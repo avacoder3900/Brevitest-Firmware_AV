@@ -363,6 +363,23 @@ bool cartridge_loaded() {
     return (sensor_reading > SENSOR_CARD_CHECK_THRESHOLD);
 }
 
+void validate_cartridge() {
+    cartridge_validated = false;
+    Particle.publish("brevitest-validate-cartridge", qr_uuid, 60, PRIVATE);
+}
+
+void validate_cartridge_callback(const char *event, const char *data) {
+    cartridge_validated = (strcmp(data, VALIDATE_CARTRIDGE_SUCCESS) == 0);
+    if (cartridge_validated) {
+        set_device_LED_color(0, 255, 0);    // cartridge found
+        turn_on_device_LED();
+    }
+    else {
+        set_device_LED_color(255, 0, 0);    // cartridge not found
+        turn_on_device_LED();
+    }
+}
+
 void check_device_status() {
     int sensor_reading = check_sensor_clear('A');
     /*Serial.printlnf("Checking device status: %d", sensor_reading);*/
@@ -373,18 +390,19 @@ void check_device_status() {
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             set_device_LED_color(0, 0, 255);
             turn_on_device_LED();
+            cartridge_validated = false;
         }
         else {
             Serial.printlnf("Device just closed: %d", sensor_reading);
             if (cartridge_loaded()) {
                 Serial.println("Cartridge in device");
                 if (scan_QR_code() == CARTRIDGE_UUID_LENGTH) {
-                    set_device_LED_color(0, 255, 0);    // cartridge found
-                    turn_on_device_LED();
+                    validate_cartridge();
                 }
                 else {
                     set_device_LED_color(255, 0, 0);    // bad cartridge uuid
                     turn_on_device_LED();
+                    cartridge_validated = false;
                 }
             }
             else {
@@ -392,6 +410,7 @@ void check_device_status() {
                 memcpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                 set_device_LED_color(255, 255, 0);
                 turn_on_device_LED();
+                cartridge_validated = false;
             }
         }
         bluetooth_update_characteristic("cartridge ID", qr_uuid, gatt.cartridge_id_characteristic);
@@ -1459,6 +1478,7 @@ void setup() {
         Particle.variable("status", particle_status, STRING);
         Particle.variable("powerstatus", &power_status, INT);
         Particle.subscribe("hook-response/brevitest-upload-test", remove_test_from_cache, MY_DEVICES);
+        Particle.subscribe("hook-response/brevitest-validate-cartridge", validate_cartridge_callback, MY_DEVICES);
 
         turn_off_device_LED();
         set_device_LED_color(255, 255, 0);

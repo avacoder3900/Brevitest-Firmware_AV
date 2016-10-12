@@ -9,11 +9,14 @@
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
 #define CARTRIDGE_UUID_LENGTH 24
+#define ERROR_MESSAGE(err) Serial.println(err)
+#define CANCELLABLE(x) if (!cancel_process) {x}
+
+// device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
 #define NO_CARTRIDGE_UUID "DDDDDDDDDDDDDDDDDDDDDDDD"
 #define CARTRIDGE_ERROR_UUID "EEEEEEEEEEEEEEEEEEEEEEEE"
-#define ERROR_MESSAGE(err) Serial.println(err)
-#define CANCELLABLE(x) if (!cancel_process) {x}
+#define VALIDATE_CARTRIDGE_SUCCESS "\"SUCCESS\""
 
 // bluetooth
 #define BLUETOOTH_TIMEOUT 2000
@@ -83,6 +86,7 @@ int bluetooth_test_progress_char_index;
 #define QR_DELAY_AFTER_POWER_ON_MS 1000
 #define QR_DELAY_AFTER_TRIGGER_MS 50
 #define QR_READ_TIMEOUT 1000
+#define VALIDATE_CARTRIDGE_TIMEOUT 10000
 
 // stress test
 #define STRESS_TEST_STEPS 12
@@ -138,6 +142,7 @@ bool qr_code_being_scanned = false;
 Timer device_open_timer(SENSOR_DEVICE_OPEN_CHECK_PERIOD, set_check_device_status_flag);
 bool device_open_state = true;
 bool check_device_status_flag = true;
+bool cartridge_validated = false;
 
 // device LED
 struct DeviceLED {
