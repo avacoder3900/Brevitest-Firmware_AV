@@ -130,6 +130,7 @@ int pinQRDecoderTX = TX;
 // global variables
 bool test_in_progress;
 bool start_test;
+bool load_test;
 bool cancel_process;
 bool calibrate;
 bool stress_test;

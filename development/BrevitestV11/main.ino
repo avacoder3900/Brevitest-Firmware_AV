@@ -373,6 +373,7 @@ void validate_cartridge_callback(const char *event, const char *data) {
     if (cartridge_validated) {
         set_device_LED_color(0, 255, 0);    // cartridge found
         turn_on_device_LED();
+        load_test = true;
     }
     else {
         set_device_LED_color(255, 0, 0);    // cartridge not found
@@ -890,7 +891,7 @@ int bluetooth_run_brevitest(char *runBrevitestString) {
                 // move runBrevitestString pointer to point to assay
                 runBrevitestString += TEST_UUID_LENGTH + 1;
                 // try to load assay record
-                if (load_assay_record(runBrevitestString)) {
+                if (load_test_parameters(runBrevitestString)) {
                         // assay loaded, set start_test flag and push initial progress update
                         start_test = true;
                         test_last_progress_update = 0;
@@ -1526,6 +1527,7 @@ void setup() {
 
 void reset_globals() {
         start_test = false;
+        load_test = false;
         cancel_process = false;
 
         qr_uuid[0] = '\0';
@@ -1548,40 +1550,57 @@ void reset_globals() {
         last_upload = 0;
 }
 
-void do_run_test() {
-        unsigned long timeout;
+void load_test_callback(const char *event, const char *data) {
 
-        start_blinking_device_LED(0, 500, 0, 255, 255);
+}
+
+void do_load_test() {
+    start_blinking_device_LED(0, 500, 0, 255, 255);
+
+    load_test = false;
+    Particle.publish("brevitest-load-test", qr_uuid, 60, PRIVATE);
+
+    stop_blinking_device_LED();
+    set_device_LED_color(0, 255, 255);
+    turn_on_device_LED();
+}
+
+void do_run_test() {
+        Particle.publish("brevitest-start-test", test_record.test_uuid, 60, PRIVATE);
+
+        start_blinking_device_LED(0, 500, 0, 255, 0);
+
         start_test = false;
         test_in_progress = true;
-        test_last_progress_update = millis();
+        test_last_progress_update = 0;
+        update_progress("Resetting device and starting test", 0);
 
         pinMode(pinSolenoid, OUTPUT);
         analogWrite(pinSolenoid, 0);
         analogWrite(pinSensorLED, 0);
-
-        move_to_calibration_point();
 
         process_BCODE(0);
 
         reset_stage();
         update_progress("Test complete", -1);
 
+        reset_globals();
+
         stop_blinking_device_LED();
         set_device_LED_color(0, 255, 0);
         turn_on_device_LED();
 
         Particle.publish("brevitest-test-complete", test_record.test_uuid, 60, PRIVATE);
-
-        reset_globals();
 }
 
 void do_cancel_test() {
         update_progress("Test cancelled", -1);
         reset_globals();
+        Particle.publish("brevitest-cancel-test", test_record.test_uuid, 60, PRIVATE);
 }
 
 void do_calibration() {
+        Particle.publish("brevitest-calibrate-device", "", 60, PRIVATE);
         calibrate = false;
         save_calibration_point();
         move_to_calibration_point();
@@ -1610,16 +1629,17 @@ void loop() {
         int battery_level;
         bool online = Particle.connected();
         int inchar;
-        unsigned long now;
+
+        if (load_test) {
+                do_load_test();
+        }
 
         if (start_test && !test_in_progress) {
-                Particle.publish("brevitest-start-test", test_record.test_uuid, 60, PRIVATE);
                 do_run_test();
         }
 
         if (cancel_process) {
                 do_cancel_test();
-                Particle.publish("brevitest-cancel-test", test_record.test_uuid, 60, PRIVATE);
         }
 
         if (online && calibrate) {
