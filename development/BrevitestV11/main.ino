@@ -872,41 +872,6 @@ bool load_assay_record(char *assayString) {
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
 
-int bluetooth_run_brevitest(char *runBrevitestString) {
-        if (test_in_progress) {
-                return 0;
-        }
-        // copy cartridge id to cartridge_uuid
-        Serial.println("Start bluetooth_run_brevitest");
-        memcpy(cartridge_uuid, runBrevitestString, CARTRIDGE_UUID_LENGTH);
-        cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-        // read QR code and verify that it matches cartridge_uuid
-        if (validate_cartridge_uuid() == 0) {
-                // move runBrevitestString pointer to point to test id
-                Serial.println("Cartridge validated");
-                runBrevitestString += CARTRIDGE_UUID_LENGTH + 1;
-                // copy test id to test_uuid of current test
-                memcpy(test_record.test_uuid, runBrevitestString, TEST_UUID_LENGTH);
-                test_record.test_uuid[TEST_UUID_LENGTH] = '\0';
-                // move runBrevitestString pointer to point to assay
-                runBrevitestString += TEST_UUID_LENGTH + 1;
-                // try to load assay record
-                if (load_test_parameters(runBrevitestString)) {
-                        // assay loaded, set start_test flag and push initial progress update
-                        start_test = true;
-                        test_last_progress_update = 0;
-                        update_progress("Resetting device and starting test", 0);
-                        return 1;
-                }
-                else {
-                        return -320;
-                }
-        }
-        else {
-                return -321;
-        }
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                 TEST RESULTS UPLOADING                  //
