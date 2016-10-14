@@ -11,8 +11,8 @@
 #define CARTRIDGE_UUID_LENGTH 24
 #define ERROR_MESSAGE(err) Serial.println(err)
 #define CANCELLABLE(x) if (!cancel_process) {x}
-#define TAB_DELIM "\\t"
-#define RETURN_DELIM "\\n"
+#define TAB_DELIM "\t"
+#define RETURN_DELIM "\n"
 #define COMMA_DELIM ","
 
 // device open and cartridge validation

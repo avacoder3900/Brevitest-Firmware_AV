@@ -371,9 +371,9 @@ bool load_assay_record(char *assayString) {
 
         memcpy(cartridge_uuid, assayString, CARTRIDGE_UUID_LENGTH);
         memcpy(assay.uuid, assayString, ASSAY_UUID_LENGTH);
-        indx += CARTRIDGE_UUID_LENGTH + 2;
+        indx += CARTRIDGE_UUID_LENGTH + 1;
         memcpy(test_record.test_uuid, &assayString[indx], TEST_UUID_LENGTH);
-        indx += TEST_UUID_LENGTH + 2;
+        indx += TEST_UUID_LENGTH + 1;
 
         assay.duration = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
         assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
@@ -402,7 +402,7 @@ void process_validate_callback_buffer() {
     if (cartridge_validated) {
         set_device_LED_color(0, 255, 0);    // cartridge found
         turn_on_device_LED();
-        load_assay_record(&callback_buffer[9]);
+        start_test = load_assay_record(&callback_buffer[9]);
     }
     else {
         set_device_LED_color(255, 0, 0);    // cartridge not found
@@ -413,9 +413,28 @@ void process_validate_callback_buffer() {
 }
 
 void validate_callback(const char *event, const char *data) {
+    int i;
+    int datalen = strlen(data);
     int len = strlen(callback_buffer);
-    strcpy(&callback_buffer[len], &data[len ? 0 : 1]);
-    len += strlen(data) - (len ? 0 : 1);
+    int offset = (len ? 0 : 1);
+    for (i = offset; i < datalen; i++) {
+        if (data[i] == '\\') {
+            i++;
+            if (data[i] == 't') {
+                callback_buffer[len++] = '\t';
+            }
+            else if (data[i] == 'n') {
+                callback_buffer[len++] = '\n';
+            }
+            else {
+                callback_buffer[len++] = '\\';
+                callback_buffer[len++] = data[i];
+            }
+        }
+        else {
+            callback_buffer[len++] = data[i];
+        }
+    }
     callback_complete = (callback_buffer[len - 1] == '\"');
     if (callback_complete) {
         callback_buffer[len - 1] = '\0';
