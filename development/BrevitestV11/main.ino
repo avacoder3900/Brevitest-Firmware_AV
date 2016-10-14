@@ -402,7 +402,7 @@ void process_validate_callback_buffer() {
     if (cartridge_validated) {
         set_device_LED_color(0, 255, 0);    // cartridge found
         turn_on_device_LED();
-        start_test = load_assay_record(&callback_buffer[9]);
+        start_test = load_assay_record(&callback_buffer[8]);
     }
     else {
         set_device_LED_color(255, 0, 0);    // cartridge not found
