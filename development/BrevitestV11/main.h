@@ -16,7 +16,7 @@
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
 #define NO_CARTRIDGE_UUID "DDDDDDDDDDDDDDDDDDDDDDDD"
 #define CARTRIDGE_ERROR_UUID "EEEEEEEEEEEEEEEEEEEEEEEE"
-#define VALIDATE_CARTRIDGE_SUCCESS "\"SUCCESS\""
+#define VALIDATE_CARTRIDGE_SUCCESS "SUCCESS"
 
 // bluetooth
 #define BLUETOOTH_TIMEOUT 2000
@@ -50,7 +50,7 @@ int bluetooth_test_progress_char_index;
 #define SENSOR_CHECK_CARD_LED_DELAY 200
 #define SENSOR_CARD_CHECK_THRESHOLD 25000
 // assay
-#define ASSAY_BCODE_CAPACITY 2000
+#define ASSAY_BCODE_CAPACITY 1000
 
 // params
 #define PARAM_NUMBER_INDEX 2
@@ -63,15 +63,10 @@ int bluetooth_test_progress_char_index;
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63
-#define PARTICLE_COMMAND_CODE_INDEX 0
-#define PARTICLE_COMMAND_CODE_LENGTH 2
-#define PARTICLE_COMMAND_PARAM_INDEX (PARTICLE_COMMAND_CODE_INDEX + PARTICLE_COMMAND_CODE_LENGTH)
-#define PARTICLE_COMMAND_PARAM_LENGTH 6
-#define PARTICLE_REQUEST_CODE_INDEX 0
-#define PARTICLE_REQUEST_CODE_LENGTH 2
-#define PARTICLE_REQUEST_PARAM_INDEX (PARTICLE_REQUEST_CODE_INDEX + PARTICLE_REQUEST_CODE_LENGTH)
 #define PARTICLE_PUBLISH_INTERVAL 1000
 #define MOVE_STEPS_BETWEEN_PARTICLE_PROCESS 10
+#define GENERAL_BUFFER_SIZE 1000
+
 // status
 #define STATUS_LENGTH 622
 #define STATUS(...) snprintf(particle_status, STATUS_LENGTH, __VA_ARGS__)
@@ -188,7 +183,6 @@ char device_id[DEVICE_ID_LENGTH + 1];
 char bluetooth_buffer[BLUETOOTH_BUFFER_SIZE];
 int bluetooth_buffer_count;
 int bluetooth_buffer_line_count;
-char convert_buffer[BLUETOOTH_BUFFER_SIZE];
 char delim_string[2];
 struct GATT {
     int service;
@@ -200,12 +194,7 @@ char newline[2];
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
-
-struct Command {
-    char arg[PARTICLE_ARG_SIZE + 1];
-    int code;
-    char param[PARTICLE_ARG_SIZE - PARTICLE_COMMAND_CODE_LENGTH + 1];
-} particle_command;
+char general_buffer[GENERAL_BUFFER_SIZE];
 
 struct BrevitestSensorSampleRecord {        // 12 bytes
     int sample_time;

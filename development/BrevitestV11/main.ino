@@ -256,11 +256,6 @@ int scan_QR_code() {
         return i;
 }
 
-int validate_cartridge_uuid() {
-        scan_QR_code();
-        return strncmp(cartridge_uuid, qr_uuid, CARTRIDGE_UUID_LENGTH);
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                       DEVICE LED                        //
@@ -365,19 +360,55 @@ bool cartridge_loaded() {
 
 void validate_cartridge() {
     cartridge_validated = false;
-    Particle.publish("brevitest-validate-cartridge", qr_uuid, 60, PRIVATE);
+    Particle.publish("brevitest-validate", qr_uuid, 60, PRIVATE);
 }
 
-void validate_cartridge_callback(const char *event, const char *data) {
-    cartridge_validated = (strcmp(data, VALIDATE_CARTRIDGE_SUCCESS) == 0);
-    if (cartridge_validated) {
-        set_device_LED_color(0, 255, 0);    // cartridge found
-        turn_on_device_LED();
-        load_test = true;
+bool load_assay_record(char *assayString) {
+        int indx = 0;
+
+        memcpy(assay.uuid, cartridge_uuid, ASSAY_UUID_LENGTH);
+
+        assay.duration = extract_int_from_delimited_string(assayString, &indx, '\t');
+        assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, '\t');
+        assay.sensor_gain = extract_int_from_delimited_string(assayString, &indx, '\t');
+        assay.led_power = extract_int_from_delimited_string(assayString, &indx, '\t');
+        assay.delay_between_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, '\t');
+        assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, '\t');
+        assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, '\t');
+        strncpy(assay.BCODE, &assayString[indx], assay.BCODE_length);
+
+        indx += assay.BCODE_length;
+        return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
+}
+
+void validate_callback(const char *event, const char *data) {
+    char result[8];
+    bool first = (*data == '\"');
+    int buf_len, len = strlen(data);
+    bool last = (data[len - 1] == '\"');
+    if (first) {
+        len = last ? len - 2 : len - 1;
+        memcpy(general_buffer, &data[1], len);
+        memcpy(result, general_buffer, 7);
+        result[7] = '\0';
+        cartridge_validated = (strcmp(result, VALIDATE_CARTRIDGE_SUCCESS) == 0);
+        if (cartridge_validated) {
+            set_device_LED_color(0, 255, 0);    // cartridge found
+            turn_on_device_LED();
+        }
+        else {
+            set_device_LED_color(255, 0, 0);    // cartridge not found
+            turn_on_device_LED();
+        }
     }
     else {
-        set_device_LED_color(255, 0, 0);    // cartridge not found
-        turn_on_device_LED();
+        len = last ? len - 1 : len;
+        buf_len = strlen(general_buffer);
+        memcpy(&general_buffer[buf_len], data, len);
+        general_buffer[buf_len + len] = '\0';
+    }
+    if (last) {
+        Serial.println(general_buffer);
     }
 }
 
@@ -823,8 +854,8 @@ void bluetooth_echo_off() {
 }
 
 void bluetooth_add_characteristic(char *cmdStr, char *name, char *value, int *characteristic) {
-    sprintf(convert_buffer, "%s%s", cmdStr, value);
-    if (bluetooth_command(convert_buffer) < 1) {
+    sprintf(general_buffer, "%s%s", cmdStr, value);
+    if (bluetooth_command(general_buffer) < 1) {
         Serial.printlnf("Failed to add %s characteristic", name);
     }
     else {
@@ -833,8 +864,8 @@ void bluetooth_add_characteristic(char *cmdStr, char *name, char *value, int *ch
 }
 
 void bluetooth_update_characteristic(char *name, char *value, int characteristic) {
-    sprintf(convert_buffer, "%s%d,%s", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
-    if (bluetooth_command(convert_buffer) < 1) {
+    sprintf(general_buffer, "%s%d,%s", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
+    if (bluetooth_command(general_buffer) < 1) {
         Serial.printlnf("Failed to update %s characteristic", name);
     }
 }
@@ -852,24 +883,6 @@ void bluetooth_reset() {
     if (bluetooth_command("ATZ") < 1) {
         Serial.println("Failed to reset");
     }
-}
-
-bool load_assay_record(char *assayString) {
-        int indx = 0;
-
-        memcpy(assay.uuid, cartridge_uuid, ASSAY_UUID_LENGTH);
-
-        assay.duration = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.sensor_gain = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.led_power = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.delay_between_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, '\t');
-        strncpy(assay.BCODE, &assayString[indx], assay.BCODE_length);
-
-        indx += assay.BCODE_length;
-        return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
 
 /////////////////////////////////////////////////////////////
@@ -903,284 +916,6 @@ void remove_test_from_cache(const char *event, const char *data)
                         return;
                 }
         }
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                    PARTICLE COMMANDS                    //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-int particle_command_read_serial_number() {
-        Particle.publish("brevitest-command", "particle_command_read_serial_number", 60, PRIVATE);
-        memcpy(particle_register, eeprom.serial_number, SERIAL_NUMBER_LENGTH + 1); // includes trailing \0
-        return 1;
-}
-
-int particle_command_write_serial_number() {
-        Particle.publish("brevitest-command", "particle_command_write_serial_number", 60, PRIVATE);
-        for (int i = 0; i < SERIAL_NUMBER_LENGTH; i += 1) {
-                eeprom.serial_number[i] = particle_command.param[i];
-                EEPROM.write(offsetof(Particle_EEPROM, serial_number) + i, particle_command.param[i]);
-        }
-        eeprom.serial_number[SERIAL_NUMBER_LENGTH] = '\0';
-        EEPROM.write(offsetof(Particle_EEPROM, serial_number) + SERIAL_NUMBER_LENGTH, 0);
-        return 1;
-}
-
-int particle_command_write_and_move_to_calibration_point() {
-        Particle.publish("brevitest-command", "particle_command_write_and_move_to_calibration_point", 60, PRIVATE);
-        eeprom.param.calibration_steps = extract_int_from_string(particle_command.param, 0, PARTICLE_COMMAND_PARAM_LENGTH);
-        calibrate = true;
-        return 1;
-}
-
-int particle_command_read_param() {
-        Particle.publish("brevitest-command", "particle_command_read_param", 60, PRIVATE);
-
-        int index = 0;
-        int param_num;
-        uint16_t *addr = &eeprom.param.reset_steps;
-
-        param_num = extract_int_from_delimited_string(particle_command.param, &index, '\n');
-        if (param_num < 0) {
-                return -148;
-        }
-        if (param_num >= PARAM_NUMBER_OF_PARAMS) {
-                return -149;
-        }
-
-        return addr[param_num];
-}
-
-int particle_command_write_param() {
-        Particle.publish("brevitest-command", "particle_command_write_param", 60, PRIVATE);
-
-        int index = 0;
-        int param_num, value;
-        uint16_t *addr = &eeprom.param.reset_steps;
-
-        param_num = extract_int_from_delimited_string(particle_command.param, &index, ',');
-        if (param_num < 0) {
-                return -150;
-        }
-        if (param_num >= PARAM_NUMBER_OF_PARAMS) {
-                return -151;
-        }
-
-        value = extract_int_from_delimited_string(particle_command.param, &index, '\n');
-        addr[param_num] = (uint16_t) value & 0xFFFF;
-
-        store_eeprom();
-
-        return 1;
-}
-
-int particle_command_reset_params() {
-        Particle.publish("brevitest-command", "particle_command_reset_params", 60, PRIVATE);
-        reset_params();
-        return 1;
-}
-
-int particle_command_read_all_params() {
-        Particle.publish("brevitest-command", "particle_command_read_all_params", 60, PRIVATE);
-        uint16_t *value = &eeprom.param.reset_steps;
-        int i, index = 0;
-
-        for (i = 0; i < PARAM_NUMBER_OF_PARAMS; i += 1) {
-                index += sprintf(&particle_register[index], "%d,", value[i]);
-        }
-        particle_register[--index] = '\0';
-        return 1;
-}
-
-int particle_command_read_firmware_version() {
-        Particle.publish("brevitest-command", "particle_command_read_firmware_version", 60, PRIVATE);
-        int version = EEPROM.read(0);
-        return version;
-}
-
-int particle_command_read_QR_code() {
-        Particle.publish("brevitest-command", "particle_command_read_QR_code", 60, PRIVATE);
-
-        particle_register[0] = '\0';
-        cartridge_uuid[0] = '\0';
-
-        int scan_result = scan_QR_code();
-
-        if (scan_result == CARTRIDGE_UUID_LENGTH) {
-                memcpy(particle_register, qr_uuid, CARTRIDGE_UUID_LENGTH);
-                particle_register[CARTRIDGE_UUID_LENGTH] = '\0';
-                return 1;
-        }
-        else {
-                return scan_result;
-        }
-}
-
-int particle_command_read_battery_level() {
-        Particle.publish("brevitest-command", "particle_command_read_battery_level", 60, PRIVATE);
-        return analogRead(pinBatteryAin);
-}
-
-int particle_command_read_DC_in_status() {
-        Particle.publish("brevitest-command", "particle_command_read_DC_in_status", 60, PRIVATE);
-        return digitalRead(pinDCinDetect);
-}
-
-int particle_command_read_percent_complete() {
-        Particle.publish("brevitest-command", "particle_command_read_percent_complete", 60, PRIVATE);
-        return test_percent_complete;
-}
-
-int particle_command_read_test_record_by_uuid() {
-        Particle.publish("brevitest-command", "particle_command_read_test_record_by_uuid", 60, PRIVATE);
-        int index = find_test_index_by_uuid(particle_command.param);
-        if (index == -1) {
-                return -3;
-        }
-
-        return process_test_record(index);
-}
-
-int particle_command_read_test_record_by_index() {
-        Particle.publish("brevitest-command", "particle_command_read_test_record_by_index", 60, PRIVATE);
-        int index = extract_int_from_string(particle_command.param, 0, PARTICLE_COMMAND_PARAM_LENGTH);
-        return process_test_record(index);
-}
-
-int particle_command_read_last_test_record() {
-        Particle.publish("brevitest-command", "particle_command_read_last_test_record", 60, PRIVATE);
-        return process_test_record(eeprom.most_recent_test);
-}
-
-int particle_command_read_test_cache_uuids() {
-        Particle.publish("brevitest-command", "particle_command_read_test_cache_uuids", 60, PRIVATE);
-
-        int index = 0;
-        for (int i = 0; i < TEST_CACHE_SIZE; i++) {
-                if (eeprom.test_cache[i].test_uuid[0] != '\0') {
-                        memcpy(&particle_register[index], eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH);
-                        index += TEST_UUID_LENGTH;
-                        if (i == TEST_CACHE_SIZE - 1) {
-                                particle_register[index++] = '\0';
-                        }
-                        else {
-                                particle_register[index++] = '\n';
-                        }
-                }
-        }
-        return 1;
-}
-
-int particle_command_erase_test_cache() {
-        Particle.publish("brevitest-command", "particle_command_erase_test_cache", 60, PRIVATE);
-
-        int i;
-
-        for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
-                memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
-        }
-
-        eeprom.most_recent_test = -1;
-        store_eeprom();
-
-        return 1;
-}
-
-int particle_command_dump_eeprom() {
-        Particle.publish("brevitest-command", "particle_command_dump_eeprom", 60, PRIVATE);
-        dump_eeprom();
-        snprintf(particle_register, PARTICLE_REGISTER_SIZE, \
-                 "%6d\t%5d\t%5d\t%5d\t%5d\t%5d\t%5d\n", \
-                 eeprom.param.reset_steps, eeprom.param.step_delay_us, eeprom.param.publish_interval_during_move,
-                 eeprom.param.stepper_wake_delay_ms, eeprom.param.solenoid_power, eeprom.param.solenoid_surge_period_ms, \
-                 eeprom.param.calibration_steps);
-        return 1;
-}
-
-int particle_command_erase_eeprom() {
-        Particle.publish("brevitest-command", "particle_command_erase_eeprom", 60, PRIVATE);
-        erase_eeprom();
-        return 1;
-}
-
-int particle_command_read_both_sensors() {
-        Particle.publish("brevitest-command", "particle_command_read_both_sensors", 60, PRIVATE);
-        return read_both_sensors(particle_command.param);
-}
-
-int particle_command_test_sensors() {
-        Particle.publish("brevitest-command", "particle_command_test_sensors", 60, PRIVATE);
-        return sensor_test();
-}
-
-
-//
-//
-
-void parse_particle_command(String msg) {
-        int len = msg.length();
-        msg.toCharArray(particle_command.arg, len + 1);
-
-        particle_command.code = extract_int_from_string(particle_command.arg, PARTICLE_COMMAND_CODE_INDEX, PARTICLE_COMMAND_CODE_LENGTH);
-        len -= PARTICLE_COMMAND_CODE_LENGTH;
-        len = len < 0 ? 0 : len;
-        strncpy(particle_command.param, &particle_command.arg[PARTICLE_COMMAND_PARAM_INDEX], len);
-        particle_command.param[len] = '\0';
-}
-
-int run_command(String msg) {
-        parse_particle_command(msg);
-
-        switch (particle_command.code) {
-        // configuration functions
-        case 1: // set device serial number
-                return particle_command_read_serial_number();
-        case 2: // set device serial number
-                return particle_command_write_serial_number();
-        case 3: // set and move to calibration point
-                return particle_command_write_and_move_to_calibration_point();
-        case 4: // read device parameter
-                return particle_command_read_param();
-        case 5: // write device parameter
-                return particle_command_write_param();
-        case 6: // reset device parameters to default
-                return particle_command_reset_params();
-        case 7: // reset device parameters to default
-                return particle_command_read_all_params();
-        case 8: // get current firmware version number
-                return particle_command_read_firmware_version();
-        case 9: // read QR code of cartridge
-                return particle_command_read_QR_code();
-        case 10:
-                return particle_command_read_battery_level();
-        case 11:
-                return particle_command_read_DC_in_status();
-        case 12:
-                return particle_command_read_percent_complete();
-        case 13:
-                return particle_command_read_last_test_record();
-        case 14:
-                return particle_command_read_test_record_by_uuid();
-        case 15:
-                return particle_command_read_test_record_by_index();
-        case 16:
-                return particle_command_read_test_cache_uuids();
-        case 17:
-                return particle_command_erase_test_cache();
-        case 18:
-                return particle_command_dump_eeprom();
-        case 19:
-                return particle_command_erase_eeprom();
-        case 22:
-                return particle_command_read_both_sensors();
-        case 23:
-                return particle_command_test_sensors();
-        default:
-                return -1;
-        }
-        return -1;
 }
 
 /////////////////////////////////////////////////////////////
@@ -1224,36 +959,23 @@ int get_BCODE_token(int index, int *token) {
         return i;
 }
 
-void update_bluetooth_status_data(char *message) {
-        if (message[0] != '\0') {
-                STATUS("%s\t%.24s\t%d\n", message, test_record.test_uuid, test_percent_complete);
-        }
-}
-
 void update_progress(char *message, int duration) {
         int test_duration = assay.duration * 1000;
 
         Particle.process();
-        if (cancel_process) {
-                update_bluetooth_status_data(message);
+        if (duration == 0) {
+                test_progress = 0;
+                test_percent_complete = 0;
+        }
+        else if (duration < 0) {
+                test_progress = test_duration;
+                test_percent_complete = -1;
+                test_last_progress_update = 0;
         }
         else {
-                if (duration == 0) {
-                        test_progress = 0;
-                        test_percent_complete = 0;
-                }
-                else if (duration < 0) {
-                        test_progress = test_duration;
-                        test_percent_complete = -1;
-                        test_last_progress_update = 0;
-                }
-                else {
-                        test_progress += duration;
-                        test_percent_complete = 100 * test_progress / test_duration;
-                        test_percent_complete = test_percent_complete > 100 ? 100 : test_percent_complete;
-                }
-
-                update_bluetooth_status_data(message);
+                test_progress += duration;
+                test_percent_complete = 100 * test_progress / test_duration;
+                test_percent_complete = test_percent_complete > 100 ? 100 : test_percent_complete;
         }
 }
 
@@ -1439,12 +1161,11 @@ void setup() {
         digitalWrite(pinQRTrigger, LOW);
         digitalWrite(pinBluetoothMode, LOW);
 
-        Particle.function("runcommand", run_command);
         Particle.variable("register", particle_register, STRING);
         Particle.variable("status", particle_status, STRING);
         Particle.variable("powerstatus", &power_status, INT);
         Particle.subscribe("hook-response/brevitest-upload-test", remove_test_from_cache, MY_DEVICES);
-        Particle.subscribe("hook-response/brevitest-validate-cartridge", validate_cartridge_callback, MY_DEVICES);
+        Particle.subscribe("hook-response/brevitest-validate", validate_callback, MY_DEVICES);
 
         turn_off_device_LED();
         set_device_LED_color(255, 255, 0);
