@@ -21,17 +21,16 @@ int extract_int_from_string(char *str, int pos, int len) {
         return atoi(buf);
 }
 
-int extract_int_from_delimited_string(char *str, int *posPtr, char delim) {
+int extract_int_from_delimited_string(char *str, int *posPtr, char *delim) {
         char buf[14];
         char *mark;
         int len;
 
-        delim_string[0] = delim;
         mark = &str[*posPtr];
-        len = strcspn(mark, delim_string);
+        len = strstr(mark, delim) - mark;
         len = len > 14 ? 14 : len;
         strncpy(buf, mark, len);
-        *posPtr += len + 1;
+        *posPtr += len + strlen(delim);
         buf[len] = '\0';
         return atoi(buf);
 }
@@ -361,54 +360,68 @@ bool cartridge_loaded() {
 void validate_cartridge() {
     cartridge_validated = false;
     Particle.publish("brevitest-validate", qr_uuid, 60, PRIVATE);
+    callback_buffer[0] = '\0';
+    callback_complete = false;
 }
 
 bool load_assay_record(char *assayString) {
         int indx = 0;
 
-        memcpy(assay.uuid, cartridge_uuid, ASSAY_UUID_LENGTH);
+        Serial.println(assayString);
 
-        assay.duration = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.sensor_gain = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.led_power = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.delay_between_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, '\t');
-        assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, '\t');
-        strncpy(assay.BCODE, &assayString[indx], assay.BCODE_length);
+        memcpy(cartridge_uuid, assayString, CARTRIDGE_UUID_LENGTH);
+        memcpy(assay.uuid, assayString, ASSAY_UUID_LENGTH);
+        indx += CARTRIDGE_UUID_LENGTH + 2;
+        memcpy(test_record.test_uuid, &assayString[indx], TEST_UUID_LENGTH);
+        indx += TEST_UUID_LENGTH + 2;
+
+        assay.duration = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        assay.sensor_gain = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        assay.led_power = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        assay.delay_between_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+        strcpy(assay.BCODE, &assayString[indx]);
+
+        Serial.printlnf("%.24s %.8s %.24s %d %d %d %d %d", cartridge_uuid, assay.uuid, test_record.test_uuid, assay.duration, assay.sensor_integration_time, assay.sensor_gain, assay.led_power, assay.delay_between_sensor_readings_ms);
+        Serial.printlnf("%d %d %s", assay.BCODE_length, assay.BCODE_version, assay.BCODE);
 
         indx += assay.BCODE_length;
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
 
-void validate_callback(const char *event, const char *data) {
+void process_validate_callback_buffer() {
+    callback_complete = false;
     char result[8];
-    bool first = (*data == '\"');
-    int buf_len, len = strlen(data);
-    bool last = (data[len - 1] == '\"');
-    if (first) {
-        len = last ? len - 2 : len - 1;
-        memcpy(general_buffer, &data[1], len);
-        memcpy(result, general_buffer, 7);
-        result[7] = '\0';
-        cartridge_validated = (strcmp(result, VALIDATE_CARTRIDGE_SUCCESS) == 0);
-        if (cartridge_validated) {
-            set_device_LED_color(0, 255, 0);    // cartridge found
-            turn_on_device_LED();
-        }
-        else {
-            set_device_LED_color(255, 0, 0);    // cartridge not found
-            turn_on_device_LED();
-        }
+    int len = strlen(callback_buffer);
+
+    memcpy(result, callback_buffer, 7);
+    result[7] = '\0';
+    cartridge_validated = (strcmp(result, VALIDATE_CARTRIDGE_SUCCESS) == 0);
+    if (cartridge_validated) {
+        set_device_LED_color(0, 255, 0);    // cartridge found
+        turn_on_device_LED();
+        load_assay_record(&callback_buffer[9]);
     }
     else {
-        len = last ? len - 1 : len;
-        buf_len = strlen(general_buffer);
-        memcpy(&general_buffer[buf_len], data, len);
-        general_buffer[buf_len + len] = '\0';
+        set_device_LED_color(255, 0, 0);    // cartridge not found
+        turn_on_device_LED();
+        Serial.println(callback_buffer);
     }
-    if (last) {
-        Serial.println(general_buffer);
+
+}
+
+void validate_callback(const char *event, const char *data) {
+    int len = strlen(callback_buffer);
+    strcpy(&callback_buffer[len], &data[len ? 0 : 1]);
+    len += strlen(data) - (len ? 0 : 1);
+    callback_complete = (callback_buffer[len - 1] == '\"');
+    if (callback_complete) {
+        callback_buffer[len - 1] = '\0';
+    }
+    else {
+        callback_buffer[len] = '\0';
     }
 }
 
@@ -615,7 +628,7 @@ void print_samples_from_both_sensors_to_serial(int num) {
 
 int read_both_sensors(char *cmdStr) {
     int i, j, index = 0;
-    int number_of_cycles = extract_int_from_delimited_string(cmdStr, &index, ',');
+    int number_of_cycles = extract_int_from_delimited_string(cmdStr, &index, COMMA_DELIM);
 
     analogWrite(pinSensorLED, SENSOR_LED_ASSAY);
     delay(SENSOR_LED_WARMUP_DELAY_MS);
@@ -854,8 +867,8 @@ void bluetooth_echo_off() {
 }
 
 void bluetooth_add_characteristic(char *cmdStr, char *name, char *value, int *characteristic) {
-    sprintf(general_buffer, "%s%s", cmdStr, value);
-    if (bluetooth_command(general_buffer) < 1) {
+    sprintf(bluetooth_buffer, "%s%s", cmdStr, value);
+    if (bluetooth_command(bluetooth_buffer) < 1) {
         Serial.printlnf("Failed to add %s characteristic", name);
     }
     else {
@@ -864,8 +877,8 @@ void bluetooth_add_characteristic(char *cmdStr, char *name, char *value, int *ch
 }
 
 void bluetooth_update_characteristic(char *name, char *value, int characteristic) {
-    sprintf(general_buffer, "%s%d,%s", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
-    if (bluetooth_command(general_buffer) < 1) {
+    sprintf(bluetooth_buffer, "%s%d,%s", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
+    if (bluetooth_command(bluetooth_buffer) < 1) {
         Serial.printlnf("Failed to update %s characteristic", name);
     }
 }
@@ -1338,6 +1351,10 @@ void loop() {
 
         if (check_device_status_flag) {
                 check_device_status();
+        }
+
+        if (callback_complete) {
+            process_validate_callback_buffer();
         }
 
         if (Serial.available()) {

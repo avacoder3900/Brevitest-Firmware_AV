@@ -11,6 +11,9 @@
 #define CARTRIDGE_UUID_LENGTH 24
 #define ERROR_MESSAGE(err) Serial.println(err)
 #define CANCELLABLE(x) if (!cancel_process) {x}
+#define TAB_DELIM "\\t"
+#define RETURN_DELIM "\\n"
+#define COMMA_DELIM ","
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -20,7 +23,6 @@
 
 // bluetooth
 #define BLUETOOTH_TIMEOUT 2000
-#define BLUETOOTH_BUFFER_SIZE 500
 #define BLUETOOTH_ADD_SERVICE_STRING "AT+GATTADDSERVICE=UUID128=0f-6f-41-0d-89-47-48-70-98-4f-7d-c8-43-47-fa-ab"
 #define BLUETOOTH_ADD_DEVICE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0001,PROPERTIES=0x12,MIN_LEN=24,MAX_LEN=24,VALUE="
 #define BLUETOOTH_ADD_CARTRIDGE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0002,PROPERTIES=0x12,MIN_LEN=24,MAX_LEN=24,VALUE=000000000000000000000000"
@@ -49,6 +51,7 @@ int bluetooth_test_progress_char_index;
 #define SENSOR_CHECK_CARD_LED_POWER 200
 #define SENSOR_CHECK_CARD_LED_DELAY 200
 #define SENSOR_CARD_CHECK_THRESHOLD 25000
+
 // assay
 #define ASSAY_BCODE_CAPACITY 1000
 
@@ -65,7 +68,6 @@ int bluetooth_test_progress_char_index;
 #define PARTICLE_ARG_SIZE 63
 #define PARTICLE_PUBLISH_INTERVAL 1000
 #define MOVE_STEPS_BETWEEN_PARTICLE_PROCESS 10
-#define GENERAL_BUFFER_SIZE 1000
 
 // status
 #define STATUS_LENGTH 622
@@ -174,12 +176,12 @@ int test_percent_complete;
 unsigned long test_last_progress_update;
 
 // uuids
-char test_uuid[TEST_UUID_LENGTH + 1];
 char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char qr_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char device_id[DEVICE_ID_LENGTH + 1];
 
 // bluetooth
+#define BLUETOOTH_BUFFER_SIZE 500
 char bluetooth_buffer[BLUETOOTH_BUFFER_SIZE];
 int bluetooth_buffer_count;
 int bluetooth_buffer_line_count;
@@ -192,9 +194,11 @@ struct GATT {
 char newline[2];
 
 // particle messaging
+#define CALLBACK_BUFFER_SIZE 1200
+char callback_buffer[CALLBACK_BUFFER_SIZE];
+bool callback_complete;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
-char general_buffer[GENERAL_BUFFER_SIZE];
 
 struct BrevitestSensorSampleRecord {        // 12 bytes
     int sample_time;
