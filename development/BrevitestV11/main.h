@@ -3,8 +3,8 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 9
-#define DATA_FORMAT_VERSION 1
+#define FIRMWARE_VERSION 6
+#define DATA_FORMAT_VERSION 2
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -19,7 +19,7 @@
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
 #define NO_CARTRIDGE_UUID "DDDDDDDDDDDDDDDDDDDDDDDD"
 #define CARTRIDGE_ERROR_UUID "EEEEEEEEEEEEEEEEEEEEEEEE"
-#define VALIDATE_CARTRIDGE_SUCCESS "SUCCESS"
+#define SUCCESS "SUCCESS"
 
 // bluetooth
 #define BLUETOOTH_TIMEOUT 2000
@@ -61,7 +61,8 @@ int bluetooth_test_progress_char_index;
 #define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
-#define TEST_CACHE_SIZE 24
+#define TEST_CACHE_SIZE 6
+#define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // particle
 #define PARTICLE_REGISTER_SIZE 622
@@ -84,9 +85,6 @@ int bluetooth_test_progress_char_index;
 #define QR_DELAY_AFTER_TRIGGER_MS 50
 #define QR_READ_TIMEOUT 1000
 #define VALIDATE_CARTRIDGE_TIMEOUT 10000
-
-// stress test
-#define STRESS_TEST_STEPS 12
 
 // stepper
 #define CUMULATIVE_STEP_LIMIT 9800
@@ -127,7 +125,6 @@ int pinQRDecoderTX = TX;
 // global variables
 bool test_in_progress;
 bool start_test;
-bool load_test;
 bool cancel_process;
 bool calibrate;
 bool stress_test;
@@ -230,21 +227,24 @@ struct Param {      // 32 bytes
   }
 };
 
-struct BrevitestSensorRecord {  // 10 bytes
+struct BrevitestSensorRecord {  // 16 bytes
+    char channel;
+    uint8_t samples;
     int start_time;
-    uint16_t red_norm;
-    uint16_t green_norm;
-    uint16_t blue_norm;
+    uint16_t red_mean;
+    uint16_t green_mean;
+    uint16_t blue_mean;
+    uint16_t clear_mean;
+    uint16_t clear_max;
+    uint16_t clear_min;
 } sensor_reading;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;
     int finish_time;
     char test_uuid[TEST_UUID_LENGTH + 1];    // 26 bytes w padding
-    BrevitestSensorRecord sensor_reading_initial_assay;
-    BrevitestSensorRecord sensor_reading_initial_control;
-    BrevitestSensorRecord sensor_reading_final_assay;
-    BrevitestSensorRecord sensor_reading_final_control;
+    uint8_t number_of_readings;
+    BrevitestSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];
 } test_record;
 
 struct BrevitestAssayRecord {
@@ -263,9 +263,12 @@ struct Particle_EEPROM {
   uint8_t firmware_version;     // 8 bytes
   uint8_t data_format_version;
   uint8_t most_recent_test;
-  uint8_t stress_test_count;
-  uint8_t reserved2[4];
+  uint8_t reserved2[5];
   char serial_number[SERIAL_NUMBER_LENGTH + 1]; // 20 bytes, includes trailing \0
   Param param;  // 32 bytes
-  BrevitestTestRecord test_cache[TEST_CACHE_SIZE];  // up to 26 test results cached
+  BrevitestTestRecord test_cache[TEST_CACHE_SIZE];  // up to 6 test results cached
+  Particle_EEPROM() {
+      firmware_version = FIRMWARE_VERSION;
+      data_format_version = DATA_FORMAT_VERSION;
+  }
 } eeprom;

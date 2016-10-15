@@ -4,7 +4,7 @@
 
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(204);
-PRODUCT_VERSION(5);
+PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -55,6 +55,15 @@ void store_eeprom() {
         for (int addr = 0; addr < (int) sizeof(Particle_EEPROM); addr++, e++) {
                 EEPROM.write(addr, *e);
         }
+}
+
+int reset_eeprom() {
+        Particle_EEPROM e;
+
+        memcpy(&eeprom, &e, (int) sizeof(Particle_EEPROM));
+        store_eeprom();
+
+        return 1;
 }
 
 void erase_eeprom() {
@@ -317,7 +326,7 @@ void update_blinking_device_LED() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                        SENSORS                          //
+//               ASSAY AND CONTROL SENSORS                 //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
@@ -344,6 +353,109 @@ int check_sensor_clear(char sensor_code) {
 
     return (int) clear;
 }
+
+void read_one_sensor(char sensor_code, int sample_number) {
+        BrevitestSensorSampleRecord *sample;
+        TCS34725 *sensor;
+        int led_power, led_delay, tries;
+
+        Particle.process();
+
+        if (sensor_code == 'A') {
+                sample = &assay_buffer[sample_number];
+                led_power = SENSOR_LED_ASSAY;
+                sensor = &tcsAssay;
+                led_delay = SENSOR_LED_TRANSITION_HIGH_DELAY_MS;
+        }
+        else {
+                sample = &control_buffer[sample_number];
+                led_power = SENSOR_LED_ASSAY;
+                sensor = &tcsControl;
+                led_delay = SENSOR_LED_TRANSITION_LOW_DELAY_MS;
+        }
+
+        analogWrite(pinSensorLED, led_power);
+        delay(led_delay);
+
+        sensor->begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
+
+        sample->sample_time = Time.now();
+        sample->red = sample->green = sample->blue = sample->clear = tries = 0;
+        while (sample->clear == 0 && tries++ < 5) {
+            sensor->getRawData(&sample->red, &sample->green, &sample->blue, &sample->clear);
+        }
+
+        sensor->end();
+}
+
+void convert_samples_to_reading(char sensor_code) {
+        int i;
+        int red, green, blue, clear, samples, clr, clear_max, clear_min;
+        BrevitestSensorSampleRecord *buffer;
+        BrevitestSensorRecord *reading;
+
+        reading = &(test_record.reading[test_record.number_of_readings]);
+        reading->channel = sensor_code;
+        buffer = (sensor_code == 'A' ? assay_buffer : control_buffer);
+        red = green = blue = clear = clear_max = samples = 0;
+        clear_min = 0xFFFF;
+        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
+                if (buffer[i].clear && buffer[i].clear != 0xFFFF) {
+                        samples++;
+                        clr = (int) buffer[i].clear;
+                        red += (int) buffer[i].red;
+                        green += (int) buffer[i].green;
+                        blue += (int) buffer[i].blue;
+                        clear += clr;
+                        clear_max = (clr > clear_max ? clr : clear_max);
+                        clear_min = (clr < clear_min ? clr : clear_min);
+                }
+        }
+        reading->clear_mean = (samples ? clear / samples : 0);
+        reading->red_mean = (samples ? red / samples : 0);
+        reading->green_mean = (samples ? green / samples : 0);
+        reading->blue_mean = (samples ? blue / samples : 0);
+        reading->clear_max = clear_max;
+        reading->clear_min = clear_min;
+        reading->start_time = buffer[0].sample_time;
+
+        test_record.number_of_readings++;
+}
+
+int read_sensors(int reading_code) { // 0 -> baseline, 1 -> test
+        int i;
+
+        analogWrite(pinSensorLED, SENSOR_LED_ASSAY);
+        delay(SENSOR_LED_WARMUP_DELAY_MS);
+
+        if (reading_code == 0) {
+            Serial.println("Baseline reading");
+        }
+        else {
+            Serial.println("Test reading");
+        }
+
+        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
+                read_one_sensor('A', i);
+                read_one_sensor('C', i);
+                Serial.printlnf("%d %d %d %d %d %d %d %d %d %d %d", i, \
+                    assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
+                    control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
+        }
+
+        convert_samples_to_reading('A');
+        convert_samples_to_reading('C');
+
+        analogWrite(pinSensorLED, 0);
+
+        return 1;
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                     DEVICE STATUS                       //
+//                                                         //
+/////////////////////////////////////////////////////////////
 
 void set_check_device_status_flag() {
     check_device_status_flag = !qr_code_being_scanned;  // light from qr scanner confounds device open reading
@@ -374,6 +486,7 @@ bool load_assay_record(char *assayString) {
         indx += CARTRIDGE_UUID_LENGTH + 1;
         memcpy(test_record.test_uuid, &assayString[indx], TEST_UUID_LENGTH);
         indx += TEST_UUID_LENGTH + 1;
+        test_record.number_of_readings = 0;
 
         assay.duration = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
         assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
@@ -398,11 +511,11 @@ void process_validate_callback_buffer() {
 
     memcpy(result, callback_buffer, 7);
     result[7] = '\0';
-    cartridge_validated = (strcmp(result, VALIDATE_CARTRIDGE_SUCCESS) == 0);
+    cartridge_validated = (strcmp(result, SUCCESS) == 0);
     if (cartridge_validated) {
         set_device_LED_color(0, 255, 0);    // cartridge found
         turn_on_device_LED();
-        start_test = load_assay_record(&callback_buffer[8]);
+        start_test = load_assay_record(&callback_buffer[7]);
     }
     else {
         set_device_LED_color(255, 0, 0);    // cartridge not found
@@ -483,249 +596,6 @@ void check_device_status() {
     check_device_status_flag = false;
 }
 
-void read_one_sensor(char sensor_code, int sample_number) {
-        BrevitestSensorSampleRecord *sample;
-        TCS34725 *sensor;
-        int led_power, led_delay, tries;
-
-        Particle.process();
-
-        if (sensor_code == 'A') {
-                sample = &assay_buffer[sample_number];
-                led_power = SENSOR_LED_ASSAY;
-                sensor = &tcsAssay;
-                led_delay = SENSOR_LED_TRANSITION_HIGH_DELAY_MS;
-        }
-        else {
-                sample = &control_buffer[sample_number];
-                led_power = SENSOR_LED_ASSAY;
-                sensor = &tcsControl;
-                led_delay = SENSOR_LED_TRANSITION_LOW_DELAY_MS;
-        }
-
-        analogWrite(pinSensorLED, led_power);
-        delay(led_delay);
-
-        sensor->begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
-
-        sample->sample_time = Time.now();
-        sample->red = sample->green = sample->blue = sample->clear = tries = 0;
-        while (sample->clear == 0 && tries++ < 5) {
-            sensor->getRawData(&sample->red, &sample->green, &sample->blue, &sample->clear);
-        }
-
-        sensor->end();
-}
-
-void convert_samples_to_reading(int reading_code, char sensor_code) {
-        int i, j, k;
-        int red, green, blue, clear;
-        int index[SENSOR_NUMBER_OF_SAMPLES];
-        BrevitestSensorSampleRecord *buffer;
-        BrevitestSensorRecord *reading;
-
-        Particle.process();
-
-        if (sensor_code == 'A') {
-                buffer = assay_buffer;
-                if (reading_code == 0) {
-                        reading = &(test_record.sensor_reading_initial_assay);
-                }
-                else if (reading_code == 1) {
-                        reading = &(test_record.sensor_reading_final_assay);
-                }
-                else {
-                        reading = &sensor_reading;
-                }
-        }
-        else {
-                buffer = control_buffer;
-                if (reading_code == 0) {
-                        reading = &(test_record.sensor_reading_initial_control);
-                }
-                else if (reading_code == 1) {
-                        reading = &(test_record.sensor_reading_final_control);
-                }
-                else {
-                        reading = &sensor_reading;
-                }
-        }
-
-        Particle.process();
-
-        index[0] = 0;
-        for (i = 1; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                for (j = 0; j < i; j += 1) {
-                        if (buffer[i].clear < buffer[index[j]].clear) {
-                                for (k = i; k > j; k -= 1) {
-                                        index[k] = index[k - 1];
-                                }
-                                index[j] = i;
-                                break;
-                        }
-                        if (j == i - 1) {
-                                index[i] = i;
-                        }
-                }
-        }
-
-        red = green = blue = 0;
-        for (j = 0; j < SENSOR_NUMBER_OF_SAMPLES; j += 1) {
-                Particle.process();
-
-                i = index[j];
-                Serial.print("s: ");
-                Serial.print(sensor_code);
-                Serial.print(" i: ");
-                Serial.print(i);
-                Serial.print(" t: ");
-                Serial.print(buffer[i].sample_time);
-                Serial.print(" C: ");
-                Serial.print(buffer[i].clear);
-                Serial.print(" R: ");
-                Serial.print(buffer[i].red);
-                Serial.print(" G: ");
-                Serial.print(buffer[i].green);
-                Serial.print(" B: ");
-                Serial.println(buffer[i].blue);
-                clear = buffer[i].clear;
-                if (clear && j > 0 && j < (SENSOR_NUMBER_OF_SAMPLES - 1)) {
-                        red += (int) (10000 * (clear - (int) buffer[i].red)) / clear;
-                        green += (int) (10000 * (clear - (int) buffer[i].green)) / clear;
-                        blue += (int) (10000 * (clear - (int) buffer[i].blue)) / clear;
-                }
-        }
-        reading->red_norm = red / (SENSOR_NUMBER_OF_SAMPLES - 2);
-        reading->green_norm = green / (SENSOR_NUMBER_OF_SAMPLES - 2);
-        reading->blue_norm = blue / (SENSOR_NUMBER_OF_SAMPLES - 2);
-
-        reading->start_time = buffer[0].sample_time;
-}
-
-int read_sensors(int reading_code) { // 0 -> baseline, 1 -> test
-        int i;
-
-        analogWrite(pinSensorLED, SENSOR_LED_ASSAY);
-        delay(SENSOR_LED_WARMUP_DELAY_MS);
-
-        if (reading_code == 0) {
-            Serial.println("Baseline reading");
-        }
-        else {
-            Serial.println("Test reading");
-        }
-
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                read_one_sensor('A', i);
-                read_one_sensor('C', i);
-                Serial.printlnf("%d %d %d %d %d %d %d %d %d %d %d", i, \
-                    assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
-                    control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
-        }
-
-        analogWrite(pinSensorLED, 0);
-
-        /*convert_samples_to_reading();*/
-
-        return 1;
-}
-
-void print_samples_from_both_sensors_to_serial(int num) {
-        int i;
-        BrevitestSensorSampleRecord *buf;
-
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                /*Particle.process();*/
-                buf = &assay_buffer[i];
-                Serial.printlnf(" n: %d i: %d s: A t: %d C: %d R: %d G: %d B: %d", num, i, buf->sample_time, buf->clear, buf->red, buf->green, buf->blue);
-        }
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-            buf = &control_buffer[i];
-            Serial.printlnf(" n: %d i: %d s: C t: %d C: %d R: %d G: %d B: %d", num, i, buf->sample_time, buf->clear, buf->red, buf->green, buf->blue);
-        }
-}
-
-int read_both_sensors(char *cmdStr) {
-    int i, j, index = 0;
-    int number_of_cycles = extract_int_from_delimited_string(cmdStr, &index, COMMA_DELIM);
-
-    analogWrite(pinSensorLED, SENSOR_LED_ASSAY);
-    delay(SENSOR_LED_WARMUP_DELAY_MS);
-
-    for (i = 0; i < number_of_cycles; i += 1) {
-
-            for (j = 0; j < SENSOR_NUMBER_OF_SAMPLES; j += 1) {
-                    read_one_sensor('A', j);
-                    read_one_sensor('C', j);
-            }
-
-            print_samples_from_both_sensors_to_serial(i);
-
-            delay(1000);
-    }
-
-    analogWrite(pinSensorLED, 0);
-
-    return(1);
-}
-
-int sensor_test() {
-    int i, j, tries;
-    int assay_led_power = SENSOR_LED_ASSAY;
-    int control_led_power;
-    BrevitestSensorSampleRecord *sample;
-
-    analogWrite(pinSensorLED, assay_led_power);
-    delay(SENSOR_LED_WARMUP_DELAY_MS);
-
-    for (i = 0; i < 25; i += 1) {
-
-            for (j = 0; j < SENSOR_NUMBER_OF_SAMPLES; j += 1) {
-                analogWrite(pinSensorLED, assay_led_power);
-                delay(SENSOR_LED_TRANSITION_HIGH_DELAY_MS);
-
-                tcsAssay.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
-
-                sample = &assay_buffer[j];
-                sample->sample_time = Time.now();
-                sample->red = sample->green = sample->blue = sample->clear = tries = 0;
-                while (sample->clear == 0 && tries++ < 5) {
-                    tcsAssay.getRawData(&(sample->red), &(sample->green), &(sample->blue), &(sample->clear));
-                }
-
-                tcsAssay.end();
-
-                control_led_power = (898 * assay_led_power) / 1000;
-                analogWrite(pinSensorLED, control_led_power);
-                delay(SENSOR_LED_TRANSITION_LOW_DELAY_MS);
-
-                tcsControl.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
-
-                sample = &control_buffer[j];
-                sample->sample_time = Time.now();
-                sample->red = sample->green = sample->blue = sample->clear = tries = 0;
-                while (sample->clear == 0 && tries++ < 5) {
-                    tcsControl.getRawData(&(sample->red), &(sample->green), &(sample->blue), &(sample->clear));
-              }
-
-                tcsControl.end();
-            }
-
-            print_samples_from_both_sensors_to_serial(i);
-
-            delay(1000);
-
-            assay_led_power -= 10;
-            if (assay_led_power < 0) {
-                assay_led_power = 0;
-            }
-    }
-
-    analogWrite(pinSensorLED, 0);
-
-    return(1);
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                   EEPROM TEST CACHE                     //
@@ -736,22 +606,12 @@ int find_test_index_by_uuid(char *uuid) {
         if (uuid[0] == '\0') {
                 return -1;
         }
-
         for (int i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (strncmp(uuid, eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0) {
                         return i;
                 }
         }
-
         return -1;
-}
-
-void write_test_record_to_eeprom() {
-        // increment test_index (check for overflow and if so reset circular buffer)
-        int test_index = eeprom.most_recent_test + 1;
-        test_index %= TEST_CACHE_SIZE;
-        store_test(test_index);
-        process_test_record(test_index);
 }
 
 void store_test(int index) {
@@ -766,26 +626,30 @@ void store_test(int index) {
         EEPROM.write(offsetof(Particle_EEPROM, most_recent_test), eeprom.most_recent_test);
 }
 
+void write_test_record_to_eeprom() {
+        // increment test_index (check for overflow and if so reset circular buffer)
+        int test_index = (eeprom.most_recent_test == 255 ? 0 : eeprom.most_recent_test + 1);  // 255 is the reset value
+        test_index %= TEST_CACHE_SIZE;
+        store_test(test_index);
+        process_test_record(test_index);
+}
+
+int append_test_reading(int start, BrevitestSensorRecord *reading) {
+    return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\t%5d\t%5d\n", \
+        reading->channel, reading->start_time, reading->red_mean, reading->green_mean, reading->blue_mean, \
+        reading->clear_mean, reading-> clear_max, reading->clear_min);
+}
+
 int process_test_record(int index) {
         BrevitestTestRecord *test;
-        int len;
+        int len, i;
 
         test = &eeprom.test_cache[index];
 
-        len = snprintf(particle_register, PARTICLE_REGISTER_SIZE, \
-                       "%11d\t%11d\t%.24s\n%11d\t%5d\t%5d\t%5d\n%11d\t%5d\t%5d\t%5d\n%11d\t%5d\t%5d\t%5d\n%11d\t%5d\t%5d\t%5d\n", \
-                       test->start_time, test->finish_time, test->test_uuid, \
-//
-                       test->sensor_reading_initial_assay.start_time, test->sensor_reading_initial_assay.red_norm, \
-                       test->sensor_reading_initial_assay.green_norm, test->sensor_reading_initial_assay.blue_norm, \
-                       test->sensor_reading_initial_control.start_time, test->sensor_reading_initial_control.red_norm, \
-                       test->sensor_reading_initial_control.green_norm, test->sensor_reading_initial_control.blue_norm, \
-                       test->sensor_reading_final_assay.start_time, test->sensor_reading_final_assay.red_norm, \
-                       test->sensor_reading_final_assay.green_norm, test->sensor_reading_final_assay.blue_norm, \
-                       test->sensor_reading_final_control.start_time, test->sensor_reading_final_control.red_norm, \
-                       test->sensor_reading_final_control.green_norm, test->sensor_reading_final_control.blue_norm);
-
-        particle_register[len] = '\0';
+        len = sprintf(particle_register, "%11d\t%11d\t%.24s\t%2d\n", test->start_time, test->finish_time, test->test_uuid, test->number_of_readings);
+        for (i = 0; i < test->number_of_readings; i++) {
+            len += append_test_reading(len, &(test->reading[i]));
+        }
         return 1;
 }
 
@@ -940,13 +804,15 @@ void remove_test_from_cache(const char *event, const char *data)
         int i;
         BrevitestTestRecord *test;
 
-        for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
-                if (strncmp(&data[1], eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0) {
-                        memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
-                        store_eeprom();
-                        Particle.publish("brevitest-test-cleared-from-cache", data, 60, PRIVATE);
-                        return;
-                }
+        if (strncmp(&data[1], SUCCESS, 7) == 0) {
+            for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
+                    if (strncmp(&data[8], eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0) {
+                            memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
+                            store_eeprom();
+                            Particle.publish("brevitest-test-cleared-from-cache", data, 60, PRIVATE);
+                            return;
+                    }
+            }
         }
 }
 
@@ -1208,16 +1074,8 @@ void setup() {
         Serial4.begin(9600); // bluetooth serial port
 
         load_eeprom();
-
-        if (eeprom.firmware_version != FIRMWARE_VERSION) {
-                EEPROM.write(offsetof(Particle_EEPROM, firmware_version), FIRMWARE_VERSION);
-                eeprom.firmware_version = FIRMWARE_VERSION;
-        }
-
-        if (eeprom.data_format_version != DATA_FORMAT_VERSION) {
-                EEPROM.write(offsetof(Particle_EEPROM, data_format_version), DATA_FORMAT_VERSION);
-                eeprom.data_format_version = DATA_FORMAT_VERSION;
-                reset_params();
+        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
+                reset_eeprom();
         }
 
         init_sensor(&tcsAssay, SENSOR_NUMBER_ASSAY);
@@ -1235,6 +1093,8 @@ void setup() {
         initialize_bluetooth();
 
         device_open_timer.start();
+
+        Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1245,7 +1105,6 @@ void setup() {
 
 void reset_globals() {
         start_test = false;
-        load_test = false;
         cancel_process = false;
 
         qr_uuid[0] = '\0';
@@ -1254,6 +1113,7 @@ void reset_globals() {
         cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
         test_record.test_uuid[0] = '\0';
         test_record.test_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+        test_record.number_of_readings = 0;
         assay.uuid[0] = '\0';
         assay.uuid[CARTRIDGE_UUID_LENGTH] = '\0';
 
@@ -1268,23 +1128,8 @@ void reset_globals() {
         last_upload = 0;
 }
 
-void load_test_callback(const char *event, const char *data) {
-
-}
-
-void do_load_test() {
-    start_blinking_device_LED(0, 500, 0, 255, 255);
-
-    load_test = false;
-    Particle.publish("brevitest-load-test", qr_uuid, 60, PRIVATE);
-
-    stop_blinking_device_LED();
-    set_device_LED_color(0, 255, 255);
-    turn_on_device_LED();
-}
-
 void do_run_test() {
-        Particle.publish("brevitest-start-test", test_record.test_uuid, 60, PRIVATE);
+        Particle.publish("brevitest-test-started", test_record.test_uuid, 60, PRIVATE);
 
         start_blinking_device_LED(0, 500, 0, 255, 0);
 
@@ -1301,14 +1146,13 @@ void do_run_test() {
 
         reset_stage();
         update_progress("Test complete", -1);
+        Particle.publish("brevitest-test-completed", test_record.test_uuid, 60, PRIVATE);
 
         reset_globals();
 
         stop_blinking_device_LED();
         set_device_LED_color(0, 255, 0);
         turn_on_device_LED();
-
-        Particle.publish("brevitest-test-complete", test_record.test_uuid, 60, PRIVATE);
 }
 
 void do_cancel_test() {
@@ -1334,9 +1178,9 @@ void do_upload_tests() {
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
                         process_test_record(i);
-                        Particle.publish("brevitest-upload-test", particle_register, 60, PRIVATE);
+                        Serial.println(particle_register);
+                        Particle.publish("brevitest-upload-test", eeprom.test_cache[i].test_uuid, 60, PRIVATE);
                         delay(4000);
-                        Particle.process();
                 }
         }
 
@@ -1347,10 +1191,6 @@ void loop() {
         int battery_level;
         bool online = Particle.connected();
         int inchar;
-
-        if (load_test) {
-                do_load_test();
-        }
 
         if (start_test && !test_in_progress) {
                 do_run_test();
