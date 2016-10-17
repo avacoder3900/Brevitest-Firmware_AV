@@ -512,6 +512,8 @@ void process_validate_callback_buffer() {
     memcpy(result, callback_buffer, 7);
     result[7] = '\0';
     cartridge_validated = (strcmp(result, SUCCESS) == 0);
+    Serial.printlnf("result: %s", result);
+    Serial.printlnf("cartridge_validated: %d", cartridge_validated ? 1 : 0);
     if (cartridge_validated) {
         set_device_LED_color(0, 255, 0);    // cartridge found
         turn_on_device_LED();
@@ -521,6 +523,7 @@ void process_validate_callback_buffer() {
         set_device_LED_color(255, 0, 0);    // cartridge not found
         turn_on_device_LED();
         Serial.println(callback_buffer);
+        start_test = false;
     }
 
 }
