@@ -462,6 +462,7 @@ bool cartridge_loaded() {
     delay(SENSOR_CHECK_CARD_LED_DELAY);
     int sensor_reading = check_sensor_clear('A');
     analogWrite(pinSensorLED, 0);
+    Serial.printlnf("Cartridge loaded? %c", sensor_reading > SENSOR_CARD_CHECK_THRESHOLD ? 'Y' : 'N');
     return (sensor_reading > SENSOR_CARD_CHECK_THRESHOLD);
 }
 
@@ -502,14 +503,10 @@ bool load_assay_record(char *assayString) {
 
 void process_validate_callback_buffer() {
     callback_complete = false;
-    char result[8];
-    int len = strlen(callback_buffer);
 
-    memcpy(result, callback_buffer, 7);
-    result[7] = '\0';
-    cartridge_validated = (strcmp(result, SUCCESS) == 0);
-    Serial.printlnf("result: %s", result);
-    Serial.printlnf("cartridge_validated: %d", cartridge_validated ? 1 : 0);
+    cartridge_validated = (strncmp(callback_buffer, SUCCESS, 7) == 0) && (strncmp(&callback_buffer[7], qr_uuid, CARTRIDGE_UUID_LENGTH) == 0);
+    Serial.printlnf("result | cartridge ID: %.31s", callback_buffer);
+    Serial.printlnf("cartridge_validated: %c", cartridge_validated ? 'Y' : 'N');
     if (cartridge_validated) {
         set_device_LED_color(0, 255, 0);    // cartridge found
         turn_on_device_LED();
@@ -613,7 +610,7 @@ void check_device_status() {
                 else {
                     Serial.println("No cartridge loaded");
                     memcpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
-                    set_device_LED_color(255, 255, 0);
+                    set_device_LED_color(128, 128, 128);
                     turn_on_device_LED();
                     cartridge_validated = false;
                 }
