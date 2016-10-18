@@ -442,6 +442,7 @@ int read_sensors() { // 0 -> baseline, 1 -> test
         convert_samples_to_reading('C');
 
         analogWrite(pinSensorLED, 0);
+        delay(SENSOR_LED_WARMUP_DELAY_MS);
 
         return 1;
 }
@@ -959,8 +960,10 @@ int process_one_BCODE_command(int cmd, int index) {
                 analogWrite(pinSensorLED, 0);
                 break;
         case 9: // Read sensors
-                start_blinking_device_LED(0, 50, 0, 100, 0);
-                read_sensors(); // read final values
+                stop_blinking_device_LED();
+                set_device_LED_color(50, 50, 50);
+                turn_on_device_LED();
+                read_sensors();
                 start_blinking_device_LED(0, 500, 0, 255, 0);
                 break;
         case 10: // Read QR code
