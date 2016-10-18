@@ -957,11 +957,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 analogWrite(pinSensorLED, 0);
                 break;
         case 9: // Read sensors
-                stop_blinking_device_LED();
-                set_device_LED_color(50, 50, 50);
-                turn_on_device_LED();
                 read_sensors();
-                start_blinking_device_LED(0, 500, 0, 255, 0);
                 break;
         case 10: // Read QR code
                 CHECK_SENSOR_DEVICE_STATUS;
