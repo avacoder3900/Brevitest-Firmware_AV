@@ -102,7 +102,7 @@ void move_solenoid(int duration) {
 
         Particle.process();
 
-        if (cancel_process) {
+        if (cancel_test) {
                 return;
         }
 
@@ -143,7 +143,7 @@ void move_steps(int steps, int step_delay){
         digitalWrite(pinStepperDir,dir);
 
         for(long i = 0; i < steps; i += 1) {
-                if (cancel_process) {
+                if (cancel_test) {
                         break;
                 }
 
@@ -299,7 +299,7 @@ void start_blinking_device_LED(int total_duration, int rate, int red = 255, int 
         device_LED.blinking = true;
 
         device_LED_timer.changePeriod(rate);
-        device_LED_timer.start();
+        device_LED_timer.reset();
         turn_on_device_LED();
 }
 
@@ -422,18 +422,13 @@ void convert_samples_to_reading(char sensor_code) {
         test_record.number_of_readings++;
 }
 
-int read_sensors(int reading_code) { // 0 -> baseline, 1 -> test
+int read_sensors() { // 0 -> baseline, 1 -> test
         int i;
 
         analogWrite(pinSensorLED, SENSOR_LED_ASSAY);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
-        if (reading_code == 0) {
-            Serial.println("Baseline reading");
-        }
-        else {
-            Serial.println("Test reading");
-        }
+        Serial.println("Test reading");
 
         for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
                 read_one_sensor('A', i);
@@ -560,37 +555,67 @@ void validate_callback(const char *event, const char *data) {
     }
 }
 
-void check_device_status() {
+void set_cancel_test_flag() {
+    cancel_test = true;
+}
+
+bool get_device_open_state() {
     int sensor_reading = check_sensor_clear('A');
     /*Serial.printlnf("Checking device status: %d", sensor_reading);*/
-    bool open_now = sensor_reading > SENSOR_DEVICE_OPEN_THRESHOLD;
+    return (sensor_reading > SENSOR_DEVICE_OPEN_THRESHOLD);
+}
+
+void check_device_status() {
+    bool open_now = get_device_open_state();
     if (open_now ^ device_open_state) {
         if (open_now) {
-            Serial.printlnf("Device just opened: %d", sensor_reading);
+            Serial.printlnf("Device just opened");
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
-            set_device_LED_color(0, 0, 255);
-            turn_on_device_LED();
             cartridge_validated = false;
-        }
-        else {
-            Serial.printlnf("Device just closed: %d", sensor_reading);
-            if (cartridge_loaded()) {
-                Serial.println("Cartridge in device");
-                if (scan_QR_code() == CARTRIDGE_UUID_LENGTH) {
-                    validate_cartridge();
+            if (test_in_progress) {
+                Serial.println("Device opened during test - starting cancel timer");
+                device_open_cancel_timer.reset();
+                start_blinking_device_LED(0, 50, 255, 0, 0);
+            }
+            else {
+                if (start_test_delay.isActive()) {
+                    Serial.println("Test cancelled during startup");
+                    start_test_delay.stop();
+                    stop_blinking_device_LED();
                 }
                 else {
-                    set_device_LED_color(255, 0, 0);    // bad cartridge uuid
+                    Serial.println("Device opened - no test started or running");
+                }
+                set_device_LED_color(255, 0, 255);
+                turn_on_device_LED();
+            }
+        }
+        else {
+            if (device_open_cancel_timer.isActive()) {
+                Serial.println("Device closed in time - test resumed");
+                device_open_cancel_timer.stop();
+                start_blinking_device_LED(0, 500, 0, 255, 0);
+            }
+            else {  // no test in progress
+                Serial.printlnf("Device just closed");
+                if (cartridge_loaded()) {
+                    Serial.println("Cartridge in device");
+                    if (scan_QR_code() == CARTRIDGE_UUID_LENGTH) {
+                        validate_cartridge();
+                    }
+                    else {
+                        set_device_LED_color(255, 0, 0);    // bad cartridge uuid
+                        turn_on_device_LED();
+                        cartridge_validated = false;
+                    }
+                }
+                else {
+                    Serial.println("No cartridge loaded");
+                    memcpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
+                    set_device_LED_color(255, 255, 0);
                     turn_on_device_LED();
                     cartridge_validated = false;
                 }
-            }
-            else {
-                Serial.println("No cartridge loaded");
-                memcpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
-                set_device_LED_color(255, 255, 0);
-                turn_on_device_LED();
-                cartridge_validated = false;
             }
         }
         bluetooth_update_characteristic("cartridge ID", qr_uuid, gatt.cartridge_id_characteristic);
@@ -829,7 +854,7 @@ int get_BCODE_token(int index, int *token) {
         int i;
         char *bcode = assay.BCODE;
 
-        if (cancel_process) {
+        if (cancel_test) {
                 return index;
         }
 
@@ -883,7 +908,7 @@ void update_progress(char *message, int duration) {
 int process_one_BCODE_command(int cmd, int index) {
         int i, param1, param2, param3, start_index;
 
-        if (cancel_process) {
+        if (cancel_test) {
                 return index;
         }
 
@@ -892,20 +917,22 @@ int process_one_BCODE_command(int cmd, int index) {
         switch(cmd) {
         case 0: // Start test()
                 test_record.start_time = Time.now();
-                read_sensors(0); // read initial values
                 break;
         case 1: // Delay(milliseconds)
+                CHECK_SENSOR_DEVICE_STATUS;
                 index = get_BCODE_token(index, &param1);
                 update_progress("", param1);
                 delay(param1);
                 break;
         case 2: // Move(number of steps, step delay)
+                CHECK_SENSOR_DEVICE_STATUS;
                 index = get_BCODE_token(index, &param1);
                 index = get_BCODE_token(index, &param2);
                 update_progress("Moving magnets", (abs(param1) * param2) / 1000);
                 move_steps(param1, param2);
                 break;
         case 3: // Solenoid on(milliseconds)
+                CHECK_SENSOR_DEVICE_STATUS;
                 index = get_BCODE_token(index, &param1);
                 update_progress("Rastering magnets", param1);
                 move_solenoid(param1);
@@ -932,9 +959,12 @@ int process_one_BCODE_command(int cmd, int index) {
                 analogWrite(pinSensorLED, 0);
                 break;
         case 9: // Read sensors
-                read_sensors(1); // read final values
+                start_blinking_device_LED(0, 50, 0, 100, 0);
+                read_sensors(); // read final values
+                start_blinking_device_LED(0, 500, 0, 255, 0);
                 break;
         case 10: // Read QR code
+                CHECK_SENSOR_DEVICE_STATUS;
                 scan_QR_code();
                 break;
         case 11: // Beep (milliseconds)
@@ -945,7 +975,7 @@ int process_one_BCODE_command(int cmd, int index) {
 
                 start_index = index;
                 for (i = 0; i < param1; i += 1) {
-                        if (cancel_process) {
+                        if (cancel_test) {
                                 break;
                         }
                         index = process_BCODE(start_index);
@@ -975,7 +1005,7 @@ int process_BCODE(int start_index) {
         Particle.process();
         index = get_BCODE_token(start_index, &cmd);
         if ((start_index == 0) && (cmd != 0)) { // first command
-                cancel_process = true;
+                cancel_test = true;
                 ERROR_MESSAGE(-15);
                 return -1;
         }
@@ -983,7 +1013,7 @@ int process_BCODE(int start_index) {
                 index = process_one_BCODE_command(cmd, index);
         }
 
-        while ((cmd != 99) && (index > 0) && !cancel_process) {
+        while ((cmd != 99) && (index > 0) && !cancel_test) {
                 Particle.process();
                 index = get_BCODE_token(index, &cmd);
                 index = process_one_BCODE_command(cmd, index);
@@ -1095,6 +1125,7 @@ void setup() {
         initialize_test_cache();
         initialize_bluetooth();
 
+        device_open_state = !get_device_open_state();
         device_open_timer.start();
 
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -1108,7 +1139,8 @@ void setup() {
 
 void reset_globals() {
         start_test = false;
-        cancel_process = false;
+        run_test = false;
+        cancel_test = false;
 
         qr_uuid[0] = '\0';
         qr_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
@@ -1136,7 +1168,6 @@ void do_run_test() {
 
         start_blinking_device_LED(0, 500, 0, 255, 0);
 
-        start_test = false;
         test_in_progress = true;
         test_last_progress_update = 0;
         update_progress("Resetting device and starting test", 0);
@@ -1147,21 +1178,27 @@ void do_run_test() {
 
         process_BCODE(0);
 
+        if (cancel_test) {
+            Serial.println("Test cancelled");
+            update_progress("Test cancelled", -1);
+            Particle.publish("brevitest-cancel-test", test_record.test_uuid, 60, PRIVATE);
+
+            stop_blinking_device_LED();
+            set_device_LED_color(255, 0, 0);
+            turn_on_device_LED();
+        }
+        else {
+            Serial.println("Test completed");
+            update_progress("Test complete", -1);
+            Particle.publish("brevitest-test-completed", test_record.test_uuid, 60, PRIVATE);
+
+            stop_blinking_device_LED();
+            set_device_LED_color(0, 255, 0);
+            turn_on_device_LED();
+        }
+
+        reset_globals();
         reset_stage();
-        update_progress("Test complete", -1);
-        Particle.publish("brevitest-test-completed", test_record.test_uuid, 60, PRIVATE);
-
-        reset_globals();
-
-        stop_blinking_device_LED();
-        set_device_LED_color(0, 255, 0);
-        turn_on_device_LED();
-}
-
-void do_cancel_test() {
-        update_progress("Test cancelled", -1);
-        reset_globals();
-        Particle.publish("brevitest-cancel-test", test_record.test_uuid, 60, PRIVATE);
 }
 
 void do_calibration() {
@@ -1190,17 +1227,32 @@ void do_upload_tests() {
         last_upload = millis();
 }
 
+void set_run_test_flag() {
+    run_test = true;
+}
+
 void loop() {
         int battery_level;
         bool online = Particle.connected();
         int inchar;
 
-        if (start_test && !test_in_progress) {
-                do_run_test();
+        if (start_test) {
+            Serial.println("Starting test");
+            start_test = false;
+            if (!test_in_progress) {
+                Serial.println("Starting test delay");
+                start_test_delay.reset();
+                start_blinking_device_LED(0, 50, 0, 255, 0);
+            }
         }
 
-        if (cancel_process) {
-                do_cancel_test();
+        if (run_test) {
+            Serial.println("Test delay complete");
+            run_test = false;
+            if (!test_in_progress) {
+                Serial.println("Running test");
+                do_run_test();
+            }
         }
 
         if (online && calibrate) {
@@ -1211,9 +1263,7 @@ void loop() {
                 do_upload_tests();
         }
 
-        if (check_device_status_flag) {
-                check_device_status();
-        }
+        CHECK_SENSOR_DEVICE_STATUS;
 
         if (callback_complete) {
             process_validate_callback_buffer();

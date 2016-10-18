@@ -10,7 +10,9 @@
 #define DEVICE_ID_LENGTH 24
 #define CARTRIDGE_UUID_LENGTH 24
 #define ERROR_MESSAGE(err) Serial.println(err)
-#define CANCELLABLE(x) if (!cancel_process) {x}
+#define CANCELLABLE(x) if (!cancel_test) {x}
+#define CHECK_SENSOR_DEVICE_STATUS if (check_device_status_flag) check_device_status()
+
 #define TAB_DELIM "\t"
 #define RETURN_DELIM "\n"
 #define COMMA_DELIM ","
@@ -47,13 +49,17 @@ int bluetooth_test_progress_char_index;
 #define SENSOR_LED_ASSAY 255
 #define SENSOR_LED_CONTROL 229
 #define SENSOR_DEVICE_OPEN_THRESHOLD 35
-#define SENSOR_DEVICE_OPEN_CHECK_PERIOD 1000
 #define SENSOR_CHECK_CARD_LED_POWER 200
 #define SENSOR_CHECK_CARD_LED_DELAY 200
 #define SENSOR_CARD_CHECK_THRESHOLD 25000
 
 // assay
 #define ASSAY_BCODE_CAPACITY 1000
+
+// timers
+#define TEST_START_DELAY 10000
+#define TEST_DEVICE_OPEN_BEFORE_CANCEL 10000
+#define DEVICE_OPEN_CHECK_PERIOD 1000
 
 // params
 #define PARAM_NUMBER_INDEX 2
@@ -125,7 +131,8 @@ int pinQRDecoderTX = TX;
 // global variables
 bool test_in_progress;
 bool start_test;
-bool cancel_process;
+bool run_test;
+bool cancel_test;
 bool calibrate;
 bool stress_test;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
@@ -134,12 +141,13 @@ unsigned long last_upload;
 bool qr_code_being_scanned = false;
 
 // device open check
-Timer device_open_timer(SENSOR_DEVICE_OPEN_CHECK_PERIOD, set_check_device_status_flag);
-bool device_open_state = true;
+bool device_open_state;
 bool check_device_status_flag = true;
 bool cartridge_validated = false;
 
 // device LED
+void update_blinking_device_LED(void);
+Timer device_LED_timer(DEVICE_LED_BLINK_DELAY_DEFAULT, update_blinking_device_LED);
 struct DeviceLED {
     bool blinking;
     bool currently_on;
@@ -160,8 +168,13 @@ struct DeviceLED {
     }
 } device_LED;
 
-void update_blinking_device_LED(void);
-Timer device_LED_timer(DEVICE_LED_BLINK_DELAY_DEFAULT, update_blinking_device_LED);
+// timers
+void set_check_device_status_flag(void);
+Timer device_open_timer(DEVICE_OPEN_CHECK_PERIOD, set_check_device_status_flag);
+void set_cancel_test_flag(void);
+Timer device_open_cancel_timer(TEST_DEVICE_OPEN_BEFORE_CANCEL, set_cancel_test_flag, true);
+void set_run_test_flag(void);
+Timer start_test_delay(TEST_START_DELAY, set_run_test_flag, true);
 
 // sensors
 TCS34725 tcsAssay;
