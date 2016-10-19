@@ -1130,8 +1130,11 @@ void set_update_battery_life_flag() {
 }
 void calculate_power_status() {
     int battery_level = analogRead(pinBatteryAin);
+    int old_power_status = power_status;
     power_status = (battery_level > BATTERY_CONVERSION_FACTOR * 100 ? 100 : battery_level / BATTERY_CONVERSION_FACTOR) * (digitalRead(pinDCinDetect) ? -1 : 1);
-    bluetooth_set_battery_life();
+    if (power_status != old_power_status) {
+        bluetooth_set_battery_life();
+    }
 }
 
 void setup() {

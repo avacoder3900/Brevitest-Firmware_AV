@@ -143,7 +143,7 @@ bool cancel_test;
 bool calibrate;
 bool stress_test;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
-int power_status;
+int power_status = 0;
 bool update_battery_life = false;
 unsigned long last_upload;
 bool qr_code_being_scanned = false;
