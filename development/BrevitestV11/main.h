@@ -26,8 +26,14 @@
 // bluetooth
 #define BLUETOOTH_TIMEOUT 2000
 #define BLUETOOTH_ADD_SERVICE_STRING "AT+GATTADDSERVICE=UUID128=0f-6f-41-0d-89-47-48-70-98-4f-7d-c8-43-47-fa-ab"
-#define BLUETOOTH_ADD_DEVICE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0001,PROPERTIES=0x12,MIN_LEN=24,MAX_LEN=24,VALUE="
-#define BLUETOOTH_ADD_CARTRIDGE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0002,PROPERTIES=0x12,MIN_LEN=24,MAX_LEN=24,VALUE=000000000000000000000000"
+#define BLUETOOTH_ADD_DEVICE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0001,DESCRIPTION=DeviceID,PROPERTIES=0x02,MIN_LEN=24,MAX_LEN=24,VALUE="
+#define BLUETOOTH_ADD_CARTRIDGE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0002,DESCRIPTION=CartridgeID,PROPERTIES=0x12,MIN_LEN=24,MAX_LEN=24,VALUE=000000000000000000000000"
+#define BLUETOOTH_ADD_STATUS_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0003,DESCRIPTION=Status,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
+#define BLUETOOTH_ADD_DEVICE_OPEN_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0004,DESCRIPTION=DeviceOpen,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=13"
+#define BLUETOOTH_ADD_PERCENT_COMPLETE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0005,DESCRIPTION=PercentComplete,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
+#define BLUETOOTH_ADD_CANCEL_TEST_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0006,DESCRIPTION=CancelTest,PROPERTIES=0x1A,MIN_LEN=1,MAX_LEN=1,VALUE=0"
+#define BLUETOOTH_ADD_ERROR_CODE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0007,DESCRIPTION=ErrorCode,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
+#define BLUETOOTH_ADD_BATTERY_LIFE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0008,DESCRIPTION=BatteryLife,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
 #define BLUETOOTH_UPDATE_CHARACTERISTIC_STRING "AT+GATTCHAR="
 
 int bluetooth_battery_service_index;
@@ -60,6 +66,7 @@ int bluetooth_test_progress_char_index;
 #define TEST_START_DELAY 10000
 #define TEST_DEVICE_OPEN_BEFORE_CANCEL 10000
 #define DEVICE_OPEN_CHECK_PERIOD 1000
+#define BATTERY_CHECK_PERIOD 60000
 
 // params
 #define PARAM_NUMBER_INDEX 2
@@ -137,6 +144,7 @@ bool calibrate;
 bool stress_test;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status;
+bool update_battery_life = false;
 unsigned long last_upload;
 bool qr_code_being_scanned = false;
 
@@ -175,6 +183,8 @@ void set_cancel_test_flag(void);
 Timer device_open_cancel_timer(TEST_DEVICE_OPEN_BEFORE_CANCEL, set_cancel_test_flag, true);
 void set_run_test_flag(void);
 Timer start_test_delay(TEST_START_DELAY, set_run_test_flag, true);
+void set_update_battery_life_flag(void);
+Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 
 // sensors
 TCS34725 tcsAssay;
@@ -200,6 +210,12 @@ struct GATT {
     int service;
     int device_id_characteristic;
     int cartridge_id_characteristic;
+    int status_characteristic;
+    int device_open_characteristic;
+    int percent_complete_characteristic;
+    int cancel_test_characteristic;
+    int error_code_characteristic;
+    int battery_life_characteristic;
 } gatt;
 char newline[2];
 
