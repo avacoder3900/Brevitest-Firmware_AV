@@ -1191,7 +1191,7 @@ void setup() {
         delim_string[1] = '\0';
         newline[0] = '\n';
         newline[1] = '\0';
-        System.deviceID().toCharArray(device_id, DEVICE_ID_LENGTH);
+        System.deviceID().toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
         reset_stage();
