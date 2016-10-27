@@ -506,22 +506,24 @@ bool load_assay_record(char *assayString) {
 void process_validate_callback_buffer() {
     callback_complete = false;
 
-    cartridge_validated = (strncmp(callback_buffer, SUCCESS, 7) == 0) && (strncmp(&callback_buffer[7], qr_uuid, CARTRIDGE_UUID_LENGTH) == 0);
-    Serial.printlnf("result | cartridge ID: %.31s", callback_buffer);
-    Serial.printlnf("cartridge_validated: %c", cartridge_validated ? 'Y' : 'N');
-    if (cartridge_validated) {    // cartridge found
-        bluetooth_set_status(6);
-        start_test = load_assay_record(&callback_buffer[7]);
-        stop_blinking_device_LED();
-    }
-    else {
-        bluetooth_set_status(5);
-        stop_blinking_device_LED();
-        set_device_LED_color(255, 0, 0);    // cartridge not found
-        turn_on_device_LED();
-        Serial.println(callback_buffer);
-        start_test = false;
-        bluetooth_set_error_code(2);
+    if (strncmp(&callback_buffer[7], qr_uuid, CARTRIDGE_UUID_LENGTH) == 0) { // is this my cartridge?
+        cartridge_validated = (strncmp(callback_buffer, SUCCESS, 7) == 0);
+        Serial.printlnf("result | cartridge ID: %.31s", callback_buffer);
+        Serial.printlnf("cartridge_validated: %c", cartridge_validated ? 'Y' : 'N');
+        if (cartridge_validated) {    // cartridge found
+            bluetooth_set_status(6);
+            start_test = load_assay_record(&callback_buffer[7]);
+            stop_blinking_device_LED();
+        }
+        else {
+            bluetooth_set_status(5);
+            stop_blinking_device_LED();
+            set_device_LED_color(255, 0, 0);    // cartridge not found
+            turn_on_device_LED();
+            Serial.println(callback_buffer);
+            start_test = false;
+            bluetooth_set_error_code(2);
+        }
     }
 
 }
