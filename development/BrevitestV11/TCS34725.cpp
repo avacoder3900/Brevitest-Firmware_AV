@@ -205,6 +205,7 @@ boolean TCS34725::begin(void)
 /**************************************************************************/
 boolean TCS34725::end(void)
 {
+    disable();
     THIS_WIRE.end();
     if (_wire_number == 1) {
         pinMode(C4, INPUT);

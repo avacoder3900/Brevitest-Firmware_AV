@@ -33,7 +33,7 @@
 #define BLUETOOTH_ADD_PERCENT_COMPLETE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0005,DESCRIPTION=PercentComplete,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
 #define BLUETOOTH_ADD_CANCEL_TEST_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0006,DESCRIPTION=CancelTest,PROPERTIES=0x1A,MIN_LEN=1,MAX_LEN=1,VALUE=0"
 #define BLUETOOTH_ADD_ERROR_CODE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0007,DESCRIPTION=ErrorCode,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
-#define BLUETOOTH_ADD_BATTERY_LIFE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0008,DESCRIPTION=BatteryLife,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
+#define BLUETOOTH_ADD_BATTERY_LIFE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0008,DESCRIPTION=BatteryLife,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=2,VALUE=0"
 #define BLUETOOTH_UPDATE_CHARACTERISTIC_STRING "AT+GATTCHAR="
 
 int bluetooth_battery_service_index;
@@ -56,7 +56,7 @@ int bluetooth_test_progress_char_index;
 #define SENSOR_LED_CONTROL 229
 #define SENSOR_DEVICE_OPEN_THRESHOLD 35
 #define SENSOR_CHECK_CARD_LED_POWER 200
-#define SENSOR_CHECK_CARD_LED_DELAY 200
+#define SENSOR_CHECK_CARD_LED_DELAY 100
 #define SENSOR_CARD_CHECK_THRESHOLD 25000
 
 // assay
@@ -65,7 +65,7 @@ int bluetooth_test_progress_char_index;
 // timers
 #define TEST_START_DELAY 10000
 #define TEST_DEVICE_OPEN_BEFORE_CANCEL 10000
-#define DEVICE_OPEN_CHECK_PERIOD 1000
+#define DEVICE_STATUS_CHECK_PERIOD 1000
 #define BATTERY_CHECK_PERIOD 60000
 
 // params
@@ -109,6 +109,10 @@ int bluetooth_test_progress_char_index;
 // upload
 #define UPLOAD_INTERVAL 60000
 
+// application watchdog
+void watchdog(void);
+ApplicationWatchdog wd(20000, watchdog);
+
 // pin definitions
 
 // ELECTRON PIN MAPPINGS
@@ -145,7 +149,7 @@ bool stress_test;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
-unsigned long last_upload;
+unsigned long next_upload;
 bool qr_code_being_scanned = false;
 
 // device open check
@@ -178,7 +182,7 @@ struct DeviceLED {
 
 // timers
 void set_check_device_status_flag(void);
-Timer device_open_timer(DEVICE_OPEN_CHECK_PERIOD, set_check_device_status_flag);
+Timer device_status_timer(DEVICE_STATUS_CHECK_PERIOD, set_check_device_status_flag);
 void set_cancel_test_flag(void);
 Timer device_open_cancel_timer(TEST_DEVICE_OPEN_BEFORE_CANCEL, set_cancel_test_flag, true);
 void set_run_test_flag(void);

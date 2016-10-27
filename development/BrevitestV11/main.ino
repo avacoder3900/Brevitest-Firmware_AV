@@ -334,9 +334,9 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         *sensor = TCS34725(sensor_number);
 }
 
-int check_sensor_clear(char sensor_code) {
-    uint16_t red = 0, green = 0, blue = 0, clear = 0;
+uint16_t check_sensor_clear(char sensor_code) {
     TCS34725 *sensor;
+    uint16_t red = 0, green = 0, blue = 0, clear = 0;
     int tries = 0;
 
     if (sensor_code == 'A') {
@@ -345,13 +345,14 @@ int check_sensor_clear(char sensor_code) {
     else {
             sensor = &tcsControl;
     }
+
     sensor->begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
     while (clear == 0 && tries++ < 5) {
         sensor->getRawData(&red, &green, &blue, &clear);
     }
     sensor->end();
-
-    return (int) clear;
+    /*Serial.printlnf("R: %d, G: %d, B: %d, C: %d, tries: %d", red, green, blue, clear, tries);*/
+    return clear;
 }
 
 void read_one_sensor(char sensor_code, int sample_number) {
@@ -460,10 +461,10 @@ void set_check_device_status_flag() {
 bool cartridge_loaded() {
     analogWrite(pinSensorLED, SENSOR_CHECK_CARD_LED_POWER);
     delay(SENSOR_CHECK_CARD_LED_DELAY);
-    int sensor_reading = check_sensor_clear('A');
+    uint16_t level = check_sensor_clear('A');
     analogWrite(pinSensorLED, 0);
-    Serial.printlnf("Cartridge loaded? %c", sensor_reading > SENSOR_CARD_CHECK_THRESHOLD ? 'Y' : 'N');
-    return (sensor_reading > SENSOR_CARD_CHECK_THRESHOLD);
+    Serial.printlnf("Cartridge loaded? %c, level: %d", level > SENSOR_CARD_CHECK_THRESHOLD ? 'Y' : 'N', level);
+    return (level > SENSOR_CARD_CHECK_THRESHOLD);
 }
 
 void validate_cartridge() {
@@ -563,13 +564,15 @@ void set_cancel_test_flag() {
 }
 
 bool device_is_open() {
-    int sensor_reading = check_sensor_clear('A');
-    /*Serial.printlnf("Checking device status: %d", sensor_reading);*/
-    return (sensor_reading > SENSOR_DEVICE_OPEN_THRESHOLD);
+    uint16_t level = check_sensor_clear('A');
+    /*Serial.printlnf("Checking device status: %d, bluetooth count: %d", level, bluetooth_buffer_count);*/
+    return (level > SENSOR_DEVICE_OPEN_THRESHOLD);
 }
 
 void check_device_status() {
+    check_device_status_flag = false;
     bool open_now = device_is_open();
+    /*Serial.printlnf("device_open_state: %c, open_now: %c", device_open_state ? 'T' : 'F', open_now ? 'T' : 'F');*/
     if (open_now ^ device_open_state) {
         if (open_now) {
             Serial.printlnf("Device just opened");
@@ -626,7 +629,7 @@ void check_device_status() {
                 else {
                     bluetooth_set_status(1);
                     Serial.println("No cartridge loaded");
-                    memcpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
+                    strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                     stop_blinking_device_LED();
                     set_device_LED_color(128, 128, 128);
                     turn_on_device_LED();
@@ -637,7 +640,6 @@ void check_device_status() {
         bluetooth_set_cartridge_id();
     }
     device_open_state = open_now;
-    check_device_status_flag = false;
 }
 
 /////////////////////////////////////////////////////////////
@@ -690,9 +692,11 @@ int process_test_record(int index) {
 
         test = &eeprom.test_cache[index];
 
-        len = sprintf(particle_register, "%11d\t%11d\t%.24s\t%2d\n", test->start_time, test->finish_time, test->test_uuid, test->number_of_readings);
-        for (i = 0; i < test->number_of_readings; i++) {
-            len += append_test_reading(len, &(test->reading[i]));
+        len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
+        for (i = 0; i < TEST_MAXIMUM_NUMBER_OF_READINGS; i++) {
+            if (test->reading[i].channel == 'A' || test->reading[i].channel == 'C') {
+                len += append_test_reading(len, &(test->reading[i]));
+            }
         }
         return 1;
 }
@@ -736,7 +740,7 @@ void store_params() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int bluetooth_command(char *cmd) {
+int try_bluetooth_command(char *cmd) {
     unsigned long timeout;
     int readInt;
     char readChar;
@@ -770,6 +774,17 @@ int bluetooth_command(char *cmd) {
     return 0;
 }
 
+int bluetooth_command(char *cmd) {
+    int tries = 0;
+
+    int result = try_bluetooth_command(cmd);
+    while (result < 1 && ++tries < 5) { // retry on ERROR or timeout
+        delay(2000);
+        result = try_bluetooth_command(cmd);
+    }
+    return result;
+}
+
 int bluetooth_extract_int(int lineNumber) {
     char *start;
     int i;
@@ -783,7 +798,7 @@ int bluetooth_extract_int(int lineNumber) {
 
 void bluetooth_factory_reset() {
     if (bluetooth_command("AT+FACTORYRESET") < 1) {
-        Serial.println("Failed to perform factory reset");
+        Serial.println("Failed to perform factory reset; retrying...");
     }
 }
 
@@ -865,6 +880,10 @@ void bluetooth_set_battery_life() {
 
 bool tests_to_upload() {
         int i;
+
+        if (millis() < next_upload) {
+                return false;
+        }
 
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
@@ -1137,6 +1156,10 @@ void calculate_power_status() {
     }
 }
 
+void watchdog() {
+    Serial.println("Watchdog!");
+}
+
 void setup() {
         pinMode(pinBatteryAin, INPUT);
         pinMode(pinDCinDetect, INPUT);
@@ -1202,8 +1225,8 @@ void setup() {
         calculate_power_status();
 
         device_open_state = !device_is_open();
-        device_open_timer.start();
-        battery_check_timer.start();
+        device_status_timer.reset();
+        battery_check_timer.reset();
 
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 }
@@ -1237,7 +1260,7 @@ void reset_globals() {
         particle_status[0] = '\n';
         particle_status[1] = '\0';
 
-        last_upload = 0;
+        next_upload = 0;
 }
 
 void do_run_test() {
@@ -1293,12 +1316,9 @@ void do_calibration() {
 void do_upload_tests() {
         int i;
 
-        if (millis() < last_upload + UPLOAD_INTERVAL) {
-                return;
-        }
-
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
+                        Serial.printlnf("Processing test record: %s", eeprom.test_cache[i].test_uuid);
                         process_test_record(i);
                         Serial.println(particle_register);
                         Particle.publish("brevitest-upload-test", eeprom.test_cache[i].test_uuid, 60, PRIVATE);
@@ -1306,7 +1326,7 @@ void do_upload_tests() {
                 }
         }
 
-        last_upload = millis();
+        next_upload = millis() + UPLOAD_INTERVAL;
 }
 
 void set_run_test_flag() {
@@ -1340,16 +1360,19 @@ void loop() {
         }
 
         if (online && calibrate) {
+                Serial.println("Calibrating");
                 do_calibration();
         }
 
         if (online && tests_to_upload()) {
+                Serial.println("Uploading tests");
                 do_upload_tests();
         }
 
         CHECK_SENSOR_DEVICE_STATUS;
 
         if (callback_complete) {
+            Serial.println("Processing validation callback");
             process_validate_callback_buffer();
         }
 
@@ -1364,6 +1387,7 @@ void loop() {
         }
 
         if (update_battery_life) {
+            Serial.println("Updating battery life monitor");
             update_battery_life = false;
             calculate_power_status();
         }
