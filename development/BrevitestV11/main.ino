@@ -61,6 +61,7 @@ int reset_eeprom() {
         Particle_EEPROM e;
 
         memcpy(&eeprom, &e, (int) sizeof(Particle_EEPROM));
+        erase_test_cache();
         store_eeprom();
 
         return 1;
@@ -238,23 +239,27 @@ int scan_QR_code() {
                 Particle.process();
         }
 
-        Serial.println("Stop triggering QR reader");
+        Serial.printlnf("Stop triggering QR reader, ready=%c", Serial1.available() ? 'Y' : 'N');
         digitalWrite(pinQRTrigger, LOW);
 
         delay(100); // allow QR code buffer to fill before reading
 
         Serial.println("Reading QR code from Serial1");
         do {
+                Serial.print('.');
                 buf = Serial1.read();
                 if (buf != -1) {
                         qr_uuid[i++] = (char) buf;
                 }
         } while (Serial1.available() && i < CARTRIDGE_UUID_LENGTH);
+        Serial.println();
+        Serial.printlnf("QR code: %s, length: %d", qr_uuid, i);
 
         if (i < CARTRIDGE_UUID_LENGTH) {
             memcpy(qr_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
         }
         qr_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+        Serial.printlnf("QR code: %s, length: %d", qr_uuid, i);
 
         Serial1.end();
         Serial.println("Finish reading QR code");
@@ -506,6 +511,7 @@ bool load_assay_record(char *assayString) {
 void process_validate_callback_buffer() {
     callback_complete = false;
 
+    Serial.println(callback_buffer);
     if (strncmp(&callback_buffer[7], qr_uuid, CARTRIDGE_UUID_LENGTH) == 0) { // is this my cartridge?
         cartridge_validated = (strncmp(callback_buffer, SUCCESS, 7) == 0);
         Serial.printlnf("result | cartridge ID: %.31s", callback_buffer);
@@ -582,9 +588,10 @@ void check_device_status() {
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_validated = false;
             if (test_in_progress) {
-                bluetooth_set_status(9);
-                Serial.println("Device opened during test - starting cancel timer");
-                device_open_cancel_timer.reset();
+                /*bluetooth_set_status(9);*/
+                /*Serial.println("Device opened during test - starting cancel timer");
+                device_open_cancel_timer.reset();*/
+                Serial.println("Device opened during test");
                 start_blinking_device_LED(0, 100, 255, 0, 0);
             }
             else {
@@ -605,10 +612,11 @@ void check_device_status() {
         }
         else {
             bluetooth_set_device_open_state("Device closed");
-            if (device_open_cancel_timer.isActive()) {
-                bluetooth_set_status(8);
-                Serial.println("Device closed in time - test resumed");
-                device_open_cancel_timer.stop();
+            /*if (device_open_cancel_timer.isActive()) {*/
+            if (test_in_progress) {
+                /*bluetooth_set_status(8);*/
+                /*Serial.println("Device closed in time - test resumed");*/
+                /*device_open_cancel_timer.stop();*/
                 start_blinking_device_LED(0, 500, 0, 255, 0);
             }
             else {  // no test in progress
@@ -1118,6 +1126,17 @@ void initialize_test_cache() {
         }
 }
 
+void erase_test_cache() {
+        int *ptr;
+        int i;
+
+        Serial.println("Erasing test cache");
+        for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
+                ptr = &eeprom.test_cache[i].start_time;
+                memset(ptr, '\0', sizeof(BrevitestTestRecord));
+        }
+}
+
 void initialize_bluetooth() {
     bluetooth_factory_reset();
     delay(500);
@@ -1267,7 +1286,7 @@ void reset_globals() {
 
 void do_run_test() {
         if (!device_is_open()) {
-            Serial.println("Running test");
+            Serial.println("Started test run");
             Particle.publish("brevitest-test-started", test_record.test_uuid, 60, PRIVATE);
 
             start_blinking_device_LED(0, 500, 0, 255, 0);
@@ -1280,6 +1299,7 @@ void do_run_test() {
             analogWrite(pinSolenoid, 0);
             analogWrite(pinSensorLED, 0);
 
+            Particle.process();
             process_BCODE(0);
 
             if (cancel_test) {

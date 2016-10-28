@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 6
-#define DATA_FORMAT_VERSION 2
+#define DATA_FORMAT_VERSION 4
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -96,7 +96,7 @@ int bluetooth_test_progress_char_index;
 // qr scanner
 #define QR_DELAY_AFTER_POWER_ON_MS 1000
 #define QR_DELAY_AFTER_TRIGGER_MS 50
-#define QR_READ_TIMEOUT 1000
+#define QR_READ_TIMEOUT 2000
 #define VALIDATE_CARTRIDGE_TIMEOUT 10000
 
 // stepper
