@@ -203,6 +203,7 @@ unsigned long test_last_progress_update;
 char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char qr_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char device_id[DEVICE_ID_LENGTH + 1];
+String device_id_string;
 
 // bluetooth
 #define BLUETOOTH_BUFFER_SIZE 500

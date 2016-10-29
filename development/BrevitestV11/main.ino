@@ -1271,13 +1271,15 @@ void setup() {
         Particle.variable("register", particle_register, STRING);
         Particle.variable("status", particle_status, STRING);
         Particle.variable("powerstatus", &power_status, INT);
-        Particle.subscribe("hook-response/brevitest-upload-test", remove_test_from_cache, MY_DEVICES);
-        Particle.subscribe("hook-response/brevitest-validate", validate_callback, MY_DEVICES);
+        device_id_string = System.deviceID();
+        Particle.subscribe(String("hook-response/brevitest-upload-test-" + device_id_string), remove_test_from_cache, MY_DEVICES);
+        Particle.subscribe(String("hook-response/brevitest-validate-" + device_id_string), validate_callback, MY_DEVICES);
+        device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
+        device_id[DEVICE_ID_LENGTH] = '\0';
 
         turn_off_device_LED();
         set_device_LED_color(255, 255, 0);
         turn_on_device_LED();
-
 
         Serial.begin(115200); // standard serial port
         Serial4.begin(9600); // bluetooth serial port
@@ -1292,8 +1294,6 @@ void setup() {
         delim_string[1] = '\0';
         newline[0] = '\n';
         newline[1] = '\0';
-        System.deviceID().toCharArray(device_id, DEVICE_ID_LENGTH + 1);
-        device_id[DEVICE_ID_LENGTH] = '\0';
 
         reset_stage();
         reset_globals();
