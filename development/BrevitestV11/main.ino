@@ -198,22 +198,6 @@ void reset_stage() {
         move_steps(1300, eeprom.param.step_delay_us);
 }
 
-void save_calibration_point() {
-        uint8_t lsb, msb;
-        int addr = offsetof(Particle_EEPROM, param.calibration_steps);
-
-        msb = (uint8_t) (eeprom.param.calibration_steps >> 8);
-        lsb = (uint8_t) (eeprom.param.calibration_steps & 0x0F);
-        EEPROM.write(addr, msb);
-        EEPROM.write(addr + 1, lsb);
-}
-
-void move_to_calibration_point() {
-        CANCELLABLE(reset_stage(); )
-        delay(500);
-        CANCELLABLE(move_steps(eeprom.param.calibration_steps, eeprom.param.step_delay_us); )
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                       QR SCANNER                        //
@@ -475,7 +459,7 @@ bool cartridge_loaded() {
 void validate_cartridge() {
     bluetooth_set_status(4);
     cartridge_validated = false;
-    Particle.publish("brevitest-validate", qr_uuid, 60, PRIVATE);
+    brevitest_publish("validate", qr_uuid);
     callback_buffer[0] = '\0';
     callback_complete = false;
 }
@@ -508,62 +492,148 @@ bool load_assay_record(char *assayString) {
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
 
-void process_validate_callback_buffer() {
-    callback_complete = false;
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                 PUBLISH AND CALLBACKS                   //
+//                                                         //
+/////////////////////////////////////////////////////////////
 
-    Serial.println(callback_buffer);
-    if (strncmp(&callback_buffer[7], qr_uuid, CARTRIDGE_UUID_LENGTH) == 0) { // is this my cartridge?
-        cartridge_validated = (strncmp(callback_buffer, SUCCESS, 7) == 0);
-        Serial.printlnf("result | cartridge ID: %.31s", callback_buffer);
-        Serial.printlnf("cartridge_validated: %c", cartridge_validated ? 'Y' : 'N');
-        if (cartridge_validated) {    // cartridge found
-            bluetooth_set_status(6);
-            start_test = load_assay_record(&callback_buffer[7]);
-            stop_blinking_device_LED();
+void brevitest_publish(char *event_name, char *data) {
+    callback_complete = false;
+    Particle.publish(String("brevitest"), String(event_name) + String("\n") + String(data), 60, PRIVATE);
+    Serial.printlnf("Publish: %s, %s", event_name, data);
+}
+
+void callback_validate(char *mark) {
+    cartridge_validated = (strncmp(callback_result, SUCCESS, 7) == 0);
+    Serial.printlnf("Catridge validated: %c", cartridge_validated ? 'Y' : 'N');
+    if (cartridge_validated) {    // cartridge found
+        bluetooth_set_status(6);
+        start_test = load_assay_record(mark);
+        stop_blinking_device_LED();
+    }
+    else {
+        bluetooth_set_status(5);
+        stop_blinking_device_LED();
+        set_device_LED_color(255, 0, 0);    // cartridge not found
+        turn_on_device_LED();
+        Serial.println(mark);
+        start_test = false;
+        bluetooth_set_error_code(2);
+    }
+}
+
+void callback_test_start() {
+    Serial.println("Test started");
+    test_record_created = (strncmp(callback_result, SUCCESS, 7) == 0);
+}
+
+void callback_test_finish() {
+    Serial.println("Test finished");
+    reset_globals();
+    reset_stage();
+}
+
+void callback_test_cancel() {
+    Serial.println("Test cancelled");
+    reset_globals();
+    reset_stage();
+}
+
+void callback_test_upload(char *mark) {
+    if (strncmp(callback_result, SUCCESS, 7) == 0) {
+        Serial.println("Test successfully uploaded; removing from cache");
+        Serial.println(mark);
+        remove_test_from_cache(mark);
+    }
+    else {
+        Serial.println("Test upload failed");
+    }
+}
+
+char *extract_callback_params() {
+    int indx;
+    char *mark;
+
+    mark = callback_buffer;
+
+    indx = strcspn(mark, RETURN_DELIM);
+    strncpy(callback_name, mark, indx);
+    callback_name[indx] = '\0';
+    mark += indx + 1;
+
+    indx = strcspn(mark, RETURN_DELIM);
+    strncpy(callback_result, mark, indx);
+    callback_result[indx] = '\0';
+    mark += indx + 1;
+
+    return mark;
+}
+
+void unescape_callback_buffer() {
+    int i, len;
+    char *from = callback_buffer;
+    char *to = callback_buffer;
+
+    len = strlen(callback_buffer);
+    from++;
+    for (i = 0; i < len - 1; i++) {
+        if (*from == '\\') {
+            from++;
+            if (*from == 't') {
+                *to++ = '\t';
+            }
+            else if (*from == 'n') {
+                *to++ = '\n';
+            }
+            else {
+                *to++ = '\\';
+                *to++ = *from;
+            }
+            from++;
         }
         else {
-            bluetooth_set_status(5);
-            stop_blinking_device_LED();
-            set_device_LED_color(255, 0, 0);    // cartridge not found
-            turn_on_device_LED();
-            Serial.println(callback_buffer);
-            start_test = false;
-            bluetooth_set_error_code(2);
+            *to++ = *from++;
         }
+    }
+    *to = '\0';
+}
+
+void process_callback_buffer() {
+    char *mark;
+    callback_complete = false;
+    Serial.println(callback_buffer);
+
+    unescape_callback_buffer();
+    Serial.println(callback_buffer);
+
+    mark = extract_callback_params();
+    Serial.println(mark);
+
+    if (strcmp(mark, "validate") == 0) {
+        callback_validate(mark);
+    }
+    else if (strcmp(mark, "test-start") == 0) {
+        callback_test_start();
+    }
+    else if (strcmp(mark, "test-finish") == 0) {
+        callback_test_finish();
+    }
+    else if (strcmp(mark, "test-cancel") == 0) {
+        callback_test_cancel();
+    }
+    else if (strcmp(mark, "test-upload") == 0) {
+        callback_test_upload(mark);
     }
 
 }
 
-void validate_callback(const char *event, const char *data) {
-    int i;
-    int datalen = strlen(data);
-    int len = strlen(callback_buffer);
-    int offset = (len ? 0 : 1);
-    for (i = offset; i < datalen; i++) {
-        if (data[i] == '\\') {
-            i++;
-            if (data[i] == 't') {
-                callback_buffer[len++] = '\t';
-            }
-            else if (data[i] == 'n') {
-                callback_buffer[len++] = '\n';
-            }
-            else {
-                callback_buffer[len++] = '\\';
-                callback_buffer[len++] = data[i];
-            }
-        }
-        else {
-            callback_buffer[len++] = data[i];
-        }
-    }
-    Serial.printlnf("Last character in callback: %c, len: %d", callback_buffer[len - 1], len);
-    callback_complete = (callback_buffer[len - 1] == '\"');
-    if (callback_complete) {
-        callback_buffer[len - 1] = '\0';
-    }
-    else {
-        callback_buffer[len] = '\0';
+void brevitest_callback(const char *event, const char *data) {
+    SINGLE_THREADED_BLOCK() {
+        strcat(callback_buffer, data);
+        int len = strlen(data);
+        callback_complete = (len < 512) || (data[len - 1] == '\"');
+        /*Serial.printlnf("callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');*/
     }
 }
 
@@ -924,20 +994,17 @@ bool tests_to_upload() {
         return false;
 }
 
-void remove_test_from_cache(const char *event, const char *data)
+void remove_test_from_cache(char *testId)
 {
         int i;
         BrevitestTestRecord *test;
 
-        if (strncmp(&data[1], SUCCESS, 7) == 0) {
-            for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
-                    if (strncmp(&data[8], eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0) {
-                            memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
-                            store_eeprom();
-                            Particle.publish("brevitest-test-cleared-from-cache", data, 60, PRIVATE);
-                            return;
-                    }
-            }
+        for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
+                if (strncmp(testId, eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0) {
+                        memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
+                        store_eeprom();
+                        return;
+                }
         }
 }
 
@@ -1272,8 +1339,7 @@ void setup() {
         Particle.variable("status", particle_status, STRING);
         Particle.variable("powerstatus", &power_status, INT);
         device_id_string = System.deviceID();
-        Particle.subscribe(String("hook-response/brevitest-upload-test-" + device_id_string), remove_test_from_cache, MY_DEVICES);
-        Particle.subscribe(String("hook-response/brevitest-validate-" + device_id_string), validate_callback, MY_DEVICES);
+        Particle.subscribe(String("hook-response/brevitest-" + device_id_string), brevitest_callback, MY_DEVICES);
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
@@ -1343,8 +1409,7 @@ void reset_globals() {
 
 void do_run_test() {
         if (!device_is_open()) {
-            Serial.println("Started test run");
-            Particle.publish("brevitest-test-started", test_record.test_uuid, 60, PRIVATE);
+            Serial.println("Running test");
 
             start_blinking_device_LED(0, 500, 0, 255, 0);
 
@@ -1363,7 +1428,7 @@ void do_run_test() {
                 bluetooth_set_status(14);
                 Serial.println("Test cancelled");
                 update_progress("Test cancelled", -1);
-                Particle.publish("brevitest-test-cancelled", test_record.test_uuid, 60, PRIVATE);
+                brevitest_publish("test-cancel", test_record.test_uuid);
 
                 stop_blinking_device_LED();
                 set_device_LED_color(255, 0, 0);
@@ -1373,23 +1438,13 @@ void do_run_test() {
                 bluetooth_set_status(12);
                 Serial.println("Test completed");
                 update_progress("Test complete", -1);
-                Particle.publish("brevitest-test-completed", test_record.test_uuid, 60, PRIVATE);
+                brevitest_publish("test-finish", test_record.test_uuid);
 
                 stop_blinking_device_LED();
                 set_device_LED_color(0, 255, 0);
                 turn_on_device_LED();
             }
-
-            reset_globals();
-            reset_stage();
         }
-}
-
-void do_calibration() {
-        Particle.publish("brevitest-calibrate-device", "", 60, PRIVATE);
-        calibrate = false;
-        save_calibration_point();
-        move_to_calibration_point();
 }
 
 void do_upload_tests() {
@@ -1400,7 +1455,7 @@ void do_upload_tests() {
                         Serial.printlnf("Processing test record: %s", eeprom.test_cache[i].test_uuid);
                         process_test_record(i);
                         Serial.println(particle_register);
-                        Particle.publish("brevitest-upload-test", eeprom.test_cache[i].test_uuid, 60, PRIVATE);
+                        brevitest_publish("upload-test", eeprom.test_cache[i].test_uuid);
                         delay(4000);
                 }
         }
@@ -1413,8 +1468,13 @@ void set_run_test_flag() {
 }
 
 void loop() {
-        bool online = Particle.connected();
         int inchar;
+
+        if (callback_complete) {
+            Serial.println("Processing callback");
+            process_callback_buffer();
+            return;
+        }
 
         if (start_test) {
             Serial.println("Starting test");
@@ -1424,10 +1484,13 @@ void loop() {
                 Serial.println("Starting test delay");
                 start_test_delay.reset();
                 start_blinking_device_LED(0, 100, 0, 255, 0);
+                test_record_created = false;
+                brevitest_publish("test-start", test_record.test_uuid);
             }
+            return;
         }
 
-        if (run_test) {
+        if (run_test && test_record_created) {
             Serial.println("Test delay complete");
             run_test = false;
             if (!test_in_progress) {
@@ -1435,24 +1498,16 @@ void loop() {
                 Serial.println("Running test");
                 do_run_test();
             }
+            return;
         }
 
-        if (online && calibrate) {
-                Serial.println("Calibrating");
-                do_calibration();
-        }
-
-        if (online && tests_to_upload()) {
+        if (!test_in_progress && tests_to_upload()) {
                 Serial.println("Uploading tests");
                 do_upload_tests();
+                return;
         }
 
         CHECK_SENSOR_DEVICE_STATUS;
-
-        if (callback_complete) {
-            Serial.println("Processing validation callback");
-            process_validate_callback_buffer();
-        }
 
         if (Serial.available()) {
                 inchar = Serial.read();

@@ -12,7 +12,6 @@
 #define ERROR_MESSAGE(err) Serial.println(err)
 #define CANCELLABLE(x) if (!cancel_test) {x}
 #define CHECK_SENSOR_DEVICE_STATUS if (check_device_status_flag) check_device_status()
-
 #define TAB_DELIM "\t"
 #define RETURN_DELIM "\n"
 #define COMMA_DELIM ","
@@ -144,7 +143,6 @@ bool test_in_progress;
 bool start_test;
 bool run_test;
 bool cancel_test;
-bool calibrate;
 bool stress_test;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
@@ -156,6 +154,7 @@ bool qr_code_being_scanned = false;
 bool device_open_state;
 bool check_device_status_flag = true;
 bool cartridge_validated = false;
+bool test_record_created = false;
 
 // device LED
 void update_blinking_device_LED(void);
@@ -224,10 +223,14 @@ struct GATT {
 } gatt;
 char newline[2];
 
-// particle messaging
+// publish and subscribe callback
 #define CALLBACK_BUFFER_SIZE 1200
 char callback_buffer[CALLBACK_BUFFER_SIZE];
 bool callback_complete;
+char callback_name[40];
+char callback_result[30];
+
+// particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
@@ -248,8 +251,7 @@ struct Param {      // 32 bytes
   uint16_t stepper_wake_delay_ms;
   uint16_t solenoid_power;  // surge << 8 + sustain
   uint16_t solenoid_surge_period_ms;
-  uint16_t calibration_steps;
-  uint16_t reserved[9];
+  uint16_t reserved[10];
   Param() {
     reset_steps = 14000;
     step_delay_us = 800;
@@ -257,7 +259,6 @@ struct Param {      // 32 bytes
     stepper_wake_delay_ms = 5;
     solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 150;
-    calibration_steps = 250;
   }
 };
 
