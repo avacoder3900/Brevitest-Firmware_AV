@@ -143,7 +143,7 @@ bool test_in_progress;
 bool start_test;
 bool run_test;
 bool cancel_test;
-bool stress_test;
+bool uploading_test = false;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
@@ -227,8 +227,12 @@ char newline[2];
 #define CALLBACK_BUFFER_SIZE 1200
 char callback_buffer[CALLBACK_BUFFER_SIZE];
 bool callback_complete;
-char callback_name[40];
-char callback_result[30];
+char callback_event[30];
+char callback_status[40];
+char callback_target[40];
+char current_event[30];
+char current_data[60];
+int current_event_tries = 0;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];

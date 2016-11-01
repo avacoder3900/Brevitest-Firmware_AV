@@ -459,20 +459,17 @@ bool cartridge_loaded() {
 void validate_cartridge() {
     bluetooth_set_status(4);
     cartridge_validated = false;
-    brevitest_publish("validate", qr_uuid);
+    brevitest_publish("validate-cartridge", qr_uuid, false);
     callback_buffer[0] = '\0';
     callback_complete = false;
 }
 
-bool load_assay_record(char *assayString) {
+bool load_assay_record(char *cartridgeId, char *assayString) {
         int indx = 0;
 
-        Serial.println(assayString);
-
-        memcpy(cartridge_uuid, assayString, CARTRIDGE_UUID_LENGTH);
-        memcpy(assay.uuid, assayString, ASSAY_UUID_LENGTH);
-        indx += CARTRIDGE_UUID_LENGTH + 1;
-        memcpy(test_record.test_uuid, &assayString[indx], TEST_UUID_LENGTH);
+        memcpy(cartridge_uuid, cartridgeId, CARTRIDGE_UUID_LENGTH);
+        memcpy(assay.uuid, cartridgeId, ASSAY_UUID_LENGTH);
+        memcpy(test_record.test_uuid, assayString, TEST_UUID_LENGTH);
         indx += TEST_UUID_LENGTH + 1;
         test_record.number_of_readings = 0;
 
@@ -485,9 +482,6 @@ bool load_assay_record(char *assayString) {
         assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
         strcpy(assay.BCODE, &assayString[indx]);
 
-        Serial.printlnf("%.24s %.8s %.24s %d %d %d %d %d", cartridge_uuid, assay.uuid, test_record.test_uuid, assay.duration, assay.sensor_integration_time, assay.sensor_gain, assay.led_power, assay.delay_between_sensor_readings_ms);
-        Serial.printlnf("%d %d %s", assay.BCODE_length, assay.BCODE_version, assay.BCODE);
-
         indx += assay.BCODE_length;
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
@@ -498,57 +492,69 @@ bool load_assay_record(char *assayString) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void brevitest_publish(char *event_name, char *data) {
+void brevitest_publish(char *event_name, char *data, bool retry) {
+    if (!retry) {
+      current_event_tries = 0;
+    }
+    current_event_tries++;
     callback_complete = false;
+    strcpy(current_event, event_name);
+    strcpy(current_data, data);
     Particle.publish(String("brevitest"), String(event_name) + String("\n") + String(data), 60, PRIVATE);
-    Serial.printlnf("Publish: %s, %s", event_name, data);
+    Serial.printlnf("Publish: %s, %s, try: %d", event_name, data, current_event_tries);
 }
 
-void callback_validate(char *mark) {
-    cartridge_validated = (strncmp(callback_result, SUCCESS, 7) == 0);
-    Serial.printlnf("Catridge validated: %c", cartridge_validated ? 'Y' : 'N');
+void callback_validate(char *cartridgeId, char *assayString) {
+    cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
+    Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
     if (cartridge_validated) {    // cartridge found
         bluetooth_set_status(6);
-        start_test = load_assay_record(mark);
-        stop_blinking_device_LED();
+        start_test = load_assay_record(cartridgeId, assayString);
+        start_blinking_device_LED(0, 500, 0, 255, 0);
+        start_test = true;
     }
     else {
         bluetooth_set_status(5);
         stop_blinking_device_LED();
         set_device_LED_color(255, 0, 0);    // cartridge not found
         turn_on_device_LED();
-        Serial.println(mark);
+        Serial.printlnf("cartridgeId: %s, assayString: %s", cartridgeId, assayString);
         start_test = false;
         bluetooth_set_error_code(2);
     }
+    callback_buffer[0] = '\0';
 }
 
 void callback_test_start() {
     Serial.println("Test started");
-    test_record_created = (strncmp(callback_result, SUCCESS, 7) == 0);
+    callback_buffer[0] = '\0';
+    test_record_created = (strncmp(callback_status, SUCCESS, 7) == 0);
 }
 
 void callback_test_finish() {
     Serial.println("Test finished");
+    callback_buffer[0] = '\0';
     reset_globals();
     reset_stage();
 }
 
 void callback_test_cancel() {
     Serial.println("Test cancelled");
+    callback_buffer[0] = '\0';
     reset_globals();
     reset_stage();
 }
 
-void callback_test_upload(char *mark) {
-    if (strncmp(callback_result, SUCCESS, 7) == 0) {
-        Serial.println("Test successfully uploaded; removing from cache");
-        Serial.println(mark);
-        remove_test_from_cache(mark);
+void callback_test_upload(char *testId) {
+    callback_buffer[0] = '\0';
+    if (strncmp(callback_status, SUCCESS, 7) == 0) {
+        Serial.printlnf("Test successfully uploaded; removing test %s from cache", testId);
+        remove_test_from_cache(testId);
     }
     else {
         Serial.println("Test upload failed");
     }
+    uploading_test = false;
 }
 
 char *extract_callback_params() {
@@ -558,28 +564,34 @@ char *extract_callback_params() {
     mark = callback_buffer;
 
     indx = strcspn(mark, RETURN_DELIM);
-    strncpy(callback_name, mark, indx);
-    callback_name[indx] = '\0';
+    strncpy(callback_event, mark, indx);
+    callback_event[indx] = '\0';
     mark += indx + 1;
 
     indx = strcspn(mark, RETURN_DELIM);
-    strncpy(callback_result, mark, indx);
-    callback_result[indx] = '\0';
+    strncpy(callback_status, mark, indx);
+    callback_status[indx] = '\0';
+    mark += indx + 1;
+
+    indx = strcspn(mark, RETURN_DELIM);
+    strncpy(callback_target, mark, indx);
+    callback_target[indx] = '\0';
     mark += indx + 1;
 
     return mark;
 }
 
-void unescape_callback_buffer() {
+void clean_callback_buffer() {
     int i, len;
     char *from = callback_buffer;
     char *to = callback_buffer;
 
     len = strlen(callback_buffer);
     from++;
-    for (i = 0; i < len - 1; i++) {
+    for (i = 0; i < len - 2; i++) {
         if (*from == '\\') {
             from++;
+            i++;
             if (*from == 't') {
                 *to++ = '\t';
             }
@@ -599,33 +611,52 @@ void unescape_callback_buffer() {
     *to = '\0';
 }
 
+void cancel_or_retry_publish() {
+  if (current_event_tries < 3) {
+    Serial.printlnf("ERROR: bad callback for event %s - retrying", current_event);
+    callback_buffer[0] = '\0';
+    brevitest_publish(current_event, current_data, true);
+  }
+  else {
+    Serial.printlnf("ERROR: bad callback for event %s - maximum number of retries exceeded", current_event);
+  }
+}
+
 void process_callback_buffer() {
-    char *mark;
+    char *data_mark;
+
     callback_complete = false;
-    Serial.println(callback_buffer);
-
-    unescape_callback_buffer();
-    Serial.println(callback_buffer);
-
-    mark = extract_callback_params();
-    Serial.println(mark);
-
-    if (strcmp(mark, "validate") == 0) {
-        callback_validate(mark);
+    if (callback_buffer[0] != '\"') {
+        Serial.printlnf("Missing lead quote. Callback buffer: %s", callback_buffer);
+        cancel_or_retry_publish();
+        return;
     }
-    else if (strcmp(mark, "test-start") == 0) {
+
+    clean_callback_buffer();
+    data_mark = extract_callback_params();
+    Serial.printlnf("Event: %s, status: %s, target: %s, data: %s", callback_event, callback_status, callback_target, data_mark);
+
+    if (strcmp(callback_event, current_event) != 0) {
+        Serial.printlnf("Wrong event. Callback buffer: %s", callback_buffer);
+        cancel_or_retry_publish();
+        return;
+    }
+
+    if (strcmp(callback_event, "validate-cartridge") == 0) {
+        callback_validate(callback_target, data_mark);
+    }
+    else if (strcmp(callback_event, "test-start") == 0) {
         callback_test_start();
     }
-    else if (strcmp(mark, "test-finish") == 0) {
+    else if (strcmp(callback_event, "test-finish") == 0) {
         callback_test_finish();
     }
-    else if (strcmp(mark, "test-cancel") == 0) {
+    else if (strcmp(callback_event, "test-cancel") == 0) {
         callback_test_cancel();
     }
-    else if (strcmp(mark, "test-upload") == 0) {
-        callback_test_upload(mark);
+    else if (strcmp(callback_event, "test-upload") == 0) {
+        callback_test_upload(callback_target);
     }
-
 }
 
 void brevitest_callback(const char *event, const char *data) {
@@ -673,6 +704,7 @@ void check_device_status() {
                     Serial.println("Test cancelled during startup");
                     start_test_delay.stop();
                     run_test = false;
+                    test_record_created = false;
                     stop_blinking_device_LED();
                 }
                 else {
@@ -1386,6 +1418,7 @@ void reset_globals() {
         run_test = false;
         cancel_test = false;
         test_in_progress = false;
+        test_record_created = false;
 
         test_progress = 0;
         test_percent_complete = 0;
@@ -1428,7 +1461,7 @@ void do_run_test() {
                 bluetooth_set_status(14);
                 Serial.println("Test cancelled");
                 update_progress("Test cancelled", -1);
-                brevitest_publish("test-cancel", test_record.test_uuid);
+                brevitest_publish("test-cancel", test_record.test_uuid, false);
 
                 stop_blinking_device_LED();
                 set_device_LED_color(255, 0, 0);
@@ -1438,7 +1471,7 @@ void do_run_test() {
                 bluetooth_set_status(12);
                 Serial.println("Test completed");
                 update_progress("Test complete", -1);
-                brevitest_publish("test-finish", test_record.test_uuid);
+                brevitest_publish("test-finish", test_record.test_uuid, false);
 
                 stop_blinking_device_LED();
                 set_device_LED_color(0, 255, 0);
@@ -1450,13 +1483,18 @@ void do_run_test() {
 void do_upload_tests() {
         int i;
 
+        if (start_test || run_test || test_in_progress || uploading_test) {
+          return;
+        }
+
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
+                        uploading_test = true;
                         Serial.printlnf("Processing test record: %s", eeprom.test_cache[i].test_uuid);
                         process_test_record(i);
                         Serial.println(particle_register);
-                        brevitest_publish("upload-test", eeprom.test_cache[i].test_uuid);
-                        delay(4000);
+                        brevitest_publish("test-upload", eeprom.test_cache[i].test_uuid, false);
+                        break;
                 }
         }
 
@@ -1484,39 +1522,46 @@ void loop() {
                 Serial.println("Starting test delay");
                 start_test_delay.reset();
                 start_blinking_device_LED(0, 100, 0, 255, 0);
-                test_record_created = false;
-                brevitest_publish("test-start", test_record.test_uuid);
             }
             return;
         }
 
-        if (run_test && test_record_created) {
+        if (run_test) {
             Serial.println("Test delay complete");
             run_test = false;
+            test_record_created = false;
             if (!test_in_progress) {
+                brevitest_publish("test-start", test_record.test_uuid, false);
                 bluetooth_set_status(9);
-                Serial.println("Running test");
-                do_run_test();
+                Serial.println("Starting test");
             }
             return;
+        }
+
+        if (test_record_created) {
+            test_record_created = false;
+            Serial.println("Running test");
+            if (!test_in_progress) {
+                do_run_test();
+            }
         }
 
         if (!test_in_progress && tests_to_upload()) {
-                Serial.println("Uploading tests");
-                do_upload_tests();
-                return;
+            Serial.println("Uploading tests");
+            do_upload_tests();
+            return;
         }
 
         CHECK_SENSOR_DEVICE_STATUS;
 
         if (Serial.available()) {
-                inchar = Serial.read();
-                Serial4.write(inchar);
+            inchar = Serial.read();
+            Serial4.write(inchar);
         }
 
         if (Serial4.available()) {
-                inchar = Serial4.read();
-                Serial.write(inchar);
+            inchar = Serial4.read();
+            Serial.write(inchar);
         }
 
         if (update_battery_life) {
