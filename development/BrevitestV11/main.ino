@@ -718,6 +718,7 @@ void check_device_status() {
                     Serial.println("Test cancelled during startup");
                     start_test_delay.stop();
                     run_test = false;
+                    lock = false;
                     test_record_created = false;
                     stop_blinking_device_LED();
                 }
