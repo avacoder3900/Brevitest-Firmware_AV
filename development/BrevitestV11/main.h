@@ -106,7 +106,7 @@ int bluetooth_test_progress_char_index;
 #define BATTERY_CONVERSION_FACTOR 34
 
 // upload
-#define UPLOAD_INTERVAL 60000
+#define UPLOAD_INTERVAL 30000
 
 // application watchdog
 void watchdog(void);
@@ -139,22 +139,26 @@ int pinQRDecoderRX = RX;
 int pinQRDecoderTX = TX;
 
 // global variables
-bool test_in_progress;
-bool start_test;
-bool run_test;
-bool cancel_test;
-bool uploading_test = false;
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
 unsigned long next_upload;
 bool qr_code_being_scanned = false;
 
+// status
+bool validating_cartridge = false;
+bool test_in_progress = false;
+bool start_test;
+bool run_test;
+bool cancel_test;
+bool uploading_test = false;
+bool cartridge_validated = false;
+bool test_record_created = false;
+bool lock = false;
+
 // device open check
 bool device_open_state;
 bool check_device_status_flag = true;
-bool cartridge_validated = false;
-bool test_record_created = false;
 
 // device LED
 void update_blinking_device_LED(void);
