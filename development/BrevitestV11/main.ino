@@ -485,8 +485,10 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
         assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
         assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
         strcpy(assay.BCODE, &assayString[indx]);
-
         indx += assay.BCODE_length;
+
+        bluetooth_update_characteristic("assay duration", assay.duration, gatt.assay_duration_characteristic);
+
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
 
@@ -1018,6 +1020,10 @@ bool bluetooth_set_battery_life() {
     return bluetooth_update_characteristic("battery life", power_status, gatt.battery_life_characteristic);
 }
 
+bool bluetooth_set_assay_duration(int duration) {
+    return bluetooth_update_characteristic("assay duration", duration, gatt.assay_duration_characteristic);
+}
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1322,6 +1328,10 @@ void initialize_bluetooth() {
         }
         delay(500);
         if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_BATTERY_LIFE_CHARACTERISTIC_STRING, "battery life", "", &gatt.battery_life_characteristic) && gatt.battery_life_characteristic == 8)) {
+            continue;
+        }
+        delay(500);
+        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_ASSAY_DURATION_CHARACTERISTIC_STRING, "assay duration", "", &gatt.assay_duration_characteristic) && gatt.assay_duration_characteristic == 9)) {
             continue;
         }
         delay(500);
