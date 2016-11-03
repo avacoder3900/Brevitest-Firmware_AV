@@ -704,6 +704,7 @@ void check_device_status() {
     if (open_now ^ device_open_state) {
         if (open_now) {
             Serial.printlnf("Device just opened");
+            bluetooth_check_cancel_test();
             bluetooth_set_device_open_state("Device open");
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_validated = false;
@@ -959,6 +960,14 @@ bool bluetooth_add_characteristic(char *cmdStr, char *name, char *value, int *ch
     return true;
 }
 
+bool bluetooth_get_characteristic_char(char *name, int characteristic) {
+    if (bluetooth_command(BLUETOOTH_READ_CANCEL_TEST_STRING) < 1) {
+        Serial.printlnf("Failed to update %s characteristic", name);
+        return false;
+    }
+    return true;
+}
+
 bool bluetooth_update_characteristic(char *name, char *value, int characteristic) {
     sprintf(bluetooth_buffer, "%s%d,%s", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
     if (bluetooth_command(bluetooth_buffer) < 1) {
@@ -1010,6 +1019,16 @@ bool bluetooth_set_device_open_state(char *state) {
 
 bool bluetooth_set_percent_complete(int percent_complete) {
     return bluetooth_update_characteristic("percent complete", percent_complete, gatt.percent_complete_characteristic);
+}
+
+void bluetooth_check_cancel_test() {
+    if (bluetooth_get_characteristic_char("cancel test", gatt.cancel_test_characteristic)) {
+        int value = atoi(bluetooth_buffer);
+        if (value == 84) { // 'T'
+            set_cancel_test_flag();
+            bluetooth_update_characteristic("cancel test", "F", gatt.cancel_test_characteristic);
+        }
+    }
 }
 
 bool bluetooth_set_error_code(int code) {
@@ -1127,6 +1146,7 @@ void update_progress(char *message, int duration) {
                     bluetooth_set_percent_complete(test_percent_complete);
                 }
         }
+        bluetooth_check_cancel_test();
 }
 
 int process_one_BCODE_command(int cmd, int index) {
