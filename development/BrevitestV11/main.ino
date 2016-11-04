@@ -3,7 +3,7 @@
 #include "Serial4/Serial4.h"
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(204);
+PRODUCT_ID(2045);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
