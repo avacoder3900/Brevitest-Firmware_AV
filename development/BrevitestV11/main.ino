@@ -974,6 +974,11 @@ bool bluetooth_update_characteristic(char *name, char *value, int characteristic
         Serial.printlnf("Failed to update %s characteristic", name);
         return false;
     }
+    sprintf(bluetooth_buffer, "%s%d,%d", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, gatt.notification_characteristic, characteristic);
+    if (bluetooth_command(bluetooth_buffer) < 1) {
+        Serial.printlnf("Failed to create notification of updated %s characteristic", name);
+        return false;
+    }
     return true;
 }
 
@@ -981,6 +986,11 @@ bool bluetooth_update_characteristic(char *name, int value, int characteristic) 
     sprintf(bluetooth_buffer, "%s%d,%d", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
     if (bluetooth_command(bluetooth_buffer) < 1) {
         Serial.printlnf("Failed to update %s characteristic", name);
+        return false;
+    }
+    sprintf(bluetooth_buffer, "%s%d,%d", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, gatt.notification_characteristic, characteristic);
+    if (bluetooth_command(bluetooth_buffer) < 1) {
+        Serial.printlnf("Failed to create notification of updated %s characteristic", name);
         return false;
     }
     return true;
