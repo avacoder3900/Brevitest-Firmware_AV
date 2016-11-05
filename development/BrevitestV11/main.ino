@@ -1365,6 +1365,10 @@ void initialize_bluetooth() {
             continue;
         }
         delay(500);
+        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_NOTIFICATION_CHARACTERISTIC_STRING, "notification", "", &gatt.notification_characteristic) && gatt.notification_characteristic == 10)) {
+            continue;
+        }
+        delay(500);
         if (!bluetooth_reset()) {
             continue;
         }
