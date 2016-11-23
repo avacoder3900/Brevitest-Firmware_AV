@@ -353,13 +353,13 @@ void read_one_sensor(char sensor_code, int sample_number) {
 
         if (sensor_code == 'A') {
                 sample = &assay_buffer[sample_number];
-                led_power = SENSOR_LED_ASSAY;
+                led_power = assay.led_power & 0xFF;
                 sensor = &tcsAssay;
                 led_delay = SENSOR_LED_TRANSITION_HIGH_DELAY_MS;
         }
         else {
                 sample = &control_buffer[sample_number];
-                led_power = SENSOR_LED_ASSAY;
+                led_power = assay.led_power >> 8;
                 sensor = &tcsControl;
                 led_delay = SENSOR_LED_TRANSITION_LOW_DELAY_MS;
         }
