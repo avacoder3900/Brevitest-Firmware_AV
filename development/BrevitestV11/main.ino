@@ -1020,25 +1020,28 @@ bool bluetooth_set_cartridge_id() {
 }
 
 bool bluetooth_set_status(int code) {
-    return bluetooth_update_characteristic("status code", code, gatt.status_code_characteristic);
+    return true;
+    /*return bluetooth_update_characteristic("status code", code, gatt.status_code_characteristic);*/
 }
 
 bool bluetooth_set_device_open_state(char *state) {
-    return bluetooth_update_characteristic("device open", state, gatt.device_open_characteristic);
+    return true;
+    /*return bluetooth_update_characteristic("device open", state, gatt.device_open_characteristic);*/
 }
 
 bool bluetooth_set_percent_complete(int percent_complete) {
-    return bluetooth_update_characteristic("percent complete", percent_complete, gatt.percent_complete_characteristic);
+    return true;
+    /*return bluetooth_update_characteristic("percent complete", percent_complete, gatt.percent_complete_characteristic);*/
 }
 
 void bluetooth_check_cancel_test() {
-    if (bluetooth_get_characteristic_char("cancel test", gatt.cancel_test_characteristic)) {
+    /*if (bluetooth_get_characteristic_char("cancel test", gatt.cancel_test_characteristic)) {
         int value = atoi(bluetooth_buffer);
         if (value == 84) { // 'T'
             set_cancel_test_flag();
             bluetooth_update_characteristic("cancel test", "F", gatt.cancel_test_characteristic);
         }
-    }
+    }*/
 }
 
 bool bluetooth_set_error_code(int code) {
