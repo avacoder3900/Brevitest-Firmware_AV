@@ -101,8 +101,6 @@ void move_solenoid(int duration) {
         uint8_t surge = eeprom.param.solenoid_power >> 8;
         uint8_t sustain = (uint8_t) eeprom.param.solenoid_power;
 
-        Particle.process();
-
         if (cancel_test) {
                 return;
         }
@@ -148,9 +146,9 @@ void move_steps(int steps, int step_delay){
                         break;
                 }
 
-                if (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS == 0) {
+                /*if (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS == 0) {
                         Particle.process();
-                }
+                }*/
 
                 if ((dir == LOW) && (digitalRead(pinLimitSwitch) == HIGH)) {
                         cumulative_steps = 0;
@@ -349,7 +347,7 @@ void read_one_sensor(char sensor_code, int sample_number) {
         TCS34725 *sensor;
         int led_power, led_delay, tries;
 
-        Particle.process();
+        /*Particle.process();*/
 
         if (sensor_code == 'A') {
                 sample = &assay_buffer[sample_number];
@@ -1138,7 +1136,7 @@ void update_progress(char *message, int duration) {
         int new_percent_complete;
         int test_duration = assay.duration * 1000;
 
-        Particle.process();
+        /*Particle.process();*/
         if (duration == 0) {
                 test_progress = 0;
                 test_percent_complete = 0;
@@ -1259,7 +1257,6 @@ int process_one_BCODE_command(int cmd, int index) {
 int process_BCODE(int start_index) {
         int cmd, index;
 
-        Particle.process();
         index = get_BCODE_token(start_index, &cmd);
         if ((start_index == 0) && (cmd != 0)) { // first command
                 cancel_test = true;
@@ -1271,7 +1268,6 @@ int process_BCODE(int start_index) {
         }
 
         while ((cmd != 99) && (index > 0) && !cancel_test) {
-                Particle.process();
                 index = get_BCODE_token(index, &cmd);
                 index = process_one_BCODE_command(cmd, index);
         };
@@ -1528,7 +1524,9 @@ void do_run_test() {
             analogWrite(pinSensorLED, 0);
 
             Particle.process();
-            process_BCODE(0);
+            SINGLE_THREADED_BLOCK() {
+              process_BCODE(0);
+            }
 
             if (cancel_test) {
                 bluetooth_set_status(14);
