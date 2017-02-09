@@ -459,7 +459,6 @@ void validate_cartridge() {
         start_blinking_device_LED(0, 100, 0, 255, 255);
     }
     else {
-        bluetooth_set_status(4);
         cartridge_validated = false;
         validating_cartridge = true;
         brevitest_publish("validate-cartridge", qr_uuid, false);
@@ -484,8 +483,6 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
         assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
         strcpy(assay.BCODE, &assayString[indx]);
         indx += assay.BCODE_length;
-
-        bluetooth_update_characteristic("assay duration", assay.duration, gatt.assay_duration_characteristic);
 
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
 }
@@ -516,19 +513,16 @@ void callback_validate(char *cartridgeId, char *assayString) {
     cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
     Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
     if (cartridge_validated) {    // cartridge found
-        bluetooth_set_status(6);
         start_test = load_assay_record(cartridgeId, assayString);
         start_blinking_device_LED(0, 500, 0, 255, 0);
         start_test = true;
     }
     else {
-        bluetooth_set_status(5);
         stop_blinking_device_LED();
         set_device_LED_color(255, 0, 0);    // cartridge not found
         turn_on_device_LED();
         Serial.printlnf("cartridgeId: %s, assayString: %s", cartridgeId, assayString);
         start_test = false;
-        bluetooth_set_error_code(2);
     }
 }
 
@@ -684,12 +678,10 @@ void brevitest_callback(const char *event, const char *data) {
 
 void set_cancel_test_flag() {
     cancel_test = true;
-    bluetooth_set_status(15);
 }
 
 bool device_is_open() {
     uint16_t level = check_sensor_clear('A');
-    /*Serial.printlnf("Checking device status: %d, bluetooth count: %d", level, bluetooth_buffer_count);*/
     return (level > SENSOR_DEVICE_OPEN_THRESHOLD);
 }
 
@@ -702,12 +694,9 @@ void check_device_status() {
     if (open_now ^ device_open_state) {
         if (open_now) {
             Serial.printlnf("Device just opened");
-            bluetooth_check_cancel_test();
-            bluetooth_set_device_open_state("Device open");
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_validated = false;
             if (test_in_progress) {
-                /*bluetooth_set_status(9);*/
                 /*Serial.println("Device opened during test - starting cancel timer");
                 device_open_cancel_timer.reset();*/
                 Serial.println("Device opened during test");
@@ -715,7 +704,6 @@ void check_device_status() {
             }
             else {
                 if (start_test_delay.isActive()) {
-                    bluetooth_set_status(7);
                     Serial.println("Test cancelled during startup");
                     start_test_delay.stop();
                     run_test = false;
@@ -724,7 +712,6 @@ void check_device_status() {
                     stop_blinking_device_LED();
                 }
                 else {
-                    bluetooth_set_status(3);
                     Serial.println("Device opened - no test started or running");
                 }
                 set_device_LED_color(0, 255, 255);
@@ -732,10 +719,8 @@ void check_device_status() {
             }
         }
         else {
-            bluetooth_set_device_open_state("Device closed");
             /*if (device_open_cancel_timer.isActive()) {*/
             if (test_in_progress) {
-                /*bluetooth_set_status(8);*/
                 /*Serial.println("Device closed in time - test resumed");*/
                 /*device_open_cancel_timer.stop();*/
                 start_blinking_device_LED(0, 500, 0, 255, 0);
@@ -749,16 +734,13 @@ void check_device_status() {
                         validate_cartridge();
                     }
                     else {
-                        bluetooth_set_status(2);
                         stop_blinking_device_LED();
                         set_device_LED_color(255, 0, 0);    // bad cartridge uuid
                         turn_on_device_LED();
                         cartridge_validated = false;
-                        bluetooth_set_error_code(1);
                     }
                 }
                 else {
-                    bluetooth_set_status(1);
                     Serial.println("No cartridge loaded");
                     strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                     stop_blinking_device_LED();
@@ -767,10 +749,6 @@ void check_device_status() {
                     cartridge_validated = false;
                 }
             }
-        }
-
-        while (!bluetooth_set_cartridge_id() && ++tries < 3) {
-            Particle.process();
         }
     }
     device_open_state = open_now;
@@ -870,193 +848,6 @@ void store_params() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                  BLUETOOTH COMMANDS                     //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-int try_bluetooth_command(char *cmd) {
-    unsigned long timeout;
-    int readInt;
-    char readChar;
-
-    Serial.println(cmd);
-    Serial4.println(cmd);
-
-    bluetooth_buffer_line_count = 0;
-    bluetooth_buffer_count = 0;
-    timeout = millis() + BLUETOOTH_TIMEOUT;
-    while (millis() < timeout) {
-        if (Serial4.available()) {
-            readInt = Serial4.read();
-            if (readInt != -1) {
-                readChar = (char) readInt;
-                Serial.print(readChar);
-                bluetooth_buffer[bluetooth_buffer_count++] = readChar;
-                bluetooth_buffer[bluetooth_buffer_count] = '\0';
-                if (readInt == 10) {
-                    bluetooth_buffer_line_count++;
-                    if (strncmp(&bluetooth_buffer[bluetooth_buffer_count - 4], "OK", 2) == 0) {
-                        return 1;
-                    }
-                    if (strncmp(&bluetooth_buffer[bluetooth_buffer_count - 7], "ERROR", 5) == 0) {
-                        return -1;
-                    }
-                }
-            }
-        }
-    }
-    return 0;
-}
-
-int bluetooth_command(char *cmd) {
-    int tries = 0;
-
-    int result = try_bluetooth_command(cmd);
-    while (result < 1 && ++tries < 3) { // retry on ERROR or timeout
-        delay(2000);
-        result = try_bluetooth_command(cmd);
-    }
-    return result;
-}
-
-int bluetooth_extract_int(int lineNumber) {
-    char *start;
-    int i;
-
-    start = bluetooth_buffer;
-    for (i = 0; i < lineNumber; i++) {
-        start = strpbrk(start, newline) + 1;
-    }
-    return atoi(start);
-}
-
-bool bluetooth_factory_reset() {
-    if (bluetooth_command("AT+FACTORYRESET") < 1) {
-        Serial.println("Failed to perform factory reset; retrying...");
-        return false;
-    }
-    return true;
-}
-
-bool bluetooth_echo_off() {
-    if (bluetooth_command("ATE=0") < 1) {
-        Serial.println("Failed to turn off echo");
-        return false;
-    }
-    return true;
-}
-
-bool bluetooth_add_characteristic(char *cmdStr, char *name, char *value, int *characteristic) {
-    sprintf(bluetooth_buffer, "%s%s", cmdStr, value);
-    if (bluetooth_command(bluetooth_buffer) < 1) {
-        Serial.printlnf("Failed to add %s characteristic", name);
-        return false;
-    }
-    else {
-        *characteristic = bluetooth_extract_int(0);
-    }
-    return true;
-}
-
-bool bluetooth_get_characteristic_char(char *name, int characteristic) {
-    if (bluetooth_command(BLUETOOTH_READ_CANCEL_TEST_STRING) < 1) {
-        Serial.printlnf("Failed to update %s characteristic", name);
-        return false;
-    }
-    return true;
-}
-
-bool bluetooth_update_characteristic(char *name, char *value, int characteristic) {
-    sprintf(bluetooth_buffer, "%s%d,%s", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
-    if (bluetooth_command(bluetooth_buffer) < 1) {
-        Serial.printlnf("Failed to update %s characteristic", name);
-        return false;
-    }
-    sprintf(bluetooth_buffer, "%s%d,%d", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, gatt.notification_characteristic, characteristic);
-    if (bluetooth_command(bluetooth_buffer) < 1) {
-        Serial.printlnf("Failed to create notification of updated %s characteristic", name);
-        return false;
-    }
-    return true;
-}
-
-bool bluetooth_update_characteristic(char *name, int value, int characteristic) {
-    sprintf(bluetooth_buffer, "%s%d,%d", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, characteristic, value);
-    if (bluetooth_command(bluetooth_buffer) < 1) {
-        Serial.printlnf("Failed to update %s characteristic", name);
-        return false;
-    }
-    sprintf(bluetooth_buffer, "%s%d,%d", BLUETOOTH_UPDATE_CHARACTERISTIC_STRING, gatt.notification_characteristic, characteristic);
-    if (bluetooth_command(bluetooth_buffer) < 1) {
-        Serial.printlnf("Failed to create notification of updated %s characteristic", name);
-        return false;
-    }
-    return true;
-}
-
-bool bluetooth_add_service(char *cmdStr, char *name, int *service) {
-    if (bluetooth_command(cmdStr) < 1) {
-        Serial.printlnf("Failed to add %s service", name);
-        return false;
-    }
-    else {
-        *service = bluetooth_extract_int(0);
-    }
-    return true;
-}
-
-bool bluetooth_reset() {
-    if (bluetooth_command("ATZ") < 1) {
-        Serial.println("Failed to reset");
-        return false;
-    }
-    return true;
-}
-
-bool bluetooth_set_cartridge_id() {
-    return bluetooth_update_characteristic("cartridge ID", qr_uuid, gatt.cartridge_id_characteristic);
-}
-
-bool bluetooth_set_status(int code) {
-    return true;
-    /*return bluetooth_update_characteristic("status code", code, gatt.status_code_characteristic);*/
-}
-
-bool bluetooth_set_device_open_state(char *state) {
-    return true;
-    /*return bluetooth_update_characteristic("device open", state, gatt.device_open_characteristic);*/
-}
-
-bool bluetooth_set_percent_complete(int percent_complete) {
-    return true;
-    /*return bluetooth_update_characteristic("percent complete", percent_complete, gatt.percent_complete_characteristic);*/
-}
-
-void bluetooth_check_cancel_test() {
-    /*if (bluetooth_get_characteristic_char("cancel test", gatt.cancel_test_characteristic)) {
-        int value = atoi(bluetooth_buffer);
-        if (value == 84) { // 'T'
-            set_cancel_test_flag();
-            bluetooth_update_characteristic("cancel test", "F", gatt.cancel_test_characteristic);
-        }
-    }*/
-}
-
-bool bluetooth_set_error_code(int code) {
-    return bluetooth_update_characteristic("error message", code, gatt.error_code_characteristic);
-}
-
-bool bluetooth_set_battery_life() {
-    return bluetooth_update_characteristic("battery life", power_status, gatt.battery_life_characteristic);
-}
-
-bool bluetooth_set_assay_duration(int duration) {
-    return bluetooth_update_characteristic("assay duration", duration, gatt.assay_duration_characteristic);
-}
-
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                 TEST RESULTS UPLOADING                  //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1140,13 +931,11 @@ void update_progress(char *message, int duration) {
         if (duration == 0) {
                 test_progress = 0;
                 test_percent_complete = 0;
-                bluetooth_set_percent_complete(0);
         }
         else if (duration < 0) {
                 test_progress = test_duration;
                 test_percent_complete = -1;
                 test_last_progress_update = 0;
-                bluetooth_set_percent_complete(100);
         }
         else {
                 test_progress += duration;
@@ -1154,10 +943,8 @@ void update_progress(char *message, int duration) {
                 new_percent_complete = new_percent_complete > 100 ? 100 : new_percent_complete;
                 if (new_percent_complete != test_percent_complete) {
                     test_percent_complete = new_percent_complete;
-                    bluetooth_set_percent_complete(test_percent_complete);
                 }
         }
-        bluetooth_check_cancel_test();
 }
 
 int process_one_BCODE_command(int cmd, int index) {
@@ -1214,9 +1001,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 analogWrite(pinSensorLED, 0);
                 break;
         case 9: // Read sensors
-                bluetooth_set_status(11);
                 read_sensors();
-                bluetooth_set_status(9);
                 break;
         case 10: // Read QR code
                 CHECK_SENSOR_DEVICE_STATUS;
@@ -1310,79 +1095,6 @@ void erase_test_cache() {
         }
 }
 
-void initialize_bluetooth() {
-    int tries = 0;
-    int success = false;
-
-    while (!success && ++tries < 5) {
-        delay(500);
-        if (!bluetooth_factory_reset()) {
-            continue;
-        }
-        delay(500);
-        if (!bluetooth_echo_off()) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_service(BLUETOOTH_ADD_SERVICE_STRING, "brevitest", &gatt.service) && gatt.service == 1)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_DEVICE_ID_CHARACTERISTIC_STRING, "device ID", device_id, &gatt.device_id_characteristic) && gatt.device_id_characteristic == 1)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_CARTRIDGE_ID_CHARACTERISTIC_STRING, "cartridge ID", "", &gatt.cartridge_id_characteristic) && gatt.cartridge_id_characteristic == 2)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_STATUS_CODE_CHARACTERISTIC_STRING, "status", "", &gatt.status_code_characteristic) && gatt.status_code_characteristic == 3)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_DEVICE_OPEN_CHARACTERISTIC_STRING, "device open", "", &gatt.device_open_characteristic) && gatt.device_open_characteristic == 4)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_PERCENT_COMPLETE_CHARACTERISTIC_STRING, "percent complete", "", &gatt.percent_complete_characteristic) && gatt.percent_complete_characteristic == 5)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_CANCEL_TEST_CHARACTERISTIC_STRING, "cancel test", "", &gatt.cancel_test_characteristic) && gatt.cancel_test_characteristic == 6)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_ERROR_CODE_CHARACTERISTIC_STRING, "error code", "", &gatt.error_code_characteristic) && gatt.error_code_characteristic == 7)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_BATTERY_LIFE_CHARACTERISTIC_STRING, "battery life", "", &gatt.battery_life_characteristic) && gatt.battery_life_characteristic == 8)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_ASSAY_DURATION_CHARACTERISTIC_STRING, "assay duration", "", &gatt.assay_duration_characteristic) && gatt.assay_duration_characteristic == 9)) {
-            continue;
-        }
-        delay(500);
-        if (!(bluetooth_add_characteristic(BLUETOOTH_ADD_NOTIFICATION_CHARACTERISTIC_STRING, "notification", "", &gatt.notification_characteristic) && gatt.notification_characteristic == 10)) {
-            continue;
-        }
-        delay(500);
-        if (!bluetooth_reset()) {
-            continue;
-        }
-        success = true;
-    }
-
-    if (success) {
-        Serial.printlnf("Bluetooth service %d started successfully!", gatt.service);
-    }
-    else {
-        Serial.printlnf("Bluetooth unable to initialize after %d tries - rebooting", tries);
-        System.reset();
-    }
-}
-
 void set_update_battery_life_flag() {
     update_battery_life = true;
 }
@@ -1391,7 +1103,6 @@ void calculate_power_status() {
     int new_power_status = (battery_level > BATTERY_CONVERSION_FACTOR * 100 ? 100 : battery_level / BATTERY_CONVERSION_FACTOR) * (digitalRead(pinDCinDetect) ? -1 : 1);
     if (abs(new_power_status - power_status) > 1) {
         power_status = new_power_status;
-        bluetooth_set_battery_life();
     }
 }
 
@@ -1443,7 +1154,6 @@ void setup() {
         turn_on_device_LED();
 
         Serial.begin(115200); // standard serial port
-        Serial4.begin(9600); // bluetooth serial port
 
         load_eeprom();
         if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
@@ -1460,7 +1170,6 @@ void setup() {
         reset_globals();
 
         initialize_test_cache();
-        initialize_bluetooth();
         calculate_power_status();
 
         device_open_state = !device_is_open();
@@ -1529,7 +1238,6 @@ void do_run_test() {
             }
 
             if (cancel_test) {
-                bluetooth_set_status(14);
                 Serial.println("Test cancelled");
                 update_progress("Test cancelled", -1);
                 brevitest_publish("test-cancel", test_record.test_uuid, false);
@@ -1539,7 +1247,6 @@ void do_run_test() {
                 turn_on_device_LED();
             }
             else {
-                bluetooth_set_status(12);
                 Serial.println("Test completed");
                 update_progress("Test complete", -1);
                 brevitest_publish("test-finish", test_record.test_uuid, false);
@@ -1589,7 +1296,6 @@ void loop() {
             start_test = false;
             if (!test_in_progress) {
                 lock = true;
-                bluetooth_set_status(7);
                 Serial.println("Starting test delay");
                 start_test_delay.reset();
                 start_blinking_device_LED(0, 100, 0, 255, 0);
@@ -1604,7 +1310,6 @@ void loop() {
             if (!test_in_progress) {
                 lock = true;
                 brevitest_publish("test-start", test_record.test_uuid, false);
-                bluetooth_set_status(9);
                 Serial.println("Starting test");
             }
             return;
