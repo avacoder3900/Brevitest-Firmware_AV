@@ -857,6 +857,7 @@ bool tests_to_upload() {
                         return true;
                 }
         }
+        next_upload = millis() + UPLOAD_INTERVAL;
 
         return false;
 }

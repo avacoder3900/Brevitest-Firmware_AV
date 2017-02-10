@@ -109,7 +109,7 @@ int bluetooth_test_progress_char_index;
 #define BATTERY_CONVERSION_FACTOR 34
 
 // upload
-#define UPLOAD_INTERVAL 30000
+#define UPLOAD_INTERVAL 10000
 
 // application watchdog
 void watchdog(void);
