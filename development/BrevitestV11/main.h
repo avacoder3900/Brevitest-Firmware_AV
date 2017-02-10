@@ -157,7 +157,6 @@ bool cancel_test;
 bool uploading_test = false;
 bool cartridge_validated = false;
 bool test_record_created = false;
-bool lock = false;
 
 // device open check
 bool device_open_state;

@@ -455,14 +455,9 @@ bool cartridge_loaded() {
 }
 
 void validate_cartridge() {
-    if (lock) {
-        start_blinking_device_LED(0, 100, 0, 255, 255);
-    }
-    else {
-        cartridge_validated = false;
-        validating_cartridge = true;
-        brevitest_publish("validate-cartridge", qr_uuid, false);
-    }
+    cartridge_validated = false;
+    validating_cartridge = true;
+    brevitest_publish("validate-cartridge", qr_uuid, false);
 }
 
 bool load_assay_record(char *cartridgeId, char *assayString) {
@@ -654,8 +649,6 @@ void process_callback_buffer() {
     else if (strcmp(callback_event, "test-upload") == 0) {
         callback_test_upload(callback_target);
     }
-
-    lock = false;
 }
 
 void brevitest_error(const char *event, const char *data) {
@@ -707,7 +700,6 @@ void check_device_status() {
                     Serial.println("Test cancelled during startup");
                     start_test_delay.stop();
                     run_test = false;
-                    lock = false;
                     test_record_created = false;
                     stop_blinking_device_LED();
                 }
@@ -1176,8 +1168,6 @@ void setup() {
         device_status_timer.reset();
         battery_check_timer.reset();
 
-        lock = false;
-
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 }
 
@@ -1279,7 +1269,6 @@ void do_upload_tests() {
 
 void set_run_test_flag() {
     run_test = true;
-    lock = false;
 }
 
 void loop() {
@@ -1291,11 +1280,10 @@ void loop() {
             return;
         }
 
-        if (start_test && !lock) {
+        if (start_test) {
             Serial.println("Starting test");
             start_test = false;
             if (!test_in_progress) {
-                lock = true;
                 Serial.println("Starting test delay");
                 start_test_delay.reset();
                 start_blinking_device_LED(0, 100, 0, 255, 0);
@@ -1303,28 +1291,26 @@ void loop() {
             return;
         }
 
-        if (run_test && !lock) {
+        if (run_test) {
             Serial.println("Test delay complete");
             run_test = false;
             test_record_created = false;
             if (!test_in_progress) {
-                lock = true;
                 brevitest_publish("test-start", test_record.test_uuid, false);
                 Serial.println("Starting test");
             }
             return;
         }
 
-        if (test_record_created && !lock) {
+        if (test_record_created) {
             test_record_created = false;
             Serial.println("Running test");
             if (!test_in_progress) {
-                lock = true;
                 do_run_test();
             }
         }
 
-        if (!lock && !uploading_test && tests_to_upload()) {
+        if (!uploading_test && tests_to_upload()) {
             Serial.println("Uploading tests");
             do_upload_tests();
             next_upload = millis() + UPLOAD_INTERVAL;
