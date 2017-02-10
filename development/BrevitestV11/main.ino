@@ -1323,14 +1323,4 @@ void loop() {
         }
 
         CHECK_SENSOR_DEVICE_STATUS;
-
-        if (Serial.available()) {
-            inchar = Serial.read();
-            Serial4.write(inchar);
-        }
-
-        if (Serial4.available()) {
-            inchar = Serial4.read();
-            Serial.write(inchar);
-        }
 }
