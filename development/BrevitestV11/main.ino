@@ -850,9 +850,10 @@ bool tests_to_upload() {
         if (millis() < next_upload) {
                 return false;
         }
-
+        Serial.println("Looking for test to upload");
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
+                        Serial.printlnf("Test found: %s", eeprom.test_cache[i].test_uuid[0]);
                         return true;
                 }
         }
@@ -1259,6 +1260,7 @@ void upload_one_test(int test_number, char *test_id) {
 void do_upload_tests() {
         int i;
 
+        Serial.println("Uploading tests");
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
             if (eeprom.test_cache[i].test_uuid[0] != '\0') {
                 upload_one_test(i, eeprom.test_cache[i].test_uuid);
