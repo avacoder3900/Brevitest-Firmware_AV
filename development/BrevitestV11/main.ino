@@ -1227,26 +1227,25 @@ void do_run_test() {
             Particle.process();
             SINGLE_THREADED_BLOCK() {
               process_BCODE(0);
+            }
 
-              Particle.process();
-              if (cancel_test) {
-                  Serial.println("Test cancelled");
-                  update_progress("Test cancelled", -1);
-                  brevitest_publish("test-cancel", test_record.test_uuid, false);
+            if (cancel_test) {
+                Serial.println("Test cancelled");
+                update_progress("Test cancelled", -1);
+                brevitest_publish("test-cancel", test_record.test_uuid, false);
 
-                  stop_blinking_device_LED();
-                  set_device_LED_color(255, 0, 0);
-                  turn_on_device_LED();
-              }
-              else {
-                  Serial.println("Test completed");
-                  update_progress("Test complete", -1);
-                  brevitest_publish("test-finish", test_record.test_uuid, false);
+                stop_blinking_device_LED();
+                set_device_LED_color(255, 0, 0);
+                turn_on_device_LED();
+            }
+            else {
+                Serial.println("Test completed");
+                update_progress("Test complete", -1);
+                brevitest_publish("test-finish", test_record.test_uuid, false);
 
-                  stop_blinking_device_LED();
-                  set_device_LED_color(0, 255, 0);
-                  turn_on_device_LED();
-              }
+                stop_blinking_device_LED();
+                set_device_LED_color(0, 255, 0);
+                turn_on_device_LED();
             }
         }
 }
