@@ -652,21 +652,17 @@ void process_callback_buffer() {
 }
 
 void brevitest_error(const char *event, const char *data) {
-    SINGLE_THREADED_BLOCK() {
-        strcat(callback_buffer, data);
-        int len = strlen(data);
-        callback_complete = (len < 512) || (data[len - 1] == '\"');
-        Serial.printlnf("Callback error - event: %s, data: %s", event, data);
-    }
+      strcat(callback_buffer, data);
+      int len = strlen(data);
+      callback_complete = (len < 512) || (data[len - 1] == '\"');
+      Serial.printlnf("Callback error - event: %s, data: %s", event, data);
 }
 
 void brevitest_callback(const char *event, const char *data) {
-    SINGLE_THREADED_BLOCK() {
-        strcat(callback_buffer, data);
-        int len = strlen(data);
-        callback_complete = (len < 512) || (data[len - 1] == '\"');
-        /*Serial.printlnf("callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');*/
-    }
+      strcat(callback_buffer, data);
+      int len = strlen(data);
+      callback_complete = (len < 512) || (data[len - 1] == '\"');
+      /*Serial.printlnf("callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');*/
 }
 
 void set_cancel_test_flag() {
@@ -1247,6 +1243,8 @@ void do_run_test() {
                 set_device_LED_color(0, 255, 0);
                 turn_on_device_LED();
             }
+
+            reset_stage();
         }
 }
 
