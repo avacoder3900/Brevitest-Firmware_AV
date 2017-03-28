@@ -365,7 +365,7 @@ void read_one_sensor(char sensor_code, int sample_number) {
         analogWrite(pinSensorLED, led_power);
         delay(led_delay);
 
-        sensor->begin(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_4X);
+        sensor->begin(TCS34725_INTEGRATIONTIME_700MS, TCS34725_GAIN_4X);
 
         sample->sample_time = Time.now();
         sample->red = sample->green = sample->blue = sample->clear = tries = 0;
