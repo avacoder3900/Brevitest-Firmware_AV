@@ -729,6 +729,52 @@ bool device_is_open() {
     return (level > SENSOR_DEVICE_OPEN_THRESHOLD);
 }
 
+void cartridge_heat_on() {
+    digitalWrite(pinCartridgeHeater, HIGH);
+    cartridge_heater_is_on = TRUE;
+    digitalWrite(pinCartridgeHeaterLED, HIGH);
+    Serial.printlnf("Heater ON");
+}
+
+void cartridge_heat_off() {
+    digitalWrite(pinCartridgeHeater, LOW);
+    cartridge_heater_is_on = false;
+    digitalWrite(pinCartridgeHeaterLED, LOW);
+    Serial.printlnf("Heater OFF");
+}
+
+void change_cartridge_heater_state() {
+    if (cartridge_heater_is_on) {
+        cartridge_heat_off();
+        cartridge_heater_timer.changePeriod(cartridge_heater_off_duration);
+        cartridge_heater_off_duration += CARTRIDGE_HEATER_OFF_PERIOD_INCREMENT;
+        if (cartridge_heater_off_duration > CARTRIDGE_HEATER_OFF_PERIOD_MAX) {
+            cartridge_heater_off_duration = CARTRIDGE_HEATER_OFF_PERIOD_MAX;
+        }
+    }
+    else {
+        cartridge_heat_on();
+        cartridge_heater_timer.changePeriod(cartridge_heater_on_duration);
+        cartridge_heater_on_duration -= CARTRIDGE_HEATER_ON_PERIOD_DECREMENT;
+        if (cartridge_heater_on_duration < CARTRIDGE_HEATER_ON_PERIOD_MIN) {
+            cartridge_heater_on_duration = CARTRIDGE_HEATER_ON_PERIOD_MIN;
+        }
+    }
+}
+
+void turn_on_cartridge_heater() {
+    cartridge_heat_on();
+    cartridge_heater_on_duration = CARTRIDGE_HEATER_ON_PERIOD_START;
+    cartridge_heater_off_duration = CARTRIDGE_HEATER_OFF_PERIOD_START;
+    cartridge_heater_timer.changePeriod(cartridge_heater_on_duration);
+    cartridge_heater_timer.reset();
+}
+
+void turn_off_cartridge_heater() {
+    cartridge_heat_off();
+    cartridge_heater_timer.stop();
+}
+
 void check_device_status() {
     int tries = 0;
 
@@ -738,6 +784,7 @@ void check_device_status() {
     if (open_now ^ device_open_state) {
         if (open_now) {
             Serial.printlnf("Device just opened");
+            turn_off_cartridge_heater();
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_validated = false;
             if (test_in_progress) {
@@ -766,6 +813,7 @@ void check_device_status() {
             if (test_in_progress) {
                 /*Serial.println("Device closed in time - test resumed");*/
                 /*device_open_cancel_timer.stop();*/
+                turn_on_cartridge_heater();
                 start_blinking_device_LED(0, 500, 0, 255, 0);
             }
             else {  // no test in progress
@@ -773,6 +821,7 @@ void check_device_status() {
                 start_blinking_device_LED(0, 100, 0, 0, 255);
                 if (cartridge_loaded()) {
                     Serial.println("Cartridge in device");
+                    turn_on_cartridge_heater();
                     if (scan_QR_code() == CARTRIDGE_UUID_LENGTH) {
                         validate_cartridge();
                     }
@@ -785,6 +834,7 @@ void check_device_status() {
                 }
                 else {
                     Serial.println("No cartridge loaded");
+                    turn_off_cartridge_heater();
                     strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                     stop_blinking_device_LED();
                     set_device_LED_color(128, 128, 128);
@@ -1178,7 +1228,8 @@ void setup() {
         pinMode(pinStepperSleep, OUTPUT);
         pinMode(pinStepperDir, OUTPUT);
         pinMode(pinQRTrigger, OUTPUT);
-        pinMode(pinBluetoothMode, OUTPUT);
+        pinMode(pinCartridgeHeater, OUTPUT);
+        pinMode(pinCartridgeHeaterLED, OUTPUT);
 
         digitalWrite(pinSensorLED, LOW);
         analogWrite(pinSolenoid, 0);
@@ -1186,7 +1237,8 @@ void setup() {
         digitalWrite(pinStepperDir, LOW);
         digitalWrite(pinStepperSleep, LOW);
         digitalWrite(pinQRTrigger, LOW);
-        digitalWrite(pinBluetoothMode, LOW);
+        digitalWrite(pinCartridgeHeater, LOW);
+        digitalWrite(pinCartridgeHeaterLED, LOW);
 
         Particle.variable("register", particle_register, STRING);
         Particle.variable("status", particle_status, STRING);
@@ -1210,9 +1262,6 @@ void setup() {
 
         init_sensor(&tcsAssay, SENSOR_NUMBER_ASSAY);
         init_sensor(&tcsControl, SENSOR_NUMBER_CONTROL);
-        delim_string[1] = '\0';
-        newline[0] = '\n';
-        newline[1] = '\0';
 
         reset_stage();
         reset_globals();

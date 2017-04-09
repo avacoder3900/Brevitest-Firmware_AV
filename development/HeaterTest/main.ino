@@ -22,39 +22,29 @@ int pinStepperStep = D5;
 int pinQRDecoderRX = RX;
 int pinQRDecoderTX = TX;
 
-int pinHeatRed = RX;
-int pinHeatBlack = TX;
+int pinHeater = RX;
+int pinHeaterLED = TX;
 
 void setup() {
     pinMode(pinDeviceLEDRed, OUTPUT);
-    pinMode(pinDeviceLEDGreen, OUTPUT);
-    pinMode(pinDeviceLEDBlue, OUTPUT);
+    pinMode(pinHeater, OUTPUT);
+    pinMode(pinHeaterLED, OUTPUT);
 
     analogWrite(pinDeviceLEDRed, 0);
-    analogWrite(pinDeviceLEDGreen, 0);
-    analogWrite(pinDeviceLEDBlue, 0);
-
-    pinMode(pinHeatRed, OUTPUT);
-    pinMode(pinHeatBlack, OUTPUT);
-
-    analogWrite(pinHeatRed, 0);
-    analogWrite(pinHeatBlack, 0);
+    analogWrite(pinHeater, 0);
+    digitalWrite(pinHeaterLED, LOW);
 }
 
 void loop() {
-    pinMode(pinHeatRed, OUTPUT);
-    pinMode(pinHeatBlack, OUTPUT);
-
     analogWrite(pinDeviceLEDRed, 255);
-    analogWrite(pinHeatRed, 100);
+    analogWrite(pinHeater, 80);
+    digitalWrite(pinHeaterLED, HIGH);
 
-    delay(20000);
+    delay(10000);
 
-    pinMode(pinHeatRed, OUTPUT);
-    pinMode(pinHeatBlack, OUTPUT);
-
-    analogWrite(pinHeatRed, 0);
     analogWrite(pinDeviceLEDRed, 0);
+    analogWrite(pinHeater, 0);
+    digitalWrite(pinHeaterLED, LOW);
 
-    delay(20000);
+    delay(10000);
 }

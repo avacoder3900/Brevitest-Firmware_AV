@@ -22,28 +22,6 @@
 #define CARTRIDGE_ERROR_UUID "EEEEEEEEEEEEEEEEEEEEEEEE"
 #define SUCCESS "SUCCESS"
 
-// bluetooth
-#define BLUETOOTH_TIMEOUT 2000
-#define BLUETOOTH_ADD_SERVICE_STRING "AT+GATTADDSERVICE=UUID128=0f-6f-41-0d-89-47-48-70-98-4f-7d-c8-43-47-fa-ab"
-#define BLUETOOTH_ADD_DEVICE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0001,DESCRIPTION=DeviceID,PROPERTIES=0x02,MIN_LEN=24,MAX_LEN=24,VALUE="
-#define BLUETOOTH_ADD_CARTRIDGE_ID_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0002,DESCRIPTION=CartridgeID,PROPERTIES=0x02,MIN_LEN=24,MAX_LEN=24,VALUE=000000000000000000000000"
-#define BLUETOOTH_ADD_STATUS_CODE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0003,DESCRIPTION=StatusCode,PROPERTIES=0x02,MIN_LEN=1,MAX_LEN=2,VALUE=0"
-#define BLUETOOTH_ADD_DEVICE_OPEN_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0004,DESCRIPTION=DeviceOpen,PROPERTIES=0x02,MIN_LEN=1,MAX_LEN=13"
-#define BLUETOOTH_ADD_PERCENT_COMPLETE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0005,DESCRIPTION=PercentComplete,PROPERTIES=0x02,MIN_LEN=1,MAX_LEN=1,VALUE=0"
-#define BLUETOOTH_ADD_CANCEL_TEST_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0006,DESCRIPTION=CancelTest,PROPERTIES=0x0A,MIN_LEN=1,MAX_LEN=1,VALUE=F"
-#define BLUETOOTH_ADD_ERROR_CODE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0007,DESCRIPTION=ErrorCode,PROPERTIES=0x02,MIN_LEN=1,MAX_LEN=1,VALUE=0"
-#define BLUETOOTH_ADD_BATTERY_LIFE_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0008,DESCRIPTION=BatteryLife,PROPERTIES=0x02,MIN_LEN=1,MAX_LEN=2,VALUE=0"
-#define BLUETOOTH_ADD_ASSAY_DURATION_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x0009,DESCRIPTION=AssayDuration,PROPERTIES=0x02,MIN_LEN=1,MAX_LEN=2,VALUE=0"
-#define BLUETOOTH_ADD_NOTIFICATION_CHARACTERISTIC_STRING "AT+GATTADDCHAR=UUID=0x000A,DESCRIPTION=Notification,PROPERTIES=0x12,MIN_LEN=1,MAX_LEN=1,VALUE=0"
-#define BLUETOOTH_UPDATE_CHARACTERISTIC_STRING "AT+GATTCHAR="
-#define BLUETOOTH_READ_CANCEL_TEST_STRING "AT+GATTCHAR=6"
-
-int bluetooth_battery_service_index;
-int bluetooth_battery_level_char_index;
-int bluetooth_test_service_index;
-int bluetooth_test_code_char_index;
-int bluetooth_test_progress_char_index;
-
 // serial number
 #define SERIAL_NUMBER_LENGTH 19
 
@@ -108,6 +86,14 @@ int bluetooth_test_progress_char_index;
 // battery
 #define BATTERY_CONVERSION_FACTOR 34
 
+// cartridge heater
+#define CARTRIDGE_HEATER_ON_PERIOD_START 500
+#define CARTRIDGE_HEATER_ON_PERIOD_DECREMENT 10
+#define CARTRIDGE_HEATER_ON_PERIOD_MIN 200
+#define CARTRIDGE_HEATER_OFF_PERIOD_START 100
+#define CARTRIDGE_HEATER_OFF_PERIOD_INCREMENT 50
+#define CARTRIDGE_HEATER_OFF_PERIOD_MAX 4000
+
 // upload
 #define UPLOAD_INTERVAL 10000
 
@@ -127,9 +113,9 @@ int pinSolenoid = A5;
 int pinDeviceLEDRed = B0;
 int pinDeviceLEDGreen = B1;
 int pinDeviceLEDBlue = B2;
-int pinBluetoothMode = B3;
-int pinBluetoothRX = C2;
-int pinBluetoothTX = C3;
+// int pinBluetoothMode = B3;
+int pinCartridgeHeaterLED = C2;
+int pinCartridgeHeater = C3;
 int pinAssaySDA = C4;
 int pinAssaySCL = C5;
 int pinControlSDA = D0;
@@ -194,6 +180,11 @@ void set_run_test_flag(void);
 Timer start_test_delay(TEST_START_DELAY, set_run_test_flag, true);
 void set_update_battery_life_flag(void);
 Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
+void change_cartridge_heater_state(void);
+Timer cartridge_heater_timer(CARTRIDGE_HEATER_ON_PERIOD_START, change_cartridge_heater_state);
+bool cartridge_heater_is_on = false;
+int cartridge_heater_on_duration;
+int cartridge_heater_off_duration;
 
 // sensors
 TCS34725 tcsAssay;
@@ -209,27 +200,6 @@ char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char qr_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char device_id[DEVICE_ID_LENGTH + 1];
 String device_id_string;
-
-// bluetooth
-#define BLUETOOTH_BUFFER_SIZE 500
-char bluetooth_buffer[BLUETOOTH_BUFFER_SIZE];
-int bluetooth_buffer_count;
-int bluetooth_buffer_line_count;
-char delim_string[2];
-struct GATT {
-    int service;
-    int device_id_characteristic;
-    int cartridge_id_characteristic;
-    int status_code_characteristic;
-    int device_open_characteristic;
-    int percent_complete_characteristic;
-    int cancel_test_characteristic;
-    int error_code_characteristic;
-    int battery_life_characteristic;
-    int assay_duration_characteristic;
-    int notification_characteristic;
-} gatt;
-char newline[2];
 
 // publish and subscribe callback
 #define CALLBACK_BUFFER_SIZE 1200
