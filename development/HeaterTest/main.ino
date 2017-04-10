@@ -26,24 +26,20 @@ int pinHeater = RX;
 int pinHeaterLED = TX;
 
 void setup() {
-    pinMode(pinDeviceLEDRed, OUTPUT);
     pinMode(pinHeater, OUTPUT);
     pinMode(pinHeaterLED, OUTPUT);
 
-    analogWrite(pinDeviceLEDRed, 0);
-    analogWrite(pinHeater, 0);
+    digitalWrite(pinHeater, LOW);
     digitalWrite(pinHeaterLED, LOW);
 }
 
 void loop() {
-    analogWrite(pinDeviceLEDRed, 255);
-    analogWrite(pinHeater, 80);
+    digitalWrite(pinHeater, HIGH);
     digitalWrite(pinHeaterLED, HIGH);
 
-    delay(10000);
+    delay(1000);
 
-    analogWrite(pinDeviceLEDRed, 0);
-    analogWrite(pinHeater, 0);
+    digitalWrite(pinHeater, LOW);
     digitalWrite(pinHeaterLED, LOW);
 
     delay(10000);
