@@ -784,7 +784,7 @@ void check_device_status() {
     if (open_now ^ device_open_state) {
         if (open_now) {
             Serial.printlnf("Device just opened");
-            turn_off_cartridge_heater();
+            /*turn_off_cartridge_heater();*/
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_validated = false;
             if (test_in_progress) {
@@ -813,7 +813,7 @@ void check_device_status() {
             if (test_in_progress) {
                 /*Serial.println("Device closed in time - test resumed");*/
                 /*device_open_cancel_timer.stop();*/
-                turn_on_cartridge_heater();
+                /*turn_on_cartridge_heater();*/
                 start_blinking_device_LED(0, 500, 0, 255, 0);
             }
             else {  // no test in progress
@@ -821,7 +821,7 @@ void check_device_status() {
                 start_blinking_device_LED(0, 100, 0, 0, 255);
                 if (cartridge_loaded()) {
                     Serial.println("Cartridge in device");
-                    turn_on_cartridge_heater();
+                    /*turn_on_cartridge_heater();*/
                     if (scan_QR_code() == CARTRIDGE_UUID_LENGTH) {
                         validate_cartridge();
                     }
@@ -834,7 +834,7 @@ void check_device_status() {
                 }
                 else {
                     Serial.println("No cartridge loaded");
-                    turn_off_cartridge_heater();
+                    /*turn_off_cartridge_heater();*/
                     strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                     stop_blinking_device_LED();
                     set_device_LED_color(128, 128, 128);
@@ -1274,6 +1274,7 @@ void setup() {
         battery_check_timer.reset();
 
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
+        turn_on_cartridge_heater();
 }
 
 /////////////////////////////////////////////////////////////
