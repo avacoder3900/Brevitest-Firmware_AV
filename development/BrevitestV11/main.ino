@@ -342,6 +342,30 @@ uint16_t check_sensor_clear(char sensor_code) {
     return clear;
 }
 
+int check_sensor_red_norm(char sensor_code) {
+    TCS34725 *sensor;
+    uint16_t red = 0, green = 0, blue = 0, clear = 0;
+    int tries = 0;
+    int red_norm;
+
+    if (sensor_code == 'A') {
+            sensor = &tcsAssay;
+    }
+    else {
+            sensor = &tcsControl;
+    }
+
+    sensor->begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
+    while (clear == 0 && tries++ < 5) {
+        sensor->getRawData(&red, &green, &blue, &clear);
+    }
+    sensor->end();
+    /*Serial.printlnf("R: %d, G: %d, B: %d, C: %d, tries: %d", red, green, blue, clear, tries);*/
+    red_norm = (int) red * 10000;
+    red_norm /= (int) clear;
+    return red_norm;
+}
+
 void convert_samples_to_reading(char sensor_code) {
         int i;
         int red, green, blue, clear, samples, clr, clear_max, clear_min;
@@ -539,6 +563,61 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                    CARTRIDGE HEATER                     //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void cartridge_heat_on() {
+    digitalWrite(pinCartridgeHeater, HIGH);
+    cartridge_heater_is_on = TRUE;
+    digitalWrite(pinCartridgeHeaterLED, HIGH);
+    Serial.printlnf("Heater ON");
+}
+
+void cartridge_heat_off() {
+    digitalWrite(pinCartridgeHeater, LOW);
+    cartridge_heater_is_on = false;
+    digitalWrite(pinCartridgeHeaterLED, LOW);
+    Serial.printlnf("Heater OFF");
+}
+
+void change_cartridge_heater_state() {
+    int red_norm = check_sensor_red_norm('A');
+    if (red_norm > CARTRIDGE_HEATER_LED_THRESHOLD) {    // red above threshold means reagent still below 33 deg C, use high heat
+        if (cartridge_heater_is_on) {
+            cartridge_heat_off();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_HIGH_OFF_PERIOD);
+        }
+        else {
+            cartridge_heat_on();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_HIGH_ON_PERIOD);
+        }
+    }
+    else {    // red below threshold means reagent at or above 33 deg C, use low heat
+        if (cartridge_heater_is_on) {
+            cartridge_heat_off();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_OFF_PERIOD);
+        }
+        else {
+            cartridge_heat_on();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_ON_PERIOD);
+        }
+    }
+}
+
+void turn_on_cartridge_heater() {
+    cartridge_heat_on();
+    cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_ON_PERIOD);
+    cartridge_heater_timer.reset();
+}
+
+void turn_off_cartridge_heater() {
+    cartridge_heat_off();
+    cartridge_heater_timer.stop();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                 PUBLISH AND CALLBACKS                   //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -565,6 +644,7 @@ void callback_validate(char *cartridgeId, char *assayString) {
     if (cartridge_validated) {    // cartridge found
         start_test = load_assay_record(cartridgeId, assayString);
         start_blinking_device_LED(0, 500, 0, 255, 0);
+        turn_on_cartridge_heater();
         start_test = true;
     }
     else {
@@ -729,52 +809,6 @@ bool device_is_open() {
     return (level > SENSOR_DEVICE_OPEN_THRESHOLD);
 }
 
-void cartridge_heat_on() {
-    digitalWrite(pinCartridgeHeater, HIGH);
-    cartridge_heater_is_on = TRUE;
-    digitalWrite(pinCartridgeHeaterLED, HIGH);
-    Serial.printlnf("Heater ON");
-}
-
-void cartridge_heat_off() {
-    digitalWrite(pinCartridgeHeater, LOW);
-    cartridge_heater_is_on = false;
-    digitalWrite(pinCartridgeHeaterLED, LOW);
-    Serial.printlnf("Heater OFF");
-}
-
-void change_cartridge_heater_state() {
-    if (cartridge_heater_is_on) {
-        cartridge_heat_off();
-        cartridge_heater_timer.changePeriod(cartridge_heater_off_duration);
-        cartridge_heater_off_duration += CARTRIDGE_HEATER_OFF_PERIOD_INCREMENT;
-        if (cartridge_heater_off_duration > CARTRIDGE_HEATER_OFF_PERIOD_MAX) {
-            cartridge_heater_off_duration = CARTRIDGE_HEATER_OFF_PERIOD_MAX;
-        }
-    }
-    else {
-        cartridge_heat_on();
-        cartridge_heater_timer.changePeriod(cartridge_heater_on_duration);
-        cartridge_heater_on_duration -= CARTRIDGE_HEATER_ON_PERIOD_DECREMENT;
-        if (cartridge_heater_on_duration < CARTRIDGE_HEATER_ON_PERIOD_MIN) {
-            cartridge_heater_on_duration = CARTRIDGE_HEATER_ON_PERIOD_MIN;
-        }
-    }
-}
-
-void turn_on_cartridge_heater() {
-    cartridge_heat_on();
-    cartridge_heater_on_duration = CARTRIDGE_HEATER_ON_PERIOD_START;
-    cartridge_heater_off_duration = CARTRIDGE_HEATER_OFF_PERIOD_START;
-    cartridge_heater_timer.changePeriod(cartridge_heater_on_duration);
-    cartridge_heater_timer.reset();
-}
-
-void turn_off_cartridge_heater() {
-    cartridge_heat_off();
-    cartridge_heater_timer.stop();
-}
-
 void check_device_status() {
     int tries = 0;
 
@@ -784,7 +818,7 @@ void check_device_status() {
     if (open_now ^ device_open_state) {
         if (open_now) {
             Serial.printlnf("Device just opened");
-            /*turn_off_cartridge_heater();*/
+            turn_off_cartridge_heater();
             memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_validated = false;
             if (test_in_progress) {
@@ -813,7 +847,7 @@ void check_device_status() {
             if (test_in_progress) {
                 /*Serial.println("Device closed in time - test resumed");*/
                 /*device_open_cancel_timer.stop();*/
-                /*turn_on_cartridge_heater();*/
+                turn_on_cartridge_heater();
                 start_blinking_device_LED(0, 500, 0, 255, 0);
             }
             else {  // no test in progress
@@ -834,7 +868,7 @@ void check_device_status() {
                 }
                 else {
                     Serial.println("No cartridge loaded");
-                    /*turn_off_cartridge_heater();*/
+                    turn_off_cartridge_heater();
                     strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                     stop_blinking_device_LED();
                     set_device_LED_color(128, 128, 128);
@@ -1274,7 +1308,7 @@ void setup() {
         battery_check_timer.reset();
 
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
-        turn_on_cartridge_heater();
+        /*turn_on_cartridge_heater();*/
 }
 
 /////////////////////////////////////////////////////////////

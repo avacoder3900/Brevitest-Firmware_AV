@@ -87,12 +87,11 @@
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_ON_PERIOD_START 1200
-#define CARTRIDGE_HEATER_ON_PERIOD_DECREMENT 500
-#define CARTRIDGE_HEATER_ON_PERIOD_MIN 200
-#define CARTRIDGE_HEATER_OFF_PERIOD_START 1000
-#define CARTRIDGE_HEATER_OFF_PERIOD_INCREMENT 500
-#define CARTRIDGE_HEATER_OFF_PERIOD_MAX 2000
+#define CARTRIDGE_HEATER_LOW_ON_PERIOD 200
+#define CARTRIDGE_HEATER_LOW_OFF_PERIOD 2000
+#define CARTRIDGE_HEATER_HIGH_ON_PERIOD 500
+#define CARTRIDGE_HEATER_HIGH_OFF_PERIOD 1000
+#define CARTRIDGE_HEATER_LED_THRESHOLD 1234
 
 // upload
 #define UPLOAD_INTERVAL 10000
@@ -181,10 +180,8 @@ Timer start_test_delay(TEST_START_DELAY, set_run_test_flag, true);
 void set_update_battery_life_flag(void);
 Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 void change_cartridge_heater_state(void);
-Timer cartridge_heater_timer(CARTRIDGE_HEATER_ON_PERIOD_START, change_cartridge_heater_state);
+Timer cartridge_heater_timer(CARTRIDGE_HEATER_LOW_ON_PERIOD, change_cartridge_heater_state);
 bool cartridge_heater_is_on = false;
-int cartridge_heater_on_duration;
-int cartridge_heater_off_duration;
 
 // sensors
 TCS34725 tcsAssay;
