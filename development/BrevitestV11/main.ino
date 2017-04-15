@@ -455,32 +455,21 @@ void convert_samples_to_reading(char sensor_code) {
         test_record.number_of_readings++;
 }
 
-int read_sensors() {
-        read_sensors_with_parameters(assay.led_power, TCS34725_INTEGRATIONTIME_700MS, TCS34725_GAIN_4X);
-}
-
-void read_one_sensor(char sensor_code, int sample_number, int ledPower_param, int integrationTime, int gain) {
+void read_one_sensor(char sensor_code, int sample_number, int integrationTime, int gain) {
         BrevitestSensorSampleRecord *sample;
         TCS34725 *sensor;
-        int led_power, led_delay, tries;
+        int tries;
 
         /*Particle.process();*/
 
         if (sensor_code == 'A') {
                 sample = &assay_buffer[sample_number];
-                led_power = ledPower_param & 0xFF;
                 sensor = &tcsAssay;
-                led_delay = SENSOR_LED_TRANSITION_HIGH_DELAY_MS;
         }
         else {
                 sample = &control_buffer[sample_number];
-                led_power = ledPower_param >> 8;
                 sensor = &tcsControl;
-                led_delay = SENSOR_LED_TRANSITION_LOW_DELAY_MS;
         }
-
-        analogWrite(pinSensorLED, led_power);
-        delay(led_delay);
 
         sensor->begin((tcs34725IntegrationTime_t) integrationTime, (tcs34725Gain_t) gain);
 
@@ -496,24 +485,28 @@ void read_one_sensor(char sensor_code, int sample_number, int ledPower_param, in
 int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
         int i;
 
-        analogWrite(pinSensorLED, SENSOR_LED_ASSAY);
+        analogWrite(pinSensorLED, ledPower);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
         for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                read_one_sensor('A', i, ledPower, integrationTime, gain);
-                read_one_sensor('C', i, ledPower, integrationTime, gain);
+                read_one_sensor('A', i, integrationTime, gain);
+                read_one_sensor('C', i, integrationTime, gain);
+
                 Serial.printlnf("%d %d %d %d %d %d %d %d %d %d %d", i, \
                     assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
                     control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
         }
 
+        analogWrite(pinSensorLED, 0);
+
         convert_samples_to_reading('A');
         convert_samples_to_reading('C');
 
-        analogWrite(pinSensorLED, 0);
-        delay(SENSOR_LED_WARMUP_DELAY_MS);
-
         return 1;
+}
+
+int read_sensors() {
+        read_sensors_with_parameters(assay.led_power, TCS34725_INTEGRATIONTIME_700MS, TCS34725_GAIN_4X);
 }
 
 /////////////////////////////////////////////////////////////
