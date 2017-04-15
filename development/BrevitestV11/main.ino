@@ -603,14 +603,12 @@ void callback_test_start() {
 
 void callback_test_finish() {
     Serial.println("Test finished");
-    reset_globals();
     reset_stage();
     next_upload = 0;
 }
 
 void callback_test_cancel() {
     Serial.println("Test cancelled");
-    reset_globals();
     reset_stage();
 }
 
@@ -1335,7 +1333,7 @@ void do_run_test() {
                 turn_on_device_LED();
             }
 
-            reset_stage();
+            reset_globals();
         }
 }
 
