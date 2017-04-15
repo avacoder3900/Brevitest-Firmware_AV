@@ -198,6 +198,61 @@ void reset_stage() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                    CARTRIDGE HEATER                     //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void cartridge_heat_on() {
+    digitalWrite(pinCartridgeHeater, HIGH);
+    cartridge_heater_is_on = TRUE;
+    digitalWrite(pinCartridgeHeaterLED, HIGH);
+    Serial.printlnf("Heater ON");
+}
+
+void cartridge_heat_off() {
+    digitalWrite(pinCartridgeHeater, LOW);
+    cartridge_heater_is_on = false;
+    digitalWrite(pinCartridgeHeaterLED, LOW);
+    Serial.printlnf("Heater OFF");
+}
+
+void change_cartridge_heater_state() {
+    int red_norm = check_sensor_red_norm('A');
+    if (red_norm > CARTRIDGE_HEATER_LED_THRESHOLD) {    // red above threshold means reagent still below 33 deg C, use high heat
+        if (cartridge_heater_is_on) {
+            cartridge_heat_off();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_HIGH_OFF_PERIOD);
+        }
+        else {
+            cartridge_heat_on();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_HIGH_ON_PERIOD);
+        }
+    }
+    else {    // red below threshold means reagent at or above 33 deg C, use low heat
+        if (cartridge_heater_is_on) {
+            cartridge_heat_off();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_OFF_PERIOD);
+        }
+        else {
+            cartridge_heat_on();
+            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_ON_PERIOD);
+        }
+    }
+}
+
+void turn_on_cartridge_heater() {
+    cartridge_heat_on();
+    cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_ON_PERIOD);
+    cartridge_heater_timer.reset();
+}
+
+void turn_off_cartridge_heater() {
+    cartridge_heat_off();
+    cartridge_heater_timer.stop();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                       QR SCANNER                        //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -559,61 +614,6 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
         indx += assay.BCODE_length;
 
         return (assayString[indx] == '\n'); // should be end of test string; if not don't start test
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                    CARTRIDGE HEATER                     //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void cartridge_heat_on() {
-    digitalWrite(pinCartridgeHeater, HIGH);
-    cartridge_heater_is_on = TRUE;
-    digitalWrite(pinCartridgeHeaterLED, HIGH);
-    Serial.printlnf("Heater ON");
-}
-
-void cartridge_heat_off() {
-    digitalWrite(pinCartridgeHeater, LOW);
-    cartridge_heater_is_on = false;
-    digitalWrite(pinCartridgeHeaterLED, LOW);
-    Serial.printlnf("Heater OFF");
-}
-
-void change_cartridge_heater_state() {
-    int red_norm = check_sensor_red_norm('A');
-    if (red_norm > CARTRIDGE_HEATER_LED_THRESHOLD) {    // red above threshold means reagent still below 33 deg C, use high heat
-        if (cartridge_heater_is_on) {
-            cartridge_heat_off();
-            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_HIGH_OFF_PERIOD);
-        }
-        else {
-            cartridge_heat_on();
-            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_HIGH_ON_PERIOD);
-        }
-    }
-    else {    // red below threshold means reagent at or above 33 deg C, use low heat
-        if (cartridge_heater_is_on) {
-            cartridge_heat_off();
-            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_OFF_PERIOD);
-        }
-        else {
-            cartridge_heat_on();
-            cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_ON_PERIOD);
-        }
-    }
-}
-
-void turn_on_cartridge_heater() {
-    cartridge_heat_on();
-    cartridge_heater_timer.changePeriod(CARTRIDGE_HEATER_LOW_ON_PERIOD);
-    cartridge_heater_timer.reset();
-}
-
-void turn_off_cartridge_heater() {
-    cartridge_heat_off();
-    cartridge_heater_timer.stop();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1156,8 +1156,11 @@ int process_one_BCODE_command(int cmd, int index) {
         case 13: // Repeat end
                 return -index;
                 break;
-        case 14: // Enable sensor (integration time, gain)
-                Serial.println("Enable sensor not implemented");
+        case 14: // Turn on cartridge heater
+                index = get_BCODE_token(index, &param1);
+                turn_on_cartridge_heater();
+                delay(param1);
+                turn_off_cartridge_heater();
                 break;
         case 15: // Disable sensor
                 Serial.println("Disable sensor not implemented");
