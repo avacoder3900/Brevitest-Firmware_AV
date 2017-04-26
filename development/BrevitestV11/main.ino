@@ -193,7 +193,7 @@ void wake_stepper() {
 void reset_stage() {
         cumulative_steps = CUMULATIVE_STEP_LIMIT;
         move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
-        move_steps(1300, eeprom.param.step_delay_us);
+        move_steps(STEPS_TO_MICROBEAD_WELL, eeprom.param.step_delay_us);
 }
 
 /////////////////////////////////////////////////////////////
