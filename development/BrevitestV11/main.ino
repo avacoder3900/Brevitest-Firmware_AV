@@ -506,7 +506,7 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
 }
 
 int read_sensors() {
-        read_sensors_with_parameters(assay.led_power, TCS34725_INTEGRATIONTIME_700MS, TCS34725_GAIN_4X);
+        read_sensors_with_parameters(assay.led_power, assay.sensor_integration_time, assay.sensor_gain);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1067,7 +1067,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 break;
         case 9: // Read sensors with default values - PRIVILEGED
                 SINGLE_THREADED_BLOCK() {
-                    read_sensors_with_parameters(assay.led_power, TCS34725_INTEGRATIONTIME_700MS, TCS34725_GAIN_4X);
+                    read_sensors();
                 }
                 break;
         case 10: // Read sensors with parameters - PRIVILEGED
