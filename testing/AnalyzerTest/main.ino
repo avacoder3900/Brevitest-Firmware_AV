@@ -628,6 +628,11 @@ int particle_command(String arg) {
             Serial.printlnf("duration = %d", param1);
             move_solenoid(param1);
             break;
+        case 3:     // scan_QR_code()
+            Serial.printlnf("command %d: scan_QR_code", cmd_number);
+            scan_QR_code();
+            memcpy(particle_register, qr_uuid, CARTRIDGE_UUID_LENGTH);
+            break;
     }
 
     return cmd_number;
