@@ -11,10 +11,9 @@
 #define CARTRIDGE_UUID_LENGTH 24
 #define ERROR_MESSAGE(err) Serial.println(err)
 #define CANCELLABLE(x) if (!cancel_test) {x}
-#define CHECK_SENSOR_DEVICE_STATUS if (check_device_status_flag) check_device_status()
 #define TAB_DELIM "\t"
 #define RETURN_DELIM "\n"
-#define COMMA_DELIM ","
+#define COMMA_DELIM ",\n\0"
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -172,10 +171,6 @@ struct DeviceLED {
 // timers
 void set_check_device_status_flag(void);
 Timer device_status_timer(DEVICE_STATUS_CHECK_PERIOD, set_check_device_status_flag);
-void set_cancel_test_flag(void);
-Timer device_open_cancel_timer(TEST_DEVICE_OPEN_BEFORE_CANCEL, set_cancel_test_flag, true);
-void set_run_test_flag(void);
-Timer start_test_delay(TEST_START_DELAY, set_run_test_flag, true);
 void set_update_battery_life_flag(void);
 Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 void change_cartridge_heater_state(void);
