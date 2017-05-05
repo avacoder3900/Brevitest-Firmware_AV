@@ -1066,19 +1066,31 @@ int process_one_BCODE_command(int cmd, int index) {
                 analogWrite(pinSensorLED, 0);
                 break;
         case 9: // Read sensors with default values - PRIVILEGED
-                SINGLE_THREADED_BLOCK() {
+                /*SINGLE_THREADED_BLOCK() {*/
                     read_sensors();
-                }
+                /*}*/
                 break;
         case 10: // Read sensors with parameters - PRIVILEGED
                 index = get_BCODE_token(index, &param1); // LED power
                 index = get_BCODE_token(index, &param2); // integration time
                 index = get_BCODE_token(index, &param3); // gain
-                SINGLE_THREADED_BLOCK() {
+                /*SINGLE_THREADED_BLOCK() {*/
                     read_sensors_with_parameters(param1, param2, param3);
-                }
+                /*}*/
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations)
+                index = get_BCODE_token(index, &param1);
+
+                start_index = index;
+                /*SINGLE_THREADED_BLOCK() {*/
+                    for (i = 0; i < param1; i += 1) {
+                            if (cancel_test) {
+                                    break;
+                            }
+                            index = process_BCODE(start_index);
+                    }
+                /*}*/
+                break;
         case 12: // Repeat begin(number of iterations)
                 index = get_BCODE_token(index, &param1);
 
@@ -1087,14 +1099,7 @@ int process_one_BCODE_command(int cmd, int index) {
                         if (cancel_test) {
                                 break;
                         }
-                        if (cmd == 11) {
-                            SINGLE_THREADED_BLOCK() {
-                                index = process_BCODE(start_index);
-                            }
-                        }
-                        else {
-                            index = process_BCODE(start_index);
-                        }
+                        index = process_BCODE(start_index);
                 }
                 break;
         case 13: // Repeat end
@@ -1312,7 +1317,9 @@ void do_run_test() {
             analogWrite(pinSolenoid, 0);
             analogWrite(pinSensorLED, 0);
 
-            process_BCODE(0);
+            SINGLE_THREADED_BLOCK() {
+                process_BCODE(0);
+            }
 
             if (cancel_test) {
                 Serial.println("Test cancelled");
