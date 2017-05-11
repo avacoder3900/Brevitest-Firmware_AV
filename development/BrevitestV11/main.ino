@@ -3,7 +3,7 @@
 #include "Serial4/Serial4.h"
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(2045);
+PRODUCT_ID(4347);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -573,7 +573,7 @@ void brevitest_publish(char *event_name, char *data, bool retry) {
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest"), String(event_name) + String("\n") + String(data), 60, PRIVATE);
+    Particle.publish(String("brevitest"), String(event_name) + String("\n") + String(data), PRIVATE, NO_ACK);
     Serial.printlnf("Publish: %s, %s, try: %d", event_name, data, current_event_tries);
 }
 
@@ -1198,6 +1198,15 @@ void watchdog() {
 }
 
 void setup() {
+        Particle.variable("register", particle_register, STRING);
+        Particle.variable("status", particle_status, STRING);
+        Particle.variable("powerstatus", &power_status, INT);
+        device_id_string = System.deviceID();
+        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
+        device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
+        device_id[DEVICE_ID_LENGTH] = '\0';
+
         pinMode(pinBatteryAin, INPUT);
         pinMode(pinDCinDetect, INPUT);
         pinMode(pinLimitSwitch, INPUT_PULLUP);
@@ -1228,15 +1237,6 @@ void setup() {
         digitalWrite(pinQRTrigger, LOW);
         digitalWrite(pinCartridgeHeater, LOW);
         digitalWrite(pinCartridgeHeaterLED, LOW);
-
-        Particle.variable("register", particle_register, STRING);
-        Particle.variable("status", particle_status, STRING);
-        Particle.variable("powerstatus", &power_status, INT);
-        device_id_string = System.deviceID();
-        Particle.subscribe(String("hook-response/brevitest-" + device_id_string), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String("hook-error/brevitest-" + device_id_string), brevitest_error, MY_DEVICES);
-        device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
-        device_id[DEVICE_ID_LENGTH] = '\0';
 
         turn_off_device_LED();
         set_device_LED_color(255, 255, 0);
@@ -1317,8 +1317,22 @@ void do_run_test() {
             analogWrite(pinSolenoid, 0);
             analogWrite(pinSensorLED, 0);
 
+            Particle.disconnect();
+            while(!Particle.disconnected()) {
+                Serial.println("...");
+                Particle.process();
+                delay(1000);
+            }
+
             SINGLE_THREADED_BLOCK() {
                 process_BCODE(0);
+            }
+
+            Particle.connect();
+            while (!Particle.connected()) {
+                Serial.println("...");
+                Particle.process();
+                delay(1000);
             }
 
             if (cancel_test) {
