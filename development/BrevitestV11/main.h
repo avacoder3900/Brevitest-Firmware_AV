@@ -12,6 +12,7 @@
 #define TAB_DELIM "\t"
 #define RETURN_DELIM "\n"
 #define COMMA_DELIM ","
+#define BCODE_END "99"
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -86,7 +87,7 @@
 
 // state
 #define STATE_SENSOR_LED_POWER 200
-#define STATE_SENSOR_LED_DELAY 100
+#define STATE_SENSOR_LED_DELAY 200
 #define STATE_DEVICE_OPEN_THRESHOLD 35
 #define STATE_CARD_CHECK_THRESHOLD 16000
 
