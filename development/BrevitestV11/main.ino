@@ -1119,7 +1119,7 @@ void setup() {
         calculate_power_status();
 
         initialize_device_state();
-        device_state_timer.reset();
+        /*device_state_timer.reset();*/
         battery_check_timer.reset();
 
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -1133,101 +1133,106 @@ void setup() {
 
 void initialize_device_state() {
     int tries = 0;
+    uint16_t old_clear;
 
     tcsControl.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
+    delay(STATE_SENSOR_STARTUP_DELAY);
 
-    sensor_state.clear = 0;
-    while (sensor_state.clear == 0 && tries++ < 5) {
+    sensor_state.clear = 0xFFFF;
+    do {
+        old_clear = sensor_state.clear;
         tcsControl.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
-    }
-    Serial.printlnf("Open? R: %d, G: %d, B: %d, C: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, tries);
+    } while (abs(old_clear - sensor_state.clear) > 2 && tries++ < 5);
+    Serial.printlnf("Initialize R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
+    if (device_open) {
+        analogWrite(pinSensorLED, STATE_SENSOR_LED_POWER);
+        delay(STATE_SENSOR_LED_DELAY);
+        tries = 0;
+        sensor_state.clear = 0xFFFF;
+        do {
+            old_clear = sensor_state.clear;
+            tcsControl.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
+        } while (abs(old_clear - sensor_state.clear) > 2 && tries++ < 5);
+        Serial.printlnf("Cartridge? R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);
+        analogWrite(pinSensorLED, 0);
+        cartridge_loaded = !(sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
+    }
 
     tcsControl.end();
 }
 
 void check_device_state() {
-    bool cartridge_loaded_now, device_open_now;
+    bool device_open_now;
     int tries = 0;
+    uint16_t old_clear;
 
-    if (qr_code_being_scanned || validating_cartridge || test_starting_up || cancelling_test || reading_sensors || uploading_test) {
+    if (qr_code_being_scanned || validating_cartridge || test_starting_up || test_in_progress || cancelling_test || reading_sensors || uploading_test) {
         return;
     }
 
     // pause timer while we check status
-    device_state_timer.stop();
+    /*device_state_timer.stop();*/
 
     tcsControl.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
+    delay(STATE_SENSOR_STARTUP_DELAY);
 
-    sensor_state.clear = 0;
-    while (sensor_state.clear == 0 && tries++ < 5) {
+    sensor_state.clear = 0xFFFF;
+    do {
+        old_clear = sensor_state.clear;
         tcsControl.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
-    }
-    /*Serial.printlnf("Open? R: %d, G: %d, B: %d, C: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, tries);*/
-    if (sensor_state.clear != 0) {
-        device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
+    } while (abs(old_clear - sensor_state.clear) > 2 && tries++ < 5);
+    /*Serial.printlnf("Open? R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 
-        if (device_open ^ device_open_now) {    // device open state changed
-            if (device_open_now) {
-                if (test_in_progress) {
-                    Serial.println("Device opened while test in progress");
-                    start_blinking_device_LED(0, 100, 255, 0, 0);
-                }
-                else {
-                    memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
-                    cartridge_loaded = false;
-                    ready_to_scan_qr_code = false;
-                    cartridge_validated = false;
-                    test_ready_to_start = false;
-                    Serial.println("Device opened - no test in progress");
-                    stop_blinking_device_LED();
-                    set_device_LED_color(0, 255, 255);
-                    turn_on_device_LED();
-                }
+    device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
+    if (device_open ^ device_open_now) {    // device open state changed
+        if (device_open_now) {
+            Serial.println("Device just opened");
+            memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
+            cartridge_loaded = false;
+            ready_to_scan_qr_code = false;
+            cartridge_validated = false;
+            test_ready_to_start = false;
+            stop_blinking_device_LED();
+            set_device_LED_color(0, 255, 255);
+            turn_on_device_LED();
+        }
+        else {
+            Serial.printlnf("Device just closed");
+
+            analogWrite(pinSensorLED, STATE_SENSOR_LED_POWER);
+            delay(STATE_SENSOR_LED_DELAY);
+            tries = 0;
+            sensor_state.clear = 0xFFFF;
+            do {
+                old_clear = sensor_state.clear;
+                tcsControl.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
+            } while (abs(old_clear - sensor_state.clear) > 2 && tries++ < 5);
+            Serial.printlnf("Cartridge? R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);
+            analogWrite(pinSensorLED, 0);
+
+            cartridge_loaded = (sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
+            cartridge_validated = false;
+            if (cartridge_loaded) {
+                Serial.println("Cartridge in device; ready to scan qr code");
+                start_blinking_device_LED(0, 100, 0, 255, 255);
+                ready_to_scan_qr_code = true;
+                test_ready_to_start = false;
             }
             else {
-                Serial.printlnf("Device just closed");
-                if (!test_in_progress) {  // no test in progress
-
-                    // check for cartridge
-                    analogWrite(pinSensorLED, STATE_SENSOR_LED_POWER);
-                    delay(STATE_SENSOR_LED_DELAY);
-                    sensor_state.sample_time = Time.now();
-                    sensor_state.clear = 0;
-                    tries = 0;
-                    while (sensor_state.clear == 0 && tries++ < 5) {
-                        tcsControl.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
-                    }
-                    analogWrite(pinSensorLED, 0);
-                    Serial.printlnf("Cartridge? R: %d, G: %d, B: %d, C: %d, tries: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, tries);
-                    cartridge_loaded_now = (sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
-
-                    if (cartridge_loaded ^ cartridge_loaded_now) {    // cartridge loaded state changed
-                        cartridge_validated = false;
-                        if (cartridge_loaded_now) {
-                            start_blinking_device_LED(0, 100, 0, 255, 255);
-                            Serial.println("Cartridge in device; ready to scan qr code");
-                            ready_to_scan_qr_code = true;
-                            test_ready_to_start = false;
-                        }
-                        else {
-                            Serial.println("No cartridge loaded");
-                            strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
-                            stop_blinking_device_LED();
-                            set_device_LED_color(128, 128, 128);
-                            turn_on_device_LED();
-                        }
-                        cartridge_loaded = cartridge_loaded_now;
-                    }
-                }
+                Serial.println("No cartridge in device");
+                strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
+                stop_blinking_device_LED();
+                set_device_LED_color(128, 128, 128);
+                turn_on_device_LED();
             }
-            device_open = device_open_now;
         }
+        device_open = device_open_now;
     }
 
     tcsControl.end();
 
-    device_state_timer.start();
+    /*device_state_timer.start();*/
 
     /*if (cartridge_loaded && sensor_state.clear < CARTRIDGE_HEATER_THRESHOLD) {    // reading below threshold means reagent still below 33 deg C, turn on heat
         if (!cartridge_heater_is_on) {
@@ -1291,6 +1296,7 @@ void run_test() {
     analogWrite(pinSolenoid, 0);
     analogWrite(pinSensorLED, 0);
 
+    /*device_state_timer.stop();*/
     Particle.disconnect();
     while(!Particle.disconnected()) {
         Serial.println("-");
@@ -1308,6 +1314,7 @@ void run_test() {
         Particle.process();
         delay(1000);
     }
+    /*device_state_timer.start();*/
 
     if (cancelling_test) {
         Serial.println("Test cancelled");
@@ -1396,12 +1403,11 @@ void loop() {
                 next_upload = millis() + UPLOAD_INTERVAL;
                 return;
             }
+            check_device_state();
         }
 
         if (update_battery_life) {
             update_battery_life = false;
             calculate_power_status();
         }
-
-        check_device_state();
 }
