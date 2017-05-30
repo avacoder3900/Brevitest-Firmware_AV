@@ -9,12 +9,10 @@
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
 #define CARTRIDGE_UUID_LENGTH 24
-#define ERROR_MESSAGE(err) Serial.println(err)
-#define CANCELLABLE(x) if (!cancel_test) {x}
-#define CHECK_SENSOR_DEVICE_STATUS if (check_device_status_flag) check_device_status()
 #define TAB_DELIM "\t"
 #define RETURN_DELIM "\n"
 #define COMMA_DELIM ","
+#define BCODE_END "99"
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -32,18 +30,12 @@
 #define SENSOR_NUMBER_CONTROL 0
 #define SENSOR_LED_ASSAY 255
 #define SENSOR_LED_CONTROL 229
-#define SENSOR_DEVICE_OPEN_THRESHOLD 35
-#define SENSOR_CHECK_CARD_LED_POWER 200
-#define SENSOR_CHECK_CARD_LED_DELAY 100
-#define SENSOR_CARD_CHECK_THRESHOLD 20000
 
 // assay
 #define ASSAY_BCODE_CAPACITY 1000
 
 // timers
-#define TEST_START_DELAY 1000
-#define TEST_DEVICE_OPEN_BEFORE_CANCEL 10000
-#define DEVICE_STATUS_CHECK_PERIOD 1000
+#define DEVICE_STATE_CHECK_PERIOD 1000
 #define BATTERY_CHECK_PERIOD 2000
 
 // params
@@ -86,14 +78,19 @@
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_LOW_ON_PERIOD 200
-#define CARTRIDGE_HEATER_LOW_OFF_PERIOD 2000
-#define CARTRIDGE_HEATER_HIGH_ON_PERIOD 500
-#define CARTRIDGE_HEATER_HIGH_OFF_PERIOD 1000
-#define CARTRIDGE_HEATER_LED_THRESHOLD 1234
+#define CARTRIDGE_HEATER_THRESHOLD 19000
+#define CARTRIDGE_HEATER_HEAT_UP_PERIOD 20000
+#define CARTRIDGE_HEATER_COOL_DOWN_PERIOD 600000
 
 // upload
 #define UPLOAD_INTERVAL 10000
+
+// state
+#define STATE_SENSOR_STARTUP_DELAY 25
+#define STATE_SENSOR_LED_POWER 200
+#define STATE_SENSOR_LED_DELAY 200
+#define STATE_DEVICE_OPEN_THRESHOLD 35
+#define STATE_CARD_CHECK_THRESHOLD 25000
 
 // application watchdog
 void watchdog(void);
@@ -130,21 +127,23 @@ int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
 unsigned long next_upload;
+unsigned long cartridge_heater_timeout;
+
+// device state
+bool device_open = false;
+bool cartridge_loaded = false;
+bool ready_to_scan_qr_code = false;
 bool qr_code_being_scanned = false;
-
-// status
 bool validating_cartridge = false;
-bool test_in_progress = false;
-bool start_test;
-bool run_test;
-bool cancel_test;
-bool uploading_test = false;
 bool cartridge_validated = false;
-bool test_record_created = false;
-
-// device open check
-bool device_open_state;
-bool check_device_status_flag = true;
+bool test_starting_up = false;
+bool test_startup_successful = false;
+bool test_in_progress = false;
+bool reading_sensors = false;
+bool cancelling_test = false;
+bool uploading_test = false;
+bool cartridge_heater_is_on = false;
+bool cartridge_heater_is_cooling_down = false;
 
 // device LED
 void update_blinking_device_LED(void);
@@ -170,17 +169,12 @@ struct DeviceLED {
 } device_LED;
 
 // timers
-void set_check_device_status_flag(void);
-Timer device_status_timer(DEVICE_STATUS_CHECK_PERIOD, set_check_device_status_flag);
-void set_cancel_test_flag(void);
-Timer device_open_cancel_timer(TEST_DEVICE_OPEN_BEFORE_CANCEL, set_cancel_test_flag, true);
-void set_run_test_flag(void);
-Timer start_test_delay(TEST_START_DELAY, set_run_test_flag, true);
 void set_update_battery_life_flag(void);
 Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
-void change_cartridge_heater_state(void);
-Timer cartridge_heater_timer(CARTRIDGE_HEATER_LOW_ON_PERIOD, change_cartridge_heater_state);
-bool cartridge_heater_is_on = false;
+void cartridge_heater_heat_up(void);
+Timer cartridge_heater_heat_up_timer(CARTRIDGE_HEATER_HEAT_UP_PERIOD, cartridge_heater_heat_up);
+void cartridge_heater_cool_down(void);
+Timer cartridge_heater_cool_down_timer(CARTRIDGE_HEATER_COOL_DOWN_PERIOD, cartridge_heater_cool_down);
 
 // sensors
 TCS34725 tcsAssay;
@@ -218,7 +212,7 @@ struct BrevitestSensorSampleRecord {        // 12 bytes
     uint16_t green;
     uint16_t blue;
     uint16_t clear;
-};
+} sensor_state;
 BrevitestSensorSampleRecord assay_buffer[SENSOR_NUMBER_OF_SAMPLES];
 BrevitestSensorSampleRecord control_buffer[SENSOR_NUMBER_OF_SAMPLES];
 
