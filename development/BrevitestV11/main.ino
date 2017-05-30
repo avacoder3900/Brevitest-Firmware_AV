@@ -231,9 +231,11 @@ void cartridge_heater_cool_down() {
 }
 
 void turn_on_cartridge_heater() {
-    if (!cartridge_heater_is_on && !cartridge_heater_is_cooling_down) {
+    if (!cartridge_heater_is_on) {
         cartridge_heat_on();
         cartridge_heater_heat_up_timer.start();
+        cartridge_heater_cool_down_timer.reset();
+        cartridge_heater_cool_down_timer.stop();
     }
 }
 
@@ -515,25 +517,35 @@ void brevitest_publish(char *event_name, char *data, bool retry) {
 
 void callback_validate(char *cartridgeId, char *assayString) {
     validating_cartridge = false;
-    cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
-    Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
-    if (cartridge_validated) {    // cartridge found
-        test_ready_to_start = load_assay_record(cartridgeId, assayString);
-        if (test_ready_to_start) {
-            start_blinking_device_LED(0, 500, 0, 255, 0);
-            turn_on_cartridge_heater();
-        }
-        else {
-            start_blinking_device_LED(0, 50, 255, 0, 0);
-        }
+    check_device_state();
+    if (device_open) {
+        stop_blinking_device_LED();
+        set_device_LED_color(0, 255, 255);    // cartridge not found
+        turn_on_device_LED();
     }
     else {
-        stop_blinking_device_LED();
-        set_device_LED_color(255, 0, 0);    // cartridge not found
-        turn_on_device_LED();
-        turn_off_cartridge_heater();
-        Serial.printlnf("cartridgeId: %s, assayString: %s", cartridgeId, assayString);
-        test_ready_to_start = false;
+        cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
+        Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
+        if (cartridge_validated) {    // cartridge found
+            if (load_assay_record(cartridgeId, assayString)) {
+                Serial.println("Starting test");
+                test_starting_up = true;
+                start_blinking_device_LED(0, 500, 0, 255, 0);
+                turn_on_cartridge_heater();
+                brevitest_publish("test-start", test_record.test_uuid, false);
+            }
+            else {
+                Serial.println("Failed to load assay record");
+                start_blinking_device_LED(0, 100, 255, 0, 0);
+            }
+        }
+        else {
+            stop_blinking_device_LED();
+            set_device_LED_color(255, 0, 0);    // cartridge not found
+            turn_on_device_LED();
+            turn_off_cartridge_heater();
+            Serial.printlnf("cartridgeId: %s, assayString: %s", cartridgeId, assayString);
+        }
     }
 }
 
@@ -1119,7 +1131,6 @@ void setup() {
         calculate_power_status();
 
         initialize_device_state();
-        /*device_state_timer.reset();*/
         battery_check_timer.reset();
 
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -1171,9 +1182,6 @@ void check_device_state() {
         return;
     }
 
-    // pause timer while we check status
-    /*device_state_timer.stop();*/
-
     tcsControl.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
     delay(STATE_SENSOR_STARTUP_DELAY);
 
@@ -1192,10 +1200,10 @@ void check_device_state() {
             cartridge_loaded = false;
             ready_to_scan_qr_code = false;
             cartridge_validated = false;
-            test_ready_to_start = false;
             stop_blinking_device_LED();
             set_device_LED_color(0, 255, 255);
             turn_on_device_LED();
+            turn_off_cartridge_heater();
         }
         else {
             Serial.printlnf("Device just closed");
@@ -1217,7 +1225,6 @@ void check_device_state() {
                 Serial.println("Cartridge in device; ready to scan qr code");
                 start_blinking_device_LED(0, 100, 0, 255, 255);
                 ready_to_scan_qr_code = true;
-                test_ready_to_start = false;
             }
             else {
                 Serial.println("No cartridge in device");
@@ -1231,8 +1238,6 @@ void check_device_state() {
     }
 
     tcsControl.end();
-
-    /*device_state_timer.start();*/
 
     /*if (cartridge_loaded && sensor_state.clear < CARTRIDGE_HEATER_THRESHOLD) {    // reading below threshold means reagent still below 33 deg C, turn on heat
         if (!cartridge_heater_is_on) {
@@ -1248,13 +1253,12 @@ void check_device_state() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                           LOOP                          //
+//                           TESTS                         //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
 void reset_globals() {
         validating_cartridge = false;
-        test_ready_to_start = false;
         test_in_progress = false;
         cancelling_test = false;
         test_starting_up = false;
@@ -1284,6 +1288,26 @@ void reset_globals() {
         next_upload = millis() + UPLOAD_INTERVAL;
 }
 
+void cancel_test() {
+    Serial.println("Test cancelled");
+    update_progress("Test cancelled", -1);
+    brevitest_publish("test-cancel", test_record.test_uuid, false);
+
+    stop_blinking_device_LED();
+    set_device_LED_color(255, 0, 0);
+    turn_on_device_LED();
+}
+
+void finish_test() {
+    Serial.println("Test completed");
+    update_progress("Test complete", -1);
+    brevitest_publish("test-finish", test_record.test_uuid, false);
+
+    stop_blinking_device_LED();
+    set_device_LED_color(0, 255, 0);
+    turn_on_device_LED();
+}
+
 void run_test() {
     test_in_progress = true;
     start_blinking_device_LED(0, 500, 0, 255, 0);
@@ -1296,7 +1320,6 @@ void run_test() {
     analogWrite(pinSolenoid, 0);
     analogWrite(pinSensorLED, 0);
 
-    /*device_state_timer.stop();*/
     Particle.disconnect();
     while(!Particle.disconnected()) {
         Serial.println("-");
@@ -1314,25 +1337,12 @@ void run_test() {
         Particle.process();
         delay(1000);
     }
-    /*device_state_timer.start();*/
 
     if (cancelling_test) {
-        Serial.println("Test cancelled");
-        update_progress("Test cancelled", -1);
-        brevitest_publish("test-cancel", test_record.test_uuid, false);
-
-        stop_blinking_device_LED();
-        set_device_LED_color(255, 0, 0);
-        turn_on_device_LED();
+        cancel_test();
     }
     else {
-        Serial.println("Test completed");
-        update_progress("Test complete", -1);
-        brevitest_publish("test-finish", test_record.test_uuid, false);
-
-        stop_blinking_device_LED();
-        set_device_LED_color(0, 255, 0);
-        turn_on_device_LED();
+        finish_test();
     }
 
     reset_globals();
@@ -1358,6 +1368,12 @@ void upload_tests() {
         }
 }
 
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                           LOOP                          //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
 void loop() {
         int inchar;
 
@@ -1368,32 +1384,32 @@ void loop() {
         }
 
         if (!test_in_progress) {
-            if (ready_to_scan_qr_code && !device_open) {
-                ready_to_scan_qr_code = false;
-                if (scan_qr_code() == CARTRIDGE_UUID_LENGTH) {
-                    validate_cartridge();
+            check_device_state();
+
+            if (test_startup_successful && cartridge_heater_is_cooling_down) {
+                test_startup_successful = false;
+                if (device_open) {
+                    cancel_test();
                 }
                 else {
-                    stop_blinking_device_LED();
-                    set_device_LED_color(255, 0, 0);    // bad cartridge uuid
-                    turn_on_device_LED();
-                    cartridge_validated = false;
+                    run_test();
                 }
                 return;
             }
 
-            if (test_ready_to_start) {
-                test_ready_to_start = false;
-                Serial.println("Starting test");
-                test_starting_up = true;
-                brevitest_publish("test-start", test_record.test_uuid, false);
-                Serial.println("Starting test");
-                return;
-            }
-
-            if (test_startup_successful && !device_open) {
-                test_startup_successful = false;
-                run_test();
+            if (ready_to_scan_qr_code) {
+                ready_to_scan_qr_code = false;
+                if (!device_open) {
+                    if (scan_qr_code() == CARTRIDGE_UUID_LENGTH) {
+                        validate_cartridge();
+                    }
+                    else {
+                        stop_blinking_device_LED();
+                        set_device_LED_color(255, 0, 0);    // bad cartridge uuid
+                        turn_on_device_LED();
+                        cartridge_validated = false;
+                    }
+                }
                 return;
             }
 
@@ -1403,7 +1419,6 @@ void loop() {
                 next_upload = millis() + UPLOAD_INTERVAL;
                 return;
             }
-            check_device_state();
         }
 
         if (update_battery_life) {

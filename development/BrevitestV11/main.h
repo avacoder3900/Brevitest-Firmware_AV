@@ -136,7 +136,6 @@ bool ready_to_scan_qr_code = false;
 bool qr_code_being_scanned = false;
 bool validating_cartridge = false;
 bool cartridge_validated = false;
-bool test_ready_to_start = false;
 bool test_starting_up = false;
 bool test_startup_successful = false;
 bool test_in_progress = false;
@@ -145,9 +144,6 @@ bool cancelling_test = false;
 bool uploading_test = false;
 bool cartridge_heater_is_on = false;
 bool cartridge_heater_is_cooling_down = false;
-
-void check_device_state(void);
-Timer device_state_timer(DEVICE_STATE_CHECK_PERIOD, check_device_state);
 
 // device LED
 void update_blinking_device_LED(void);
