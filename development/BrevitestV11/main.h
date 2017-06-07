@@ -82,9 +82,10 @@
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_THRESHOLD 19000
-#define CARTRIDGE_HEATER_HEAT_UP_PERIOD 20000
-#define CARTRIDGE_HEATER_COOL_DOWN_PERIOD 600000
+#define CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD 19000
+#define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
+#define CARTRIDGE_HEATER_ON_PERIOD 80
+#define CARTRIDGE_HEATER_OFF_PERIOD 3920
 
 // upload
 #define UPLOAD_INTERVAL 10000
@@ -131,7 +132,6 @@ int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
 unsigned long next_upload;
-unsigned long cartridge_heater_timeout;
 
 // device state
 bool device_open = false;
@@ -146,8 +146,12 @@ bool test_in_progress = false;
 bool reading_sensors = false;
 bool cancelling_test = false;
 bool uploading_test = false;
-bool cartridge_heater_is_on = false;
-bool cartridge_heater_is_cooling_down = false;
+
+volatile bool cartridge_heater_is_on = false;
+volatile bool cartridge_heater_is_cooling_down = false;
+volatile unsigned long cartridge_heater_switch_millis;
+bool cartridge_is_heated;
+unsigned long next_sensor_reading_time = 0;
 
 // device LED
 void update_blinking_device_LED(void);
@@ -175,14 +179,11 @@ struct DeviceLED {
 // timers
 void set_update_battery_life_flag(void);
 Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
-void cartridge_heater_heat_up(void);
-Timer cartridge_heater_heat_up_timer(CARTRIDGE_HEATER_HEAT_UP_PERIOD, cartridge_heater_heat_up);
-void cartridge_heater_cool_down(void);
-Timer cartridge_heater_cool_down_timer(CARTRIDGE_HEATER_COOL_DOWN_PERIOD, cartridge_heater_cool_down);
 
 // sensors
 TCS34725 tcsAssay;
 TCS34725 tcsControl;
+unsigned long last_sensor_reading_time = 0;
 
 // progress
 int test_progress;
