@@ -198,38 +198,6 @@ void reset_stage() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                    CARTRIDGE HEATER                     //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void cartridge_heat_on() {
-    digitalWrite(pinCartridgeHeater, HIGH);
-    cartridge_heater_is_on = true;
-    digitalWrite(pinCartridgeHeaterLED, HIGH);
-}
-
-void cartridge_heat_off() {
-    digitalWrite(pinCartridgeHeater, LOW);
-    cartridge_heater_is_on = false;
-    digitalWrite(pinCartridgeHeaterLED, LOW);
-}
-
-void cartridge_heater_interrupt() {
-    unsigned long now = millis();
-    if (now > cartridge_heater_switch_millis) {  // switch heater state
-        if(cartridge_heater_is_on) {
-          cartridge_heat_off();
-          cartridge_heater_switch_millis = now + CARTRIDGE_HEATER_OFF_PERIOD;
-        }
-        else {
-          cartridge_heat_on();
-          cartridge_heater_switch_millis = now + CARTRIDGE_HEATER_ON_PERIOD;
-        }
-    }
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                       QR SCANNER                        //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -957,18 +925,6 @@ int process_one_BCODE_command(int cmd, int index) {
         case 13: // Repeat end
                 return -index;
                 break;
-        case 14: // Turn heat on for specific period
-                /*index = get_BCODE_token(index, &param1);
-                cartridge_heat_on();
-                delay(param1);
-                cartridge_heat_off();*/
-                break;
-        case 15: // Turn on cartridge heater - DEPRECATED
-                /*turn_on_cartridge_heater();*/
-                break;
-        case 16: // Turn off cartridge heater - DEPRECATED
-                /*turn_off_cartridge_heater();*/
-                break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
                 write_test_record_to_eeprom();
@@ -1093,10 +1049,6 @@ void setup() {
         turn_off_device_LED();
         set_device_LED_color(255, 255, 0);
         turn_on_device_LED();
-
-        cartridge_heat_on();
-        cartridge_heater_switch_millis = millis() + CARTRIDGE_HEATER_ON_PERIOD;
-        attachSystemInterrupt(SysInterrupt_SysTick, cartridge_heater_interrupt);
 
         Serial.begin(115200); // standard serial port
 

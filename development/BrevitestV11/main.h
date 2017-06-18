@@ -84,12 +84,6 @@
 // cartridge heater
 #define CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD 19000
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
-#define CARTRIDGE_HEATER_ON_PERIOD 160
-#define CARTRIDGE_HEATER_OFF_PERIOD 3840
-
-//Brad Test Parameters
-//#define CARTRIDGE_HEATER_ON_PERIOD 1000
-//#define CARTRIDGE_HEATER_OFF_PERIOD 1000
 
 // upload
 #define UPLOAD_INTERVAL 10000
@@ -151,9 +145,6 @@ bool reading_sensors = false;
 bool cancelling_test = false;
 bool uploading_test = false;
 
-volatile bool cartridge_heater_is_on = false;
-volatile bool cartridge_heater_is_cooling_down = false;
-volatile unsigned long cartridge_heater_switch_millis;
 bool cartridge_is_heated;
 unsigned long next_sensor_reading_time = 0;
 
