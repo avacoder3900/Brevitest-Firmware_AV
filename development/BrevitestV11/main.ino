@@ -1114,6 +1114,7 @@ void check_control_sensor_state(bool initSensor, bool ledOn) {
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
         cartridge_is_heated = (sensor_state.clear > CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD);   // reading below threshold means reagent still below 33 deg C, turn on heat
+        Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
 }
@@ -1235,6 +1236,7 @@ void run_test() {
     analogWrite(pinSensorLED, 0);
 
     Particle.disconnect();
+    delay(1000);
     while(!Particle.disconnected()) {
         Serial.println("-");
         Particle.process();
@@ -1246,6 +1248,7 @@ void run_test() {
     }
 
     Particle.connect();
+    delay(1000);
     while (!Particle.connected()) {
         Serial.println("+");
         Particle.process();
@@ -1301,7 +1304,7 @@ void loop() {
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
                     check_control_sensor_state(true, true);
-                    Serial.printlnf("Waiting for cartridge to heat - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
+                    /*Serial.printlnf("Waiting for cartridge to heat - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
                     tcsControl.end();
                 }
                 if (cartridge_is_heated) {
