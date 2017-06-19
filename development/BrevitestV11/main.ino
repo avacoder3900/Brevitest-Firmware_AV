@@ -1129,6 +1129,7 @@ void check_device_state() {
     check_control_sensor_state(true, false);
 
     device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
+    /*Serial.printlnf("Device status - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
     if (device_open ^ device_open_now) {    // device open state changed
         if (device_open_now) {
             Serial.println("Device just opened");
