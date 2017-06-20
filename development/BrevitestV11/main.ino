@@ -1079,23 +1079,23 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void initialize_device_state() {
-    check_control_sensor_state(true, false);
+    check_assay_sensor_state(true, false);
 
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open) {
-        check_control_sensor_state(false, true);
+        check_assay_sensor_state(false, true);
         cartridge_loaded = !(sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
     }
 
-    tcsControl.end();
+    tcsAssay.end();
 }
 
-void check_control_sensor_state(bool initSensor, bool ledOn) {
+void check_assay_sensor_state(bool initSensor, bool ledOn) {
     int tries = 0;
     uint16_t old_clear;
 
     if (initSensor) {
-        tcsControl.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
+        tcsAssay.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
         delay(STATE_SENSOR_STARTUP_DELAY);
     }
 
@@ -1107,7 +1107,7 @@ void check_control_sensor_state(bool initSensor, bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsControl.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
+        tcsAssay.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
     } while (abs(old_clear - sensor_state.clear) > 2 && tries++ < 5);
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 
@@ -1126,7 +1126,7 @@ void check_device_state() {
         return;
     }
 
-    check_control_sensor_state(true, false);
+    check_assay_sensor_state(true, false);
 
     device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     /*Serial.printlnf("Device status - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
@@ -1144,7 +1144,7 @@ void check_device_state() {
         else {
             Serial.printlnf("Device just closed");
 
-            check_control_sensor_state(false, true);
+            check_assay_sensor_state(false, true);
 
             cartridge_loaded = (sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
             cartridge_validated = false;
@@ -1164,7 +1164,7 @@ void check_device_state() {
         device_open = device_open_now;
     }
 
-    tcsControl.end();
+    tcsAssay.end();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1304,9 +1304,9 @@ void loop() {
 
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
-                    check_control_sensor_state(true, true);
-                    /*Serial.printlnf("Waiting for cartridge to heat - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
-                    tcsControl.end();
+                    check_assay_sensor_state(true, true);
+                    Serial.printlnf("Waiting for cartridge to heat - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
+                    tcsAssay.end();
                 }
                 if (cartridge_is_heated) {
                     test_startup_successful = false;

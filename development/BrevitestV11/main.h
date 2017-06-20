@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 2
-#define DATA_FORMAT_VERSION 4
+#define DATA_FORMAT_VERSION 5
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -32,7 +32,7 @@
 #define SENSOR_LED_CONTROL 229
 
 // assay
-#define ASSAY_BCODE_CAPACITY 1000
+#define ASSAY_BCODE_CAPACITY 2200
 
 // timers
 #define DEVICE_STATE_CHECK_PERIOD 1000
@@ -44,7 +44,7 @@
 #define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
-#define TEST_CACHE_SIZE 6
+#define TEST_CACHE_SIZE 3
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // particle
