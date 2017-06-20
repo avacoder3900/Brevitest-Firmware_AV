@@ -192,7 +192,7 @@ char device_id[DEVICE_ID_LENGTH + 1];
 String device_id_string;
 
 // publish and subscribe callback
-#define CALLBACK_BUFFER_SIZE 1200
+#define CALLBACK_BUFFER_SIZE 3000
 char callback_buffer[CALLBACK_BUFFER_SIZE];
 bool callback_complete;
 char callback_event[30];
