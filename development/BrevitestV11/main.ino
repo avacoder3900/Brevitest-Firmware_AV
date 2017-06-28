@@ -1030,12 +1030,13 @@ int particle_command(String arg) {
         case 1: // set and move to calibration point
             eeprom.param.steps_to_calibration_point = param1;
             store_eeprom();
+            reset_stage();
             return param1;
         case 2: // set cartridge check threshold
             eeprom.param.card_check_threshold = param1;
             store_eeprom();
             return param1;
-        case 2: // set cartridge check threshold
+        case 3: // set cartridge check threshold
             eeprom.param.heat_sensor_threshold = param1;
             store_eeprom();
             return param1;
