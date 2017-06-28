@@ -193,7 +193,7 @@ void wake_stepper() {
 void reset_stage() {
         cumulative_steps = CUMULATIVE_STEP_LIMIT;
         move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
-        move_steps(STEPS_TO_MICROBEAD_WELL, eeprom.param.step_delay_us);
+        move_steps(STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1005,10 +1005,49 @@ void watchdog() {
     Serial.println("Watchdog!");
 }
 
+int particle_command(String arg) {
+    int cmd, indx1, indx2, param1 = 0, param2 = 0;
+
+    indx1 = arg.indexOf(COMMA_DELIM);
+    if (indx1 == -1) {
+        cmd = arg.toInt();
+    }
+    else {
+        cmd = arg.substring(0, indx1).toInt();
+        indx1++;
+        indx2 = arg.indexOf(COMMA_DELIM, indx1);
+        if (indx2 == -1) {
+            param1 = arg.substring(indx1).toInt();
+        }
+        else {
+            param1 = arg.substring(indx1, indx2).toInt();
+            indx2++;
+            param2 = arg.substring(indx2).toInt();
+        }
+    }
+
+    switch (cmd) {
+        case 1: // set and move to calibration point
+            eeprom.param.steps_to_calibration_point = param1;
+            store_eeprom();
+            return param1;
+        case 2: // set cartridge check threshold
+            eeprom.param.card_check_threshold = param1;
+            store_eeprom();
+            return param1;
+        case 2: // set cartridge check threshold
+            eeprom.param.heat_sensor_threshold = param1;
+            store_eeprom();
+            return param1;
+    }
+
+}
+
 void setup() {
         Particle.variable("register", particle_register, STRING);
         Particle.variable("status", particle_status, STRING);
         Particle.variable("powerstatus", &power_status, INT);
+        Particle.function("command", particle_command);
         device_id_string = System.deviceID();
         Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
         Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
@@ -1084,7 +1123,7 @@ void initialize_device_state() {
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open) {
         check_assay_sensor_state(false, true);
-        cartridge_loaded = !(sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
+        cartridge_loaded = !(sensor_state.clear > eeprom.param.card_check_threshold);
     }
 
     tcsAssay.end();
@@ -1113,7 +1152,7 @@ void check_assay_sensor_state(bool initSensor, bool ledOn) {
 
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
-        cartridge_is_heated = (sensor_state.clear > CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD);   // reading below threshold means reagent still below 33 deg C, turn on heat
+        cartridge_is_heated = (sensor_state.clear > eeprom.param.heat_sensor_threshold);   // reading below threshold means reagent still below 33 deg C, turn on heat
         Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
@@ -1146,7 +1185,7 @@ void check_device_state() {
 
             check_assay_sensor_state(false, true);
 
-            cartridge_loaded = (sensor_state.clear > STATE_CARD_CHECK_THRESHOLD);
+            cartridge_loaded = (sensor_state.clear > eeprom.param.card_check_threshold);
             cartridge_validated = false;
             if (cartridge_loaded) {
                 Serial.println("Cartridge in device; ready to scan qr code");

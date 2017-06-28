@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 2
-#define DATA_FORMAT_VERSION 5
+#define DATA_FORMAT_VERSION 6
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -75,25 +75,24 @@
   //Well #1
   //#define STEPS_TO_MICROBEAD_WELL 1300
 
-  //Well #2
-#define STEPS_TO_MICROBEAD_WELL 2900
+  //Well #2  - steps to the proximal edge of microbead well
+#define STEPS_TO_MICROBEAD_WELL 2300
 
 // battery
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD 31500
+#define CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD 20400
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
 
 // upload
 #define UPLOAD_INTERVAL 10000
 
 // state
-#define STATE_SENSOR_STARTUP_DELAY 25
+#define STATE_SENSOR_STARTUP_DELAY 200
 #define STATE_SENSOR_LED_POWER 200
 #define STATE_SENSOR_LED_DELAY 200
 #define STATE_DEVICE_OPEN_THRESHOLD 35
-#define STATE_CARD_CHECK_THRESHOLD 20000
 
 // application watchdog
 void watchdog(void);
@@ -219,18 +218,22 @@ BrevitestSensorSampleRecord control_buffer[SENSOR_NUMBER_OF_SAMPLES];
 struct Param {      // 32 bytes
   uint16_t reset_steps;
   uint16_t step_delay_us;
-  uint16_t publish_interval_during_move;
+  uint16_t steps_to_calibration_point;
   uint16_t stepper_wake_delay_ms;
   uint16_t solenoid_power;  // surge << 8 + sustain
   uint16_t solenoid_surge_period_ms;
-  uint16_t reserved[10];
+  uint16_t card_check_threshold;
+  uint16_t heat_sensor_threshold;
+  uint16_t reserved[9];
   Param() {
     reset_steps = 14000;
     step_delay_us = 800;
-    publish_interval_during_move = 100;
+    steps_to_calibration_point = 600;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
     solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 150;
+    card_check_threshold = 17500;
+    heat_sensor_threshold = 20400;
   }
 };
 
