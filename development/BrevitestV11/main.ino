@@ -1036,7 +1036,7 @@ int particle_command(String arg) {
             eeprom.param.card_check_threshold = param1;
             store_eeprom();
             return param1;
-        case 3: // set cartridge check threshold
+        case 3: // set heat threshold
             eeprom.param.heat_sensor_threshold = param1;
             store_eeprom();
             return param1;
