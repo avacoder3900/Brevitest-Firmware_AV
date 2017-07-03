@@ -928,18 +928,23 @@ int process_one_BCODE_command(int cmd, int index) {
         case 17: // Raster well
                 index = get_BCODE_token(index, &param1);    // total steps
                 index = get_BCODE_token(index, &param2);    // step_delay_us
-                index = get_BCODE_token(index, &param3);    // gather_time_ms
-                index = get_BCODE_token(index, &param4);    // number of rasters
-                steps = param1 / param4;
-                index = get_BCODE_token(index, &param5);    // number of firings
+                index = get_BCODE_token(index, &param3);    // number of rasters
+                if (param3 == 1) {
+                    steps = param1;
+                }
+                else {
+                    steps = param1 / (param3 - 1);
+                }
+                index = get_BCODE_token(index, &param4);    // number of firings
+                index = get_BCODE_token(index, &param5);    // gather_time_ms
                 index = get_BCODE_token(index, &param6);    // number of firing segments
                 mark = index;
-                for (i = 0; i < param4; i++) {
+                for (i = 0; i < param3 - 1; i++) {
                         if (cancelling_test) {
                                 break;
                         }
                         index = mark;
-                        for (j = 0; j < param5; j++) {
+                        for (j = 0; j < param4; j++) {
                             if (j < param6) {
                                 index = get_BCODE_token(index, &param7);    // energize time
                                 index = get_BCODE_token(index, &param8);    // delay time
@@ -949,8 +954,23 @@ int process_one_BCODE_command(int cmd, int index) {
                         }
                         move_steps(steps, param2);
                 }
-                move_steps(param1 - steps * param4, param2);  // clean up extra steps
-                delay(param3);   // gather beads
+
+                index = mark;
+                for (j = 0; j < param4; j++) {
+                    if (j < param6) {
+                        index = get_BCODE_token(index, &param7);    // energize time
+                        index = get_BCODE_token(index, &param8);    // delay time
+                    }
+                    move_solenoid(param7);
+                    delay(param8);
+                }
+
+                steps = param1 - steps * (param3 - 1);
+                if (steps) {
+                    move_steps(steps, param2);
+                }
+
+                delay(param5);   // gather beads
                 break;
         case 18: // Well transit
                 index = get_BCODE_token(index, &param1);    // step_delay_us
