@@ -836,7 +836,7 @@ void update_progress(char *message, int duration) {
 }
 
 int process_one_BCODE_command(int cmd, int index) {
-        int i, j, param1, param2, param3, param4, param5, param6, start_index;
+        int i, j, mark, param1, param2, param3, param4, param5, param6, param7, param8, start_index, steps;
 
         if (cancelling_test) {
                 return index;
@@ -926,6 +926,31 @@ int process_one_BCODE_command(int cmd, int index) {
                 return -index;
                 break;
         case 17: // Raster well
+                index = get_BCODE_token(index, &param1);    // total steps
+                index = get_BCODE_token(index, &param2);    // step_delay_us
+                index = get_BCODE_token(index, &param3);    // gather_time_ms
+                index = get_BCODE_token(index, &param4);    // number of rasters
+                steps = param1 / param4;
+                index = get_BCODE_token(index, &param5);    // number of firings
+                index = get_BCODE_token(index, &param6);    // number of firing segments
+                mark = index;
+                for (i = 0; i < param4; i++) {
+                        if (cancelling_test) {
+                                break;
+                        }
+                        index = mark;
+                        for (j = 0; j < param5; j++) {
+                            if (j < param6) {
+                                index = get_BCODE_token(index, &param7);    // energize time
+                                index = get_BCODE_token(index, &param8);    // delay time
+                            }
+                            move_solenoid(param7);
+                            delay(param8);
+                        }
+                        move_steps(steps, param2);
+                }
+                move_steps(param1 - steps * param4, param2);  // clean up extra steps
+                delay(param3);   // gather beads
                 break;
         case 18: // Well transit
                 index = get_BCODE_token(index, &param1);    // step_delay_us
