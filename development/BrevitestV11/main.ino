@@ -836,7 +836,7 @@ void update_progress(char *message, int duration) {
 }
 
 int process_one_BCODE_command(int cmd, int index) {
-        int i, param1, param2, param3, start_index;
+        int i, j, param1, param2, param3, param4, param5, param6, start_index;
 
         if (cancelling_test) {
                 return index;
@@ -854,8 +854,8 @@ int process_one_BCODE_command(int cmd, int index) {
                 delay(param1);
                 break;
         case 2: // Move(number of steps, step delay)
-                index = get_BCODE_token(index, &param1);
-                index = get_BCODE_token(index, &param2);
+                index = get_BCODE_token(index, &param1);    // number of steps
+                index = get_BCODE_token(index, &param2);    // step_delay_us
                 update_progress("Moving magnets", (abs(param1) * param2) / 1000);
                 move_steps(param1, param2);
                 break;
@@ -928,6 +928,23 @@ int process_one_BCODE_command(int cmd, int index) {
         case 17: // Raster well
                 break;
         case 18: // Well transit
+                index = get_BCODE_token(index, &param1);    // step_delay_us
+                index = get_BCODE_token(index, &param2);    // gather_time_ms
+                index = get_BCODE_token(index, &param3);    // number of segments
+                for (i = 0; i < param3; i++) {
+                        if (cancelling_test) {
+                                break;
+                        }
+                        // read segment data
+                        index = get_BCODE_token(index, &param4);    // number of iterations
+                        index = get_BCODE_token(index, &param5);    // steps per iteration
+                        index = get_BCODE_token(index, &param6);    // delay between steps, in milliseconds
+                        for (j = 0; j < param4; j++) {
+                            move_steps(param5, param1);
+                            delay(param6);
+                        }
+                }
+                delay(param2);   // gather beads
                 break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
@@ -1158,7 +1175,7 @@ void check_assay_sensor_state(bool initSensor, bool ledOn) {
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
         cartridge_is_heated = (sensor_state.clear > eeprom.param.heat_sensor_threshold);   // reading below threshold means reagent still below 33 deg C, turn on heat
-        Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
+        /*Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
 }
@@ -1349,7 +1366,7 @@ void loop() {
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
                     check_assay_sensor_state(true, true);
-                    Serial.printlnf("Waiting for cartridge to heat - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
+                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", eeprom.param.heat_sensor_threshold, sensor_state.clear);
                     tcsAssay.end();
                 }
                 if (cartridge_is_heated) {
