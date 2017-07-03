@@ -925,6 +925,10 @@ int process_one_BCODE_command(int cmd, int index) {
         case 13: // Repeat end
                 return -index;
                 break;
+        case 17: // Raster well
+                break;
+        case 18: // Well transit
+                break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
                 write_test_record_to_eeprom();
