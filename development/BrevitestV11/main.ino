@@ -481,7 +481,7 @@ void validate_cartridge() {
 
 bool load_assay_record(char *cartridgeId, char *assayString) {
     int indx = 0;
-    uint32_t crc_loaded, crc_calculated;
+    int crc_loaded, crc_calculated;
 
     memcpy(cartridge_uuid, cartridgeId, CARTRIDGE_UUID_LENGTH);
     memcpy(assay.uuid, cartridgeId, ASSAY_UUID_LENGTH);
@@ -496,11 +496,11 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
     assay.delay_between_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
-    crc_loaded = (uint32_t) extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+    crc_loaded = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     strncpy(assay.BCODE, &assayString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
-    crc_calculated = checksum(assay.BCODE, assay.BCODE_length - 2);
-    Serial.printlnf("BCODE checksums: %d, %d", crc_loaded, crc_calculated);
+    crc_calculated = abs(checksum(assay.BCODE, assay.BCODE_length - 2));
+    Serial.printlnf("BCODE checksums: %u, %u", crc_loaded, crc_calculated);
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
 }
 
