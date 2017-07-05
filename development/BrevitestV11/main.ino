@@ -1312,6 +1312,7 @@ void check_device_state() {
 
             check_assay_sensor_state(false, true);
 
+            Serial.printlnf("Device status - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
             cartridge_loaded = (sensor_state.clear > eeprom.param.card_check_threshold);
             cartridge_validated = false;
             if (cartridge_loaded) {
