@@ -204,9 +204,9 @@ void move_steps(int steps, int step_delay){
                         break;
                 }
 
-                /*if (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS == 0) {
+                if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
                         Particle.process();
-                }*/
+                }
 
                 if ((dir == LOW) && (digitalRead(pinLimitSwitch) == HIGH)) {
                         cumulative_steps = 0;
@@ -538,10 +538,7 @@ void callback_validate(char *cartridgeId, char *assayString) {
         Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
         if (cartridge_validated) {    // cartridge found
             if (load_assay_record(cartridgeId, assayString)) {
-                Serial.println("Starting test");
-                test_starting_up = true;
-                start_blinking_device_LED(0, 500, 0, 255, 0);
-                brevitest_publish("test-start", test_record.test_uuid, false);
+                starting_test = true;
             }
             else {
                 Serial.println("Failed to load assay record");
@@ -558,31 +555,54 @@ void callback_validate(char *cartridgeId, char *assayString) {
 }
 
 void callback_test_start() {
-    Serial.println("Test started");
     test_startup_successful = (strncmp(callback_status, SUCCESS, 7) == 0);
-    test_starting_up = false;
+    if (test_startup_successful) {
+        Serial.println("Test started");
+        waiting_for_start_confirmation = false;
+    }
+    else {
+        Serial.println("Test start failed!");
+    }
 }
 
 void callback_test_finish() {
-    Serial.println("Test finished");
-    reset_stage();
-    next_upload = 0;
+    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
+    if (success) {
+        Serial.println("Test finished");
+        waiting_for_finish_confirmation = false;
+        reset_stage();
+        reset_globals();
+        next_upload = 0;
+    }
+    else {
+        Serial.println("Test finish failed!");
+    }
 }
 
 void callback_test_cancel() {
-    Serial.println("Test cancelled");
-    reset_stage();
+    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
+    if (success) {
+        Serial.println("Test cancelled");
+        waiting_for_cancel_confirmation = false;
+        reset_stage();
+        reset_globals();
+        next_upload = 0;
+    }
+    else {
+        Serial.println("Test cancel failed!");
+    }
 }
 
 void callback_test_upload(char *testId) {
-    if (strncmp(callback_status, SUCCESS, 7) == 0) {
+    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
+    if (success) {
         Serial.printlnf("Test successfully uploaded; removing test %s from cache", testId);
+        waiting_for_upload_confirmation = false;
         remove_test_from_cache(testId);
     }
     else {
-        Serial.println("Test upload failed");
+        Serial.println("Test upload failed!");
     }
-    uploading_test = false;
 }
 
 char *extract_callback_params() {
@@ -1288,7 +1308,7 @@ void check_assay_sensor_state(bool initSensor, bool ledOn) {
 void check_device_state() {
     bool device_open_now;
 
-    if (qr_code_being_scanned || validating_cartridge || test_starting_up || test_in_progress || cancelling_test || reading_sensors || uploading_test) {
+    if (qr_code_being_scanned || validating_cartridge || waiting_for_start_confirmation || test_in_progress || cancelling_test || finishing_test || reading_sensors || waiting_for_upload_confirmation) {
         return;
     }
 
@@ -1343,10 +1363,7 @@ void check_device_state() {
 void reset_globals() {
         validating_cartridge = false;
         test_in_progress = false;
-        cancelling_test = false;
-        test_starting_up = false;
         test_startup_successful = false;
-        uploading_test = false;
         cartridge_validated = false;
         callback_complete = false;
         reading_sensors = false;
@@ -1371,8 +1388,22 @@ void reset_globals() {
         next_upload = millis() + UPLOAD_INTERVAL;
 }
 
+void start_test() {
+    Serial.println("Test starting");
+
+    waiting_for_start_confirmation = true;
+    start_timeout = millis() + TIMEOUT_START;
+
+    start_blinking_device_LED(0, 500, 0, 255, 0);
+    brevitest_publish("test-start", test_record.test_uuid, false);
+}
+
 void cancel_test() {
     Serial.println("Test cancelled");
+
+    waiting_for_cancel_confirmation = true;
+    cancel_timeout = millis() + TIMEOUT_CANCEL;
+
     update_progress("Test cancelled", -1);
     brevitest_publish("test-cancel", test_record.test_uuid, false);
 
@@ -1383,6 +1414,10 @@ void cancel_test() {
 
 void finish_test() {
     Serial.println("Test completed");
+
+    waiting_for_finish_confirmation = true;
+    finish_timeout = millis() + TIMEOUT_FINISH;
+
     update_progress("Test complete", -1);
     brevitest_publish("test-finish", test_record.test_uuid, false);
 
@@ -1404,11 +1439,11 @@ void run_test() {
     analogWrite(pinSensorLED, 0);
 
     Particle.disconnect();
-    delay(1000);
+    delay(PARTICLE_CLOUD_DELAY);
     while(!Particle.disconnected()) {
         Serial.println("-");
         Particle.process();
-        delay(1000);
+        delay(PARTICLE_CLOUD_DELAY);
     }
 
     SINGLE_THREADED_BLOCK() {
@@ -1416,27 +1451,23 @@ void run_test() {
     }
 
     Particle.connect();
-    delay(1000);
+    delay(PARTICLE_CLOUD_DELAY);
     while (!Particle.connected()) {
         Serial.println("+");
         Particle.process();
-        delay(1000);
+        delay(PARTICLE_CLOUD_DELAY);
     }
 
-    if (cancelling_test) {
-        cancel_test();
-    }
-    else {
-        finish_test();
-    }
-
-    reset_globals();
+    finishing_test = !cancelling_test;
 }
 
 void upload_one_test(int test_number, char *test_id) {
-    uploading_test = true;
-    Serial.printlnf("Processing test record: %s", test_id);
+    waiting_for_upload_confirmation = true;
+    upload_timeout = millis() + TIMEOUT_UPLOAD;
+
+    Serial.printlnf("Processing test %s for upload", test_id);
     process_test_record(test_number);
+
     Serial.println(particle_register);
     brevitest_publish("test-upload", test_id, false);
 }
@@ -1466,7 +1497,35 @@ void loop() {
             return;
         }
 
-        if (!test_in_progress) {
+        if (test_in_progress) {
+            if (cancelling_test) {
+                cancelling_test = false;
+                cancel_test();
+                return;
+            }
+
+            if (finishing_test) {
+                finishing_test = false;
+                finish_test();
+                return;
+            }
+
+            if (waiting_for_start_confirmation && millis() > start_timeout) {
+                start_test();
+                return;
+            }
+
+            if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
+                cancel_test();
+                return;
+            }
+
+            if (waiting_for_finish_confirmation && millis() > finish_timeout) {
+                finish_test();
+                return;
+            }
+        }
+        else {
             check_device_state();
 
             if (test_startup_successful) {
@@ -1478,7 +1537,7 @@ void loop() {
                 if (cartridge_is_heated) {
                     test_startup_successful = false;
                     if (device_open) {
-                        cancel_test();
+                        cancelling_test = true;
                     }
                     else {
                         run_test();
@@ -1503,12 +1562,24 @@ void loop() {
                 return;
             }
 
-            if (!uploading_test && tests_to_upload()) {
-                Serial.println("Uploading tests");
-                upload_tests();
-                next_upload = millis() + UPLOAD_INTERVAL;
+            if (starting_test) {
+                starting_test = false;
+                start_test();
                 return;
             }
+
+            if (waiting_for_upload_confirmation) {
+                if (millis() > upload_timeout) {
+                    upload_tests();
+                }
+                return;
+            }
+
+            if (tests_to_upload()) {
+                upload_tests();
+                return;
+            }
+
         }
 
         if (update_battery_life) {

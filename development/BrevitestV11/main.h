@@ -51,7 +51,8 @@
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63
 #define PARTICLE_PUBLISH_INTERVAL 1000
-#define MOVE_STEPS_BETWEEN_PARTICLE_PROCESS 10
+#define MOVE_STEPS_BETWEEN_PARTICLE_PROCESS 200
+#define PARTICLE_CLOUD_DELAY 2000
 
 // status
 #define STATUS_LENGTH 622
@@ -86,13 +87,19 @@
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
 
 // upload
-#define UPLOAD_INTERVAL 10000
+#define UPLOAD_INTERVAL 20000
 
 // state
 #define STATE_SENSOR_STARTUP_DELAY 200
 #define STATE_SENSOR_LED_POWER 200
 #define STATE_SENSOR_LED_DELAY 200
 #define STATE_DEVICE_OPEN_THRESHOLD 35
+
+// timeouts
+#define TIMEOUT_START 20000
+#define TIMEOUT_CANCEL 20000
+#define TIMEOUT_FINISH 20000
+#define TIMEOUT_UPLOAD 20000
 
 // application watchdog
 void watchdog(void);
@@ -129,6 +136,10 @@ int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
 unsigned long next_upload;
+unsigned long start_timeout;
+unsigned long cancel_timeout;
+unsigned long finish_timeout;
+unsigned long upload_timeout;
 
 // device state
 bool device_open = false;
@@ -137,12 +148,18 @@ bool ready_to_scan_qr_code = false;
 bool qr_code_being_scanned = false;
 bool validating_cartridge = false;
 bool cartridge_validated = false;
-bool test_starting_up = false;
+
 bool test_startup_successful = false;
 bool test_in_progress = false;
 bool reading_sensors = false;
+bool starting_test = false;
+bool waiting_for_start_confirmation = false;
 bool cancelling_test = false;
+bool waiting_for_cancel_confirmation = false;
+bool finishing_test = false;
+bool waiting_for_finish_confirmation = false;
 bool uploading_test = false;
+bool waiting_for_upload_confirmation = false;
 
 bool cartridge_is_heated;
 unsigned long next_sensor_reading_time = 0;
