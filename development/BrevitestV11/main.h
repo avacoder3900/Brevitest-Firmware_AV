@@ -96,14 +96,15 @@
 #define STATE_DEVICE_OPEN_THRESHOLD 35
 
 // timeouts
-#define TIMEOUT_START 20000
-#define TIMEOUT_CANCEL 20000
-#define TIMEOUT_FINISH 20000
+#define TIMEOUT_VALIDATION 10000
+#define TIMEOUT_START 10000
+#define TIMEOUT_CANCEL 10000
+#define TIMEOUT_FINISH 10000
 #define TIMEOUT_UPLOAD 20000
 
 // application watchdog
 void watchdog(void);
-ApplicationWatchdog wd(20000, watchdog);
+ApplicationWatchdog wd(30000, watchdog);
 
 // pin definitions
 
@@ -136,6 +137,7 @@ int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
 bool update_battery_life = false;
 unsigned long next_upload;
+unsigned long validation_timeout;
 unsigned long start_timeout;
 unsigned long cancel_timeout;
 unsigned long finish_timeout;
@@ -146,12 +148,13 @@ bool device_open = false;
 bool cartridge_loaded = false;
 bool ready_to_scan_qr_code = false;
 bool qr_code_being_scanned = false;
-bool validating_cartridge = false;
-bool cartridge_validated = false;
 
 bool test_startup_successful = false;
 bool test_in_progress = false;
 bool reading_sensors = false;
+
+bool cartridge_validated = false;
+bool waiting_for_validation = false;
 bool starting_test = false;
 bool waiting_for_start_confirmation = false;
 bool cancelling_test = false;

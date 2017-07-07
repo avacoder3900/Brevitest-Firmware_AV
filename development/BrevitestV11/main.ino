@@ -474,8 +474,13 @@ int read_sensors() {
 /////////////////////////////////////////////////////////////
 
 void validate_cartridge() {
+    Serial.println("Validating cartridge");
+
+    waiting_for_validation = true;
+    validation_timeout = millis() + TIMEOUT_VALIDATION;
+
+    start_blinking_device_LED(0, 100, 255, 0, 255);
     cartridge_validated = false;
-    validating_cartridge = true;
     brevitest_publish("validate-cartridge", qr_uuid, false);
 }
 
@@ -526,7 +531,7 @@ void brevitest_publish(char *event_name, char *data, bool retry) {
 }
 
 void callback_validate(char *cartridgeId, char *assayString) {
-    validating_cartridge = false;
+    waiting_for_validation = false;
     check_device_state();
     if (device_open) {
         stop_blinking_device_LED();
@@ -1308,7 +1313,7 @@ void check_assay_sensor_state(bool initSensor, bool ledOn) {
 void check_device_state() {
     bool device_open_now;
 
-    if (qr_code_being_scanned || validating_cartridge || waiting_for_start_confirmation || test_in_progress || cancelling_test || finishing_test || reading_sensors || waiting_for_upload_confirmation) {
+    if (qr_code_being_scanned || waiting_for_validation || waiting_for_start_confirmation || test_in_progress || cancelling_test || finishing_test || reading_sensors || waiting_for_upload_confirmation) {
         return;
     }
 
@@ -1361,7 +1366,6 @@ void check_device_state() {
 /////////////////////////////////////////////////////////////
 
 void reset_globals() {
-        validating_cartridge = false;
         test_in_progress = false;
         test_startup_successful = false;
         cartridge_validated = false;
@@ -1510,11 +1514,6 @@ void loop() {
                 return;
             }
 
-            if (waiting_for_start_confirmation && millis() > start_timeout) {
-                start_test();
-                return;
-            }
-
             if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
                 cancel_test();
                 return;
@@ -1527,6 +1526,11 @@ void loop() {
         }
         else {
             check_device_state();
+
+            if (waiting_for_start_confirmation && millis() > start_timeout) {
+                start_test();
+                return;
+            }
 
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
@@ -1544,6 +1548,13 @@ void loop() {
                     }
                     return;
                 }
+            }
+
+            if (waiting_for_validation) {
+                if (millis() > validation_timeout) {
+                    validate_cartridge();
+                }
+                return;
             }
 
             if (ready_to_scan_qr_code) {
