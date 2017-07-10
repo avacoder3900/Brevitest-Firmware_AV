@@ -82,10 +82,12 @@ uint16_t TCS34725::read16(uint8_t reg)
 /**************************************************************************/
 void TCS34725::enable(void)
 {
-  write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
-  delay(3);
-  write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN);
-  _is_enabled = true;
+    if (!_is_enabled) {
+        write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
+        delay(5);
+        write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN);
+        _is_enabled = true;
+    }
 }
 
 /**************************************************************************/
@@ -96,10 +98,13 @@ void TCS34725::enable(void)
 void TCS34725::disable(void)
 {
   /* Turn the device off to save power */
-  uint8_t reg = 0;
-  reg = read8(TCS34725_ENABLE);
-  write8(TCS34725_ENABLE, reg & ~(TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));
-  _is_enabled = false;
+  /*uint8_t reg = 0;*/
+  /*reg = read8(TCS34725_ENABLE);*/
+  /*write8(TCS34725_ENABLE, reg & ~(TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));*/
+  if (_is_enabled) {
+      write8(TCS34725_ENABLE, 0x00);
+      _is_enabled = false;
+  }
 }
 
 /**************************************************************************/
@@ -151,6 +156,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
     }
 
     THIS_WIRE.begin();
+    delay(5);
 
     /* Make sure we're actually connected */
     uint8_t x = read8(TCS34725_ID);
@@ -253,55 +259,21 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 /**************************************************************************/
 void TCS34725::getRawData (uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c)
 {
-  *c = read16(TCS34725_CDATAL);
-  *r = read16(TCS34725_RDATAL);
-  *g = read16(TCS34725_GDATAL);
-  *b = read16(TCS34725_BDATAL);
-
-  /* Set a delay for the integration time */
-  switch (_tcs34725IntegrationTime)
-  {
-    case TCS34725_INTEGRATIONTIME_2_4MS:
-      delay(3);
-      break;
-    case TCS34725_INTEGRATIONTIME_24MS:
-      delay(24);
-      break;
-    case TCS34725_INTEGRATIONTIME_50MS:
-      delay(50);
-      break;
-    case TCS34725_INTEGRATIONTIME_101MS:
-      delay(101);
-      break;
-    case TCS34725_INTEGRATIONTIME_154MS:
-      delay(154);
-      break;
-    case TCS34725_INTEGRATIONTIME_700MS:
-      delay(700);
-      break;
-  }
-}
-
-void TCS34725::setInterrupt(boolean i) {
-  uint8_t r = read8(TCS34725_ENABLE);
-  if (i) {
-    r |= TCS34725_ENABLE_AIEN;
-  } else {
-    r &= ~TCS34725_ENABLE_AIEN;
-  }
-  write8(TCS34725_ENABLE, r);
-}
-
-void TCS34725::clearInterrupt(void) {
-  THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-  THIS_WIRE.write(TCS34725_COMMAND_BIT | 0x66);
-  THIS_WIRE.endTransmission();
-}
-
-
-void TCS34725::setIntLimits(uint16_t low, uint16_t high) {
-   write8(0x04, low & 0xFF);
-   write8(0x05, low >> 8);
-   write8(0x06, high & 0xFF);
-   write8(0x07, high >> 8);
+    int tries = 10;
+    bool ready = false;
+    while (!ready && tries-- > 0) {
+        ready = (read8(TCS34725_STATUS) & 0x01) == 1;
+        if (!ready) {
+            delay(70);
+        }
+    }
+    if (tries > 0) {
+        *c = read16(TCS34725_CDATAL);
+        *r = read16(TCS34725_RDATAL);
+        *g = read16(TCS34725_GDATAL);
+        *b = read16(TCS34725_BDATAL);
+    }
+    else {
+        *c = *r = *g = *b = 0xFFFF;
+    }
 }

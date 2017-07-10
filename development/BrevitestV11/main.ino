@@ -413,7 +413,7 @@ void convert_samples_to_reading(char sensor_code) {
         test_record.number_of_readings++;
 }
 
-void read_one_sensor(char sensor_code, int sample_number, int integrationTime, int gain) {
+void read_one_sensor(char sensor_code, int sample_number) {
         BrevitestSensorSampleRecord *sample;
         TCS34725 *sensor;
         int tries;
@@ -429,15 +429,16 @@ void read_one_sensor(char sensor_code, int sample_number, int integrationTime, i
                 sensor = &tcsControl;
         }
 
-        sensor->begin((tcs34725IntegrationTime_t) integrationTime, (tcs34725Gain_t) gain);
-
-        sample->sample_time = Time.now();
+        sample->sample_time = millis();
         sample->red = sample->green = sample->blue = sample->clear = tries = 0;
+
+        /*sensor->enable();*/
+
         while (sample->clear == 0 && tries++ < 5) {
             sensor->getRawData(&sample->red, &sample->green, &sample->blue, &sample->clear);
         }
 
-        sensor->end();
+        /*sensor->disable();*/
 }
 
 int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
@@ -446,14 +447,20 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
         analogWrite(pinSensorLED, ledPower);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                read_one_sensor('A', i, integrationTime, gain);
-                read_one_sensor('C', i, integrationTime, gain);
+        tcsAssay.begin((tcs34725IntegrationTime_t) integrationTime, (tcs34725Gain_t) gain);
+        tcsControl.begin((tcs34725IntegrationTime_t) integrationTime, (tcs34725Gain_t) gain);
 
-                Serial.printlnf("%d %d %d %d %d %d %d %d %d %d %d", i, \
+        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
+                read_one_sensor('A', i);
+                read_one_sensor('C', i);
+
+                Serial.printlnf("%u %d %d %d %d %u %d %d %d %d %d", i, \
                     assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
                     control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
         }
+
+        tcsAssay.end();
+        tcsControl.end();
 
         analogWrite(pinSensorLED, 0);
 

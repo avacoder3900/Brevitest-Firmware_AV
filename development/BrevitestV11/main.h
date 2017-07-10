@@ -25,7 +25,7 @@
 
 // sensors
 #define SENSOR_NUMBER_OF_SAMPLES 6
-#define SENSOR_LED_WARMUP_DELAY_MS 1000
+#define SENSOR_LED_WARMUP_DELAY_MS 2000
 #define SENSOR_NUMBER_ASSAY 1
 #define SENSOR_NUMBER_CONTROL 0
 #define SENSOR_LED_ASSAY 255
@@ -226,7 +226,7 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
 struct BrevitestSensorSampleRecord {        // 12 bytes
-    int sample_time;
+    unsigned long sample_time;
     uint16_t red;
     uint16_t green;
     uint16_t blue;
