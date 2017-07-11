@@ -30,6 +30,8 @@
 #define SENSOR_NUMBER_CONTROL 0
 #define SENSOR_LED_ASSAY 255
 #define SENSOR_LED_CONTROL 229
+#define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
+#define SENSOR_DEFAULT_GAIN TCS34725_GAIN_4X
 
 // assay
 #define ASSAY_BCODE_CAPACITY 3200
@@ -252,7 +254,7 @@ struct Param {      // 32 bytes
     stepper_wake_delay_ms = 5;
     solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 150;
-    card_check_threshold = 17500;
+    card_check_threshold = 4000;
     heat_sensor_threshold = 20400;
   }
 };

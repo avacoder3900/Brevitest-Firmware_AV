@@ -31,12 +31,22 @@
     @brief  Writes a register and an 8 bit value over I2C
 */
 /**************************************************************************/
-void TCS34725::write8 (uint8_t reg, uint32_t value)
+void TCS34725::write8 (uint8_t reg, uint8_t value)
 {
-  THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-  THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
-  THIS_WIRE.write(value & 0xFF);
-  THIS_WIRE.endTransmission();
+    uint8_t result = 0xFF, bytes_sent;
+    int tries = 0;
+
+    while (result != 0 && ++tries < 6) {
+        THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
+        THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
+        /*Serial.printlnf("Command %d, sent %d", TCS34725_COMMAND_BIT | reg, bytes_sent);*/
+        bytes_sent = THIS_WIRE.write(value);
+        /*Serial.printlnf("Data %d, sent %d", value, bytes_sent);*/
+        result = THIS_WIRE.endTransmission();
+        if (result != 0) {
+            Serial.printlnf("Bad transmission, %d, try = %d", result, tries );
+        }
+    }
 }
 
 /**************************************************************************/
@@ -83,6 +93,7 @@ uint16_t TCS34725::read16(uint8_t reg)
 void TCS34725::enable(void)
 {
     if (!_is_enabled) {
+        /*Serial.printlnf("Enabling sensor %d", _wire_number);*/
         write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
         delay(5);
         write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN);
@@ -129,7 +140,7 @@ boolean TCS34725::isEnabled(void)
 TCS34725::TCS34725(uint8_t sensor_number)
 {
   _tcs34725IntegrationTime = TCS34725_INTEGRATIONTIME_154MS;
-  _tcs34725Gain = TCS34725_GAIN_1X;
+  _tcs34725Gain = TCS34725_GAIN_4X;
   _wire_number = sensor_number;
   _is_enabled = false;
 }
@@ -146,7 +157,7 @@ TCS34725::TCS34725(uint8_t sensor_number)
 /**************************************************************************/
 boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 {
-    if (THAT_WIRE.isEnabled()) {
+    /*if (THAT_WIRE.isEnabled()) {
         THAT_WIRE.end();
     }
 
@@ -154,7 +165,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
         THIS_WIRE.end();
         delay(5);
     }
-
+*/
     THIS_WIRE.begin();
     delay(5);
 
@@ -162,14 +173,15 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
     uint8_t x = read8(TCS34725_ID);
     if ((x != 0x44) && (x != 0x10))
     {
+        Serial.println("Not connected to sensor");
       return false;
     }
 
     /* Note: by default, the device is in power down mode on bootup */
+    enable();
+
     setIntegrationTime(it);
     setGain(gain);
-
-    enable();
 
   return true;
 }
@@ -191,14 +203,15 @@ boolean TCS34725::begin(void)
     uint8_t x = read8(TCS34725_ID);
     if ((x != 0x44) && (x != 0x10))
     {
+        Serial.println("Not connected to sensor");
       return false;
     }
 
     /* Note: by default, the device is in power down mode on bootup */
+    enable();
+
     setIntegrationTime(_tcs34725IntegrationTime);
     setGain(_tcs34725Gain);
-
-    enable();
 
   return true;
 }
@@ -231,6 +244,9 @@ boolean TCS34725::end(void)
 /**************************************************************************/
 void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 {
+    if (it == _tcs34725IntegrationTime) {
+        return;
+    }
   /* Update the timing register */
   write8(TCS34725_ATIME, it);
 
@@ -245,6 +261,9 @@ void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 /**************************************************************************/
 void TCS34725::setGain(tcs34725Gain_t gain)
 {
+    if (gain == _tcs34725Gain) {
+        return;
+    }
   /* Update the timing register */
   write8(TCS34725_CONTROL, gain);
 
@@ -257,23 +276,34 @@ void TCS34725::setGain(tcs34725Gain_t gain)
     @brief  Reads the raw red, green, blue and clear channel values
 */
 /**************************************************************************/
-void TCS34725::getRawData (uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c)
+void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c)
 {
-    int tries = 10;
+    int tries = 50;
     bool ready = false;
-    while (!ready && tries-- > 0) {
-        ready = (read8(TCS34725_STATUS) & 0x01) == 1;
+    uint8_t state;
+
+    begin(it, gain);
+
+    while (!ready && --tries > 0) {
+        state = read8(TCS34725_STATUS);
+        /*Serial.printlnf("Sensor state: %d, try %d", state, 10-tries);*/
+        ready = (state & 0x01) == 1;
         if (!ready) {
-            delay(70);
+            /*Serial.print(".");*/
+            delay(20);
         }
     }
     if (tries > 0) {
+        /*Serial.println("Successful sensor read");*/
         *c = read16(TCS34725_CDATAL);
         *r = read16(TCS34725_RDATAL);
         *g = read16(TCS34725_GDATAL);
         *b = read16(TCS34725_BDATAL);
     }
     else {
+        Serial.println("Unsuccessful sensor read");
         *c = *r = *g = *b = 0xFFFF;
     }
+
+    end();
 }

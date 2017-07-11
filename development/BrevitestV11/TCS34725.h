@@ -125,8 +125,8 @@ class TCS34725 {
   boolean   end(void);
   void      setIntegrationTime(tcs34725IntegrationTime_t it);
   void      setGain(tcs34725Gain_t gain);
-  void      getRawData(uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c);
-  void      write8 (uint8_t reg, uint32_t value);
+  void      getRawData(tcs34725IntegrationTime_t it, tcs34725Gain_t gain, uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c);
+  void      write8 (uint8_t reg, uint8_t value);
   uint8_t   read8 (uint8_t reg);
   uint16_t  read16 (uint8_t reg);
   void      setInterrupt(boolean flag);
