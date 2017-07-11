@@ -1191,6 +1191,8 @@ int particle_command(String arg) {
         }
     }
 
+    Serial.printlnf("Command: %d, param1: %d, param2: %d, param3: %d", cmd, param1, param2, param3);
+
     switch (cmd) {
         case 1: // set and move to calibration point
             eeprom.param.steps_to_calibration_point = param1;
@@ -1206,8 +1208,11 @@ int particle_command(String arg) {
             store_eeprom();
             return param1;
         case 4: // read assay sensor (ledPower, integration_time, gain)
-            read_sensors_with_parameters(param1, param2, param3);
-            return param1;
+            read_sensors_command_led_power = param1;
+            read_sensors_command_integration_time = param2;
+            read_sensors_command_gain = param3;
+            read_sensors_command_flag = true;
+            return 1;
     }
 
 }
@@ -1292,7 +1297,7 @@ void initialize_device_state() {
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open) {
         check_assay_sensor_state(true);
-        cartridge_loaded = !(sensor_state.clear > eeprom.param.card_check_threshold);
+        cartridge_loaded = !(sensor_state.blue > STATE_DEVICE_CARTRIDGE_THRESHOLD);
     }
 
     /*tcsAssay.disable();*/
@@ -1316,7 +1321,7 @@ void check_assay_sensor_state(bool ledOn) {
 
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
-        cartridge_is_heated = (sensor_state.clear > eeprom.param.heat_sensor_threshold);   // reading below threshold means reagent still below 33 deg C, turn on heat
+        cartridge_is_heated = (sensor_state.red > CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD);   // reading below threshold means reagent still below 33 deg C, turn on heat
         /*Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
@@ -1333,7 +1338,6 @@ void check_device_state() {
     /*Serial.printlnf("Device state(false) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
 
     device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
-    /*Serial.printlnf("Device status - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
     if (device_open ^ device_open_now) {    // device open state changed
         if (device_open_now) {
             Serial.println("Device just opened");
@@ -1351,7 +1355,7 @@ void check_device_state() {
             check_assay_sensor_state(true);
 
             Serial.printlnf("Device state(true) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
-            cartridge_loaded = (sensor_state.clear > eeprom.param.card_check_threshold);
+            cartridge_loaded = (sensor_state.blue > STATE_DEVICE_CARTRIDGE_THRESHOLD);
             cartridge_validated = false;
             if (cartridge_loaded) {
                 Serial.println("Cartridge in device; ready to scan qr code");
@@ -1548,7 +1552,7 @@ void loop() {
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
                     check_assay_sensor_state(true);
-                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", eeprom.param.heat_sensor_threshold, sensor_state.clear);
+                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD, sensor_state.red);
                     tcsAssay.end();
                 }
                 if (cartridge_is_heated) {
@@ -1604,6 +1608,11 @@ void loop() {
                 return;
             }
 
+        }
+
+        if (read_sensors_command_flag) {
+            read_sensors_command_flag = false;
+            read_sensors_with_parameters(read_sensors_command_led_power, read_sensors_command_integration_time, read_sensors_command_gain);
         }
 
         if (update_battery_life) {

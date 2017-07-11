@@ -44,7 +44,8 @@ void TCS34725::write8 (uint8_t reg, uint8_t value)
         /*Serial.printlnf("Data %d, sent %d", value, bytes_sent);*/
         result = THIS_WIRE.endTransmission();
         if (result != 0) {
-            Serial.printlnf("Bad transmission, %d, try = %d", result, tries );
+            Serial.printlnf("Bad transmission, %d, try = %d", result, tries);
+            delay(50);
         }
     }
 }
@@ -84,6 +85,27 @@ uint16_t TCS34725::read16(uint8_t reg)
   x |= t;
   return x;
 }
+
+/*========================================================================*/
+/*                            CONSTRUCTORS                                */
+/*========================================================================*/
+
+/**************************************************************************/
+/*!
+    Constructor
+*/
+/**************************************************************************/
+TCS34725::TCS34725(uint8_t sensor_number)
+{
+  _tcs34725IntegrationTime = TCS34725_INTEGRATIONTIME_154MS;
+  _tcs34725Gain = TCS34725_GAIN_4X;
+  _wire_number = sensor_number;
+  _is_enabled = false;
+}
+
+/*========================================================================*/
+/*                           PUBLIC FUNCTIONS                             */
+/*========================================================================*/
 
 /**************************************************************************/
 /*!
@@ -128,27 +150,6 @@ boolean TCS34725::isEnabled(void)
   return _is_enabled;
 }
 
-/*========================================================================*/
-/*                            CONSTRUCTORS                                */
-/*========================================================================*/
-
-/**************************************************************************/
-/*!
-    Constructor
-*/
-/**************************************************************************/
-TCS34725::TCS34725(uint8_t sensor_number)
-{
-  _tcs34725IntegrationTime = TCS34725_INTEGRATIONTIME_154MS;
-  _tcs34725Gain = TCS34725_GAIN_4X;
-  _wire_number = sensor_number;
-  _is_enabled = false;
-}
-
-/*========================================================================*/
-/*                           PUBLIC FUNCTIONS                             */
-/*========================================================================*/
-
 /**************************************************************************/
 /*!
     Initializes I2C and configures the sensor (call this function before
@@ -157,61 +158,39 @@ TCS34725::TCS34725(uint8_t sensor_number)
 /**************************************************************************/
 boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 {
-    /*if (THAT_WIRE.isEnabled()) {
-        THAT_WIRE.end();
-    }
+    int tries = 0;
+    uint8_t id = 0;
 
-    if (THIS_WIRE.isEnabled()) {
-        THIS_WIRE.end();
-        delay(5);
-    }
-*/
-    THIS_WIRE.begin();
-    delay(5);
-
-    /* Make sure we're actually connected */
-    uint8_t x = read8(TCS34725_ID);
-    if ((x != 0x44) && (x != 0x10))
+    while ((id != 0x44) && (id != 0x10))
     {
-        Serial.println("Not connected to sensor");
-      return false;
-    }
+        if (THAT_WIRE.isEnabled()) {
+            THAT_WIRE.end();
+        }
 
-    /* Note: by default, the device is in power down mode on bootup */
-    enable();
+        if (THIS_WIRE.isEnabled()) {
+            THIS_WIRE.end();
+            delay(5);
+        }
+
+        THIS_WIRE.begin();
+        delay(5);
+
+        /* Make sure we're actually connected */
+        id = read8(TCS34725_ID);
+        if ((id != 0x44) && (id != 0x10)) {
+            if (++tries > 5) {
+                return false;
+            }
+            Serial.printlnf("Not connected to sensor, try: %d, retrying...", tries);
+        }
+
+    }
 
     setIntegrationTime(it);
     setGain(gain);
 
-  return true;
-}
-
-boolean TCS34725::begin(void)
-{
-    if (THAT_WIRE.isEnabled()) {
-        THAT_WIRE.end();
-    }
-
-    if (THIS_WIRE.isEnabled()) {
-        THIS_WIRE.end();
-        delay(5);
-    }
-
-    THIS_WIRE.begin();
-
-    /* Make sure we're actually connected */
-    uint8_t x = read8(TCS34725_ID);
-    if ((x != 0x44) && (x != 0x10))
-    {
-        Serial.println("Not connected to sensor");
-      return false;
-    }
-
     /* Note: by default, the device is in power down mode on bootup */
     enable();
-
-    setIntegrationTime(_tcs34725IntegrationTime);
-    setGain(_tcs34725Gain);
 
   return true;
 }
@@ -244,9 +223,6 @@ boolean TCS34725::end(void)
 /**************************************************************************/
 void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 {
-    if (it == _tcs34725IntegrationTime) {
-        return;
-    }
   /* Update the timing register */
   write8(TCS34725_ATIME, it);
 
@@ -261,9 +237,6 @@ void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 /**************************************************************************/
 void TCS34725::setGain(tcs34725Gain_t gain)
 {
-    if (gain == _tcs34725Gain) {
-        return;
-    }
   /* Update the timing register */
   write8(TCS34725_CONTROL, gain);
 

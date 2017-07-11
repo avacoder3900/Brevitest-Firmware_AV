@@ -31,7 +31,7 @@
 #define SENSOR_LED_ASSAY 255
 #define SENSOR_LED_CONTROL 229
 #define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
-#define SENSOR_DEFAULT_GAIN TCS34725_GAIN_4X
+#define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
 
 // assay
 #define ASSAY_BCODE_CAPACITY 3200
@@ -85,7 +85,7 @@
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD 20400
+#define CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD 10500
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
 
 // upload
@@ -95,7 +95,8 @@
 #define STATE_SENSOR_STARTUP_DELAY 200
 #define STATE_SENSOR_LED_POWER 200
 #define STATE_SENSOR_LED_DELAY 200
-#define STATE_DEVICE_OPEN_THRESHOLD 35
+#define STATE_DEVICE_OPEN_THRESHOLD 10
+#define STATE_DEVICE_CARTRIDGE_THRESHOLD 5000
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
@@ -200,6 +201,10 @@ Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 TCS34725 tcsAssay;
 TCS34725 tcsControl;
 unsigned long last_sensor_reading_time = 0;
+bool read_sensors_command_flag = false;
+int read_sensors_command_led_power;
+int read_sensors_command_integration_time;
+int read_sensors_command_gain;
 
 // progress
 int test_progress;
