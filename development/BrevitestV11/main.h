@@ -232,7 +232,6 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-BrevitestSensorSampleRecord sensor_state;
 BrevitestSensorSampleRecord assay_buffer[SENSOR_NUMBER_OF_SAMPLES];
 BrevitestSensorSampleRecord control_buffer[SENSOR_NUMBER_OF_SAMPLES];
 
@@ -258,17 +257,7 @@ struct Param {      // 32 bytes
   }
 };
 
-struct BrevitestSensorRecord {  // 16 bytes
-    char channel;
-    uint8_t samples;
-    int start_time;
-    uint16_t red_mean;
-    uint16_t green_mean;
-    uint16_t blue_mean;
-    uint16_t clear_mean;
-    uint16_t clear_max;
-    uint16_t clear_min;
-} sensor_reading;
+BrevitestSensorRecord sensor_reading, sensor_state;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;

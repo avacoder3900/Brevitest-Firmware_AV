@@ -381,85 +381,44 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         delay(STATE_SENSOR_STARTUP_DELAY);
 }
 
-void convert_samples_to_reading(char sensor_code) {
-        int i;
-        int red, green, blue, clear, samples, clr, clear_max, clear_min;
-        BrevitestSensorSampleRecord *buffer;
-        BrevitestSensorRecord *reading;
-
-        reading = &(test_record.reading[test_record.number_of_readings]);
-        reading->channel = sensor_code;
-        buffer = (sensor_code == 'A' ? assay_buffer : control_buffer);
-        red = green = blue = clear = clear_max = samples = 0;
-        clear_min = 0xFFFF;
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                if (buffer[i].clear && buffer[i].clear != 0xFFFF) {
-                        samples++;
-                        clr = (int) buffer[i].clear;
-                        red += (int) buffer[i].red;
-                        green += (int) buffer[i].green;
-                        blue += (int) buffer[i].blue;
-                        clear += clr;
-                        clear_max = (clr > clear_max ? clr : clear_max);
-                        clear_min = (clr < clear_min ? clr : clear_min);
-                }
-        }
-        reading->clear_mean = (samples ? clear / samples : 0);
-        reading->red_mean = (samples ? red / samples : 0);
-        reading->green_mean = (samples ? green / samples : 0);
-        reading->blue_mean = (samples ? blue / samples : 0);
-        reading->clear_max = clear_max;
-        reading->clear_min = clear_min;
-        reading->start_time = buffer[0].sample_time;
-
-        test_record.number_of_readings++;
-}
-
-void read_one_sensor(char sensor_code, int sample_number, int it, int gain) {
-        BrevitestSensorSampleRecord *sample;
+void read_one_sensor(char sensor_code, int it, int gain) {
+        BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
         int tries, reading_count;
 
         /*Particle.process();*/
 
         if (sensor_code == 'A') {
-                sample = &assay_buffer[sample_number];
                 sensor = &tcsAssay;
         }
         else {
-                sample = &control_buffer[sample_number];
                 sensor = &tcsControl;
         }
 
-        sample->sample_time = millis();
-        sample->red = sample->green = sample->blue = sample->clear = tries = 0;
-
-        while (sample->clear == 0 && tries++ < 5) {
-            reading_count = sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, sample);
+        reading->channel = sensor_code;
+        reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
+        while (reading->clear == 0 && tries++ < 5) {
+            sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 20);
         }
+
+        Serial.printlnf("%c %d %u %d %d %d %d", \
+            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue);
+
+        test_record.number_of_readings++;
 }
 
 int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
-        int i;
+        int assay_count, control_count, i;
 
         Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
 
         analogWrite(pinSensorLED, ledPower);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                read_one_sensor('A', i, integrationTime, gain);
-                read_one_sensor('C', i, integrationTime, gain);
-
-                Serial.printlnf("%u %d %d %d %d %u %d %d %d %d %d", i, \
-                    assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
-                    control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
-        }
+        read_one_sensor('A', integrationTime, gain);
+        read_one_sensor('C', integrationTime, gain);
 
         analogWrite(pinSensorLED, 0);
-
-        convert_samples_to_reading('A');
-        convert_samples_to_reading('C');
 
         return 1;
 }
@@ -765,9 +724,8 @@ void write_test_record_to_eeprom() {
 }
 
 int append_test_reading(int start, BrevitestSensorRecord *reading) {
-    return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\t%5d\t%5d\n", \
-        reading->channel, reading->start_time, reading->red_mean, reading->green_mean, reading->blue_mean, \
-        reading->clear_mean, reading-> clear_max, reading->clear_min);
+    return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\n", \
+        reading->channel, reading->time_ms, reading->red, reading->green, reading->blue, reading->clear);
 }
 
 int process_test_record(int index) {
@@ -1299,7 +1257,7 @@ void initialize_device_state() {
 }
 
 void check_assay_sensor_state(bool ledOn) {
-    int tries = 0, reading_count;
+    int tries = 0;
     uint16_t old_clear;
 
     if (ledOn) {
@@ -1310,7 +1268,7 @@ void check_assay_sensor_state(bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        reading_count = tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state);
+        tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state, 3);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 

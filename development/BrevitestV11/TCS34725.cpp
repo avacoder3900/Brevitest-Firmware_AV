@@ -19,8 +19,7 @@
 #include <stdlib.h>
 #include "TCS34725.h"
 
-#define THIS_WIRE (_wire_number == 1 ? Wire1 : Wire)
-#define THAT_WIRE (_wire_number == 1 ? Wire : Wire1)
+#define CHANNEL (_wire_number == 1 ? Wire1 : Wire)
 
 /*========================================================================*/
 /*                          PRIVATE FUNCTIONS                             */
@@ -37,20 +36,20 @@ void TCS34725::write8 (uint8_t reg, uint8_t value)
     int tries = 0;
 
     while (result != 0 && bytes_sent != 1 && ++tries < 6) {
-        THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-        bytes_sent = THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
+        CHANNEL.beginTransmission(TCS34725_ADDRESS);
+        bytes_sent = CHANNEL.write(TCS34725_COMMAND_BIT | reg);
         if (bytes_sent != 1) {
             Serial.printlnf("Bad write command, try: %d, bytes sent: %d", tries, bytes_sent);
             delay(50);
         }
         else {
-            bytes_sent = THIS_WIRE.write(value);
+            bytes_sent = CHANNEL.write(value);
             if (bytes_sent != 1) {
                 Serial.printlnf("Bad write value, try: %d, bytes sent: %d", tries, bytes_sent);
                 delay(50);
             }
             else {
-                result = THIS_WIRE.endTransmission();
+                result = CHANNEL.endTransmission();
                 if (result != 0) {
                     Serial.printlnf("Bad write endTransmission, %d, try: %d", result, tries);
                     delay(50);
@@ -67,13 +66,13 @@ void TCS34725::write8 (uint8_t reg, uint8_t value)
 /**************************************************************************/
 
 boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
-    uint8_t result = 0xFF, bytes_sent, byte_read;
+    uint8_t result = 0xFF, bytes_sent;
     int tries = 0;
 
     while (result != 0 && ++tries < 6) {
-      THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-      bytes_sent = THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
-      result = THIS_WIRE.endTransmission();
+      CHANNEL.beginTransmission(TCS34725_ADDRESS);
+      bytes_sent = CHANNEL.write(TCS34725_COMMAND_BIT | reg);
+      result = CHANNEL.endTransmission();
 
       if (result != 0 || bytes_sent != 1) {
           Serial.printlnf("Bad requestRead write, try: %d, result: %d, bytes_sent: %d", tries, result, bytes_sent);
@@ -84,11 +83,11 @@ boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
     if (result == 0) {
         tries = 0;
         while (result != number_of_bytes && ++tries < 6) {
-            result = THIS_WIRE.requestFrom(TCS34725_ADDRESS, number_of_bytes);
+            result = CHANNEL.requestFrom(TCS34725_ADDRESS, number_of_bytes);
             if (result != number_of_bytes) {
                 Serial.printlnf("Bad readRequest requestFrom, bytes requested: %d, result: %d, try: %d", number_of_bytes, result, tries);
-                while (THIS_WIRE.available()) {
-                    Serial.print(THIS_WIRE.read());
+                while (CHANNEL.available()) {
+                    Serial.print(CHANNEL.read());
                 }
                 Serial.println();
                 delay(10);
@@ -96,11 +95,11 @@ boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
         }
         if (result == number_of_bytes) {
             tries = 0;
-            result = THIS_WIRE.available();
+            result = CHANNEL.available();
             while (result != number_of_bytes && ++tries < 6) {
                 Serial.printlnf("Waiting for readRequest response, bytes requested: %d, result: %d, try: %d", number_of_bytes, result, tries);
                 delay(10);
-                result = THIS_WIRE.available();
+                result = CHANNEL.available();
             }
             if (result == number_of_bytes) {
                 return true;
@@ -120,7 +119,7 @@ boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
 uint8_t TCS34725::read8(uint8_t reg)
 {
     if (requestRead(reg, 1)) {
-        return THIS_WIRE.read();
+        return CHANNEL.read();
     }
     else {
         return 0xFF;
@@ -137,8 +136,8 @@ uint16_t TCS34725::read16(uint8_t reg)
   uint16_t x; uint16_t t;
 
   if (requestRead(reg, 2)) {
-      t = THIS_WIRE.read();
-      x = THIS_WIRE.read();
+      t = CHANNEL.read();
+      x = CHANNEL.read();
       return (x << 8) | t;
   }
   else {
@@ -223,23 +222,15 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 
     while ((id != 0x44) && (id != 0x10))
     {
-        if (THAT_WIRE.isEnabled()) {
-            THAT_WIRE.end();
-        }
-
-        if (THIS_WIRE.isEnabled()) {
-            THIS_WIRE.end();
-            delay(5);
-        }
-
-        THIS_WIRE.begin();
+        CHANNEL.begin();
         delay(5);
 
         /* Make sure we're actually connected */
-        /*Serial.println("Reading sensor ID number");*/
         id = read8(TCS34725_ID);
+        /*Serial.println("Reading sensor ID number");*/
         if ((id != 0x44) && (id != 0x10)) {
             if (++tries > 5) {
+                CHANNEL.end();
                 return false;
             }
             Serial.printlnf("Not connected to sensor, try: %d, retrying...", tries);
@@ -253,7 +244,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
     /* Note: by default, the device is in power down mode on bootup */
     enable();
 
-  return true;
+    return true;
 }
 
 /**************************************************************************/
@@ -265,7 +256,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 boolean TCS34725::end(void)
 {
     disable();
-    THIS_WIRE.end();
+    CHANNEL.end();
     if (_wire_number == 1) {
         pinMode(C4, INPUT);
         pinMode(C5, INPUT);
@@ -312,7 +303,7 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 /**************************************************************************/
 #define CLEAR_CHANNEL_STABILITY_THRESHOLD 1
 
-int TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorSampleRecord *sample, bool read_once)
+void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorRecord *reading, int stability)
 {
     int tries = 50;
     uint16_t clear, old_clear;
@@ -320,7 +311,7 @@ int TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Bre
     bool ready = false;
     uint8_t state;
 
-    while (++reading_count < 10) {
+    while (++reading_count < stability) {
         begin(it, gain);
 
         ready = false;
@@ -339,27 +330,30 @@ int TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Bre
             /*Serial.println("Successful sensor read");*/
             clear = read16(TCS34725_CDATAL);
             if (reading_count == 1 || abs(clear - old_clear) > CLEAR_CHANNEL_STABILITY_THRESHOLD) {
-                if (reading_count == 9) {
+                if (reading_count == (stability - 1)) {
                     Serial.printlnf("Sensor failed to stabilize, reading count: %d, new: %d, old: %d", reading_count, clear, old_clear);
                 }
                 old_clear = clear;
             }
             else {
-                sample->clear = clear;
-                sample->red = read16(TCS34725_RDATAL);
-                sample->green = read16(TCS34725_GDATAL);
-                sample->blue = read16(TCS34725_BDATAL);
+                reading->time_ms = millis();
+                reading->samples = reading_count;
+                reading->clear = clear;
+                reading->red = read16(TCS34725_RDATAL);
+                reading->green = read16(TCS34725_GDATAL);
+                reading->blue = read16(TCS34725_BDATAL);
                 /*Serial.printlnf("Sensor reading stabilized, reading count: %d", reading_count);*/
-                break;
+                end();
+                return;
             }
         }
         else {
             Serial.println("Unsuccessful sensor read");
-            sample->clear = sample->red = sample->green = sample->blue = 0xFFFF;
+            reading->time_ms = millis();
+            reading->samples = 0;
+            reading->clear = reading->red = reading->green = reading->blue = 0xFFFF;
         }
 
         end();
     }
-
-    return reading_count;
 }

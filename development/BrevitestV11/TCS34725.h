@@ -123,6 +123,16 @@ struct BrevitestSensorSampleRecord {        // 12 bytes
     uint16_t clear;
 };
 
+struct BrevitestSensorRecord {  // 14 bytes
+    char channel;
+    uint8_t samples;
+    unsigned long time_ms;
+    uint16_t red;
+    uint16_t green;
+    uint16_t blue;
+    uint16_t clear;
+};
+
 class TCS34725 {
  public:
 
@@ -133,7 +143,7 @@ class TCS34725 {
   boolean   end(void);
   void      setIntegrationTime(tcs34725IntegrationTime_t it);
   void      setGain(tcs34725Gain_t gain);
-  int      getRawData(tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorSampleRecord *sample);
+  void      getRawData(tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorRecord *record, int stability);
   void      write8 (uint8_t reg, uint8_t value);
   uint8_t   read8 (uint8_t reg);
   uint16_t  read16 (uint8_t reg);
