@@ -138,8 +138,9 @@ class TCS34725 {
  private:
   tcs34725Gain_t _tcs34725Gain;
   tcs34725IntegrationTime_t _tcs34725IntegrationTime;
-  uint8_t _wire_number;
-  boolean _is_enabled;
+  uint8_t   _wire_number;
+  boolean   _is_enabled;
+  boolean   requestRead(uint8_t reg, uint8_t number_of_bytes);
   void      disable(void);
 
 };

@@ -33,21 +33,78 @@
 /**************************************************************************/
 void TCS34725::write8 (uint8_t reg, uint8_t value)
 {
-    uint8_t result = 0xFF, bytes_sent;
+    uint8_t result = 0xFF, bytes_sent = 0;
+    int tries = 0;
+
+    while (result != 0 && bytes_sent != 1 && ++tries < 6) {
+        THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
+        bytes_sent = THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
+        if (bytes_sent != 1) {
+            Serial.printlnf("Bad write command, try: %d, bytes sent: %d", tries, bytes_sent);
+            delay(50);
+        }
+        else {
+            bytes_sent = THIS_WIRE.write(value);
+            if (bytes_sent != 1) {
+                Serial.printlnf("Bad write value, try: %d, bytes sent: %d", tries, bytes_sent);
+                delay(50);
+            }
+            else {
+                result = THIS_WIRE.endTransmission();
+                if (result != 0) {
+                    Serial.printlnf("Bad write endTransmission, %d, try: %d", result, tries);
+                    delay(50);
+                }
+            }
+        }
+    }
+}
+
+/**************************************************************************/
+/*!
+    @brief  Request a register read over I2C
+*/
+/**************************************************************************/
+
+boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
+    uint8_t result = 0xFF, bytes_sent, byte_read;
     int tries = 0;
 
     while (result != 0 && ++tries < 6) {
-        THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-        THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
-        /*Serial.printlnf("Command %d, sent %d", TCS34725_COMMAND_BIT | reg, bytes_sent);*/
-        bytes_sent = THIS_WIRE.write(value);
-        /*Serial.printlnf("Data %d, sent %d", value, bytes_sent);*/
-        result = THIS_WIRE.endTransmission();
-        if (result != 0) {
-            Serial.printlnf("Bad transmission, %d, try = %d", result, tries);
-            delay(50);
+      THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
+      bytes_sent = THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
+      result = THIS_WIRE.endTransmission();
+
+      if (result != 0 || bytes_sent != 1) {
+          Serial.printlnf("Bad requestRead write, try: %d, result: %d, bytes_sent: %d", tries, result, bytes_sent);
+          delay(50);
+      }
+    }
+
+    if (result == 0) {
+        tries = 0;
+        while (result != number_of_bytes && ++tries < 6) {
+            result = THIS_WIRE.requestFrom(TCS34725_ADDRESS, 1);
+            if (result != number_of_bytes) {
+                Serial.printlnf("Bad readRequest requestFrom, %d, try: %d, result: %d", tries, result);
+                delay(10);
+            }
+        }
+        if (result == number_of_bytes) {
+            tries = 0;
+            result = THIS_WIRE.available();
+            while (result != number_of_bytes && ++tries < 6) {
+                Serial.printlnf("Waiting for readRequest response, %d, try: %d, result: %d", tries, result);
+                delay(10);
+                result = THIS_WIRE.available();
+            }
+            if (result == 1) {
+                return true;
+            }
         }
     }
+
+    return false;
 }
 
 /**************************************************************************/
@@ -55,14 +112,15 @@ void TCS34725::write8 (uint8_t reg, uint8_t value)
     @brief  Reads an 8 bit value over I2C
 */
 /**************************************************************************/
+
 uint8_t TCS34725::read8(uint8_t reg)
 {
-  THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-  THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
-  THIS_WIRE.endTransmission();
-
-  THIS_WIRE.requestFrom(TCS34725_ADDRESS, 1);
-  return THIS_WIRE.read();
+    if (requestRead(reg, 1) {
+        return THIS_WIRE.read();
+    }
+    else {
+        return 0xFF;
+    }
 }
 
 /**************************************************************************/
@@ -74,16 +132,14 @@ uint16_t TCS34725::read16(uint8_t reg)
 {
   uint16_t x; uint16_t t;
 
-  THIS_WIRE.beginTransmission(TCS34725_ADDRESS);
-  THIS_WIRE.write(TCS34725_COMMAND_BIT | reg);
-  THIS_WIRE.endTransmission();
-
-  THIS_WIRE.requestFrom(TCS34725_ADDRESS, 2);
-  t = THIS_WIRE.read();
-  x = THIS_WIRE.read();
-  x <<= 8;
-  x |= t;
-  return x;
+  if (requestRead(reg, 2) {
+      t = THIS_WIRE.read();
+      x = THIS_WIRE.read();
+      return (x << 8) | t;
+  }
+  else {
+      return 0xFFFF;
+  }
 }
 
 /*========================================================================*/
@@ -266,7 +322,7 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, ui
             delay(20);
         }
     }
-    if (tries > 0) {
+    if (ready) {
         /*Serial.println("Successful sensor read");*/
         *c = read16(TCS34725_CDATAL);
         *r = read16(TCS34725_RDATAL);
