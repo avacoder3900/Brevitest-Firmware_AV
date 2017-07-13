@@ -179,7 +179,7 @@ void move_solenoid(int duration) {
         pinMode(pinSolenoid, OUTPUT);
         analogWrite(pinSolenoid, 0);
 
-        STATUS("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);
+        Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1252,6 +1252,7 @@ void setup() {
         init_sensor(&tcsControl, SENSOR_NUMBER_CONTROL);
 
         reset_stage();
+        move_solenoid(1000);
         reset_globals();
 
         initialize_test_cache();
