@@ -418,7 +418,7 @@ void convert_samples_to_reading(char sensor_code) {
 void read_one_sensor(char sensor_code, int sample_number, int it, int gain) {
         BrevitestSensorSampleRecord *sample;
         TCS34725 *sensor;
-        int tries;
+        int tries, reading_count;
 
         /*Particle.process();*/
 
@@ -435,7 +435,7 @@ void read_one_sensor(char sensor_code, int sample_number, int it, int gain) {
         sample->red = sample->green = sample->blue = sample->clear = tries = 0;
 
         while (sample->clear == 0 && tries++ < 5) {
-            sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, &sample->red, &sample->green, &sample->blue, &sample->clear);
+            reading_count = sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, sample);
         }
 }
 
@@ -447,8 +447,6 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
         analogWrite(pinSensorLED, ledPower);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
-        read_one_sensor('A', 0, integrationTime, gain);
-
         for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
                 read_one_sensor('A', i, integrationTime, gain);
                 read_one_sensor('C', i, integrationTime, gain);
@@ -457,9 +455,6 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
                     assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
                     control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
         }
-
-        /*tcsAssay.end();
-        tcsControl.end();*/
 
         analogWrite(pinSensorLED, 0);
 
@@ -1304,7 +1299,7 @@ void initialize_device_state() {
 }
 
 void check_assay_sensor_state(bool ledOn) {
-    int tries = 0;
+    int tries = 0, reading_count;
     uint16_t old_clear;
 
     if (ledOn) {
@@ -1315,7 +1310,7 @@ void check_assay_sensor_state(bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
+        reading_count = tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 

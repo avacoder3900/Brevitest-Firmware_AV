@@ -84,9 +84,13 @@ boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
     if (result == 0) {
         tries = 0;
         while (result != number_of_bytes && ++tries < 6) {
-            result = THIS_WIRE.requestFrom(TCS34725_ADDRESS, 1);
+            result = THIS_WIRE.requestFrom(TCS34725_ADDRESS, number_of_bytes);
             if (result != number_of_bytes) {
-                Serial.printlnf("Bad readRequest requestFrom, %d, try: %d, result: %d", tries, result);
+                Serial.printlnf("Bad readRequest requestFrom, bytes requested: %d, result: %d, try: %d", number_of_bytes, result, tries);
+                while (THIS_WIRE.available()) {
+                    Serial.print(THIS_WIRE.read());
+                }
+                Serial.println();
                 delay(10);
             }
         }
@@ -94,11 +98,11 @@ boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
             tries = 0;
             result = THIS_WIRE.available();
             while (result != number_of_bytes && ++tries < 6) {
-                Serial.printlnf("Waiting for readRequest response, %d, try: %d, result: %d", tries, result);
+                Serial.printlnf("Waiting for readRequest response, bytes requested: %d, result: %d, try: %d", number_of_bytes, result, tries);
                 delay(10);
                 result = THIS_WIRE.available();
             }
-            if (result == 1) {
+            if (result == number_of_bytes) {
                 return true;
             }
         }
@@ -115,7 +119,7 @@ boolean TCS34725::requestRead(uint8_t reg, uint8_t number_of_bytes) {
 
 uint8_t TCS34725::read8(uint8_t reg)
 {
-    if (requestRead(reg, 1) {
+    if (requestRead(reg, 1)) {
         return THIS_WIRE.read();
     }
     else {
@@ -132,7 +136,7 @@ uint16_t TCS34725::read16(uint8_t reg)
 {
   uint16_t x; uint16_t t;
 
-  if (requestRead(reg, 2) {
+  if (requestRead(reg, 2)) {
       t = THIS_WIRE.read();
       x = THIS_WIRE.read();
       return (x << 8) | t;
@@ -232,6 +236,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
         delay(5);
 
         /* Make sure we're actually connected */
+        /*Serial.println("Reading sensor ID number");*/
         id = read8(TCS34725_ID);
         if ((id != 0x44) && (id != 0x10)) {
             if (++tries > 5) {
@@ -305,34 +310,56 @@ void TCS34725::setGain(tcs34725Gain_t gain)
     @brief  Reads the raw red, green, blue and clear channel values
 */
 /**************************************************************************/
-void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c)
+#define CLEAR_CHANNEL_STABILITY_THRESHOLD 1
+
+int TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorSampleRecord *sample, bool read_once)
 {
     int tries = 50;
+    uint16_t clear, old_clear;
+    int reading_count = 0;
     bool ready = false;
     uint8_t state;
 
-    begin(it, gain);
+    while (++reading_count < 10) {
+        begin(it, gain);
 
-    while (!ready && --tries > 0) {
-        state = read8(TCS34725_STATUS);
-        /*Serial.printlnf("Sensor state: %d, try %d", state, 10-tries);*/
-        ready = (state & 0x01) == 1;
-        if (!ready) {
-            /*Serial.print(".");*/
-            delay(20);
+        ready = false;
+        tries = 50;
+        while (!ready && --tries > 0) {
+            state = read8(TCS34725_STATUS);
+            /*Serial.printlnf("Sensor state: %d, try %d", state, 10-tries);*/
+            ready = (state & 0x01) == 1;
+            if (!ready) {
+                /*Serial.print(".");*/
+                delay(20);
+            }
         }
-    }
-    if (ready) {
-        /*Serial.println("Successful sensor read");*/
-        *c = read16(TCS34725_CDATAL);
-        *r = read16(TCS34725_RDATAL);
-        *g = read16(TCS34725_GDATAL);
-        *b = read16(TCS34725_BDATAL);
-    }
-    else {
-        Serial.println("Unsuccessful sensor read");
-        *c = *r = *g = *b = 0xFFFF;
+
+        if (ready) {
+            /*Serial.println("Successful sensor read");*/
+            clear = read16(TCS34725_CDATAL);
+            if (reading_count == 1 || abs(clear - old_clear) > CLEAR_CHANNEL_STABILITY_THRESHOLD) {
+                if (reading_count == 9) {
+                    Serial.printlnf("Sensor failed to stabilize, reading count: %d, new: %d, old: %d", reading_count, clear, old_clear);
+                }
+                old_clear = clear;
+            }
+            else {
+                sample->clear = clear;
+                sample->red = read16(TCS34725_RDATAL);
+                sample->green = read16(TCS34725_GDATAL);
+                sample->blue = read16(TCS34725_BDATAL);
+                /*Serial.printlnf("Sensor reading stabilized, reading count: %d", reading_count);*/
+                break;
+            }
+        }
+        else {
+            Serial.println("Unsuccessful sensor read");
+            sample->clear = sample->red = sample->green = sample->blue = 0xFFFF;
+        }
+
+        end();
     }
 
-    end();
+    return reading_count;
 }

@@ -24,8 +24,8 @@
 #define SERIAL_NUMBER_LENGTH 19
 
 // sensors
-#define SENSOR_NUMBER_OF_SAMPLES 6
-#define SENSOR_LED_WARMUP_DELAY_MS 2000
+#define SENSOR_NUMBER_OF_SAMPLES 3
+#define SENSOR_LED_WARMUP_DELAY_MS 1000
 #define SENSOR_NUMBER_ASSAY 1
 #define SENSOR_NUMBER_CONTROL 0
 #define SENSOR_LED_ASSAY 255
@@ -232,13 +232,7 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-struct BrevitestSensorSampleRecord {        // 12 bytes
-    unsigned long sample_time;
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
-    uint16_t clear;
-} sensor_state;
+BrevitestSensorSampleRecord sensor_state;
 BrevitestSensorSampleRecord assay_buffer[SENSOR_NUMBER_OF_SAMPLES];
 BrevitestSensorSampleRecord control_buffer[SENSOR_NUMBER_OF_SAMPLES];
 

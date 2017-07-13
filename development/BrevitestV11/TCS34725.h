@@ -115,6 +115,14 @@ typedef enum
 }
 tcs34725Gain_t;
 
+struct BrevitestSensorSampleRecord {        // 12 bytes
+    unsigned long sample_time;
+    uint16_t red;
+    uint16_t green;
+    uint16_t blue;
+    uint16_t clear;
+};
+
 class TCS34725 {
  public:
 
@@ -125,7 +133,7 @@ class TCS34725 {
   boolean   end(void);
   void      setIntegrationTime(tcs34725IntegrationTime_t it);
   void      setGain(tcs34725Gain_t gain);
-  void      getRawData(tcs34725IntegrationTime_t it, tcs34725Gain_t gain, uint16_t *r, uint16_t *g, uint16_t *b, uint16_t *c);
+  int      getRawData(tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorSampleRecord *sample);
   void      write8 (uint8_t reg, uint8_t value);
   uint8_t   read8 (uint8_t reg);
   uint16_t  read16 (uint8_t reg);
