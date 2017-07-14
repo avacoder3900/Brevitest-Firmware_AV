@@ -1252,7 +1252,7 @@ void setup() {
         init_sensor(&tcsControl, SENSOR_NUMBER_CONTROL);
 
         reset_stage();
-        move_solenoid(1000);
+        move_solenoid(400);
         reset_globals();
 
         initialize_test_cache();
