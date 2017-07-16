@@ -175,7 +175,7 @@ void TCS34725::enable(void)
 {
     write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
     delay(5);
-    write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN);
+    write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN | TCS34725_ENABLE_WEN);
     _is_enabled = true;
 }
 
@@ -217,6 +217,8 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 
     while ((id != 0x44) && (id != 0x10))
     {
+        CHANNEL.reset();
+        delay(5);
         CHANNEL.begin();
         delay(5);
 
@@ -237,7 +239,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
     setGain(gain);
 
     /* Note: by default, the device is in power down mode on bootup */
-    enable();
+    /*enable();*/
 
     return true;
 }
@@ -250,7 +252,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 /**************************************************************************/
 boolean TCS34725::end(void)
 {
-    disable();
+    /*disable();*/
     CHANNEL.end();
     pinMode(C4, INPUT);
     pinMode(C5, INPUT);
@@ -266,8 +268,12 @@ boolean TCS34725::end(void)
 /**************************************************************************/
 void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 {
-    tcs34725IntegrationTime_t reg = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
     int tries = 0;
+    tcs34725IntegrationTime_t reg = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
+    if (reg == it) {
+        return;
+    }
+
     /* Update the timing register */
     while (reg != it && ++tries < 6) {
         write8(TCS34725_ATIME, it);
@@ -276,11 +282,12 @@ void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
             Serial.printlnf("Integration time not updated, retrying, old: %d, new: %d", reg, it);
         }
     }
+
     if (reg != it) {
         Serial.printlnf("Unable to update integration time, old: %d, new: %d", reg, it);
     }
-  /* Update value placeholders */
-  _tcs34725IntegrationTime = reg;
+    /* Update value placeholders */
+    _tcs34725IntegrationTime = reg;
 }
 
 /**************************************************************************/
@@ -290,9 +297,13 @@ void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 /**************************************************************************/
 void TCS34725::setGain(tcs34725Gain_t gain)
 {
-    tcs34725Gain_t reg = (tcs34725Gain_t) (read8(TCS34725_CONTROL) & 0x03);
     int tries = 0;
-  /* Update the gain register */
+    tcs34725Gain_t reg = (tcs34725Gain_t) (read8(TCS34725_CONTROL) & 0x03);
+    if (reg == gain) {
+        return;
+    }
+
+    /* Update the gain register */
     while (reg != gain && ++tries < 6) {
         write8(TCS34725_CONTROL, gain);
         reg = (tcs34725Gain_t) (read8(TCS34725_CONTROL) & 0x03);
@@ -300,11 +311,12 @@ void TCS34725::setGain(tcs34725Gain_t gain)
             Serial.printlnf("Gain not updated, retrying, old: %d, new: %d", reg, gain);
         }
     }
+
     if (reg != gain) {
         Serial.printlnf("Unable to update gain, old: %d, new: %d", reg, gain);
     }
-  /* Update value placeholders */
-  _tcs34725Gain = reg;
+    /* Update value placeholders */
+    _tcs34725Gain = reg;
 }
 
 /**************************************************************************/
@@ -313,27 +325,34 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 */
 /**************************************************************************/
 #define CLEAR_CHANNEL_STABILITY_THRESHOLD 1
+#define SENSOR_WAIT_MAXIMUM_CYCLES 50
 
 void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorRecord *reading, int stability)
 {
-    int tries = 50;
+    int tries;
     uint16_t clear, old_clear;
     int reading_count = 0;
     bool ready = false;
     uint8_t state;
+    unsigned long duration;
 
     begin(it, gain);
 
     while (stability == 0 || ++reading_count < stability) {
+        enable();
+        duration = millis();
         ready = false;
-        tries = 50;
-        while (!ready && --tries > 0) {
+        tries = 0;
+        while (!ready && ++tries <= SENSOR_WAIT_MAXIMUM_CYCLES) {
             state = read8(TCS34725_STATUS);
-            /*Serial.printlnf("Sensor state: %d, try %d", state, 10-tries);*/
+            /*Serial.printlnf("Sensor state: %d, try %d", state, SENSOR_WAIT_MAXIMUM_CYCLES - tries);*/
             ready = (state & 0x01) == 1;
             if (!ready) {
                 /*Serial.print(".");*/
                 delay(20);
+            }
+            else {
+                duration = millis() - duration;
             }
         }
 
@@ -353,16 +372,25 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
                 reading->red = read16(TCS34725_RDATAL);
                 reading->green = read16(TCS34725_GDATAL);
                 reading->blue = read16(TCS34725_BDATAL);
-                /*Serial.printlnf("Sensor reading stabilized, reading count: %d", reading_count);*/
+                if (gain != TCS34725_GAIN_16X) {
+                    state = read8(TCS34725_STATUS);
+                    it = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
+                    gain = (tcs34725Gain_t) read8(TCS34725_CONTROL);
+                    /*Serial.printlnf("Sensor reading stabilized, tries: %d, duration: %u, STATUS: %u,", tries, duration, read8(TCS34725_STATUS));
+                    Serial.printlnf("ENABLE: %u, ATIME: %u, WTIME: %u, PERS: %d, config: %d", read8(TCS34725_ENABLE), read8(TCS34725_ATIME), read8(TCS34725_WTIME), read8(TCS34725_PERS), read8(TCS34725_CONFIG));
+                    Serial.printlnf("AILTL: %u, AILTH: %u, AIHTL: %u, AIHTH: %u", read8(TCS34725_AILTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTH));*/
+                }
+                disable();
                 break;
             }
         }
         else {
-            Serial.println("Unsuccessful sensor read");
+            Serial.printlnf("Unsuccessful sensor read, tries: %d, duration: %u, status: %d, integration time: %d, gain: %d", tries, duration, state, it, gain);
             reading->time_ms = millis();
             reading->samples = 0;
             reading->clear = reading->red = reading->green = reading->blue = 0;
         }
+        disable();
     }
 
     end();
