@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 2
-#define DATA_FORMAT_VERSION 7
+#define DATA_FORMAT_VERSION 8
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -34,7 +34,7 @@
 #define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
 
 // assay
-#define ASSAY_BCODE_CAPACITY 3200
+#define ASSAY_BCODE_CAPACITY 2000
 
 // timers
 #define DEVICE_STATE_CHECK_PERIOD 1000
@@ -46,7 +46,7 @@
 #define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
-#define TEST_CACHE_SIZE 2
+#define TEST_CACHE_SIZE 3
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // particle
@@ -85,7 +85,7 @@
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD 10500
+#define CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD 7200
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
 
 // upload
@@ -218,7 +218,7 @@ char device_id[DEVICE_ID_LENGTH + 1];
 String device_id_string;
 
 // publish and subscribe callback
-#define CALLBACK_BUFFER_SIZE 3500
+#define CALLBACK_BUFFER_SIZE 2500
 char callback_buffer[CALLBACK_BUFFER_SIZE];
 bool callback_complete;
 char callback_event[30];
@@ -242,18 +242,14 @@ struct Param {      // 32 bytes
   uint16_t stepper_wake_delay_ms;
   uint16_t solenoid_power;  // surge << 8 + sustain
   uint16_t solenoid_surge_period_ms;
-  uint16_t card_check_threshold;
-  uint16_t heat_sensor_threshold;
-  uint16_t reserved[9];
+  uint16_t reserved[11];
   Param() {
     reset_steps = 14000;
     step_delay_us = 800;
-    steps_to_calibration_point = 600;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
+    steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
     solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 150;
-    card_check_threshold = 4000;
-    heat_sensor_threshold = 20400;
   }
 };
 

@@ -1153,14 +1153,10 @@ int particle_command(String arg) {
             store_eeprom();
             reset_stage();
             return param1;
-        case 2: // set cartridge check threshold
-            eeprom.param.card_check_threshold = param1;
-            store_eeprom();
-            return param1;
-        case 3: // set heat threshold
-            eeprom.param.heat_sensor_threshold = param1;
-            store_eeprom();
-            return param1;
+        case 2: // not used
+            return 0;
+        case 3: // not used
+            return 0;
         case 4: // read assay sensor (ledPower, integration_time, gain)
             read_sensors_command_led_power = param1;
             read_sensors_command_integration_time = param2;
