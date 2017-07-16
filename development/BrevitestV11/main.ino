@@ -404,12 +404,13 @@ void read_one_sensor(char sensor_code, int it, int gain) {
         Serial.printlnf("%c %d %u %d %d %d %d", \
             reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue);
 
-        test_record.number_of_readings++;
+        ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
 
 int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
-        int assay_count, control_count, i;
+        int assay_count, control_count;
 
+        /*it_control = (11 * integrationTime) / 12;*/
         Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
 
         analogWrite(pinSensorLED, ledPower);
@@ -1224,7 +1225,7 @@ void setup() {
         }
 
         reset_stage();
-        move_solenoid(1000);
+        move_solenoid(500);
         reset_globals();
 
         init_sensor(&tcsAssay, SENSOR_NUMBER_ASSAY);
@@ -1236,6 +1237,7 @@ void setup() {
         initialize_device_state();
         battery_check_timer.reset();
 
+        Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 }
 
@@ -1251,7 +1253,7 @@ void initialize_device_state() {
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open) {
         check_assay_sensor_state(true);
-        cartridge_loaded = !(sensor_state.blue > STATE_DEVICE_CARTRIDGE_THRESHOLD);
+        cartridge_loaded = !(sensor_state.clear > STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD);
     }
 
     /*tcsAssay.disable();*/
@@ -1269,7 +1271,7 @@ void check_assay_sensor_state(bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state, 3);
+        tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state, 0);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 
@@ -1289,7 +1291,7 @@ void check_device_state() {
     }
 
     check_assay_sensor_state(false);
-    /*Serial.printlnf("Device state(false) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
+    /*Serial.printlnf("Device state (no LED) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
 
     device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open ^ device_open_now) {    // device open state changed
@@ -1308,8 +1310,8 @@ void check_device_state() {
 
             check_assay_sensor_state(true);
 
-            Serial.printlnf("Device state(true) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
-            cartridge_loaded = (sensor_state.blue > STATE_DEVICE_CARTRIDGE_THRESHOLD);
+            Serial.printlnf("Device state (LED on) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
+            cartridge_loaded = (sensor_state.clear > STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD);
             cartridge_validated = false;
             if (cartridge_loaded) {
                 Serial.println("Cartridge in device; ready to scan qr code");
