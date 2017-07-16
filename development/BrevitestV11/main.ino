@@ -377,88 +377,49 @@ void update_blinking_device_LED() {
 
 void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         *sensor = TCS34725(sensor_number);
+        /*sensor->begin(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN);*/
+        delay(STATE_SENSOR_STARTUP_DELAY);
 }
 
-void convert_samples_to_reading(char sensor_code) {
-        int i;
-        int red, green, blue, clear, samples, clr, clear_max, clear_min;
-        BrevitestSensorSampleRecord *buffer;
-        BrevitestSensorRecord *reading;
-
-        reading = &(test_record.reading[test_record.number_of_readings]);
-        reading->channel = sensor_code;
-        buffer = (sensor_code == 'A' ? assay_buffer : control_buffer);
-        red = green = blue = clear = clear_max = samples = 0;
-        clear_min = 0xFFFF;
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                if (buffer[i].clear && buffer[i].clear != 0xFFFF) {
-                        samples++;
-                        clr = (int) buffer[i].clear;
-                        red += (int) buffer[i].red;
-                        green += (int) buffer[i].green;
-                        blue += (int) buffer[i].blue;
-                        clear += clr;
-                        clear_max = (clr > clear_max ? clr : clear_max);
-                        clear_min = (clr < clear_min ? clr : clear_min);
-                }
-        }
-        reading->clear_mean = (samples ? clear / samples : 0);
-        reading->red_mean = (samples ? red / samples : 0);
-        reading->green_mean = (samples ? green / samples : 0);
-        reading->blue_mean = (samples ? blue / samples : 0);
-        reading->clear_max = clear_max;
-        reading->clear_min = clear_min;
-        reading->start_time = buffer[0].sample_time;
-
-        test_record.number_of_readings++;
-}
-
-void read_one_sensor(char sensor_code, int sample_number, int integrationTime, int gain) {
-        BrevitestSensorSampleRecord *sample;
+void read_one_sensor(char sensor_code, int it, int gain) {
+        BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
-        int tries;
+        int tries, reading_count;
 
         /*Particle.process();*/
 
         if (sensor_code == 'A') {
-                sample = &assay_buffer[sample_number];
                 sensor = &tcsAssay;
         }
         else {
-                sample = &control_buffer[sample_number];
                 sensor = &tcsControl;
         }
 
-        sensor->begin((tcs34725IntegrationTime_t) integrationTime, (tcs34725Gain_t) gain);
-
-        sample->sample_time = Time.now();
-        sample->red = sample->green = sample->blue = sample->clear = tries = 0;
-        while (sample->clear == 0 && tries++ < 5) {
-            sensor->getRawData(&sample->red, &sample->green, &sample->blue, &sample->clear);
+        reading->channel = sensor_code;
+        reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
+        while (reading->clear == 0 && tries++ < 5) {
+            sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 20);
         }
 
-        sensor->end();
+        Serial.printlnf("%c %d %u %d %d %d %d", \
+            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue);
+
+        ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
 
 int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
-        int i;
+        int assay_count, control_count;
+
+        /*it_control = (11 * integrationTime) / 12;*/
+        Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
 
         analogWrite(pinSensorLED, ledPower);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
-        for (i = 0; i < SENSOR_NUMBER_OF_SAMPLES; i += 1) {
-                read_one_sensor('A', i, integrationTime, gain);
-                read_one_sensor('C', i, integrationTime, gain);
-
-                Serial.printlnf("%d %d %d %d %d %d %d %d %d %d %d", i, \
-                    assay_buffer[i].sample_time, assay_buffer[i].clear, assay_buffer[i].red, assay_buffer[i].green, assay_buffer[i].blue, \
-                    control_buffer[i].sample_time, control_buffer[i].clear, control_buffer[i].red, control_buffer[i].green, control_buffer[i].blue);
-        }
+        read_one_sensor('A', integrationTime, gain);
+        read_one_sensor('C', integrationTime, gain);
 
         analogWrite(pinSensorLED, 0);
-
-        convert_samples_to_reading('A');
-        convert_samples_to_reading('C');
 
         return 1;
 }
@@ -764,9 +725,8 @@ void write_test_record_to_eeprom() {
 }
 
 int append_test_reading(int start, BrevitestSensorRecord *reading) {
-    return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\t%5d\t%5d\n", \
-        reading->channel, reading->start_time, reading->red_mean, reading->green_mean, reading->blue_mean, \
-        reading->clear_mean, reading-> clear_max, reading->clear_min);
+    return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\n", \
+        reading->channel, reading->time_ms, reading->red, reading->green, reading->blue, reading->clear);
 }
 
 int process_test_record(int index) {
@@ -1157,7 +1117,7 @@ void watchdog() {
 }
 
 int particle_command(String arg) {
-    int cmd, indx1, indx2, param1 = 0, param2 = 0;
+    int cmd, indx1, indx2, indx3, param1 = 0, param2 = 0, param3 = 0;
 
     indx1 = arg.indexOf(COMMA_DELIM);
     if (indx1 == -1) {
@@ -1173,9 +1133,19 @@ int particle_command(String arg) {
         else {
             param1 = arg.substring(indx1, indx2).toInt();
             indx2++;
-            param2 = arg.substring(indx2).toInt();
+            indx3 = arg.indexOf(COMMA_DELIM, indx2);
+            if (indx3 == -1) {
+                param2 = arg.substring(indx2).toInt();
+            }
+            else {
+                param2 = arg.substring(indx2, indx3).toInt();
+                indx3++;
+                param3 = arg.substring(indx3).toInt();
+            }
         }
     }
+
+    Serial.printlnf("Command: %d, param1: %d, param2: %d, param3: %d", cmd, param1, param2, param3);
 
     switch (cmd) {
         case 1: // set and move to calibration point
@@ -1183,14 +1153,16 @@ int particle_command(String arg) {
             store_eeprom();
             reset_stage();
             return param1;
-        case 2: // set cartridge check threshold
-            eeprom.param.card_check_threshold = param1;
-            store_eeprom();
-            return param1;
-        case 3: // set heat threshold
-            eeprom.param.heat_sensor_threshold = param1;
-            store_eeprom();
-            return param1;
+        case 2: // not used
+            return 0;
+        case 3: // not used
+            return 0;
+        case 4: // read assay sensor (ledPower, integration_time, gain)
+            read_sensors_command_led_power = param1;
+            read_sensors_command_integration_time = param2;
+            read_sensors_command_gain = param3;
+            read_sensors_command_flag = true;
+            return 1;
     }
 
 }
@@ -1248,12 +1220,13 @@ void setup() {
                 reset_eeprom();
         }
 
-        init_sensor(&tcsAssay, SENSOR_NUMBER_ASSAY);
-        init_sensor(&tcsControl, SENSOR_NUMBER_CONTROL);
-
         reset_stage();
         move_solenoid(400);
+
         reset_globals();
+
+        init_sensor(&tcsAssay, SENSOR_NUMBER_ASSAY);
+        init_sensor(&tcsControl, SENSOR_NUMBER_CONTROL);
 
         initialize_test_cache();
         calculate_power_status();
@@ -1261,6 +1234,7 @@ void setup() {
         initialize_device_state();
         battery_check_timer.reset();
 
+        Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 }
 
@@ -1271,25 +1245,20 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void initialize_device_state() {
-    check_assay_sensor_state(true, false);
+    check_assay_sensor_state(false);
 
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open) {
-        check_assay_sensor_state(false, true);
-        cartridge_loaded = !(sensor_state.clear > eeprom.param.card_check_threshold);
+        check_assay_sensor_state(true);
+        cartridge_loaded = !(sensor_state.clear > STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD);
     }
 
-    tcsAssay.end();
+    /*tcsAssay.disable();*/
 }
 
-void check_assay_sensor_state(bool initSensor, bool ledOn) {
+void check_assay_sensor_state(bool ledOn) {
     int tries = 0;
     uint16_t old_clear;
-
-    if (initSensor) {
-        tcsAssay.begin(TCS34725_INTEGRATIONTIME_154MS, TCS34725_GAIN_4X);
-        delay(STATE_SENSOR_STARTUP_DELAY);
-    }
 
     if (ledOn) {
         analogWrite(pinSensorLED, STATE_SENSOR_LED_POWER);
@@ -1299,13 +1268,13 @@ void check_assay_sensor_state(bool initSensor, bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(&sensor_state.red, &sensor_state.green, &sensor_state.blue, &sensor_state.clear);
-    } while (abs(old_clear - sensor_state.clear) > 2 && tries++ < 5);
+        tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state, 0);
+    } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
-        cartridge_is_heated = (sensor_state.clear > eeprom.param.heat_sensor_threshold);   // reading below threshold means reagent still below 33 deg C, turn on heat
+        cartridge_is_heated = (sensor_state.red > CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD);   // reading below threshold means reagent still below 33 deg C, turn on heat
         /*Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
@@ -1318,10 +1287,10 @@ void check_device_state() {
         return;
     }
 
-    check_assay_sensor_state(true, false);
+    check_assay_sensor_state(false);
+    /*Serial.printlnf("Device state (no LED) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
 
     device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
-    /*Serial.printlnf("Device status - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
     if (device_open ^ device_open_now) {    // device open state changed
         if (device_open_now) {
             Serial.println("Device just opened");
@@ -1336,10 +1305,10 @@ void check_device_state() {
         else {
             Serial.printlnf("Device just closed");
 
-            check_assay_sensor_state(false, true);
+            check_assay_sensor_state(true);
 
-            Serial.printlnf("Device status - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
-            cartridge_loaded = (sensor_state.clear > eeprom.param.card_check_threshold);
+            Serial.printlnf("Device state (LED on) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
+            cartridge_loaded = (sensor_state.clear > STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD);
             cartridge_validated = false;
             if (cartridge_loaded) {
                 Serial.println("Cartridge in device; ready to scan qr code");
@@ -1357,7 +1326,7 @@ void check_device_state() {
         device_open = device_open_now;
     }
 
-    tcsAssay.end();
+    /*tcsAssay.disable();*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -1535,8 +1504,8 @@ void loop() {
 
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
-                    check_assay_sensor_state(true, true);
-                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", eeprom.param.heat_sensor_threshold, sensor_state.clear);
+                    check_assay_sensor_state(true);
+                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD, sensor_state.red);
                     tcsAssay.end();
                 }
                 if (cartridge_is_heated) {
@@ -1592,6 +1561,11 @@ void loop() {
                 return;
             }
 
+        }
+
+        if (read_sensors_command_flag) {
+            read_sensors_command_flag = false;
+            read_sensors_with_parameters(read_sensors_command_led_power, read_sensors_command_integration_time, read_sensors_command_gain);
         }
 
         if (update_battery_life) {

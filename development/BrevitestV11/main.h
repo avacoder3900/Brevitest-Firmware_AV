@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 2
-#define DATA_FORMAT_VERSION 7
+#define DATA_FORMAT_VERSION 8
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -24,15 +24,17 @@
 #define SERIAL_NUMBER_LENGTH 19
 
 // sensors
-#define SENSOR_NUMBER_OF_SAMPLES 6
+#define SENSOR_NUMBER_OF_SAMPLES 3
 #define SENSOR_LED_WARMUP_DELAY_MS 1000
 #define SENSOR_NUMBER_ASSAY 1
 #define SENSOR_NUMBER_CONTROL 0
 #define SENSOR_LED_ASSAY 255
 #define SENSOR_LED_CONTROL 229
+#define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
+#define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
 
 // assay
-#define ASSAY_BCODE_CAPACITY 3200
+#define ASSAY_BCODE_CAPACITY 2000
 
 // timers
 #define DEVICE_STATE_CHECK_PERIOD 1000
@@ -44,7 +46,7 @@
 #define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
-#define TEST_CACHE_SIZE 2
+#define TEST_CACHE_SIZE 3
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // particle
@@ -83,7 +85,7 @@
 #define BATTERY_CONVERSION_FACTOR 34
 
 // cartridge heater
-#define CARTRIDGE_HEATER_TEST_START_CLEAR_THRESHOLD 20400
+#define CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD 7200
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
 
 // upload
@@ -93,7 +95,8 @@
 #define STATE_SENSOR_STARTUP_DELAY 200
 #define STATE_SENSOR_LED_POWER 200
 #define STATE_SENSOR_LED_DELAY 200
-#define STATE_DEVICE_OPEN_THRESHOLD 35
+#define STATE_DEVICE_OPEN_THRESHOLD 10
+#define STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD 13000
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
@@ -198,6 +201,10 @@ Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 TCS34725 tcsAssay;
 TCS34725 tcsControl;
 unsigned long last_sensor_reading_time = 0;
+bool read_sensors_command_flag = false;
+int read_sensors_command_led_power;
+int read_sensors_command_integration_time;
+int read_sensors_command_gain;
 
 // progress
 int test_progress;
@@ -211,7 +218,7 @@ char device_id[DEVICE_ID_LENGTH + 1];
 String device_id_string;
 
 // publish and subscribe callback
-#define CALLBACK_BUFFER_SIZE 3500
+#define CALLBACK_BUFFER_SIZE 2500
 char callback_buffer[CALLBACK_BUFFER_SIZE];
 bool callback_complete;
 char callback_event[30];
@@ -225,13 +232,6 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-struct BrevitestSensorSampleRecord {        // 12 bytes
-    int sample_time;
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
-    uint16_t clear;
-} sensor_state;
 BrevitestSensorSampleRecord assay_buffer[SENSOR_NUMBER_OF_SAMPLES];
 BrevitestSensorSampleRecord control_buffer[SENSOR_NUMBER_OF_SAMPLES];
 
@@ -242,32 +242,18 @@ struct Param {      // 32 bytes
   uint16_t stepper_wake_delay_ms;
   uint16_t solenoid_power;  // surge << 8 + sustain
   uint16_t solenoid_surge_period_ms;
-  uint16_t card_check_threshold;
-  uint16_t heat_sensor_threshold;
-  uint16_t reserved[9];
+  uint16_t reserved[11];
   Param() {
     reset_steps = 14000;
     step_delay_us = 800;
-    steps_to_calibration_point = 600;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
+    steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
     solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 150;
-    card_check_threshold = 17500;
-    heat_sensor_threshold = 20400;
   }
 };
 
-struct BrevitestSensorRecord {  // 16 bytes
-    char channel;
-    uint8_t samples;
-    int start_time;
-    uint16_t red_mean;
-    uint16_t green_mean;
-    uint16_t blue_mean;
-    uint16_t clear_mean;
-    uint16_t clear_max;
-    uint16_t clear_min;
-} sensor_reading;
+BrevitestSensorRecord sensor_reading, sensor_state;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;
