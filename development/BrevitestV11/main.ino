@@ -1117,7 +1117,7 @@ void watchdog() {
 }
 
 int particle_command(String arg) {
-    int cmd, indx1, indx2, indx3, param1 = 0, param2 = 0, param3 = 0;
+    int cmd, indx1, indx2, indx3, param1 = 0, param2 = 0, param3 = 0, steps_to_alignment;
 
     indx1 = arg.indexOf(COMMA_DELIM);
     if (indx1 == -1) {
@@ -1153,16 +1153,26 @@ int particle_command(String arg) {
             store_eeprom();
             reset_stage();
             return param1;
-        case 2: // not used
-            return 0;
-        case 3: // not used
-            return 0;
+        case 2: // reset stage
+            reset_stage();
+            return cumulative_steps;
+        case 3: // move steps
+            move_steps(param1, param2);
+            return cumulative_steps;
         case 4: // read assay sensor (ledPower, integration_time, gain)
+            steps_to_alignment = STEPS_TO_FINAL_READ_POSITION + STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
+            if (cumulative_steps != steps_to_alignment) {
+                move_steps(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
+            }
             read_sensors_command_led_power = param1;
             read_sensors_command_integration_time = param2;
             read_sensors_command_gain = param3;
             read_sensors_command_flag = true;
             return 1;
+        case 5: // change threshold
+            eeprom.param.start_test_heat_red_threshold = param1;
+            store_eeprom();
+            return param1;
     }
 
 }
@@ -1274,7 +1284,7 @@ void check_assay_sensor_state(bool ledOn) {
 
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
-        cartridge_is_heated = (sensor_state.red > CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD);   // reading below threshold means reagent still below 33 deg C, turn on heat
+        cartridge_is_heated = (sensor_state.red > eeprom.param.start_test_heat_red_threshold);   // reading below threshold means reagent still below 33 deg C, turn on heat
         /*Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
@@ -1505,7 +1515,7 @@ void loop() {
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
                     check_assay_sensor_state(true);
-                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD, sensor_state.red);
+                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", eeprom.param.start_test_heat_red_threshold, sensor_state.red);
                     tcsAssay.end();
                 }
                 if (cartridge_is_heated) {
