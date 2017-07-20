@@ -179,7 +179,7 @@ void move_solenoid(int duration) {
         pinMode(pinSolenoid, OUTPUT);
         analogWrite(pinSolenoid, 0);
 
-        Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);
+        /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -397,8 +397,8 @@ void read_one_sensor(char sensor_code, int it, int gain) {
 
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
-        while (reading->clear == 0 && tries++ < 5) {
-            sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 20);
+        while (reading->clear == 0 && tries++ < 10) {
+            sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 50);
         }
 
         Serial.printlnf("%c %d %u %d %d %d %d", \
