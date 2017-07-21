@@ -955,10 +955,10 @@ int process_one_BCODE_command(int cmd, int index) {
                 return -index;
                 break;
         case 17: // Raster well
-                Serial.printlnf("Raster well - total steps: %d, rasters: %d", param1, param3);
                 index = get_BCODE_token(index, &param1);    // total steps
                 index = get_BCODE_token(index, &param2);    // step_delay_us
                 index = get_BCODE_token(index, &param3);    // number of rasters
+                Serial.printlnf("Raster well - total steps: %d, rasters: %d", param1, param3);
                 if (param3 == 1) {
                     steps = param1;
                 }
@@ -1003,10 +1003,10 @@ int process_one_BCODE_command(int cmd, int index) {
                 delay(param5);   // gather beads
                 break;
         case 18: // Well transit
-                Serial.printlnf("Well transit - segments: %d", param3);
                 index = get_BCODE_token(index, &param1);    // step_delay_us
                 index = get_BCODE_token(index, &param2);    // gather_time_ms
                 index = get_BCODE_token(index, &param3);    // number of segments
+                Serial.printlnf("Well transit - segments: %d", param3);
                 for (i = 0; i < param3; i++) {
                         if (cancelling_test) {
                                 break;
