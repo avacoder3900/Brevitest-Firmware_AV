@@ -930,32 +930,16 @@ int process_one_BCODE_command(int cmd, int index) {
         case 8: // Sensor LED off
                 analogWrite(pinSensorLED, 0);
                 break;
-        case 9: // Read sensors with default values - PRIVILEGED
-                /*SINGLE_THREADED_BLOCK() {*/
-                    read_sensors();
-                /*}*/
+        case 9: // Read sensors with default values
+                read_sensors();
                 break;
-        case 10: // Read sensors with parameters - PRIVILEGED
+        case 10: // Read sensors with parameters
                 index = get_BCODE_token(index, &param1); // LED power
                 index = get_BCODE_token(index, &param2); // integration time
                 index = get_BCODE_token(index, &param3); // gain
-                /*SINGLE_THREADED_BLOCK() {*/
-                    read_sensors_with_parameters(param1, param2, param3);
-                /*}*/
+                read_sensors_with_parameters(param1, param2, param3);
                 break;
-        case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations)
-                index = get_BCODE_token(index, &param1);
-
-                start_index = index;
-                /*SINGLE_THREADED_BLOCK() {*/
-                    for (i = 0; i < param1; i += 1) {
-                            if (cancelling_test) {
-                                    break;
-                            }
-                            index = process_BCODE(start_index);
-                    }
-                /*}*/
-                break;
+        case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
                 index = get_BCODE_token(index, &param1);
 
@@ -971,6 +955,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 return -index;
                 break;
         case 17: // Raster well
+                Serial.printlnf("Raster well - total steps: %d, rasters: %d", param1, param3);
                 index = get_BCODE_token(index, &param1);    // total steps
                 index = get_BCODE_token(index, &param2);    // step_delay_us
                 index = get_BCODE_token(index, &param3);    // number of rasters
@@ -1018,6 +1003,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 delay(param5);   // gather beads
                 break;
         case 18: // Well transit
+                Serial.printlnf("Well transit - segments: %d", param3);
                 index = get_BCODE_token(index, &param1);    // step_delay_us
                 index = get_BCODE_token(index, &param2);    // gather_time_ms
                 index = get_BCODE_token(index, &param3);    // number of segments
