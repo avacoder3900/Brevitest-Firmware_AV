@@ -413,6 +413,11 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
         /*it_control = (11 * integrationTime) / 12;*/
         Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
 
+        RGB.control(true);
+        RGB.color(0, 0, 0);
+
+        turn_off_device_LED();
+
         analogWrite(pinSensorLED, ledPower);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
@@ -420,6 +425,10 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
         read_one_sensor('C', integrationTime, gain);
 
         analogWrite(pinSensorLED, 0);
+
+        turn_on_device_LED();
+
+        RGB.control(false);
 
         return 1;
 }
