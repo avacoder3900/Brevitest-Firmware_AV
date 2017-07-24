@@ -147,6 +147,9 @@ unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
 
+// power management unit - used to turn off blinking red light
+PMIC _pmic;
+
 // device state
 bool device_open = false;
 bool cartridge_loaded = false;

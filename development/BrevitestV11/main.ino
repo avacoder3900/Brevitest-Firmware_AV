@@ -1205,6 +1205,9 @@ void setup() {
         digitalWrite(pinCartridgeHeater, LOW);
         digitalWrite(pinCartridgeHeaterLED, LOW);
 
+        _pmic.disableBATFET();
+        _pmic.disableCharging(); // if you comment this out, the red LED will be steady ON
+
         turn_off_device_LED();
         set_device_LED_color(255, 255, 0);
         turn_on_device_LED();
