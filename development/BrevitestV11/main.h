@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 2
-#define DATA_FORMAT_VERSION 9
+#define DATA_FORMAT_VERSION 10
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -32,6 +32,7 @@
 #define SENSOR_LED_CONTROL 229
 #define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
 #define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
+#define SENSOR_LED_BASELINE_RED_LEVEL 7000
 
 // assay
 #define ASSAY_BCODE_CAPACITY 2000
@@ -266,6 +267,8 @@ struct BrevitestTestRecord {    // 74 bytes
     int finish_time;
     char test_uuid[TEST_UUID_LENGTH + 1];    // 26 bytes w padding
     uint8_t number_of_readings;
+    uint8_t baseline_LED_power_assay;
+    uint8_t baseline_LED_power_control;
     BrevitestSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];
 } test_record;
 

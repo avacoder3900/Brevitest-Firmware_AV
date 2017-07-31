@@ -408,9 +408,6 @@ void read_one_sensor(char sensor_code, int it, int gain) {
 }
 
 int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
-        int assay_count, control_count;
-
-        /*it_control = (11 * integrationTime) / 12;*/
         Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
 
         RGB.control(true);
@@ -434,7 +431,7 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
 }
 
 int read_sensors() {
-        read_sensors_with_parameters(assay.led_power, assay.sensor_integration_time, assay.sensor_gain);
+        read_sensors_with_parameters(test_record.baseline_LED_power_control, assay.sensor_integration_time, assay.sensor_gain);
 }
 
 /////////////////////////////////////////////////////////////
@@ -463,6 +460,7 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
     memcpy(test_record.test_uuid, assayString, TEST_UUID_LENGTH);
     indx += TEST_UUID_LENGTH + 1;
     test_record.number_of_readings = 0;
+    test_record.baseline_LED_power_control = 255;
 
     assay.duration = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
@@ -1360,6 +1358,7 @@ void reset_globals() {
         test_record.test_uuid[0] = '\0';
         test_record.test_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
         test_record.number_of_readings = 0;
+        test_record.baseline_LED_power_control = 255;
         assay.uuid[0] = '\0';
         assay.uuid[CARTRIDGE_UUID_LENGTH] = '\0';
 
@@ -1408,6 +1407,42 @@ void finish_test() {
     turn_on_device_LED();
 }
 
+void set_baseline_LED_power() {
+    BrevitestSensorRecord reading;
+    int tries;
+    int rise_n, run_n, x_n, y_n;
+
+    RGB.control(true);
+    RGB.color(0, 0, 0);
+
+    turn_off_device_LED();
+
+    x_n = y_n = 0;
+    while (test_record.baseline_LED_power_control != x_n) {
+        analogWrite(pinSensorLED, test_record.baseline_LED_power_control);
+        delay(SENSOR_LED_WARMUP_DELAY_MS);
+
+        reading.red = reading.green = reading.blue = reading.clear = reading.time_ms = reading.samples = tries = 0;
+        while (reading.clear == 0 && tries++ < 10) {
+            tcsControl.getRawData((tcs34725IntegrationTime_t) assay.sensor_integration_time, (tcs34725Gain_t) assay.sensor_gain, &reading, 50);
+        }
+        Serial.printlnf("Reading with baseline LED power: LED = %d, value = %d, target = %d", test_record.baseline_LED_power_control, reading.red, SENSOR_LED_BASELINE_RED_LEVEL);
+        run_n = test_record.baseline_LED_power_control - x_n;
+        rise_n = reading.red - y_n;
+        x_n = test_record.baseline_LED_power_control;
+        y_n = reading.red;
+        test_record.baseline_LED_power_control = test_record.baseline_LED_power_control - (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n / rise_n;
+        Serial.printlnf("Calculating new baseline LED power: LED = %d, x_n = %d, y_n = %d, rise_n: %d, run_n: %d", test_record.baseline_LED_power_control, x_n, y_n, rise_n, run_n);
+    }
+
+    analogWrite(pinSensorLED, 0);
+
+    turn_on_device_LED();
+
+    RGB.control(false);
+
+}
+
 void run_test() {
     test_in_progress = true;
     start_blinking_device_LED(0, 500, 0, 255, 0);
@@ -1427,6 +1462,9 @@ void run_test() {
         Particle.process();
         delay(PARTICLE_CLOUD_DELAY);
     }
+
+    Serial.println("Setting baseline LED power");
+    set_baseline_LED_power();
 
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
