@@ -443,12 +443,22 @@ int read_sensors() {
 void validate_cartridge() {
     Serial.println("Validating cartridge");
 
-    waiting_for_validation = true;
-    validation_timeout = millis() + TIMEOUT_VALIDATION;
+    if (Particle.connected()) {
+        waiting_for_validation = true;
+        validation_timeout = millis() + TIMEOUT_VALIDATION;
 
-    start_blinking_device_LED(0, 100, 255, 0, 255);
-    cartridge_validated = false;
-    brevitest_publish("validate-cartridge", qr_uuid, false);
+        start_blinking_device_LED(0, 100, 255, 0, 255);
+        cartridge_validated = false;
+        brevitest_publish("validate-cartridge", qr_uuid, false);
+    }
+    else {
+        Serial.println("Validation failed - not connected to the cloud");
+        waiting_for_validation = false;
+        cartridge_validated = false;
+        stop_blinking_device_LED();
+        set_device_LED_color(255, 0, 0);    // not connected to the cloud
+        turn_on_device_LED();
+    }
 }
 
 bool load_assay_record(char *cartridgeId, char *assayString) {
