@@ -12,6 +12,34 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+int integerSqrt(int n) {
+    int shift, nShifted, result, candidateResult;
+
+    if (n < 0) {
+        return -1;
+    }
+
+    shift = 2;
+    nShifted = n >> shift;
+    while ((nShifted != 0) && (nShifted != n)) {
+        shift += 2;
+        nShifted = n >> shift;
+    }
+    shift -= 2;
+
+    result = 0;
+    while (shift >= 0) {
+        result <<= 1;
+        candidateResult = result + 1;
+        if ((candidateResult * candidateResult) <= (n >> shift)) {
+            result = candidateResult;
+        }
+        shift -= 2;
+    }
+
+    return result;
+}
+
 int extract_int_from_string(char *str, int pos, int len) {
         char buf[12];
 
@@ -384,7 +412,7 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
 void read_one_sensor(char sensor_code, int it, int gain) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
-        int tries, reading_count;
+        int tries, lvalue, l2value;
 
         /*Particle.process();*/
 
@@ -401,8 +429,10 @@ void read_one_sensor(char sensor_code, int it, int gain) {
             sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 50);
         }
 
-        Serial.printlnf("%c %d %u %d %d %d %d", \
-            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue);
+        l2value = (reading->red * reading->red) + (reading->blue * reading->blue) + (reading->green * reading->green);
+        lvalue = integerSqrt(l2value);
+        Serial.printlnf("%c %d %u %d %d %d %d %d %d", \
+            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, l2value, lvalue);
 
         ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
