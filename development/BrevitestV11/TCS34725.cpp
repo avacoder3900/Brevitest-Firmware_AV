@@ -217,8 +217,8 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 
     while ((id != 0x44) && (id != 0x10))
     {
-        CHANNEL.reset();
-        delay(5);
+        /*CHANNEL.reset();
+        delay(5);*/
         CHANNEL.begin();
         delay(5);
 

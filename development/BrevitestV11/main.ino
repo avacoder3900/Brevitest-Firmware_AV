@@ -1458,7 +1458,7 @@ void finish_test() {
 
 void set_LED_baseline_power(char channel_id, uint8_t *power, TCS34725 *channel) {
     BrevitestSensorRecord reading;
-    int rise_n, run_n, tries;
+    int jump, rise_n, run_n, tries;
     int x_n = 0;
     int y_n = 0;
 
@@ -1476,7 +1476,14 @@ void set_LED_baseline_power(char channel_id, uint8_t *power, TCS34725 *channel) 
         rise_n = reading.red - y_n;
         x_n = *power;
         y_n = reading.red;
-        *power -= (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n / rise_n;
+        jump = (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n;
+        *power -= jump / rise_n;
+        if (*power == x_n) {
+            if (2 * abs(jump) > abs(rise_n)) {
+                *power += jump / abs(jump);
+            }
+        }
+
         Serial.printlnf("Calculating new: LED = %d, x_n = %d, y_n = %d, rise_n: %d, run_n: %d", *power, x_n, y_n, rise_n, run_n);
     }
     Serial.printlnf("Baseline LED power for channel %c is %d", channel_id, *power);
