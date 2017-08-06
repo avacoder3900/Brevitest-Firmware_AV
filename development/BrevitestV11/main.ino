@@ -781,7 +781,7 @@ int process_test_record(int index) {
 
         test = &eeprom.test_cache[index];
 
-        len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
+        len = sprintf(particle_register, "%11d\t%11d\t%.24s\t%d\t%d\n", test->start_time, test->finish_time, test->test_uuid, test->baseline_LED_power_assay, test->baseline_LED_power_control);
         for (i = 0; i < TEST_MAXIMUM_NUMBER_OF_READINGS; i++) {
             if (test->reading[i].channel == 'A' || test->reading[i].channel == 'C') {
                 len += append_test_reading(len, &(test->reading[i]));
@@ -1068,6 +1068,10 @@ int process_one_BCODE_command(int cmd, int index) {
                         }
                 }
                 delay(param2);   // gather beads
+                break;
+        case 19: // set LED baselines
+                Serial.println("Setting LED baselines");
+                set_LED_baselines();
                 break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
@@ -1525,9 +1529,6 @@ void run_test() {
         Particle.process();
         delay(PARTICLE_CLOUD_DELAY);
     }
-
-    Serial.println("Setting baseline LED power");
-    set_LED_baselines();
 
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
