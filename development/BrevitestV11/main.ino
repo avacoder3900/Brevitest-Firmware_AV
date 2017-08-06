@@ -1206,7 +1206,15 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
+        case 6: // set baseline assay LED power
+            set_LED_baseline_power('A', &test_record.baseline_LED_power_assay, &tcsAssay);
+            return (int) test_record.baseline_LED_power_assay;
+        case 7: // set baseline cpontrol LED power
+            set_LED_baseline_power('C', &test_record.baseline_LED_power_control, &tcsControl);
+            return (int) test_record.baseline_LED_power_control;
     }
+
+    return 0;
 
 }
 
@@ -1455,6 +1463,7 @@ void set_LED_baseline_power(char channel_id, uint8_t *power, TCS34725 *channel) 
     int y_n = 0;
 
     while (*power != x_n) {
+        Serial.printlnf("Trying baseline LED power of %d for channel %c", *power, channel_id);
         analogWrite(pinSensorLED, *power);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
@@ -1462,14 +1471,17 @@ void set_LED_baseline_power(char channel_id, uint8_t *power, TCS34725 *channel) 
         while (reading.clear == 0 && tries++ < 10) {
             channel->getRawData((tcs34725IntegrationTime_t) assay.sensor_integration_time, (tcs34725Gain_t) assay.sensor_gain, &reading, 50);
         }
-        Serial.printlnf("Reading with baseline LED power: chan = %c, LED = %d, value = %d, target = %d", channel_id, *power, reading.red, SENSOR_LED_BASELINE_RED_LEVEL);
+        Serial.printlnf("Reading: value = %d, target = %d", reading.red, SENSOR_LED_BASELINE_RED_LEVEL);
         run_n = *power - x_n;
         rise_n = reading.red - y_n;
         x_n = *power;
         y_n = reading.red;
-        *power = *power - (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n / rise_n;
-        Serial.printlnf("Calculating new baseline LED power: chan = %c, LED = %d, x_n = %d, y_n = %d, rise_n: %d, run_n: %d", channel_id, *power, x_n, y_n, rise_n, run_n);
+        *power -= (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n / rise_n;
+        Serial.printlnf("Calculating new: LED = %d, x_n = %d, y_n = %d, rise_n: %d, run_n: %d", *power, x_n, y_n, rise_n, run_n);
     }
+    Serial.printlnf("Baseline LED power for channel %c is %d", channel_id, *power);
+
+    analogWrite(pinSensorLED, 0);
 }
 
 void set_LED_baselines() {
@@ -1480,8 +1492,6 @@ void set_LED_baselines() {
 
     set_LED_baseline_power('A', &test_record.baseline_LED_power_assay, &tcsAssay);
     set_LED_baseline_power('C', &test_record.baseline_LED_power_control, &tcsControl);
-
-    analogWrite(pinSensorLED, 0);
 
     turn_on_device_LED();
 
