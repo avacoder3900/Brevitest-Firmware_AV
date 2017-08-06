@@ -409,7 +409,7 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         delay(STATE_SENSOR_STARTUP_DELAY);
 }
 
-void read_one_sensor(char sensor_code, int it, int gain) {
+void read_one_sensor(char sensor_code, int it, int gain, uint8_t led_power) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
         int tries, lvalue, l2value, lvaluenorm;
@@ -423,11 +423,16 @@ void read_one_sensor(char sensor_code, int it, int gain) {
                 sensor = &tcsControl;
         }
 
+        analogWrite(pinSensorLED, led_power);
+        delay(SENSOR_LED_WARMUP_DELAY_MS);
+
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
         while (reading->clear == 0 && tries++ < 10) {
             sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 50);
         }
+
+        analogWrite(pinSensorLED, 0);
 
         l2value = (reading->red * reading->red) + (reading->blue * reading->blue) + (reading->green * reading->green);
         lvalue = integerSqrt(l2value);
@@ -438,21 +443,14 @@ void read_one_sensor(char sensor_code, int it, int gain) {
         ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
 
-int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
-        Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
-
+int read_sensors_with_parameters(uint8_t assay_LED_power, uint8_t control_LED_power, int integrationTime, int gain) {
         RGB.control(true);
         RGB.color(0, 0, 0);
 
         turn_off_device_LED();
 
-        analogWrite(pinSensorLED, ledPower);
-        delay(SENSOR_LED_WARMUP_DELAY_MS);
-
-        read_one_sensor('A', integrationTime, gain);
-        read_one_sensor('C', integrationTime, gain);
-
-        analogWrite(pinSensorLED, 0);
+        read_one_sensor('A', integrationTime, gain, assay_LED_power);
+        read_one_sensor('C', integrationTime, gain, control_LED_power);
 
         turn_on_device_LED();
 
@@ -462,7 +460,7 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
 }
 
 int read_sensors() {
-        read_sensors_with_parameters(test_record.baseline_LED_power_control, assay.sensor_integration_time, assay.sensor_gain);
+        read_sensors_with_parameters(test_record.baseline_LED_power_assay, test_record.baseline_LED_power_control, assay.sensor_integration_time, assay.sensor_gain);
 }
 
 /////////////////////////////////////////////////////////////
@@ -501,6 +499,7 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
     memcpy(test_record.test_uuid, assayString, TEST_UUID_LENGTH);
     indx += TEST_UUID_LENGTH + 1;
     test_record.number_of_readings = 0;
+    test_record.baseline_LED_power_assay = 255;
     test_record.baseline_LED_power_control = 255;
 
     assay.duration = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
@@ -783,7 +782,7 @@ int process_test_record(int index) {
 
         test = &eeprom.test_cache[index];
 
-        len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
+        len = sprintf(particle_register, "%11d\t%11d\t%.24s\t%d\t%d\n", test->start_time, test->finish_time, test->test_uuid, test->baseline_LED_power_assay, test->baseline_LED_power_control);
         for (i = 0; i < TEST_MAXIMUM_NUMBER_OF_READINGS; i++) {
             if (test->reading[i].channel == 'A' || test->reading[i].channel == 'C') {
                 len += append_test_reading(len, &(test->reading[i]));
@@ -982,10 +981,11 @@ int process_one_BCODE_command(int cmd, int index) {
                 read_sensors();
                 break;
         case 10: // Read sensors with parameters
-                index = get_BCODE_token(index, &param1); // LED power
-                index = get_BCODE_token(index, &param2); // integration time
-                index = get_BCODE_token(index, &param3); // gain
-                read_sensors_with_parameters(param1, param2, param3);
+                index = get_BCODE_token(index, &param1); // assay LED power
+                index = get_BCODE_token(index, &param2); // control LED power
+                index = get_BCODE_token(index, &param3); // integration time
+                index = get_BCODE_token(index, &param4); // gain
+                read_sensors_with_parameters(param1, param2, param3, param4);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
@@ -1069,6 +1069,10 @@ int process_one_BCODE_command(int cmd, int index) {
                         }
                 }
                 delay(param2);   // gather beads
+                break;
+        case 19: // set LED baselines
+                Serial.println("Setting LED baselines");
+                set_LED_baselines();
                 break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
@@ -1207,7 +1211,15 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
+        case 6: // set baseline assay LED power
+            set_LED_baseline_power('A', &test_record.baseline_LED_power_assay, &tcsAssay);
+            return (int) test_record.baseline_LED_power_assay;
+        case 7: // set baseline cpontrol LED power
+            set_LED_baseline_power('C', &test_record.baseline_LED_power_control, &tcsControl);
+            return (int) test_record.baseline_LED_power_control;
     }
+
+    return 0;
 
 }
 
@@ -1399,6 +1411,7 @@ void reset_globals() {
         test_record.test_uuid[0] = '\0';
         test_record.test_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
         test_record.number_of_readings = 0;
+        test_record.baseline_LED_power_assay = 255;
         test_record.baseline_LED_power_control = 255;
         assay.uuid[0] = '\0';
         assay.uuid[CARTRIDGE_UUID_LENGTH] = '\0';
@@ -1448,35 +1461,49 @@ void finish_test() {
     turn_on_device_LED();
 }
 
-void set_baseline_LED_power() {
+void set_LED_baseline_power(char channel_id, uint8_t *power, TCS34725 *channel) {
     BrevitestSensorRecord reading;
-    int tries;
-    int rise_n, run_n, x_n, y_n;
+    int jump, rise_n, run_n, tries;
+    int x_n = 0;
+    int y_n = 0;
 
+    while (*power != x_n) {
+        Serial.printlnf("Trying baseline LED power of %d for channel %c", *power, channel_id);
+        analogWrite(pinSensorLED, *power);
+        delay(SENSOR_LED_WARMUP_DELAY_MS);
+
+        reading.red = reading.green = reading.blue = reading.clear = reading.time_ms = reading.samples = tries = 0;
+        while (reading.clear == 0 && tries++ < 10) {
+            channel->getRawData((tcs34725IntegrationTime_t) assay.sensor_integration_time, (tcs34725Gain_t) assay.sensor_gain, &reading, 50);
+        }
+        Serial.printlnf("Reading: value = %d, target = %d", reading.red, SENSOR_LED_BASELINE_RED_LEVEL);
+        run_n = *power - x_n;
+        rise_n = reading.red - y_n;
+        x_n = *power;
+        y_n = reading.red;
+        jump = (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n;
+        *power -= jump / rise_n;
+        if (*power == x_n) {
+            if (2 * abs(jump) > abs(rise_n)) {
+                *power += jump / abs(jump);
+            }
+        }
+
+        Serial.printlnf("Calculating new: LED = %d, x_n = %d, y_n = %d, rise_n: %d, run_n: %d", *power, x_n, y_n, rise_n, run_n);
+    }
+    Serial.printlnf("Baseline LED power for channel %c is %d", channel_id, *power);
+
+    analogWrite(pinSensorLED, 0);
+}
+
+void set_LED_baselines() {
     RGB.control(true);
     RGB.color(0, 0, 0);
 
     turn_off_device_LED();
 
-    x_n = y_n = 0;
-    while (test_record.baseline_LED_power_control != x_n) {
-        analogWrite(pinSensorLED, test_record.baseline_LED_power_control);
-        delay(SENSOR_LED_WARMUP_DELAY_MS);
-
-        reading.red = reading.green = reading.blue = reading.clear = reading.time_ms = reading.samples = tries = 0;
-        while (reading.clear == 0 && tries++ < 10) {
-            tcsControl.getRawData((tcs34725IntegrationTime_t) assay.sensor_integration_time, (tcs34725Gain_t) assay.sensor_gain, &reading, 50);
-        }
-        Serial.printlnf("Reading with baseline LED power: LED = %d, value = %d, target = %d", test_record.baseline_LED_power_control, reading.red, SENSOR_LED_BASELINE_RED_LEVEL);
-        run_n = test_record.baseline_LED_power_control - x_n;
-        rise_n = reading.red - y_n;
-        x_n = test_record.baseline_LED_power_control;
-        y_n = reading.red;
-        test_record.baseline_LED_power_control = test_record.baseline_LED_power_control - (y_n - SENSOR_LED_BASELINE_RED_LEVEL) * run_n / rise_n;
-        Serial.printlnf("Calculating new baseline LED power: LED = %d, x_n = %d, y_n = %d, rise_n: %d, run_n: %d", test_record.baseline_LED_power_control, x_n, y_n, rise_n, run_n);
-    }
-
-    analogWrite(pinSensorLED, 0);
+    set_LED_baseline_power('A', &test_record.baseline_LED_power_assay, &tcsAssay);
+    set_LED_baseline_power('C', &test_record.baseline_LED_power_control, &tcsControl);
 
     turn_on_device_LED();
 
@@ -1503,9 +1530,6 @@ void run_test() {
         Particle.process();
         delay(PARTICLE_CLOUD_DELAY);
     }
-
-    Serial.println("Setting baseline LED power");
-    set_baseline_LED_power();
 
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
@@ -1652,7 +1676,7 @@ void loop() {
 
         if (read_sensors_command_flag) {
             read_sensors_command_flag = false;
-            read_sensors_with_parameters(read_sensors_command_led_power, read_sensors_command_integration_time, read_sensors_command_gain);
+            read_sensors_with_parameters(read_sensors_command_led_power, read_sensors_command_led_power, read_sensors_command_integration_time, read_sensors_command_gain);
         }
 
         if (update_battery_life) {
