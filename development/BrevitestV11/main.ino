@@ -409,7 +409,7 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         delay(STATE_SENSOR_STARTUP_DELAY);
 }
 
-void read_one_sensor(char sensor_code, int it, int gain) {
+void read_one_sensor(char sensor_code, int it, int gain, uint8_t led_power) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
         int tries, lvalue, l2value;
@@ -423,11 +423,16 @@ void read_one_sensor(char sensor_code, int it, int gain) {
                 sensor = &tcsControl;
         }
 
+        analogWrite(pinSensorLED, led_power);
+        delay(SENSOR_LED_WARMUP_DELAY_MS);
+
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
         while (reading->clear == 0 && tries++ < 10) {
             sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 50);
         }
+
+        analogWrite(pinSensorLED, 0);
 
         l2value = (reading->red * reading->red) + (reading->blue * reading->blue) + (reading->green * reading->green);
         lvalue = integerSqrt(l2value);
@@ -437,21 +442,14 @@ void read_one_sensor(char sensor_code, int it, int gain) {
         ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
 
-int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
-        Serial.printlnf("led: %d, it: %d, gain: %d", ledPower, integrationTime, gain);
-
+int read_sensors_with_parameters(uint8_t assay_LED_power, uint8_t control_LED_power, int integrationTime, int gain) {
         RGB.control(true);
         RGB.color(0, 0, 0);
 
         turn_off_device_LED();
 
-        analogWrite(pinSensorLED, ledPower);
-        delay(SENSOR_LED_WARMUP_DELAY_MS);
-
-        read_one_sensor('A', integrationTime, gain);
-        read_one_sensor('C', integrationTime, gain);
-
-        analogWrite(pinSensorLED, 0);
+        read_one_sensor('A', integrationTime, gain, assay_LED_power);
+        read_one_sensor('C', integrationTime, gain, control_LED_power);
 
         turn_on_device_LED();
 
@@ -461,7 +459,7 @@ int read_sensors_with_parameters(int ledPower, int integrationTime, int gain) {
 }
 
 int read_sensors() {
-        read_sensors_with_parameters(test_record.baseline_LED_power_control, assay.sensor_integration_time, assay.sensor_gain);
+        read_sensors_with_parameters(test_record.baseline_LED_power_assay, test_record.baseline_LED_power_control, assay.sensor_integration_time, assay.sensor_gain);
 }
 
 /////////////////////////////////////////////////////////////
@@ -982,10 +980,11 @@ int process_one_BCODE_command(int cmd, int index) {
                 read_sensors();
                 break;
         case 10: // Read sensors with parameters
-                index = get_BCODE_token(index, &param1); // LED power
-                index = get_BCODE_token(index, &param2); // integration time
-                index = get_BCODE_token(index, &param3); // gain
-                read_sensors_with_parameters(param1, param2, param3);
+                index = get_BCODE_token(index, &param1); // assay LED power
+                index = get_BCODE_token(index, &param2); // control LED power
+                index = get_BCODE_token(index, &param3); // integration time
+                index = get_BCODE_token(index, &param4); // gain
+                read_sensors_with_parameters(param1, param2, param3, param4);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
@@ -1658,7 +1657,7 @@ void loop() {
 
         if (read_sensors_command_flag) {
             read_sensors_command_flag = false;
-            read_sensors_with_parameters(read_sensors_command_led_power, read_sensors_command_integration_time, read_sensors_command_gain);
+            read_sensors_with_parameters(read_sensors_command_led_power, read_sensors_command_led_power, read_sensors_command_integration_time, read_sensors_command_gain);
         }
 
         if (update_battery_life) {
