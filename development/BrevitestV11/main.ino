@@ -1217,6 +1217,9 @@ int particle_command(String arg) {
         case 7: // set baseline cpontrol LED power
             set_LED_baseline_power('C', &test_record.baseline_LED_power_control, &tcsControl);
             return (int) test_record.baseline_LED_power_control;
+        case 8: // reset params
+            reset_eeprom();
+            return (int) eeprom.params.data_format_version;
     }
 
     return 0;
