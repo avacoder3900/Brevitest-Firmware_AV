@@ -90,6 +90,9 @@
 #define CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD 8600
 #define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
 
+// solenoid
+#define SOLENOID_PWM_FREQUENCY 1400
+
 // upload
 #define UPLOAD_INTERVAL 20000
 
@@ -254,7 +257,7 @@ struct Param {      // 32 bytes
     step_delay_us = 800;
     steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
-    solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
+    solenoid_power = 0xFF6C;    // surge = 255, sustain = 108
     solenoid_surge_period_ms = 150;
     start_test_heat_red_threshold = 7180;
   }

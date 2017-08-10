@@ -200,14 +200,14 @@ void move_solenoid(int duration) {
 
         if (sustain_time) {
                 pinMode(pinSolenoid, OUTPUT);
-                analogWrite(pinSolenoid, sustain);
+                analogWrite(pinSolenoid, sustain, SOLENOID_PWM_FREQUENCY);
                 delay(sustain_time);
         }
 
         pinMode(pinSolenoid, OUTPUT);
         analogWrite(pinSolenoid, 0);
 
-        /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
+        Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1219,7 +1219,11 @@ int particle_command(String arg) {
             return (int) test_record.baseline_LED_power_control;
         case 8: // reset params
             reset_eeprom();
-            return (int) eeprom.params.data_format_version;
+            return (int) eeprom.data_format_version;
+        case 9: // set solenoid sustain power
+            eeprom.param.solenoid_power = 0xFF00 + (uint8_t) param1;
+            move_solenoid(2000);
+            return eeprom.param.solenoid_power;
     }
 
     return 0;
@@ -1283,7 +1287,7 @@ void setup() {
         }
 
         reset_stage();
-        move_solenoid(400);
+        move_solenoid(2000);
 
         reset_globals();
 
