@@ -207,7 +207,7 @@ void move_solenoid(int duration) {
         pinMode(pinSolenoid, OUTPUT);
         analogWrite(pinSolenoid, 0);
 
-        Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);
+        /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
 }
 
 /////////////////////////////////////////////////////////////
