@@ -264,7 +264,7 @@ void move_steps(int steps, int step_delay){
                 cumulative_steps += dir == HIGH ? 1 : -1;
         }
 
-        sleep_stepper();
+        //sleep_stepper();
 }
 
 void sleep_stepper() {
@@ -1435,6 +1435,7 @@ void start_test() {
 
     waiting_for_start_confirmation = true;
     start_timeout = millis() + TIMEOUT_START;
+    wake_stepper();
 
     start_blinking_device_LED(0, 500, 0, 255, 0);
     brevitest_publish("test-start", test_record.test_uuid, false);
@@ -1449,6 +1450,7 @@ void cancel_test() {
     update_progress("Test cancelled", -1);
     brevitest_publish("test-cancel", test_record.test_uuid, false);
 
+    sleep_stepper();
     stop_blinking_device_LED();
     set_device_LED_color(255, 0, 0);
     turn_on_device_LED();
@@ -1463,6 +1465,7 @@ void finish_test() {
     update_progress("Test complete", -1);
     brevitest_publish("test-finish", test_record.test_uuid, false);
 
+    sleep_stepper();
     stop_blinking_device_LED();
     set_device_LED_color(0, 255, 0);
     turn_on_device_LED();
