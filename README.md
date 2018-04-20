@@ -1,2 +1,2 @@
-# spark
-Repository for all things Spark
+# Brevitest™ Firmware Repository
+Repository for all things Particle in the Brevitest™ universe
