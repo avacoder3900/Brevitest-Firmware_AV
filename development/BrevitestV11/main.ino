@@ -399,6 +399,26 @@ void update_blinking_device_LED() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                        LASERS                           //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void turn_on_assay_laser(int duration) {
+    Serial.println("Turning on assay laser");
+    digitalWrite(pinAssayLaser, HIGH);
+    delay(duration);
+    digitalWrite(pinAssayLaser, LOW);
+}
+
+void turn_on_control_laser(int duration) {
+    Serial.println("Turning on control laser");
+    digitalWrite(pinControlLaser, HIGH);
+    delay(duration);
+    digitalWrite(pinControlLaser, LOW);
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //               ASSAY AND CONTROL SENSORS                 //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1224,6 +1244,18 @@ int particle_command(String arg) {
             eeprom.param.solenoid_power = 0xFF00 + (uint8_t) param1;
             move_solenoid(2000);
             return eeprom.param.solenoid_power;
+        case 10: // turn on assay laser for param1 milliseconds
+            if (param1 > 10000 || param1 < 0) {
+                param1 = 2000;
+            }
+            turn_on_assay_laser(param1);
+            return param1;
+        case 11: // turn on control laser for param1 milliseconds
+            if (param1 > 10000 || param1 < 0) {
+                param1 = 2000;
+            }
+            turn_on_control_laser(param1);
+            return param1;
     }
 
     return 0;
@@ -1262,6 +1294,8 @@ void setup() {
         pinMode(pinQRTrigger, OUTPUT);
         pinMode(pinCartridgeHeater, OUTPUT);
         pinMode(pinCartridgeHeaterLED, OUTPUT);
+        pinMode(pinAssayLaser, OUTPUT);
+        pinMode(pinControlLaser, OUTPUT);
 
         digitalWrite(pinSensorLED, LOW);
         analogWrite(pinSolenoid, 0);
@@ -1271,6 +1305,8 @@ void setup() {
         digitalWrite(pinQRTrigger, LOW);
         digitalWrite(pinCartridgeHeater, LOW);
         digitalWrite(pinCartridgeHeaterLED, LOW);
+        digitalWrite(pinAssayLaser, LOW);
+        digitalWrite(pinControlLaser, LOW);
 
         _pmic.disableBATFET();
         _pmic.disableCharging(); // if you comment this out, the red LED will be steady ON
