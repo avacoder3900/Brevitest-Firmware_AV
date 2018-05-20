@@ -81,7 +81,7 @@
 
   //Well #2  - steps to the proximal edge of microbead well
 #define STEPS_TO_MICROBEAD_WELL 2300
-#define STEPS_TO_FINAL_READ_POSITION 4400
+// #define STEPS_TO_FINAL_READ_POSITION 4400
 
 // battery
 #define BATTERY_CONVERSION_FACTOR 34

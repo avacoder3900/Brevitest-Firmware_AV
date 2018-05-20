@@ -403,18 +403,32 @@ void update_blinking_device_LED() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_assay_laser(int duration) {
-    Serial.println("Turning on assay laser");
+void turn_on_assay_laser() {
     digitalWrite(pinAssayLaser, HIGH);
-    delay(duration);
+}
+
+void turn_on_control_laser() {
+    digitalWrite(pinControlLaser, HIGH);
+}
+
+void turn_off_assay_laser() {
     digitalWrite(pinAssayLaser, LOW);
 }
 
-void turn_on_control_laser(int duration) {
-    Serial.println("Turning on control laser");
-    digitalWrite(pinControlLaser, HIGH);
-    delay(duration);
+void turn_off_control_laser() {
     digitalWrite(pinControlLaser, LOW);
+}
+
+void turn_on_assay_laser_for_duration(int duration) {
+    turn_on_assay_laser();
+    delay(duration);
+    turn_off_assay_laser();
+}
+
+void turn_on_control_laser_for_duration(int duration) {
+    turn_on_control_laser();
+    delay(duration);
+    turn_off_control_laser();
 }
 
 /////////////////////////////////////////////////////////////
@@ -438,12 +452,13 @@ void read_one_sensor(char sensor_code, int it, int gain, uint8_t led_power) {
 
         if (sensor_code == 'A') {
                 sensor = &tcsAssay;
+                turn_on_assay_laser();
         }
         else {
                 sensor = &tcsControl;
+                turn_on_control_laser();
         }
 
-        analogWrite(pinSensorLED, led_power);
         delay(SENSOR_LED_WARMUP_DELAY_MS);
 
         reading->channel = sensor_code;
@@ -452,7 +467,12 @@ void read_one_sensor(char sensor_code, int it, int gain, uint8_t led_power) {
             sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 50);
         }
 
-        analogWrite(pinSensorLED, 0);
+        if (sensor_code == 'A') {
+                turn_off_assay_laser();
+        }
+        else {
+                turn_off_control_laser();
+        }
 
         l2value = (reading->red * reading->red) + (reading->blue * reading->blue) + (reading->green * reading->green);
         lvalue = integerSqrt(l2value);
@@ -1218,7 +1238,7 @@ int particle_command(String arg) {
             move_steps(param1, param2);
             return cumulative_steps;
         case 4: // read assay sensor (ledPower, integration_time, gain)
-            steps_to_alignment = STEPS_TO_FINAL_READ_POSITION + STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
+            steps_to_alignment = STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
             if (cumulative_steps != steps_to_alignment) {
                 move_steps(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
             }
@@ -1248,13 +1268,13 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_assay_laser(param1);
+            turn_on_assay_laser_for_duration(param1);
             return param1;
         case 11: // turn on control laser for param1 milliseconds
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_control_laser(param1);
+            turn_on_control_laser_for_duration(param1);
             return param1;
     }
 
