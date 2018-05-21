@@ -330,7 +330,8 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, BrevitestSensorRecord *reading, int stability)
 {
     int tries;
-    uint16_t clear, old_clear;
+    uint16_t clear;
+    uint16_t old_clear = 0;
     int reading_count = 0;
     bool ready = false;
     uint8_t state;
@@ -358,13 +359,7 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
         if (ready) {
             /*Serial.println("Successful sensor read");*/
             clear = read16(TCS34725_CDATAL);
-            if (stability != 0 && (reading_count == 1 || abs(clear - old_clear) > CLEAR_CHANNEL_STABILITY_THRESHOLD)) {
-                if (reading_count == (stability - 1)) {
-                    Serial.printlnf("Sensor failed to stabilize, reading count: %d, new: %d, old: %d", reading_count, clear, old_clear);
-                }
-                old_clear = clear;
-            }
-            else {
+            if (stability == 0 || (reading_count > 1 && abs(clear - old_clear) <= CLEAR_CHANNEL_STABILITY_THRESHOLD)) {
                 reading->time_ms = millis();
                 reading->samples = reading_count;
                 reading->clear = clear;
@@ -372,7 +367,7 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
                 reading->green = read16(TCS34725_GDATAL);
                 reading->blue = read16(TCS34725_BDATAL);
 
-                switch (it)
+                /*switch (it)
                 {
                   case TCS34725_INTEGRATIONTIME_2_4MS:
                     delay(3);
@@ -392,7 +387,8 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
                   case TCS34725_INTEGRATIONTIME_700MS:
                     delay(700);
                     break;
-                }
+                }*/
+
                 /*state = read8(TCS34725_STATUS);
                 it = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
                 gain = (tcs34725Gain_t) read8(TCS34725_CONTROL);
@@ -400,6 +396,12 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
                 Serial.printlnf("ENABLE: %u, ATIME: %u, WTIME: %u, PERS: %d, config: %d", read8(TCS34725_ENABLE), read8(TCS34725_ATIME), read8(TCS34725_WTIME), read8(TCS34725_PERS), read8(TCS34725_CONFIG));
                 Serial.printlnf("AILTL: %u, AILTH: %u, AIHTL: %u, AIHTH: %u", read8(TCS34725_AILTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTH));*/
                 break;
+            }
+            else {
+                if (reading_count == (stability - 1)) {
+                    Serial.printlnf("Sensor failed to stabilize, reading count: %d, new: %d, old: %d", reading_count, clear, old_clear);
+                }
+                old_clear = clear;
             }
         }
         else {
