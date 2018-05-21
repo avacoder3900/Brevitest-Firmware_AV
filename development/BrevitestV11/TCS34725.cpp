@@ -239,7 +239,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
     setGain(gain);
 
     /* Note: by default, the device is in power down mode on bootup */
-    /*enable();*/
+    enable();
 
     return true;
 }
@@ -252,7 +252,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 /**************************************************************************/
 boolean TCS34725::end(void)
 {
-    /*disable();*/
+    disable();
     CHANNEL.end();
     pinMode(C4, INPUT);
     pinMode(C5, INPUT);
@@ -339,16 +339,15 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
     begin(it, gain);
 
     while (stability == 0 || ++reading_count < stability) {
-        enable();
         duration = millis();
         ready = false;
         tries = 0;
         while (!ready && ++tries <= SENSOR_WAIT_MAXIMUM_CYCLES) {
             state = read8(TCS34725_STATUS);
-            /*Serial.printlnf("Sensor state: %d, try %d", state, SENSOR_WAIT_MAXIMUM_CYCLES - tries);*/
+            /*if (debug) Serial.printlnf("Sensor state: %d, try %d", state, tries);*/
             ready = (state & 0x01) == 1;
             if (!ready) {
-                /*Serial.print(".");*/
+                /*if (debug) Serial.print(".");*/
                 delay(20);
             }
             else {
@@ -372,15 +371,34 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
                 reading->red = read16(TCS34725_RDATAL);
                 reading->green = read16(TCS34725_GDATAL);
                 reading->blue = read16(TCS34725_BDATAL);
-                if (gain != TCS34725_GAIN_16X) {
-                    state = read8(TCS34725_STATUS);
-                    it = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
-                    gain = (tcs34725Gain_t) read8(TCS34725_CONTROL);
-                    /*Serial.printlnf("Sensor reading stabilized, tries: %d, duration: %u, STATUS: %u,", tries, duration, read8(TCS34725_STATUS));
-                    Serial.printlnf("ENABLE: %u, ATIME: %u, WTIME: %u, PERS: %d, config: %d", read8(TCS34725_ENABLE), read8(TCS34725_ATIME), read8(TCS34725_WTIME), read8(TCS34725_PERS), read8(TCS34725_CONFIG));
-                    Serial.printlnf("AILTL: %u, AILTH: %u, AIHTL: %u, AIHTH: %u", read8(TCS34725_AILTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTH));*/
+
+                switch (it)
+                {
+                  case TCS34725_INTEGRATIONTIME_2_4MS:
+                    delay(3);
+                    break;
+                  case TCS34725_INTEGRATIONTIME_24MS:
+                    delay(24);
+                    break;
+                  case TCS34725_INTEGRATIONTIME_50MS:
+                    delay(50);
+                    break;
+                  case TCS34725_INTEGRATIONTIME_101MS:
+                    delay(101);
+                    break;
+                  case TCS34725_INTEGRATIONTIME_154MS:
+                    delay(154);
+                    break;
+                  case TCS34725_INTEGRATIONTIME_700MS:
+                    delay(700);
+                    break;
                 }
-                disable();
+                /*state = read8(TCS34725_STATUS);
+                it = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
+                gain = (tcs34725Gain_t) read8(TCS34725_CONTROL);
+                Serial.printlnf("Sensor reading stabilized, tries: %d, duration: %u, STATUS: %u,", tries, duration, read8(TCS34725_STATUS));
+                Serial.printlnf("ENABLE: %u, ATIME: %u, WTIME: %u, PERS: %d, config: %d", read8(TCS34725_ENABLE), read8(TCS34725_ATIME), read8(TCS34725_WTIME), read8(TCS34725_PERS), read8(TCS34725_CONFIG));
+                Serial.printlnf("AILTL: %u, AILTH: %u, AIHTL: %u, AIHTH: %u", read8(TCS34725_AILTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTL), read8(TCS34725_AIHTH));*/
                 break;
             }
         }
@@ -390,7 +408,6 @@ void TCS34725::getRawData (tcs34725IntegrationTime_t it, tcs34725Gain_t gain, Br
             reading->samples = 0;
             reading->clear = reading->red = reading->green = reading->blue = 0;
         }
-        disable();
     }
 
     end();

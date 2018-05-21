@@ -32,7 +32,6 @@
 #define SENSOR_LED_CONTROL 229
 #define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
 #define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
-#define SENSOR_LED_BASELINE_RED_LEVEL 6000
 
 // assay
 #define ASSAY_BCODE_CAPACITY 2000
@@ -212,7 +211,6 @@ TCS34725 tcsAssay;
 TCS34725 tcsControl;
 unsigned long last_sensor_reading_time = 0;
 bool read_sensors_command_flag = false;
-int read_sensors_command_led_power;
 int read_sensors_command_integration_time;
 int read_sensors_command_gain;
 
@@ -272,8 +270,7 @@ struct BrevitestTestRecord {    // 74 bytes
     int finish_time;
     char test_uuid[TEST_UUID_LENGTH + 1];    // 26 bytes w padding
     uint8_t number_of_readings;
-    uint8_t baseline_LED_power_assay;
-    uint8_t baseline_LED_power_control;
+    uint16_t reserved;
     BrevitestSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];
 } test_record;
 
@@ -282,7 +279,7 @@ struct BrevitestAssayRecord {
     int duration;
     int sensor_integration_time;
     int sensor_gain;
-    int led_power;
+    int reserved;
     int delay_between_sensor_readings_ms;
     uint16_t BCODE_length;
     uint8_t BCODE_version;
