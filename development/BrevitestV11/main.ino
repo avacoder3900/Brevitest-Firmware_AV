@@ -477,13 +477,18 @@ void read_one_sensor(char sensor_code, int it, int gain, char laser_code) {
         else {
             turn_on_control_laser();
         }
-        delay(SENSOR_LED_WARMUP_DELAY_MS);
+        delay(LASER_WARMUP_DELAY_MS);
+
+        sensor->begin((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain);
+        delay(SENSOR_WARMUP_DELAY_MS);
 
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
         while (reading->clear == 0 && tries++ < 10) {
-            sensor->getRawData((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain, reading, 50);
+            sensor->getRawData(reading, 50);
         }
+
+        sensor->end();
 
         if (laser_code == 'A') {
             turn_off_assay_laser();
@@ -1402,11 +1407,16 @@ void check_assay_sensor_state(bool ledOn) {
         delay(STATE_SENSOR_LED_DELAY);
     }
 
+    tcsAssay.begin(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN);
+
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN, &sensor_state, 0);
+        tcsAssay.getRawData(&sensor_state, 0);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
+
+    tcsAssay.end();
+
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 
     if (ledOn) {
