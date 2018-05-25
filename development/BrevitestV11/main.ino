@@ -460,7 +460,7 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
 void read_one_sensor(char sensor_code, int it, int gain, char laser_code) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
-        int tries, lvalue, l2value, lvaluenorm;
+        int tries, lvalue, l2value, lvaluenorm, it_delay;
 
         /*Particle.process();*/
 
@@ -479,13 +479,14 @@ void read_one_sensor(char sensor_code, int it, int gain, char laser_code) {
         }
         delay(LASER_WARMUP_DELAY_MS);
 
+        it_delay = (24 * (256 - it)) / 10;
         sensor->begin((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain);
         delay(SENSOR_WARMUP_DELAY_MS);
 
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
         while (reading->clear == 0 && tries++ < 10) {
-            sensor->getRawData(reading, 50);
+            sensor->getRawData(reading, 50, it_delay);
         }
 
         sensor->end();
@@ -1412,7 +1413,7 @@ void check_assay_sensor_state(bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(&sensor_state, 0);
+        tcsAssay.getRawData(&sensor_state, 0, SENSOR_DEFAULT_IT_DELAY);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
 
     tcsAssay.end();

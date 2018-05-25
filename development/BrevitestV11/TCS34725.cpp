@@ -240,7 +240,7 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
     setGain(gain);
 
     /* Note: by default, the device is in power down mode on bootup */
-    /*enable();*/
+    enable();
 
     return true;
 }
@@ -328,7 +328,7 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 #define SENSOR_STABILITY_THRESHOLD 0
 #define SENSOR_WAIT_MAXIMUM_CYCLES 50
 
-void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability)
+void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it_delay)
 {
     int tries;
     uint16_t clear, red, green, blue;
@@ -343,7 +343,6 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability)
     unsigned long duration;
 
     while (stability == 0 || ++reading_count < stability) {
-        enable();
         duration = millis();
         ready = false;
         tries = 0;
@@ -366,7 +365,7 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability)
             red = read16(TCS34725_RDATAL);
             green = read16(TCS34725_GDATAL);
             blue = read16(TCS34725_BDATAL);
-            /*if (stability) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d", reading_count, clear, red, green, blue);*/
+            if (stability) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d", reading_count, clear, red, green, blue);
             stable = abs(clear - old_clear) <= SENSOR_STABILITY_THRESHOLD &&
                         abs(red - old_red) <= SENSOR_STABILITY_THRESHOLD &&
                         abs(green - old_green) <= SENSOR_STABILITY_THRESHOLD &&
@@ -389,6 +388,7 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability)
                 old_green = green;
                 old_blue = blue;
             }
+            delay(it_delay);
         }
         else {
             Serial.printlnf("Unsuccessful sensor read, tries: %d, duration: %u, status: %d", tries, duration, state);
