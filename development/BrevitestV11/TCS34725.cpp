@@ -366,7 +366,7 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability)
             red = read16(TCS34725_RDATAL);
             green = read16(TCS34725_GDATAL);
             blue = read16(TCS34725_BDATAL);
-            /*if (stability) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d", reading_count, clear, red, green, blue);*/
+            if (stability) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d", reading_count, clear, red, green, blue);
             stable = abs(clear - old_clear) <= SENSOR_STABILITY_THRESHOLD &&
                         abs(red - old_red) <= SENSOR_STABILITY_THRESHOLD &&
                         abs(green - old_green) <= SENSOR_STABILITY_THRESHOLD &&
