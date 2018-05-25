@@ -215,6 +215,7 @@ unsigned long last_sensor_reading_time = 0;
 bool read_sensors_command_flag = false;
 int read_sensors_command_integration_time;
 int read_sensors_command_gain;
+int read_sensors_samples;
 
 // progress
 int test_progress;

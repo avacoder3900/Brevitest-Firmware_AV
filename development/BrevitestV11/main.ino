@@ -12,34 +12,6 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int integerSqrt(int n) {
-    int shift, nShifted, result, candidateResult;
-
-    if (n < 0) {
-        return -1;
-    }
-
-    shift = 2;
-    nShifted = n >> shift;
-    while ((nShifted != 0) && (nShifted != n)) {
-        shift += 2;
-        nShifted = n >> shift;
-    }
-    shift -= 2;
-
-    result = 0;
-    while (shift >= 0) {
-        result <<= 1;
-        candidateResult = result + 1;
-        if ((candidateResult * candidateResult) <= (n >> shift)) {
-            result = candidateResult;
-        }
-        shift -= 2;
-    }
-
-    return result;
-}
-
 int extract_int_from_string(char *str, int pos, int len) {
         char buf[12];
 
@@ -425,6 +397,11 @@ void turn_off_control_laser() {
     digitalWrite(pinControlLaser, LOW);
 }
 
+void turn_off_both_lasers() {
+    digitalWrite(pinAssayLaser, LOW);
+    digitalWrite(pinControlLaser, LOW);
+}
+
 void turn_on_assay_laser_for_duration(int duration) {
     turn_on_assay_laser();
     delay(duration);
@@ -457,26 +434,22 @@ void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         delay(STATE_SENSOR_STARTUP_DELAY);
 }
 
-void read_one_sensor(char sensor_code, int it, int gain, char laser_code) {
+void read_one_sensor(char sensor_code, int it, int gain, int samples) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
-        int tries, lvalue, l2value, lvaluenorm, it_delay;
+        int tries, lvalue, it_delay;
 
         /*Particle.process();*/
 
         if (sensor_code == 'A') {
             sensor = &tcsAssay;
-        }
-        else {
-            sensor = &tcsControl;
-        }
-
-        if (laser_code == 'A') {
             turn_on_assay_laser();
         }
         else {
+            sensor = &tcsControl;
             turn_on_control_laser();
         }
+
         delay(LASER_WARMUP_DELAY_MS);
 
         it_delay = (24 * (256 - it)) / 10;
@@ -486,35 +459,26 @@ void read_one_sensor(char sensor_code, int it, int gain, char laser_code) {
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
         while (reading->clear == 0 && tries++ < 10) {
-            sensor->getRawData(reading, 50, it_delay);
+            lvalue = sensor->getRawData(reading, samples, it_delay, true);
         }
 
         sensor->end();
+        turn_off_both_lasers();
 
-        if (laser_code == 'A') {
-            turn_off_assay_laser();
-        }
-        else {
-            turn_off_control_laser();
-        }
-
-        l2value = (reading->red * reading->red) + (reading->blue * reading->blue) + (reading->green * reading->green);
-        lvalue = integerSqrt(l2value);
-        lvaluenorm = lvalue * 10000 / reading->clear;
-        Serial.printlnf("%c %d %u %d %d %d %d %d %d %d", \
-            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, l2value, lvalue, lvaluenorm);
+        Serial.printlnf("%c %d %u %d %d %d %d %d", \
+            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, lvalue);
 
         ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
 
-int read_sensors_with_parameters(int integrationTime, int gain) {
+int read_sensors_with_parameters(int integrationTime, int gain, int samples) {
         RGB.control(true);
         RGB.color(0, 0, 0);
 
         turn_off_device_LED();
 
-        read_one_sensor('A', integrationTime, gain, 'A');
-        read_one_sensor('C', integrationTime, gain, 'C');
+        read_one_sensor('A', integrationTime, gain, samples);
+        read_one_sensor('C', integrationTime, gain, samples);
 
         turn_on_device_LED();
 
@@ -524,7 +488,7 @@ int read_sensors_with_parameters(int integrationTime, int gain) {
 }
 
 int read_sensors() {
-        read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain);
+        read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain, 10);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1045,7 +1009,8 @@ int process_one_BCODE_command(int cmd, int index) {
         case 10: // Read sensors with parameters
                 index = get_BCODE_token(index, &param1); // integration time
                 index = get_BCODE_token(index, &param2); // gain
-                read_sensors_with_parameters(param1, param2);
+                index = get_BCODE_token(index, &param3); // samples
+                read_sensors_with_parameters(param1, param2, param3);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
@@ -1262,6 +1227,7 @@ int particle_command(String arg) {
             }
             read_sensors_command_integration_time = param1;
             read_sensors_command_gain = param2;
+            read_sensors_samples = param3;
             read_sensors_command_flag = true;
             return 1;
         case 5: // change threshold
@@ -1413,7 +1379,7 @@ void check_assay_sensor_state(bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(&sensor_state, 0, SENSOR_DEFAULT_IT_DELAY);
+        tcsAssay.getRawData(&sensor_state, 1, SENSOR_DEFAULT_IT_DELAY, false);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
 
     tcsAssay.end();
@@ -1716,7 +1682,7 @@ void loop() {
 
         if (read_sensors_command_flag) {
             read_sensors_command_flag = false;
-            read_sensors_with_parameters(read_sensors_command_integration_time, read_sensors_command_gain);
+            read_sensors_with_parameters(read_sensors_command_integration_time, read_sensors_command_gain, read_sensors_samples);
         }
 
         if (update_battery_life) {

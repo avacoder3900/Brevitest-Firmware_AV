@@ -328,14 +328,109 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 #define SENSOR_STABILITY_THRESHOLD 0
 #define SENSOR_WAIT_MAXIMUM_CYCLES 50
 
-void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it_delay)
+int integerSqrt(int n) {
+    int shift, nShifted, result, candidateResult;
+
+    if (n < 0) {
+        return -1;
+    }
+
+    shift = 2;
+    nShifted = n >> shift;
+    while ((nShifted != 0) && (nShifted != n)) {
+        shift += 2;
+        nShifted = n >> shift;
+    }
+    shift -= 2;
+
+    result = 0;
+    while (shift >= 0) {
+        result <<= 1;
+        candidateResult = result + 1;
+        if ((candidateResult * candidateResult) <= (n >> shift)) {
+            result = candidateResult;
+        }
+        shift -= 2;
+    }
+
+    return result;
+}
+
+int TCS34725::getRawData (BrevitestSensorRecord *reading, int sample_tries, int it_delay, bool debug)
 {
     int tries;
+    uint16_t clear, red, green, blue, lvalue;
+    int sum_clear = 0, sum_red = 0, sum_green = 0, sum_blue = 0, sum_lvalue = 0;
+    int max_clear = 0, max_red = 0, max_green = 0, max_blue = 0, max_lvalue = 0;
+    int min_clear = 65535, min_red = 65535, min_green = 65535, min_blue = 65535, min_lvalue = 65535;
+    int count, samples = 0;
+    bool ready = false;
+    uint8_t state;
+    unsigned long duration;
+
+    for (count = 0; count < sample_tries; count++) {
+        duration = millis();
+        ready = false;
+        tries = 0;
+        while (!ready && ++tries <= SENSOR_WAIT_MAXIMUM_CYCLES) {
+            state = read8(TCS34725_STATUS);
+            /*if (debug) Serial.printlnf("Sensor state: %d, try %d", state, tries);*/
+            ready = (state & 0x01) == 1;
+            if (!ready) {
+                if (debug) Serial.print(".");
+                delay(20);
+            }
+        }
+
+        if (ready) {
+            /*Serial.println("Successful sensor read");*/
+            clear = read16(TCS34725_CDATAL);
+            red = read16(TCS34725_RDATAL);
+            green = read16(TCS34725_GDATAL);
+            blue = read16(TCS34725_BDATAL);
+            lvalue = integerSqrt((red * red) + (blue * blue) + (green * green));
+            /*if (debug) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d, L: %d", count, clear, red, green, blue, lvalue);*/
+            sum_clear += clear;
+            sum_red += red;
+            sum_green += green;
+            sum_blue += blue;
+            sum_lvalue += lvalue;
+            if (clear > max_clear) max_clear = clear;
+            if (red > max_red) max_red = red;
+            if (green > max_green) max_green = green;
+            if (blue > max_blue) max_blue = blue;
+            if (lvalue > max_lvalue) max_lvalue = lvalue;
+            if (clear < min_clear) min_clear = clear;
+            if (red < min_red) min_red = red;
+            if (green < min_green) min_green = green;
+            if (blue < min_blue) min_blue = blue;
+            if (lvalue < min_lvalue) min_lvalue = lvalue;
+            samples++;
+
+        }
+        else {
+            duration = millis() - duration;
+            if (debug) Serial.printlnf("Unsuccessful sensor read, count: %d, tries: %d, duration: %u, status: %d", count, tries, duration, state);
+        }
+
+        delay(it_delay);
+    }
+
+    reading->time_ms = millis();
+    reading->samples = samples;
+    reading->clear = sum_clear / samples;
+    reading->red = sum_red / samples;
+    reading->green = sum_green / samples;
+    reading->blue = sum_blue / samples;
+    if (debug) Serial.printlnf("Max -> C: %d, R: %d, G: %d, B: %d, L: %d", max_clear, max_red, max_green, max_blue, max_lvalue);
+    if (debug) Serial.printlnf("Min -> C: %d, R: %d, G: %d, B: %d, L: %d", min_clear, min_red, min_green, min_blue, min_lvalue);
+
+    return sum_lvalue / samples;
+}
+/*int TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it_delay)
+{
+    int tries, lvalue = 0, old_lvalue = 0;
     uint16_t clear, red, green, blue;
-    uint16_t old_clear = 0;
-    uint16_t old_red = 0;
-    uint16_t old_green = 0;
-    uint16_t old_blue = 0;
     int reading_count = 0;
     bool ready = false;
     bool stable;
@@ -348,10 +443,10 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it
         tries = 0;
         while (!ready && ++tries <= SENSOR_WAIT_MAXIMUM_CYCLES) {
             state = read8(TCS34725_STATUS);
-            /*if (stability) Serial.printlnf("Sensor state: %d, try %d", state, tries);*/
+            if (stability) Serial.printlnf("Sensor state: %d, try %d", state, tries);
             ready = (state & 0x01) == 1;
             if (!ready) {
-                /*if (debug) Serial.print(".");*/
+                if (debug) Serial.print(".");
                 delay(20);
             }
             else {
@@ -360,16 +455,14 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it
         }
 
         if (ready) {
-            /*Serial.println("Successful sensor read");*/
+            Serial.println("Successful sensor read");
             clear = read16(TCS34725_CDATAL);
             red = read16(TCS34725_RDATAL);
             green = read16(TCS34725_GDATAL);
             blue = read16(TCS34725_BDATAL);
-            if (stability) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d", reading_count, clear, red, green, blue);
-            stable = abs(clear - old_clear) <= SENSOR_STABILITY_THRESHOLD &&
-                        abs(red - old_red) <= SENSOR_STABILITY_THRESHOLD &&
-                        abs(green - old_green) <= SENSOR_STABILITY_THRESHOLD &&
-                        abs(blue - old_blue) <= SENSOR_STABILITY_THRESHOLD;
+            lvalue = integerSqrt((red * red) + (blue * blue) + (green * green));
+            if (stability) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d, L: %d", reading_count, clear, red, green, blue, lvalue);
+            stable = abs(lvalue - old_lvalue) <= SENSOR_STABILITY_THRESHOLD;
             if (stability == 0 || (reading_count > 1 && stable)) {
                 reading->time_ms = millis();
                 reading->samples = reading_count;
@@ -381,12 +474,9 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it
             }
             else {
                 if (reading_count == (stability - 1)) {
-                    Serial.printlnf("Sensor failed to stabilize, reading count: %d, new: %d, old: %d", reading_count, clear, old_clear);
+                    Serial.printlnf("Sensor failed to stabilize, reading count: %d, new: %d, old: %d", reading_count, lvalue, old_lvalue);
                 }
-                old_clear = clear;
-                old_red = red;
-                old_green = green;
-                old_blue = blue;
+                old_lvalue = lvalue;
             }
             delay(it_delay);
         }
@@ -397,4 +487,6 @@ void TCS34725::getRawData (BrevitestSensorRecord *reading, int stability, int it
             reading->clear = reading->red = reading->green = reading->blue = 0;
         }
     }
-}
+
+    return lvalue;
+}*/
