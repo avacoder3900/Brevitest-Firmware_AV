@@ -138,12 +138,12 @@ class TCS34725 {
 
   TCS34725(uint8_t = 0);
 
-  boolean   begin(void);
+  // boolean   begin(void);
   boolean   begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain);
   boolean   end(void);
-  void      setIntegrationTime(tcs34725IntegrationTime_t it);
-  void      setGain(tcs34725Gain_t gain);
-  int      getRawData(BrevitestSensorRecord *record, int stability, int it_delay, bool debug);
+  boolean   setIntegrationTime(tcs34725IntegrationTime_t it);
+  boolean   setGain(tcs34725Gain_t gain);
+  int       takeReading(BrevitestSensorRecord *record, int stability, int it_delay, bool debug);
   void      write8 (uint8_t reg, uint8_t value);
   uint8_t   read8 (uint8_t reg);
   uint16_t  read16 (uint8_t reg);

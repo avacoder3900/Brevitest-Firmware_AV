@@ -430,14 +430,15 @@ void turn_on_both_lasers_for_duration(int duration) {
 
 void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         *sensor = TCS34725(sensor_number);
-        /*sensor->begin(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN);*/
-        delay(STATE_SENSOR_STARTUP_DELAY);
+        sensor->begin(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN);
+        /*delay(STATE_SENSOR_STARTUP_DELAY);*/
 }
 
 void read_one_sensor(char sensor_code, int it, int gain, int samples) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
         int tries, lvalue, it_delay;
+        bool change_it, change_gain;
 
         /*Particle.process();*/
 
@@ -454,19 +455,20 @@ void read_one_sensor(char sensor_code, int it, int gain, int samples) {
 
         it_delay = (24 * (256 - it)) / 10;
         sensor->begin((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain);
-        delay(SENSOR_WARMUP_DELAY_MS);
+        delay(it_delay);
 
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
         while (reading->clear == 0 && tries++ < 10) {
-            lvalue = sensor->getRawData(reading, samples, it_delay, true);
+            lvalue = sensor->takeReading(reading, samples, it_delay, true);
         }
 
         sensor->end();
+
         turn_off_both_lasers();
 
-        Serial.printlnf("%c %d %u %d %d %d %d %d", \
-            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, lvalue);
+        /*Serial.printlnf("%c %d %u %d %d %d %d %d", \
+            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, lvalue);*/
 
         ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
@@ -488,7 +490,7 @@ int read_sensors_with_parameters(int integrationTime, int gain, int samples) {
 }
 
 int read_sensors() {
-        read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain, 10);
+        read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain, 30);
 }
 
 /////////////////////////////////////////////////////////////
@@ -862,7 +864,7 @@ bool tests_to_upload() {
         if (millis() < next_upload) {
                 return false;
         }
-        Serial.println("Looking for test to upload");
+        /*Serial.println("Looking for test to upload");*/
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
                         Serial.printlnf("Test found: %s", eeprom.test_cache[i].test_uuid[0]);
@@ -1009,8 +1011,7 @@ int process_one_BCODE_command(int cmd, int index) {
         case 10: // Read sensors with parameters
                 index = get_BCODE_token(index, &param1); // integration time
                 index = get_BCODE_token(index, &param2); // gain
-                index = get_BCODE_token(index, &param3); // samples
-                read_sensors_with_parameters(param1, param2, param3);
+                read_sensors_with_parameters(param1, param2, 30);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
@@ -1368,6 +1369,7 @@ void initialize_device_state() {
 void check_assay_sensor_state(bool ledOn) {
     int tries = 0;
     uint16_t old_clear;
+    bool change_it, change_gain;
 
     if (ledOn) {
         analogWrite(pinSensorLED, STATE_SENSOR_LED_POWER);
@@ -1379,11 +1381,10 @@ void check_assay_sensor_state(bool ledOn) {
     sensor_state.clear = 0xFFFF;
     do {
         old_clear = sensor_state.clear;
-        tcsAssay.getRawData(&sensor_state, 1, SENSOR_DEFAULT_IT_DELAY, false);
+        tcsAssay.takeReading(&sensor_state, 1, SENSOR_DEFAULT_IT_DELAY, false);
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
 
     tcsAssay.end();
-
     /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
 
     if (ledOn) {
@@ -1439,8 +1440,6 @@ void check_device_state() {
       }
         device_open = device_open_now;
     }
-
-    /*tcsAssay.disable();*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -1682,7 +1681,9 @@ void loop() {
 
         if (read_sensors_command_flag) {
             read_sensors_command_flag = false;
+            /*SINGLE_THREADED_BLOCK() {*/
             read_sensors_with_parameters(read_sensors_command_integration_time, read_sensors_command_gain, read_sensors_samples);
+            /*}*/
         }
 
         if (update_battery_life) {

@@ -175,8 +175,8 @@ void TCS34725::enable(void)
 {
     write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
     delay(5);
-    /*write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN | TCS34725_ENABLE_WEN);*/
-    write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN);
+    write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN | TCS34725_ENABLE_WEN);
+    /*write8(TCS34725_ENABLE, TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN);*/
     _is_enabled = true;
 }
 
@@ -188,10 +188,10 @@ void TCS34725::enable(void)
 void TCS34725::disable(void)
 {
   /* Turn the device off to save power */
-  /*uint8_t reg = 0;*/
-  /*reg = read8(TCS34725_ENABLE);*/
-  /*write8(TCS34725_ENABLE, reg & ~(TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));*/
-    write8(TCS34725_ENABLE, 0x00);
+    uint8_t reg = 0;
+    reg = read8(TCS34725_ENABLE);
+    write8(TCS34725_ENABLE, reg & ~(TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));
+    /*write8(TCS34725_ENABLE, 0x00);*/
     _is_enabled = false;
 }
 
@@ -218,8 +218,6 @@ boolean TCS34725::begin(tcs34725IntegrationTime_t it, tcs34725Gain_t gain)
 
     while ((id != 0x44) && (id != 0x10))
     {
-        /*CHANNEL.reset();
-        delay(5);*/
         CHANNEL.begin();
         delay(5);
 
@@ -267,14 +265,15 @@ boolean TCS34725::end(void)
     Sets the integration time for the TC34725
 */
 /**************************************************************************/
-void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
+boolean TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 {
     int tries = 0;
     tcs34725IntegrationTime_t reg = (tcs34725IntegrationTime_t) read8(TCS34725_ATIME);
     if (reg == it) {
-        return;
+        return false;
     }
 
+    /*Serial.printlnf("Changing integration time from %d to %d", reg, it);*/
     /* Update the timing register */
     while (reg != it && ++tries < 6) {
         write8(TCS34725_ATIME, it);
@@ -286,9 +285,11 @@ void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
 
     if (reg != it) {
         Serial.printlnf("Unable to update integration time, old: %d, new: %d", reg, it);
+        return false;
     }
     /* Update value placeholders */
     _tcs34725IntegrationTime = reg;
+    return true;
 }
 
 /**************************************************************************/
@@ -296,14 +297,15 @@ void TCS34725::setIntegrationTime(tcs34725IntegrationTime_t it)
     Adjusts the gain on the TCS34725 (adjusts the sensitivity to light)
 */
 /**************************************************************************/
-void TCS34725::setGain(tcs34725Gain_t gain)
+boolean TCS34725::setGain(tcs34725Gain_t gain)
 {
     int tries = 0;
     tcs34725Gain_t reg = (tcs34725Gain_t) (read8(TCS34725_CONTROL) & 0x03);
     if (reg == gain) {
-        return;
+        return true;
     }
 
+    /*Serial.printlnf("Changing gain from %d to %d", reg, gain);*/
     /* Update the gain register */
     while (reg != gain && ++tries < 6) {
         write8(TCS34725_CONTROL, gain);
@@ -315,9 +317,11 @@ void TCS34725::setGain(tcs34725Gain_t gain)
 
     if (reg != gain) {
         Serial.printlnf("Unable to update gain, old: %d, new: %d", reg, gain);
+        return false;
     }
     /* Update value placeholders */
     _tcs34725Gain = reg;
+    return true;
 }
 
 /**************************************************************************/
@@ -356,7 +360,7 @@ int integerSqrt(int n) {
     return result;
 }
 
-int TCS34725::getRawData (BrevitestSensorRecord *reading, int sample_tries, int it_delay, bool debug)
+int TCS34725::takeReading (BrevitestSensorRecord *reading, int sample_tries, int it_delay, bool debug)
 {
     int tries;
     uint16_t clear, red, green, blue, lvalue;
@@ -367,6 +371,8 @@ int TCS34725::getRawData (BrevitestSensorRecord *reading, int sample_tries, int 
     bool ready = false;
     uint8_t state;
     unsigned long duration;
+
+    /*enable();*/
 
     for (count = 0; count < sample_tries; count++) {
         duration = millis();
@@ -388,7 +394,12 @@ int TCS34725::getRawData (BrevitestSensorRecord *reading, int sample_tries, int 
             red = read16(TCS34725_RDATAL);
             green = read16(TCS34725_GDATAL);
             blue = read16(TCS34725_BDATAL);
-            lvalue = integerSqrt((red * red) + (blue * blue) + (green * green));
+            if (clear) {
+                lvalue = (10000 * integerSqrt((red * red) + (blue * blue) + (green * green))) / clear;
+            }
+            else {
+                lvalue = 0;
+            }
             /*if (debug) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d, L: %d", count, clear, red, green, blue, lvalue);*/
             sum_clear += clear;
             sum_red += red;
@@ -416,14 +427,21 @@ int TCS34725::getRawData (BrevitestSensorRecord *reading, int sample_tries, int 
         delay(it_delay);
     }
 
+    /*disable();*/
+
     reading->time_ms = millis();
     reading->samples = samples;
     reading->clear = sum_clear / samples;
     reading->red = sum_red / samples;
     reading->green = sum_green / samples;
     reading->blue = sum_blue / samples;
-    if (debug) Serial.printlnf("Max -> C: %d, R: %d, G: %d, B: %d, L: %d", max_clear, max_red, max_green, max_blue, max_lvalue);
-    if (debug) Serial.printlnf("Min -> C: %d, R: %d, G: %d, B: %d, L: %d", min_clear, min_red, min_green, min_blue, min_lvalue);
+    max_clear = (100 * (max_clear - min_clear)) / reading->clear;
+    max_red = (100 * (max_red - min_red)) / reading->red;
+    max_green = (100 * (max_green - min_green)) / reading->green;
+    max_blue = (100 * (max_blue - min_blue)) / reading->blue;
+    max_lvalue = (100 * (max_lvalue - min_lvalue)) / lvalue;
+    if (debug) Serial.printlnf("%c %d %u (%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d)", \
+        reading->channel, reading->samples, reading->time_ms, reading->clear, max_clear, reading->red, max_red, reading->green, max_green, reading->blue, max_blue, lvalue, max_lvalue);
 
     return sum_lvalue / samples;
 }
