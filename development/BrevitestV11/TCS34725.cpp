@@ -367,14 +367,14 @@ int TCS34725::takeReading (BrevitestSensorRecord *reading, int sample_tries, int
     int sum_clear = 0, sum_red = 0, sum_green = 0, sum_blue = 0, sum_lvalue = 0;
     int max_clear = 0, max_red = 0, max_green = 0, max_blue = 0, max_lvalue = 0;
     int min_clear = 65535, min_red = 65535, min_green = 65535, min_blue = 65535, min_lvalue = 65535;
-    int count, samples = 0;
+    int count, iterations, samples = 0;
     bool ready = false;
     uint8_t state;
     unsigned long duration;
 
     /*enable();*/
-
-    for (count = 0; count < sample_tries; count++) {
+    iterations = abs(sample_tries);
+    for (count = 0; count < iterations; count++) {
         duration = millis();
         ready = false;
         tries = 0;
@@ -400,7 +400,7 @@ int TCS34725::takeReading (BrevitestSensorRecord *reading, int sample_tries, int
             else {
                 lvalue = 0;
             }
-            /*if (debug) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d, L: %d", count, clear, red, green, blue, lvalue);*/
+            if (sample_tries < 0) Serial.printlnf("Sensor reading -> count: %d, C: %d, R: %d, G: %d, B: %d, L: %d", count, clear, red, green, blue, lvalue);
             sum_clear += clear;
             sum_red += red;
             sum_green += green;

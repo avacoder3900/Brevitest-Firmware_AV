@@ -438,9 +438,8 @@ void read_one_sensor(char sensor_code, int it, int gain, int samples) {
         BrevitestSensorRecord *reading = &(test_record.reading[test_record.number_of_readings]);
         TCS34725 *sensor;
         int tries, lvalue, it_delay;
-        bool change_it, change_gain;
 
-        /*Particle.process();*/
+        Particle.process();
 
         if (sensor_code == 'A') {
             sensor = &tcsAssay;
@@ -455,7 +454,7 @@ void read_one_sensor(char sensor_code, int it, int gain, int samples) {
 
         it_delay = (24 * (256 - it)) / 10;
         sensor->begin((tcs34725IntegrationTime_t) it, (tcs34725Gain_t) gain);
-        delay(it_delay);
+        delay(it_delay + 20);
 
         reading->channel = sensor_code;
         reading->red = reading->green = reading->blue = reading->clear = reading->time_ms = reading->samples = tries = 0;
@@ -1369,7 +1368,6 @@ void initialize_device_state() {
 void check_assay_sensor_state(bool ledOn) {
     int tries = 0;
     uint16_t old_clear;
-    bool change_it, change_gain;
 
     if (ledOn) {
         analogWrite(pinSensorLED, STATE_SENSOR_LED_POWER);
