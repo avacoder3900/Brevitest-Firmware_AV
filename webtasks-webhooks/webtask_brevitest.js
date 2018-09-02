@@ -1,6 +1,8 @@
-var rp = require('request-promise');
+var rp = require('request-promise-native');
 var Particle = require('particle-api-js');
 var particle = new Particle();
+
+// test Comment
 
 function login(context) {
 	return particle.login({
@@ -601,14 +603,14 @@ function start_test(context, cb, testId) {
 
 	console.log('webtask_brevitest, test-start');
 	console.log(testId);
-	if (!context.data.coreid) {
+	if (!context.body.coreid) {
 		send_response(context, cb, 'test-start', 'FAILURE', testId + '\nNo device id found');
 	}
 
-	getDocument(context, context.data.coreid)
+	getDocument(context, context.body.coreid)
 		.then(function(d) {
 			if (!d) {
-				throw new Error ('FAILURE\n' + testId + '\nDevice not found');
+				throw new Error ('FAILURE\n' + context.body.coreid + '\nDevice not found');
 			}
 			device = d;
 
@@ -831,7 +833,7 @@ function calculateResults(data) {
 
 function upload_test(context, cb, testId) {
 	var token, result;
-	var deviceId = context.data.coreid;
+	var deviceId = context.body.coreid;
 
 	console.log('webtask_brevitest, upload-test');
 
@@ -904,6 +906,47 @@ function upload_test(context, cb, testId) {
 	}
 }
 
+function locate_device(context, cb, data) {
+	var result;
+	getDocument(context, context.body.coreid)
+		.then(function(device) {
+			if (!device) {
+				throw new Error ('FAILURE\n' + context.body.coreid + '\nDevice not found');
+			}
+
+			var params = data.split(',');
+			var whenDate = params[0].split('/');
+			var whenTime = params[1].split(':');
+			var when = new Date(parseInt(whenDate[2]),parseInt(whenDate[0]),parseInt(whenDate[1]),parseInt(whenTime[0]),parseInt(whenTime[1]),parseInt(whenTime[2]));
+			var lat = parseFloat(params[2].slice(4));
+			var long = parseFloat(params[3].slice(5));
+			result = {
+				when: when,
+				latitude: lat,
+				longitude: long,
+				uncertainty: parseFloat(params[5].slice(12))
+			};
+			device.latestLocation = result;
+
+			return saveDocument(context, device);
+		})
+		.then(function(response) {
+			console.log(response);
+			if (!response || !response.ok) {
+			  throw new Error('FAILURE\n' + context.body.coreid + '\Device location not updated');
+			}
+			send_response(context, cb, 'device-location', 'SUCCESS', context.body.coreid + '\n' + result.when + '\t' + result.latitude + '\t' + result.longitude + '\t' + result.uncertainty);
+		})
+		.catch(function(error) {
+			if (error.message && error.message.slice(0,7) === 'FAILURE') {
+				send_response(context, cb, 'device-location', 'FAILURE', error.message.slice(8));
+			}
+			else {
+				send_response(context, cb, 'device-location', 'ERROR', error);
+			}
+		});
+}
+
 function write_log(context, event_name, event_type, data) {
 	console.log('Creating new log entry', event_name);
 	var d = new Date();
@@ -932,6 +975,7 @@ function send_response(context, cb_fcn, event_name, event_type, data) {
 
 	write_log(context, event_name, event_type, data);
 
+	console.log('response', response);
 	if (event_type === 'ERROR') {
 		cb_fcn(response);
 	}
@@ -942,9 +986,10 @@ function send_response(context, cb_fcn, event_name, event_type, data) {
 
 module.exports =
 	function (context, cb) {
-		var indx = context.data.data.indexOf('\n');
-		var event_name = context.data.data.slice(0, indx);
-		var data = context.data.data.slice(indx + 1);
+	  console.log('context', context);
+		var indx = context.body.data.indexOf('\n');
+		var event_name = context.body.data.slice(0, indx);
+		var data = context.body.data.slice(indx + 1);
 
 		write_log(context, event_name, 'REQUEST', data);
 		switch (event_name) {
@@ -962,6 +1007,9 @@ module.exports =
 				break;
 			case 'test-upload':
 				upload_test(context, cb, data);
+				break;
+			case 'device-location':
+				locate_device(context, cb, data);
 				break;
 			default:
 				send_response(context, cb, event_name, 'FAILURE', 'Event not found\n' + data);
