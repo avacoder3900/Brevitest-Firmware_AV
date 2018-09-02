@@ -119,7 +119,7 @@ int reset_eeprom() {
         Particle_EEPROM e;
 
         memcpy(&eeprom, &e, (int) sizeof(Particle_EEPROM));
-        erase_test_cache();
+        /*erase_test_cache();*/
         store_eeprom();
 
         return 1;
@@ -195,7 +195,7 @@ void move_steps(int steps, int step_delay){
 
         steps = abs(steps);
 
-        digitalWrite(pinStepperDir,dir);
+        digitalWrite(pinStepper_Dir,dir);
 
         for(long i = 0; i < steps; i += 1) {
                 if (cancelling_test) {
@@ -225,10 +225,10 @@ void move_steps(int steps, int step_delay){
                         }
                 }
 
-                digitalWrite(pinStepperStep, HIGH);
+                digitalWrite(pinStepper_Step, HIGH);
                 delayMicroseconds(step_delay);
 
-                digitalWrite(pinStepperStep, LOW);
+                digitalWrite(pinStepper_Step, LOW);
                 delayMicroseconds(step_delay);
 
                 cumulative_steps += dir == HIGH ? 1 : -1;
@@ -244,11 +244,11 @@ void wake_move_sleep_stepper(int steps, int step_delay) {
 }
 
 void sleep_stepper() {
-        digitalWrite(pinStepperSleep, LOW);
+        digitalWrite(pinStepper_Sleep, LOW);
 }
 
 void wake_stepper() {
-        digitalWrite(pinStepperSleep, HIGH);
+        digitalWrite(pinStepper_Sleep, HIGH);
         delay(eeprom.param.stepper_wake_delay_ms);
 }
 
@@ -262,55 +262,55 @@ void reset_stage() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                       QR SCANNER                        //
+//                  BARCODE SCANNER                        //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int scan_qr_code() {
+int scan_barcode() {
         unsigned long timeout;
         int buf, i = 0;
 
-        qr_code_being_scanned = true;
+        barcode_being_scanned = true;
 
-        Serial.println("Start scan_QR_code");
-        Serial1.begin(115200); // QR scanner interface through RX/TX pins
+        Serial.println("Start scan_barcode");
+        Serial1.begin(115200); // barcode scanner interface through RX/TX pins
 
-        Serial.println("Trigger QR reader");
-        digitalWrite(pinQRTrigger, HIGH);
+        Serial.println("Trigger barcode reader");
+        digitalWrite(pinBarcode_Trigger, HIGH);
 
-        timeout = millis() + QR_READ_TIMEOUT;
+        timeout = millis() + BARCODE_READ_TIMEOUT;
 
-        Serial.println("Wait for QR code");
+        Serial.println("Wait for barcode");
         while (!Serial1.available() && millis() < timeout) {
                 Particle.process();
         }
 
-        Serial.printlnf("Stop triggering QR reader, ready=%c", Serial1.available() ? 'Y' : 'N');
-        digitalWrite(pinQRTrigger, LOW);
+        Serial.printlnf("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
+        digitalWrite(pinBarcode_Trigger, LOW);
 
-        delay(100); // allow QR code buffer to fill before reading
+        delay(100); // allow barcode buffer to fill before reading
 
-        Serial.println("Reading QR code from Serial1");
+        Serial.println("Reading barcode from Serial1");
         do {
                 Serial.print('.');
                 buf = Serial1.read();
                 if (buf != -1) {
-                        qr_uuid[i++] = (char) buf;
+                        barcode_uuid[i++] = (char) buf;
                 }
         } while (Serial1.available() && i < CARTRIDGE_UUID_LENGTH);
         Serial.println();
-        Serial.printlnf("QR code: %s, length: %d", qr_uuid, i);
+        Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
 
         if (i < CARTRIDGE_UUID_LENGTH) {
-            memcpy(qr_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
+            memcpy(barcode_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
         }
-        qr_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-        Serial.printlnf("QR code: %s, length: %d", qr_uuid, i);
+        barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+        Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
 
         Serial1.end();
-        Serial.println("Finish reading QR code");
+        Serial.println("Finish reading barcode");
 
-        qr_code_being_scanned = false;
+        barcode_being_scanned = false;
 
         return i;
 }
@@ -320,7 +320,7 @@ int scan_qr_code() {
 //                       DEVICE LED                        //
 //                                                         //
 /////////////////////////////////////////////////////////////
-
+/*
 void set_device_LED_color(uint8_t red, uint8_t green, uint8_t blue) {
         device_LED.red = red;
         device_LED.green = green;
@@ -373,7 +373,7 @@ void update_blinking_device_LED() {
         if (device_LED.blink_timeout && now > device_LED.blink_timeout) {
                 stop_blinking_device_LED();
         }
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -382,24 +382,24 @@ void update_blinking_device_LED() {
 /////////////////////////////////////////////////////////////
 
 void turn_on_assay_laser() {
-    digitalWrite(pinAssayLaser, HIGH);
+    digitalWrite(pinLaserAssay, HIGH);
 }
 
 void turn_on_control_laser() {
-    digitalWrite(pinControlLaser, HIGH);
+    digitalWrite(pinLaserControl, HIGH);
 }
 
 void turn_off_assay_laser() {
-    digitalWrite(pinAssayLaser, LOW);
+    digitalWrite(pinLaserAssay, LOW);
 }
 
 void turn_off_control_laser() {
-    digitalWrite(pinControlLaser, LOW);
+    digitalWrite(pinLaserControl, LOW);
 }
 
 void turn_off_both_lasers() {
-    digitalWrite(pinAssayLaser, LOW);
-    digitalWrite(pinControlLaser, LOW);
+    digitalWrite(pinLaserAssay, LOW);
+    digitalWrite(pinLaserControl, LOW);
 }
 
 void turn_on_assay_laser_for_duration(int duration) {
@@ -428,10 +428,10 @@ void turn_on_both_lasers_for_duration(int duration) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
+/*void init_sensor(TCS34725 *sensor, uint8_t sensor_number) {
         *sensor = TCS34725(sensor_number);
         sensor->begin(SENSOR_DEFAULT_INTEGRATION_TIME, SENSOR_DEFAULT_GAIN);
-        /*delay(STATE_SENSOR_STARTUP_DELAY);*/
+        delay(STATE_SENSOR_STARTUP_DELAY);
 }
 
 void read_one_sensor(char sensor_code, int it, int gain, int samples, int blink) {
@@ -468,8 +468,8 @@ void read_one_sensor(char sensor_code, int it, int gain, int samples, int blink)
 
         // turn_off_both_lasers();
 
-        /*Serial.printlnf("%c %d %u %d %d %d %d %d", \
-            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, lvalue);*/
+        Serial.printlnf("%c %d %u %d %d %d %d %d", \
+            reading->channel, reading->samples, reading->time_ms, reading->clear, reading->red, reading->green, reading->blue, lvalue);
 
         ++test_record.number_of_readings %= TEST_MAXIMUM_NUMBER_OF_READINGS;
 }
@@ -492,7 +492,7 @@ int read_sensors_with_parameters(int integrationTime, int gain, int samples, int
 
 int read_sensors() {
         read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain, 30, 0);
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -500,7 +500,7 @@ int read_sensors() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void validate_cartridge() {
+/*void validate_cartridge() {
     Serial.println("Validating cartridge");
 
     if (Particle.connected()) {
@@ -509,7 +509,7 @@ void validate_cartridge() {
 
         start_blinking_device_LED(0, 100, 255, 0, 255);
         cartridge_validated = false;
-        brevitest_publish("validate-cartridge", qr_uuid, false);
+        brevitest_publish("validate-cartridge", barcode_uuid, false);
     }
     else {
         Serial.println("Validation failed - not connected to the cloud");
@@ -544,7 +544,7 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
     crc_calculated = abs(checksum(assay.BCODE, assay.BCODE_length - 2));
     Serial.printlnf("BCODE checksums: %u, %u", crc_loaded, crc_calculated);
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -552,7 +552,7 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void brevitest_publish(char *event_name, char *data, bool retry) {
+/*void brevitest_publish(char *event_name, char *data, bool retry) {
     if (!retry) {
       current_event_tries = 0;
     }
@@ -759,8 +759,8 @@ void brevitest_callback(const char *event, const char *data) {
       strcat(callback_buffer, data);
       int len = strlen(data);
       callback_complete = (len < 512) || (data[len - 1] == '\"');
-      /*Serial.printlnf("callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');*/
-}
+      Serial.printlnf("callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -768,7 +768,7 @@ void brevitest_callback(const char *event, const char *data) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int find_test_index_by_uuid(char *uuid) {
+/*int find_test_index_by_uuid(char *uuid) {
         if (uuid[0] == '\0') {
                 return -1;
         }
@@ -818,7 +818,7 @@ int process_test_record(int index) {
             }
         }
         return 1;
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -859,13 +859,13 @@ void store_params() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-bool tests_to_upload() {
+/*bool tests_to_upload() {
         int i;
 
         if (millis() < next_upload) {
                 return false;
         }
-        /*Serial.println("Looking for test to upload");*/
+        Serial.println("Looking for test to upload");
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
                         Serial.printlnf("Test found: %s", eeprom.test_cache[i].test_uuid[0]);
@@ -889,7 +889,7 @@ void remove_test_from_cache(char *testId)
                         return;
                 }
         }
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -897,7 +897,7 @@ void remove_test_from_cache(char *testId)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int get_BCODE_token(int index, int *token) {
+/*int get_BCODE_token(int index, int *token) {
         int i;
         char *bcode = assay.BCODE;
 
@@ -936,7 +936,6 @@ void update_progress(char *message, int duration) {
         int new_percent_complete;
         int test_duration = assay.duration * 1000;
 
-        /*Particle.process();*/
         if (duration == 0) {
                 test_progress = 0;
                 test_percent_complete = 0;
@@ -1129,7 +1128,7 @@ int process_BCODE(int start_index) {
         };
 
         return (index > 0 ? index : -index);
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1137,7 +1136,7 @@ int process_BCODE(int start_index) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void initialize_test_cache() {
+/*void initialize_test_cache() {
         bool changed = false;
         int *ptr;
         int i;
@@ -1169,13 +1168,14 @@ void erase_test_cache() {
 void set_update_battery_life_flag() {
     update_battery_life = true;
 }
+
 void calculate_power_status() {
     int battery_level = analogRead(pinBatteryAin);
     int new_power_status = (battery_level > BATTERY_CONVERSION_FACTOR * 100 ? 100 : battery_level / BATTERY_CONVERSION_FACTOR) * (digitalRead(pinDCinDetect) ? -1 : 1);
     if (abs(new_power_status - power_status) > 1) {
         power_status = new_power_status;
     }
-}
+}*/
 
 void watchdog() {
     Serial.println("Watchdog!");
@@ -1274,58 +1274,52 @@ int particle_command(String arg) {
 
 }
 
+void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value) {
+    pinMode(pin, mode);
+    if (mode == OUTPUT) {
+        analogWrite(pin, value);
+    }
+}
+
+void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value) {
+    pinMode(pin, mode);
+    if (mode == OUTPUT) {
+        digitalWrite(pin, value);
+    }
+}
+
 void setup() {
         Particle.variable("register", particle_register, STRING);
         Particle.variable("status", particle_status, STRING);
-        Particle.variable("powerstatus", &power_status, INT);
+        /*Particle.variable("powerstatus", &power_status, INT);*/
         Particle.function("command", particle_command);
         device_id_string = System.deviceID();
-        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
+        /*Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);*/
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
-        pinMode(pinBatteryAin, INPUT);
-        pinMode(pinDCinDetect, INPUT);
-        pinMode(pinLimitSwitch, INPUT_PULLUP);
+        init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
 
-        pinMode(pinAssaySDA, INPUT);
-        pinMode(pinAssaySCL, INPUT);
-        pinMode(pinControlSDA, INPUT);
-        pinMode(pinControlSCL, INPUT);
+        init_digital_pin(pinInteriorLED, OUTPUT, LOW);
+        init_digital_pin(pinBarcode_Trigger, OUTPUT, LOW);
+        init_digital_pin(pinBuzzer, OUTPUT, LOW);
 
-        pinMode(pinBatteryLED, OUTPUT);
-        pinMode(pinSensorLED, OUTPUT);
-        pinMode(pinDeviceLEDRed, OUTPUT);
-        pinMode(pinDeviceLEDGreen, OUTPUT);
-        pinMode(pinDeviceLEDBlue, OUTPUT);
-        pinMode(pinSolenoid, OUTPUT);
-        pinMode(pinStepperStep, OUTPUT);
-        pinMode(pinStepperSleep, OUTPUT);
-        pinMode(pinStepperDir, OUTPUT);
-        pinMode(pinQRTrigger, OUTPUT);
-        pinMode(pinCartridgeHeater, OUTPUT);
-        pinMode(pinCartridgeHeaterLED, OUTPUT);
-        pinMode(pinAssayLaser, OUTPUT);
-        pinMode(pinControlLaser, OUTPUT);
+        init_digital_pin(pinLaserAssay, OUTPUT, LOW);
+        init_digital_pin(pinLaserControl, OUTPUT, LOW);
+        init_digital_pin(pinFan, OUTPUT, LOW);
 
-        digitalWrite(pinSensorLED, LOW);
-        analogWrite(pinSolenoid, 0);
-        digitalWrite(pinStepperStep, LOW);
-        digitalWrite(pinStepperDir, LOW);
-        digitalWrite(pinStepperSleep, LOW);
-        digitalWrite(pinQRTrigger, LOW);
-        digitalWrite(pinCartridgeHeater, LOW);
-        digitalWrite(pinCartridgeHeaterLED, LOW);
-        digitalWrite(pinAssayLaser, LOW);
-        digitalWrite(pinControlLaser, LOW);
+        init_digital_pin(pinAssaySensor_Ready, OUTPUT, LOW);
+        init_digital_pin(pinAssaySensor_Syn, OUTPUT, LOW);
+        init_digital_pin(pinControlSensor_Ready, OUTPUT, LOW);
+        init_digital_pin(pinControlSensor_Syn, OUTPUT, LOW);
 
-        _pmic.disableBATFET();
-        _pmic.disableCharging(); // if you comment this out, the red LED will be steady ON
+        init_analog_pin(pinSolenoid, OUTPUT, 0);
+        init_analog_pin(pinHeater, OUTPUT, 0);
 
-        turn_off_device_LED();
-        set_device_LED_color(255, 255, 0);
-        turn_on_device_LED();
+        init_digital_pin(pinStepper_Step, OUTPUT, LOW);
+        init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
+        init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
 
         Serial.begin(115200); // standard serial port
 
@@ -1334,19 +1328,13 @@ void setup() {
                 reset_eeprom();
         }
 
-        reset_stage();
+        wake_move_sleep_stepper(-100, 1500);
         move_solenoid(2000);
+        wake_move_sleep_stepper(100, 1500);
 
-        reset_globals();
+        /*reset_globals();*/
 
-        init_sensor(&tcsAssay, SENSOR_NUMBER_ASSAY);
-        init_sensor(&tcsControl, SENSOR_NUMBER_CONTROL);
-
-        initialize_test_cache();
-        calculate_power_status();
-
-        initialize_device_state();
-        battery_check_timer.reset();
+        /*initialize_device_state();*/
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -1358,7 +1346,7 @@ void setup() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void initialize_device_state() {
+/*void initialize_device_state() {
     check_assay_sensor_state(false);
 
     device_open = !(sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
@@ -1367,7 +1355,7 @@ void initialize_device_state() {
         cartridge_loaded = !(sensor_state.clear > STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD);
     }
 
-    /*tcsAssay.disable();*/
+    tcsAssay.disable();
 }
 
 void check_assay_sensor_state(bool ledOn) {
@@ -1388,12 +1376,12 @@ void check_assay_sensor_state(bool ledOn) {
     } while (abs(old_clear - sensor_state.clear) > 5 && tries++ < 20);
 
     tcsAssay.end();
-    /*Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);*/
+    Serial.printlnf("LED %c, R: %d, G: %d, B: %d, C: %d, OC: %d, tries: %d", ledOn ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear, old_clear, tries);
 
     if (ledOn) {
         analogWrite(pinSensorLED, 0);
         cartridge_is_heated = (sensor_state.red > eeprom.param.start_test_heat_red_threshold);   // reading below threshold means reagent still below 33 deg C, turn on heat
-        /*Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
+        Serial.printlnf("Checking cartridge pigment state - heated ? %c, R: %d, G: %d, B: %d, C: %d", cartridge_is_heated ? 'Y' : 'N', sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
         next_sensor_reading_time = millis() + CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD;
     }
 }
@@ -1401,20 +1389,20 @@ void check_assay_sensor_state(bool ledOn) {
 void check_device_state() {
     bool device_open_now;
 
-    if (qr_code_being_scanned || waiting_for_validation || waiting_for_start_confirmation || test_in_progress || cancelling_test || finishing_test || reading_sensors || waiting_for_upload_confirmation) {
+    if (barcode_code_being_scanned || waiting_for_validation || waiting_for_start_confirmation || test_in_progress || cancelling_test || finishing_test || reading_sensors || waiting_for_upload_confirmation) {
         return;
     }
 
     check_assay_sensor_state(false);
-    /*Serial.printlnf("Device state (no LED) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);*/
+    Serial.printlnf("Device state (no LED) - R: %d, G: %d, B: %d, C: %d", sensor_state.red, sensor_state.green, sensor_state.blue, sensor_state.clear);
 
     device_open_now = (sensor_state.clear > STATE_DEVICE_OPEN_THRESHOLD);
     if (device_open ^ device_open_now) {    // device open state changed
         if (device_open_now) {
             Serial.println("Device just opened");
-            memcpy(qr_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
+            memcpy(barcode_uuid, DEVICE_OPEN_UUID, CARTRIDGE_UUID_LENGTH);
             cartridge_loaded = false;
-            ready_to_scan_qr_code = false;
+            ready_to_scan_barcode = false;
             cartridge_validated = false;
             stop_blinking_device_LED();
             set_device_LED_color(0, 255, 255);
@@ -1429,13 +1417,13 @@ void check_device_state() {
             cartridge_loaded = (sensor_state.clear > STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD);
             cartridge_validated = false;
             if (cartridge_loaded) {
-                Serial.println("Cartridge in device; ready to scan qr code");
+                Serial.println("Cartridge in device; ready to scan barcode");
                 start_blinking_device_LED(0, 100, 0, 255, 255);
-                ready_to_scan_qr_code = true;
+                ready_to_scan_barcode = true;
             }
             else {
                 Serial.println("No cartridge in device");
-                strncpy(qr_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
+                strncpy(barcode_uuid, NO_CARTRIDGE_UUID, CARTRIDGE_UUID_LENGTH);
                 stop_blinking_device_LED();
                 set_device_LED_color(128, 128, 128);
                 turn_on_device_LED();
@@ -1443,7 +1431,7 @@ void check_device_state() {
       }
         device_open = device_open_now;
     }
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1451,7 +1439,7 @@ void check_device_state() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void reset_globals() {
+/*void reset_globals() {
         test_in_progress = false;
         test_startup_successful = false;
         cartridge_validated = false;
@@ -1461,8 +1449,8 @@ void reset_globals() {
         test_progress = 0;
         test_percent_complete = 0;
 
-        qr_uuid[0] = '\0';
-        qr_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+        barcode_uuid[0] = '\0';
+        barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
         cartridge_uuid[0] = '\0';
         cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
         test_record.test_uuid[0] = '\0';
@@ -1575,7 +1563,7 @@ void upload_tests() {
                 return;
             }
         }
-}
+}*/
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1584,7 +1572,8 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-        if (callback_complete) {
+
+        /*if (callback_complete) {
             Serial.println("Processing callback");
             process_callback_buffer();
             return;
@@ -1646,10 +1635,10 @@ void loop() {
                 return;
             }
 
-            if (ready_to_scan_qr_code) {
-                ready_to_scan_qr_code = false;
+            if (ready_to_scan_barcode) {
+                ready_to_scan_barcode = false;
                 if (!device_open) {
-                    if (scan_qr_code() == CARTRIDGE_UUID_LENGTH) {
+                    if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
                         validate_cartridge();
                     }
                     else {
@@ -1684,13 +1673,13 @@ void loop() {
 
         if (read_sensors_command_flag) {
             read_sensors_command_flag = false;
-            /*SINGLE_THREADED_BLOCK() {*/
+            SINGLE_THREADED_BLOCK() {
             read_sensors_with_parameters(read_sensors_command_integration_time, read_sensors_command_gain, read_sensors_samples, read_sensors_blink);
-            /*}*/
+            }
         }
 
         if (update_battery_life) {
             update_battery_life = false;
             calculate_power_status();
-        }
+        }*/
 }

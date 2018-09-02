@@ -3,7 +3,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 2
+#define FIRMWARE_VERSION 3
 #define DATA_FORMAT_VERSION 10
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
@@ -68,10 +68,10 @@
 #define DEVICE_LED_BLINK_DELAY_CLAIMED 100
 #define DEVICE_LED_BLINK_NO_TIMEOUT 0
 
-// qr scanner
-#define QR_DELAY_AFTER_POWER_ON_MS 1000
-#define QR_DELAY_AFTER_TRIGGER_MS 50
-#define QR_READ_TIMEOUT 2000
+// barcode scanner
+#define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
+#define BARCODE_DELAY_AFTER_TRIGGER_MS 50
+#define BARCODE_READ_TIMEOUT 2000
 #define VALIDATE_CARTRIDGE_TIMEOUT 10000
 
 // stepper
@@ -119,30 +119,36 @@ ApplicationWatchdog wd(30000, watchdog);
 // pin definitions
 
 // ELECTRON PIN MAPPINGS
-int pinBatteryLED = A0;
-int pinBatteryAin = A1;
-int pinDCinDetect = A2;
-int pinQRTrigger = A3;
-int pinSensorLED = A4;
-int pinSolenoid = A5;
-int pinDeviceLEDRed = B0;
-int pinDeviceLEDGreen = B1;
-int pinDeviceLEDBlue = B2;
-// int pinBluetoothMode = B3;
-int pinAssayLaser = C0;
-int pinControlLaser = C1;
-int pinCartridgeHeaterLED = C2;
-int pinCartridgeHeater = C3;
-int pinAssaySDA = C4;
-int pinAssaySCL = C5;
-int pinControlSDA = D0;
-int pinControlSCL = D1;
-int pinLimitSwitch = D2;
-int pinStepperSleep = D3;
-int pinStepperDir = D4;
-int pinStepperStep = D5;
-int pinQRDecoderRX = RX;
-int pinQRDecoderTX = TX;
+int pinAssaySensor_Ready = A0;
+int pinControlSensor_Syn = A1;
+// int pinUnused = A2;
+int pinSolenoid = A3;
+int pinLaserControl = A4;
+int pinLaserAssay = A5;
+int pinHeater = DAC;
+int pinBarcode_Trigger = WKP;
+int pinBuzzer = B0;
+int pinFan = B1;
+int pinControlSensor_Ready = B2;
+// int pinUnused = B3;
+// int pinUnused = B4;
+int pinAssaySensor_Syn = B5;
+// int pinUnused = C0;
+// int pinUnused = C1;
+int pinGPS_RX = C2;
+int pinGPS_TX = C3;
+int pinMain_SDA = C4;
+int pinMain_SCL = C5;
+int pinSensor_SDA = D0;
+int pinSensor_SCL = D1;
+int pinInteriorLED = D2;
+// int pinUnused = D3;
+int pinLimitSwitch = D4;
+int pinStepper_Sleep = D5;
+int pinStepper_Dir = D6;
+int pinStepper_Step = D7;
+// int pinBarcode_RX = RX;
+// int pinUnused = TX;
 
 // global variables
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
@@ -161,8 +167,8 @@ PMIC _pmic;
 // device state
 bool device_open = false;
 bool cartridge_loaded = false;
-bool ready_to_scan_qr_code = false;
-bool qr_code_being_scanned = false;
+bool ready_to_scan_barcode = false;
+bool barcode_being_scanned = false;
 
 bool test_startup_successful = false;
 bool test_in_progress = false;
@@ -183,8 +189,8 @@ bool cartridge_is_heated;
 unsigned long next_sensor_reading_time = 0;
 
 // device LED
-void update_blinking_device_LED(void);
-Timer device_LED_timer(DEVICE_LED_BLINK_DELAY_DEFAULT, update_blinking_device_LED);
+// void update_blinking_device_LED(void);
+// Timer device_LED_timer(DEVICE_LED_BLINK_DELAY_DEFAULT, update_blinking_device_LED);
 struct DeviceLED {
     bool blinking;
     bool currently_on;
@@ -206,8 +212,8 @@ struct DeviceLED {
 } device_LED;
 
 // timers
-void set_update_battery_life_flag(void);
-Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
+// void set_update_battery_life_flag(void);
+// Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 
 // sensors
 TCS34725 tcsAssay;
@@ -226,7 +232,7 @@ unsigned long test_last_progress_update;
 
 // uuids
 char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1];
-char qr_uuid[CARTRIDGE_UUID_LENGTH + 1];
+char barcode_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char device_id[DEVICE_ID_LENGTH + 1];
 String device_id_string;
 
