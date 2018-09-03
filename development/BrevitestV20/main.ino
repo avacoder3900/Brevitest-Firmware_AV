@@ -1337,7 +1337,9 @@ void setup() {
         wake_move_sleep_stepper(-200, 1200);
         delay(1000);
 
-        move_solenoid(2000);
+        digitalWrite(pinInteriorLED, HIGH);
+        delay(1000);
+        digitalWrite(pinInteriorLED, LOW);
 
         /*reset_globals();*/
 
