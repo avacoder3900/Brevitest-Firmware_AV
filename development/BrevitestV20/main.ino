@@ -156,7 +156,7 @@ void dump_eeprom() {
 /////////////////////////////////////////////////////////////
 
 void move_solenoid(int duration) {
-        uint8_t surge = eeprom.param.solenoid_power >> 8;
+        /*uint8_t surge = eeprom.param.solenoid_power >> 8;
         uint8_t sustain = (uint8_t) eeprom.param.solenoid_power;
 
         if (cancelling_test) {
@@ -177,9 +177,14 @@ void move_solenoid(int duration) {
         }
 
         pinMode(pinSolenoid, OUTPUT);
-        analogWrite(pinSolenoid, 0);
+        analogWrite(pinSolenoid, 0);*/
 
         /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
+
+        pinMode(pinSolenoid, OUTPUT);
+        analogWrite(pinSolenoid, 4095);
+        delay(duration);
+        analogWrite(pinSolenoid, 0);
 }
 
 /////////////////////////////////////////////////////////////
@@ -192,13 +197,11 @@ void move_steps(int steps, int step_delay){
         //rotate a specific number of steps - negative for reverse movement
 
         int dir = (steps > 0) ? HIGH : LOW;
+        digitalWrite(pinStepper_Dir, dir);
 
         steps = abs(steps);
-
-        digitalWrite(pinStepper_Dir,dir);
-
         for(long i = 0; i < steps; i += 1) {
-                if (cancelling_test) {
+                /*if (cancelling_test) {
                         break;
                 }
 
@@ -223,7 +226,7 @@ void move_steps(int steps, int step_delay){
                         else {
                                 pinMode(pinLimitSwitch, INPUT_PULLUP);
                         }
-                }
+                }*/
 
                 digitalWrite(pinStepper_Step, HIGH);
                 delayMicroseconds(step_delay);
@@ -249,7 +252,8 @@ void sleep_stepper() {
 
 void wake_stepper() {
         digitalWrite(pinStepper_Sleep, HIGH);
-        delay(eeprom.param.stepper_wake_delay_ms);
+        /*delay(eeprom.param.stepper_wake_delay_ms);*/
+        delay(10);
 }
 
 void reset_stage() {
@@ -1328,9 +1332,12 @@ void setup() {
                 reset_eeprom();
         }
 
-        wake_move_sleep_stepper(-100, 1500);
+        wake_move_sleep_stepper(200, 1200);
+        delay(1000);
+        wake_move_sleep_stepper(-200, 1200);
+        delay(1000);
+
         move_solenoid(2000);
-        wake_move_sleep_stepper(100, 1500);
 
         /*reset_globals();*/
 
@@ -1572,6 +1579,23 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
+        if (digitalRead(pinLimitSwitch) == LOW) {
+            delay(50);  //debounce
+            if (digitalRead(pinLimitSwitch) == LOW) {
+                if (fan_on) {
+                    digitalWrite(pinLaserAssay, LOW);
+                    digitalWrite(pinLaserControl, LOW);
+                }
+                else {
+                    digitalWrite(pinLaserAssay, HIGH);
+                    digitalWrite(pinLaserControl, HIGH);
+                }
+                fan_on = !fan_on;
+                while (digitalRead(pinLimitSwitch) == LOW) {
+                    delay(100);
+                }
+            }
+        }
 
         /*if (callback_complete) {
             Serial.println("Processing callback");

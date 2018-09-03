@@ -122,10 +122,10 @@ ApplicationWatchdog wd(30000, watchdog);
 int pinAssaySensor_Ready = A0;
 int pinControlSensor_Syn = A1;
 // int pinUnused = A2;
-int pinSolenoid = A3;
-int pinLaserControl = A4;
-int pinLaserAssay = A5;
-int pinHeater = DAC;
+int pinSolenoid = DAC2;
+int pinLaserAssay = A4;
+int pinLaserControl = A5;
+int pinHeater = DAC1;
 int pinBarcode_Trigger = WKP;
 int pinBuzzer = B0;
 int pinFan = B1;
@@ -153,7 +153,7 @@ int pinStepper_Step = D7;
 // global variables
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
-bool update_battery_life = false;
+bool fan_on = false;
 unsigned long next_upload;
 unsigned long validation_timeout;
 unsigned long start_timeout;
@@ -210,10 +210,6 @@ struct DeviceLED {
       blue = 0;
     }
 } device_LED;
-
-// timers
-// void set_update_battery_life_flag(void);
-// Timer battery_check_timer(BATTERY_CHECK_PERIOD, set_update_battery_life_flag);
 
 // sensors
 TCS34725 tcsAssay;
