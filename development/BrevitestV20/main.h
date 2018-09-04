@@ -75,7 +75,7 @@
 #define VALIDATE_CARTRIDGE_TIMEOUT 10000
 
 // stepper
-#define CUMULATIVE_STEP_LIMIT 10000
+#define CUMULATIVE_STEP_LIMIT 11000
 #define LIMIT_SWITCH_RELEASE_LENGTH 250
   //Well #1
   //#define STEPS_TO_MICROBEAD_WELL 1300
@@ -121,12 +121,12 @@ ApplicationWatchdog wd(30000, watchdog);
 // ELECTRON PIN MAPPINGS
 int pinAssaySensor_Ready = A0;
 int pinControlSensor_Syn = A1;
-// int pinUnused = A2;
-int pinSolenoid = DAC2;
-int pinLaserAssay = A4;
-int pinLaserControl = A5;
-int pinHeater = DAC1;
-int pinBarcode_Trigger = WKP;
+int pinBarcode_Trigger = A2;
+int pinLaserAssay = A3;
+int pinSolenoid = A4;
+int pinHeater = A5;
+int pinLaserControl = DAC1;
+int pinBarcode_Success = WKP;
 int pinBuzzer = B0;
 int pinFan = B1;
 int pinControlSensor_Ready = B2;

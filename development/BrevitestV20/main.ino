@@ -196,37 +196,40 @@ void move_solenoid(int duration) {
 void move_steps(int steps, int step_delay){
         //rotate a specific number of steps - negative for reverse movement
 
-        int dir = (steps > 0) ? HIGH : LOW;
+        int dir = (steps > 0) ? LOW : HIGH;
         digitalWrite(pinStepper_Dir, dir);
 
         steps = abs(steps);
         for(long i = 0; i < steps; i += 1) {
                 /*if (cancelling_test) {
                         break;
-                }
+                }*/
 
-                if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
+                /*if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
                         Particle.process();
-                }
+                }*/
 
-                if ((dir == LOW) && (digitalRead(pinLimitSwitch) == HIGH)) {
+                if ((dir == HIGH) && (digitalRead(pinLimitSwitch) == LOW)) {
+                    delay(20);  // debounce
+                    if (digitalRead(pinLimitSwitch) == LOW) {
                         cumulative_steps = 0;
                         break;
+                    }
                 }
 
-                if (dir == HIGH) {
+                if (dir == LOW) {
                         if (cumulative_steps > CUMULATIVE_STEP_LIMIT) {
                                 break;
                         }
 
-                        if (cumulative_steps < LIMIT_SWITCH_RELEASE_LENGTH) {
+                        /*if (cumulative_steps < LIMIT_SWITCH_RELEASE_LENGTH) {
                                 pinMode(pinLimitSwitch, OUTPUT);
                                 digitalWrite(pinLimitSwitch, LOW);
                         }
                         else {
                                 pinMode(pinLimitSwitch, INPUT_PULLUP);
-                        }
-                }*/
+                        }*/
+                }
 
                 digitalWrite(pinStepper_Step, HIGH);
                 delayMicroseconds(step_delay);
@@ -234,7 +237,7 @@ void move_steps(int steps, int step_delay){
                 digitalWrite(pinStepper_Step, LOW);
                 delayMicroseconds(step_delay);
 
-                cumulative_steps += dir == HIGH ? 1 : -1;
+                cumulative_steps += dir == LOW ? 1 : -1;
         }
 
         //sleep_stepper();
@@ -259,8 +262,10 @@ void wake_stepper() {
 void reset_stage() {
         cumulative_steps = CUMULATIVE_STEP_LIMIT;
         wake_stepper();
-        move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
-        move_steps(STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);
+        move_steps(-14000, 800);
+        move_steps(3000, 800);
+        /*move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
+        move_steps(STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);*/
         sleep_stepper();
 }
 
@@ -1332,15 +1337,7 @@ void setup() {
                 reset_eeprom();
         }
 
-        wake_move_sleep_stepper(200, 1200);
-        delay(1000);
-        wake_move_sleep_stepper(-200, 1200);
-        delay(1000);
-
-        digitalWrite(pinInteriorLED, HIGH);
-        delay(1000);
-        digitalWrite(pinInteriorLED, LOW);
-
+        reset_stage();
         /*reset_globals();*/
 
         /*initialize_device_state();*/
@@ -1581,7 +1578,7 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-        if (digitalRead(pinLimitSwitch) == LOW) {
+        /*if (digitalRead(pinLimitSwitch) == LOW) {
             delay(50);  //debounce
             if (digitalRead(pinLimitSwitch) == LOW) {
                 if (fan_on) {
@@ -1597,7 +1594,7 @@ void loop() {
                     delay(100);
                 }
             }
-        }
+        }*/
 
         /*if (callback_complete) {
             Serial.println("Processing callback");
