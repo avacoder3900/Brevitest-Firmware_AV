@@ -181,8 +181,7 @@ void move_solenoid(int duration) {
 
         /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
 
-        pinMode(pinSolenoid, OUTPUT);
-        analogWrite(pinSolenoid, 4095);
+        analogWrite(pinSolenoid, 200);
         delay(duration);
         analogWrite(pinSolenoid, 0);
 }
@@ -278,26 +277,38 @@ void reset_stage() {
 int scan_barcode() {
         unsigned long timeout;
         int buf, i = 0;
+        bool read_success = false;
 
         barcode_being_scanned = true;
 
-        Serial.println("Start scan_barcode");
-        Serial1.begin(115200); // barcode scanner interface through RX/TX pins
+        /*Serial.println("Start scan_barcode");
+        Serial1.begin(115200); // barcode scanner interface through RX/TX pins*/
 
-        Serial.println("Trigger barcode reader");
-        digitalWrite(pinBarcode_Trigger, HIGH);
+        turn_on_assay_laser();
+        /*Serial.println("Trigger barcode reader");*/
+        digitalWrite(pinBarcode_Trigger, LOW);
 
         timeout = millis() + BARCODE_READ_TIMEOUT;
 
-        Serial.println("Wait for barcode");
+        /*Serial.println("Wait for success");*/
+        do {
+            turn_on_control_laser();
+            read_success = digitalRead(pinBarcode_Success) == HIGH;
+            Particle.process();
+            turn_off_control_laser();
+            delay(200);
+        } while (!read_success && millis() < timeout);
+
+        /*Serial.printlnf("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');*/
+        digitalWrite(pinBarcode_Trigger, HIGH);
+        turn_off_assay_laser();
+
+        /*Serial.println("Wait for barcode data");
         while (!Serial1.available() && millis() < timeout) {
                 Particle.process();
-        }
+        };*/
 
-        Serial.printlnf("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
-        digitalWrite(pinBarcode_Trigger, LOW);
-
-        delay(100); // allow barcode buffer to fill before reading
+        /*delay(100); // allow barcode buffer to fill before reading
 
         Serial.println("Reading barcode from Serial1");
         do {
@@ -317,7 +328,7 @@ int scan_barcode() {
         Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
 
         Serial1.end();
-        Serial.println("Finish reading barcode");
+        Serial.println("Finish reading barcode");*/
 
         barcode_being_scanned = false;
 
@@ -1311,12 +1322,10 @@ void setup() {
         init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
 
         init_digital_pin(pinInteriorLED, OUTPUT, LOW);
-        init_digital_pin(pinBarcode_Trigger, OUTPUT, LOW);
-        init_digital_pin(pinBuzzer, OUTPUT, LOW);
+        init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
 
         init_digital_pin(pinLaserAssay, OUTPUT, LOW);
         init_digital_pin(pinLaserControl, OUTPUT, LOW);
-        init_digital_pin(pinFan, OUTPUT, LOW);
 
         init_digital_pin(pinAssaySensor_Ready, OUTPUT, LOW);
         init_digital_pin(pinAssaySensor_Syn, OUTPUT, LOW);
@@ -1325,6 +1334,8 @@ void setup() {
 
         init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinHeater, OUTPUT, 0);
+        init_analog_pin(pinFan, OUTPUT, 0);
+        init_analog_pin(pinBuzzer, OUTPUT, 0);
 
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
         init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
@@ -1337,10 +1348,22 @@ void setup() {
                 reset_eeprom();
         }
 
-        reset_stage();
+        /*reset_stage();
+
+        delay(1000);*/
+        move_solenoid(1000);
+        /*delay(1000);
+        turn_on_both_lasers_for_duration(3000);*/
+        /*delay(1000);
+        tone(pinBuzzer, 4000, 2000);*/
+
         /*reset_globals();*/
 
         /*initialize_device_state();*/
+
+        temperature[0] = '\0';
+        temperature[1] = '\0';
+        temperature[2] = '\0';
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -1578,6 +1601,46 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
+    char id;
+
+    turn_on_assay_laser();
+    delay(250);
+    Wire1.begin();
+    if (!Wire1.isEnabled()) {
+        turn_on_control_laser();
+        delay(250);
+        turn_off_control_laser();
+    }
+    else {
+        Wire1.beginTransmission(0x4B);
+        Wire1.write(7);
+        Wire1.endTransmission();
+        Wire1.requestFrom(0x4B, 1);
+        delay(10);
+        if (!Wire1.available()) {
+            Particle.publish("temp_sensor_id/failed");
+        }
+        else {
+            id = Wire1.read();
+            Particle.publish("temp_sensor_id", String(id));
+        }
+    }
+    Wire1.end();
+    turn_off_assay_laser();
+
+    /*turn_on_assay_laser();
+    analogWrite(pinFan, 255);
+
+    digitalWrite(pinHeater, 255);
+    delay(2000);
+    digitalWrite(pinHeater, 0);
+
+    delay(5000);
+    analogWrite(pinFan, 0);
+    turn_off_assay_laser();*/
+
+    delay(10000);
+
         /*if (digitalRead(pinLimitSwitch) == LOW) {
             delay(50);  //debounce
             if (digitalRead(pinLimitSwitch) == LOW) {

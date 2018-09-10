@@ -119,6 +119,7 @@ ApplicationWatchdog wd(30000, watchdog);
 // pin definitions
 
 // ELECTRON PIN MAPPINGS
+
 int pinAssaySensor_Ready = A0;
 int pinControlSensor_Syn = A1;
 int pinBarcode_Trigger = A2;
@@ -147,7 +148,7 @@ int pinLimitSwitch = D4;
 int pinStepper_Sleep = D5;
 int pinStepper_Dir = D6;
 int pinStepper_Step = D7;
-// int pinBarcode_RX = RX;
+int pinBarcode_RX = RX;
 // int pinUnused = TX;
 
 // global variables
@@ -187,6 +188,8 @@ bool waiting_for_upload_confirmation = false;
 
 bool cartridge_is_heated;
 unsigned long next_sensor_reading_time = 0;
+
+char temperature[3];
 
 // device LED
 // void update_blinking_device_LED(void);
