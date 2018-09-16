@@ -181,7 +181,7 @@ void move_solenoid(int duration) {
 
         /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
 
-        analogWrite(pinSolenoid, 200);
+        analogWrite(pinSolenoid, 168);
         delay(duration);
         analogWrite(pinSolenoid, 0);
 }
@@ -508,11 +508,66 @@ int read_sensors_with_parameters(int integrationTime, int gain, int samples, int
         RGB.control(false);
 
         return 1;
-}
+}*/
 
 int read_sensors() {
-        read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain, 30, 0);
-}*/
+        /*read_sensors_with_parameters(assay.sensor_integration_time, assay.sensor_gain, 30, 0);*/
+        int bytes_received, bytes_sent, msb, lsb, result;
+        unsigned long timeout;
+
+        Serial.println("Attempting to read sensors");
+        Wire.setSpeed(CLOCK_SPEED_400KHZ);
+        Wire.begin();
+        delay(5);
+        if (Wire.isEnabled()) {
+            /*timeout = millis() + 10000;
+            while (digitalRead(pinAssaySensor_Ready) == HIGH && millis() < timeout) {
+                Serial.print(".");
+                delay(200);
+            }
+            if (digitalRead(pinAssaySensor_Ready) == HIGH) {
+                Serial.println("Timeout, sensor never ready");
+            }
+            else {
+                timeout = millis() + 10000;
+                while (digitalRead(pinAssaySensor_Ready) == LOW && millis() < timeout) {
+                    Serial.print(".");
+                    delay(200);
+                }
+                if (digitalRead(pinAssaySensor_Ready) == HIGH) {*/
+                    Serial.println("Sensor starting, sending config");
+                    Wire.beginTransmission(0x74);
+                    bytes_sent = Wire.write(0x00);
+                    bytes_sent += Wire.write(0x03);
+                    result = Wire.endTransmission(true);
+                    Serial.printlnf("Config sent, %d bytes, result: %d", bytes_sent, result);
+
+                    Serial.println("Requesting config");
+                    Wire.beginTransmission(0x74);
+                    bytes_sent = Wire.write(0x00);
+                    result = Wire.endTransmission(false);
+                    Serial.printlnf("Request sent, %d bytes, result: %d", bytes_sent, result);
+
+                    bytes_received = Wire.requestFrom(0x74, 2);
+                    Serial.printlnf("Data ready to read, %d bytes", bytes_received);
+                    if (Wire.available() && bytes_received == 2) {
+                        msb = Wire.read();
+                        delay(200);
+                        lsb = Wire.read();
+                        Serial.printlnf("Data read: msb - %d, lsb - %d, value - %d", msb, lsb, (msb << 8) + lsb);
+                    }
+                /*}
+                else {
+                    Serial.println("Timeout, sensor not read");
+                }
+            }*/
+        }
+        else {
+            Serial.println("Unable to start communication with sensors");
+        }
+
+        Wire.end();
+}
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1310,7 +1365,7 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value) {
 
 void setup() {
         Particle.variable("register", particle_register, STRING);
-        Particle.variable("status", particle_status, STRING);
+        Particle.variable("temperature", &temperature_F, INT);
         /*Particle.variable("powerstatus", &power_status, INT);*/
         Particle.function("command", particle_command);
         device_id_string = System.deviceID();
@@ -1321,17 +1376,17 @@ void setup() {
 
         init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
 
-        init_digital_pin(pinInteriorLED, OUTPUT, LOW);
         init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
 
         init_digital_pin(pinLaserAssay, OUTPUT, LOW);
         init_digital_pin(pinLaserControl, OUTPUT, LOW);
 
-        init_digital_pin(pinAssaySensor_Ready, OUTPUT, LOW);
-        init_digital_pin(pinAssaySensor_Syn, OUTPUT, LOW);
-        init_digital_pin(pinControlSensor_Ready, OUTPUT, LOW);
-        init_digital_pin(pinControlSensor_Syn, OUTPUT, LOW);
+        init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
+        init_digital_pin(pinAssaySensor_Syn, OUTPUT, HIGH);
+        init_digital_pin(pinControlSensor_Ready, INPUT, 0);
+        init_digital_pin(pinControlSensor_Syn, OUTPUT, HIGH);
 
+        init_analog_pin(pinInteriorLED, OUTPUT, 0);
         init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinHeater, OUTPUT, 0);
         init_analog_pin(pinFan, OUTPUT, 0);
@@ -1348,22 +1403,29 @@ void setup() {
                 reset_eeprom();
         }
 
-        /*reset_stage();
-
-        delay(1000);*/
+        /*Serial.println("Resetting stage");
+        reset_stage();
+        delay(1000);
+        Serial.println("Firing solenoid");
         move_solenoid(1000);
-        /*delay(1000);
-        turn_on_both_lasers_for_duration(3000);*/
-        /*delay(1000);
-        tone(pinBuzzer, 4000, 2000);*/
+        delay(1000);
+        Serial.println("Turning on lasers");
+        turn_on_both_lasers_for_duration(3000);
+        Serial.println("Turning on interior LED");
+        analogWrite(pinInteriorLED, 64);
+        delay(1000);
+        analogWrite(pinInteriorLED, 0);
+        delay(1000);
+        Serial.println("Turning on fan");
+        analogWrite(pinFan, 255);
+        delay(1000);
+        analogWrite(pinFan, 0);*/
 
         /*reset_globals();*/
 
         /*initialize_device_state();*/
 
-        temperature[0] = '\0';
-        temperature[1] = '\0';
-        temperature[2] = '\0';
+        temperature_control_timer.start();
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -1594,6 +1656,53 @@ void upload_tests() {
         }
 }*/
 
+void update_temperature() {
+    int bytes_received;
+
+    Wire1.begin();
+    if (Wire1.isEnabled()) {
+        bytes_received = Wire1.requestFrom(0x4B, 2);
+        delay(100);
+        if (Wire1.available() && bytes_received == 2) {
+            temperature_C = Wire1.read();
+            temperature_C_half = Wire1.read() >> 7;
+            temperature_F = ((temperature_C * 9) / 5) + (temperature_C_half ? 33 : 32);
+        }
+        analogWrite(pinInteriorLED, 0);
+    }
+    Wire1.end();
+
+    /*Serial.printlnf("Temperature %d˚F", temperature_F);*/
+}
+
+void control_temperature() {
+    update_temperature();
+
+    /*if (temperature_F > heater_turn_off_threshold_F) {
+        analogWrite(pinHeater, 0);
+        heater_on = false;
+        Serial.print("Heater off – ");
+    }
+    if (temperature_F < heater_turn_on_threshold_F) {
+        analogWrite(pinHeater, 255);
+        heater_on = true;
+        Serial.print("Heater on – ");
+    }
+    analogWrite(pinInteriorLED, heater_on ? 64 : 0);
+
+
+    if (temperature_F > fan_on_off_threshold_F) {
+        analogWrite(pinFan, 255);
+        fan_on = true;
+        Serial.println("Fan on");
+    }
+    if (temperature_F < fan_on_off_threshold_F) {
+        analogWrite(pinFan, 0);
+        fan_on = false;
+        Serial.println("Fan off");
+    }*/
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           LOOP                          //
@@ -1601,64 +1710,8 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-    char id;
-
-    turn_on_assay_laser();
-    delay(250);
-    Wire1.begin();
-    if (!Wire1.isEnabled()) {
-        turn_on_control_laser();
-        delay(250);
-        turn_off_control_laser();
-    }
-    else {
-        Wire1.beginTransmission(0x4B);
-        Wire1.write(7);
-        Wire1.endTransmission();
-        Wire1.requestFrom(0x4B, 1);
-        delay(10);
-        if (!Wire1.available()) {
-            Particle.publish("temp_sensor_id/failed");
-        }
-        else {
-            id = Wire1.read();
-            Particle.publish("temp_sensor_id", String(id));
-        }
-    }
-    Wire1.end();
-    turn_off_assay_laser();
-
-    /*turn_on_assay_laser();
-    analogWrite(pinFan, 255);
-
-    digitalWrite(pinHeater, 255);
-    delay(2000);
-    digitalWrite(pinHeater, 0);
-
-    delay(5000);
-    analogWrite(pinFan, 0);
-    turn_off_assay_laser();*/
-
+    read_sensors();
     delay(10000);
-
-        /*if (digitalRead(pinLimitSwitch) == LOW) {
-            delay(50);  //debounce
-            if (digitalRead(pinLimitSwitch) == LOW) {
-                if (fan_on) {
-                    digitalWrite(pinLaserAssay, LOW);
-                    digitalWrite(pinLaserControl, LOW);
-                }
-                else {
-                    digitalWrite(pinLaserAssay, HIGH);
-                    digitalWrite(pinLaserControl, HIGH);
-                }
-                fan_on = !fan_on;
-                while (digitalRead(pinLimitSwitch) == LOW) {
-                    delay(100);
-                }
-            }
-        }*/
-
         /*if (callback_complete) {
             Serial.println("Processing callback");
             process_callback_buffer();

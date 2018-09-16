@@ -87,9 +87,8 @@
 // battery
 #define BATTERY_CONVERSION_FACTOR 34
 
-// cartridge heater
-#define CARTRIDGE_HEATER_TEST_START_RED_THRESHOLD 8600
-#define CARTRIDGE_HEATER_TEST_START_CHECK_PERIOD 2000
+// temperature control system
+#define TEMPERATURE_CONTROL_INTERVAL 2000
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 1047
@@ -154,16 +153,12 @@ int pinBarcode_RX = RX;
 // global variables
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 int power_status = 0;
-bool fan_on = false;
 unsigned long next_upload;
 unsigned long validation_timeout;
 unsigned long start_timeout;
 unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
-
-// power management unit - used to turn off blinking red light
-PMIC _pmic;
 
 // device state
 bool device_open = false;
@@ -189,30 +184,16 @@ bool waiting_for_upload_confirmation = false;
 bool cartridge_is_heated;
 unsigned long next_sensor_reading_time = 0;
 
-char temperature[3];
-
-// device LED
-// void update_blinking_device_LED(void);
-// Timer device_LED_timer(DEVICE_LED_BLINK_DELAY_DEFAULT, update_blinking_device_LED);
-struct DeviceLED {
-    bool blinking;
-    bool currently_on;
-    unsigned int blink_rate;
-    unsigned long blink_timeout;
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-
-    DeviceLED() {
-      blinking = false;
-      currently_on = false;
-      blink_rate = DEVICE_LED_BLINK_DELAY_DEFAULT;
-      blink_timeout = 0;
-      red = 0;
-      green = 0;
-      blue = 0;
-    }
-} device_LED;
+// temperature control system
+int temperature_C, temperature_C_half;
+int temperature_F;
+int heater_turn_off_threshold_F = 100;
+int heater_turn_on_threshold_F = 98;
+int fan_on_off_threshold_F = 102;
+bool heater_on = false;
+bool fan_on = false;
+void control_temperature(void);
+Timer temperature_control_timer(TEMPERATURE_CONTROL_INTERVAL, control_temperature);
 
 // sensors
 TCS34725 tcsAssay;
