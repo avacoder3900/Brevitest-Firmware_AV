@@ -1,10 +1,10 @@
-#include "TCS34725.h"
-
+// #include "TCS34725.h"
+//
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 3
-#define DATA_FORMAT_VERSION 10
+#define FIRMWARE_VERSION 5
+#define DATA_FORMAT_VERSION 11
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -31,6 +31,7 @@
 #define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
 #define SENSOR_DEFAULT_IT_DELAY 50
 #define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
+#define SENSOR_DEFAULT_PARAM 0xAB
 
 // lasers
 #define LASER_WARMUP_DELAY_MS 1000
@@ -72,7 +73,7 @@
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
 #define BARCODE_DELAY_AFTER_TRIGGER_MS 50
 #define BARCODE_READ_TIMEOUT 2000
-#define VALIDATE_CARTRIDGE_TIMEOUT 10000
+#define VALIDATE_CARTRIDGE_TIMEOUT 20000
 
 // stepper
 #define CUMULATIVE_STEP_LIMIT 11000
@@ -81,7 +82,7 @@
   //#define STEPS_TO_MICROBEAD_WELL 1300
 
   //Well #2  - steps to the proximal edge of microbead well
-#define STEPS_TO_MICROBEAD_WELL 2300
+#define STEPS_TO_MICROBEAD_WELL 2500
 // #define STEPS_TO_FINAL_READ_POSITION 4400
 
 // battery
@@ -106,7 +107,7 @@
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
-#define TIMEOUT_START 10000
+#define TIMEOUT_START 20000
 #define TIMEOUT_CANCEL 10000
 #define TIMEOUT_FINISH 10000
 #define TIMEOUT_UPLOAD 20000
@@ -196,14 +197,9 @@ void control_temperature(void);
 Timer temperature_control_timer(TEMPERATURE_CONTROL_INTERVAL, control_temperature);
 
 // sensors
-TCS34725 tcsAssay;
-TCS34725 tcsControl;
 unsigned long last_sensor_reading_time = 0;
 bool read_sensors_command_flag = false;
-int read_sensors_command_integration_time;
-int read_sensors_command_gain;
-int read_sensors_samples;
-int read_sensors_blink;
+int read_sensors_command_param;
 
 // progress
 int test_progress;
@@ -231,8 +227,13 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-BrevitestSensorSampleRecord assay_buffer[SENSOR_NUMBER_OF_SAMPLES];
-BrevitestSensorSampleRecord control_buffer[SENSOR_NUMBER_OF_SAMPLES];
+struct BrevitestSensorSampleRecord {        // 12 bytes
+    unsigned long sample_time;
+    uint16_t red;
+    uint16_t green;
+    uint16_t blue;
+    uint16_t temperature;
+} assay_buffer[SENSOR_NUMBER_OF_SAMPLES], control_buffer[SENSOR_NUMBER_OF_SAMPLES];
 
 struct Param {      // 32 bytes
   uint16_t reset_steps;
@@ -254,7 +255,15 @@ struct Param {      // 32 bytes
   }
 };
 
-BrevitestSensorRecord sensor_reading, sensor_state;
+struct BrevitestSensorRecord {  // 14 bytes
+    char channel;
+    uint8_t samples;
+    unsigned long time_ms;
+    uint16_t red;
+    uint16_t green;
+    uint16_t blue;
+    uint16_t temperature;
+} sensor_reading, sensor_state;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;
