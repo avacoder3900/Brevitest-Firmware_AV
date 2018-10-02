@@ -397,6 +397,77 @@ void update_blinking_device_LED() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                          FAN                            //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void turn_on_fan() {
+    Serial.println("Turning on fan");
+    pinMode(pinFan, OUTPUT);
+    analogWrite(pinFan, 255);
+}
+
+void turn_off_fan() {
+    Serial.println("Turning off fan");
+    analogWrite(pinFan, 0);
+}
+
+void turn_on_fan_for_duration(int duration) {
+    turn_on_fan();
+    delay(duration);
+    turn_off_fan();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                        HEATER                           //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void turn_on_heater() {
+    Serial.println("Turning on heater");
+    pinMode(pinInteriorLED, INPUT);
+    pinMode(pinHeater, OUTPUT);
+    analogWrite(pinHeater, 106);
+}
+
+void turn_off_heater() {
+    Serial.println("Turning off heater");
+    analogWrite(pinHeater, 0);
+}
+
+void turn_on_heater_for_duration(int duration) {
+    turn_on_heater();
+    delay(duration);
+    turn_off_heater();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                    INTERIOR LED                         //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void turn_on_interior_led() {
+    Serial.println("Turning on interior LED");
+    pinMode(pinHeater, INPUT);
+    pinMode(pinInteriorLED, OUTPUT);
+    analogWrite(pinInteriorLED, 255);
+}
+
+void turn_off_interior_led() {
+    Serial.println("Turning off interior LED");
+    analogWrite(pinInteriorLED, 0);
+}
+
+void turn_on_interior_led_for_duration(int duration) {
+    turn_on_interior_led();
+    delay(duration);
+    turn_off_interior_led();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                        LASERS                           //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1409,11 +1480,11 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
-        case 6: // set integration time
-            /*read_sensors_command_integration_time = param1;*/
+        case 6: // turn on heater
+            turn_on_heater_for_duration(param1);
             return 1;
-        case 7: // set gain
-            /*read_sensors_command_gain = param1;*/
+        case 7: // turn on fan
+            turn_on_fan_for_duration(param1);
             return 1;
         case 8: // reset params
             reset_eeprom();
@@ -1503,28 +1574,23 @@ void setup() {
 
         Serial.println("Resetting stage");
         reset_stage();
-        delay(1000);
+
         Serial.println("Firing solenoid");
         move_solenoid(1000);
-        delay(1000);
+
         Serial.println("Turning on lasers");
         turn_on_both_lasers_for_duration(1000);
-        Serial.println("Turning on interior LED");
-        analogWrite(pinInteriorLED, 64);
-        delay(1000);
-        analogWrite(pinInteriorLED, 0);
-        delay(1000);
-        Serial.println("Turning on fan");
-        analogWrite(pinFan, 255);
-        delay(3000);
-        analogWrite(pinFan, 0);
-        Serial.println("Turning on heater");
-        analogWrite(pinHeater, 255);
-        delay(2000);
-        analogWrite(pinHeater, 0);
 
-        tone(pinBuzzer, 4000, 2000);
-        
+        turn_on_interior_led_for_duration(2000);
+
+        turn_on_fan_for_duration(3000);
+
+        turn_on_heater_for_duration(2000);
+
+        Serial.println("Testing buzzer");
+        tone(pinBuzzer, 3000, 2000);
+
+        Serial.println("Scanning barcode");
         scan_barcode();
 
         /*initialize_device_state();*/
@@ -1923,12 +1989,6 @@ void loop() {
             }
         }
 
-        /*Serial.println("Turning on heater");
-        analogWrite(pinHeater, 255);
-        delay(2000);
-        analogWrite(pinHeater, 0);
-
-        delay (10000);*/
         /*if (update_battery_life) {
             update_battery_life = false;
             calculate_power_status();
