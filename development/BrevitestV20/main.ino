@@ -1518,6 +1518,14 @@ void setup() {
         analogWrite(pinFan, 255);
         delay(3000);
         analogWrite(pinFan, 0);
+        Serial.println("Turning on heater");
+        analogWrite(pinHeater, 255);
+        delay(2000);
+        analogWrite(pinHeater, 0);
+
+        tone(pinBuzzer, 4000, 2000);
+        
+        scan_barcode();
 
         /*initialize_device_state();*/
 
@@ -1847,8 +1855,6 @@ void loop() {
             }
         }
         else {
-            /*check_device_state();*/
-
             if (waiting_for_start_confirmation && millis() > start_timeout) {
                 start_test();
                 return;
@@ -1856,11 +1862,9 @@ void loop() {
 
             if (test_startup_successful) {
                 if (millis() > next_sensor_reading_time) {
-                    /*check_assay_sensor_state(true);
-                    Serial.printlnf("Waiting for cartridge to heat - target: %d, reading: %d", eeprom.param.start_test_heat_red_threshold, sensor_state.red);
-                    tcsAssay.end();*/
+                    // check indicator well color
                 }
-                /*if (cartridge_is_heated) {*/
+                if (cartridge_is_heated) {
                     test_startup_successful = false;
                     if (device_open) {
                         cancelling_test = true;
@@ -1869,7 +1873,7 @@ void loop() {
                         run_test();
                     }
                     return;
-                /*}*/
+                }
             }
 
             if (waiting_for_validation) {
@@ -1886,9 +1890,6 @@ void loop() {
                         validate_cartridge();
                     }
                     else {
-                        /*stop_blinking_device_LED();
-                        set_device_LED_color(255, 0, 0);    // bad cartridge uuid
-                        turn_on_device_LED();*/
                         cartridge_validated = false;
                     }
                 }
@@ -1922,6 +1923,12 @@ void loop() {
             }
         }
 
+        /*Serial.println("Turning on heater");
+        analogWrite(pinHeater, 255);
+        delay(2000);
+        analogWrite(pinHeater, 0);
+
+        delay (10000);*/
         /*if (update_battery_life) {
             update_battery_life = false;
             calculate_power_status();
