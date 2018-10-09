@@ -25,12 +25,6 @@
 
 // sensors
 #define SENSOR_NUMBER_OF_SAMPLES 3
-#define SENSOR_WARMUP_DELAY_MS 1000
-#define SENSOR_NUMBER_ASSAY 1
-#define SENSOR_NUMBER_CONTROL 0
-#define SENSOR_DEFAULT_INTEGRATION_TIME TCS34725_INTEGRATIONTIME_50MS
-#define SENSOR_DEFAULT_IT_DELAY 50
-#define SENSOR_DEFAULT_GAIN TCS34725_GAIN_16X
 #define SENSOR_DEFAULT_PARAM 0xAB
 
 // lasers
@@ -38,10 +32,6 @@
 
 // assay
 #define ASSAY_BCODE_CAPACITY 2000
-
-// timers
-#define DEVICE_STATE_CHECK_PERIOD 1000
-#define BATTERY_CHECK_PERIOD 2000
 
 // params
 #define PARAM_NUMBER_INDEX 2
@@ -64,11 +54,6 @@
 #define STATUS(...) snprintf(particle_status, STATUS_LENGTH, __VA_ARGS__)
 #define TEST_DURATION_LENGTH 6
 
-// device LED
-#define DEVICE_LED_BLINK_DELAY_DEFAULT 500
-#define DEVICE_LED_BLINK_DELAY_CLAIMED 100
-#define DEVICE_LED_BLINK_NO_TIMEOUT 0
-
 // barcode scanner
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
 #define BARCODE_DELAY_AFTER_TRIGGER_MS 50
@@ -85,11 +70,13 @@
 #define STEPS_TO_MICROBEAD_WELL 2500
 // #define STEPS_TO_FINAL_READ_POSITION 4400
 
-// battery
-#define BATTERY_CONVERSION_FACTOR 34
-
 // temperature control system
-#define TEMPERATURE_CONTROL_INTERVAL 2000
+#define TEMPERATURE_CONTROL_INTERVAL 5000
+#define TEMPERATURE_PIN_VALUE 96
+#define TEMPERATURE_PWM_FREQUENCY 500
+#define TEMPERATURE_HEATER_OFF_THRESHOLD 100
+#define TEMPERATURE_HEATER_ON_THRESHOLD 98
+#define TEMPERATURE_FAN_ON_OFF_THRESHOLD 102
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 1047
@@ -98,12 +85,7 @@
 #define UPLOAD_INTERVAL 20000
 
 // state
-#define STATE_SENSOR_STARTUP_DELAY 200
-#define STATE_SENSOR_LED_POWER 200
-#define STATE_SENSOR_LED_DELAY 200
-#define STATE_DEVICE_OPEN_THRESHOLD 10
-// #define STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD 16500  - white sensor body
-#define STATE_DEVICE_CARTRIDGE_CLEAR_THRESHOLD 500
+#define STATE_CARTRIDGE_LOADED_THRESHOLD 16500
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
@@ -121,7 +103,7 @@ ApplicationWatchdog wd(30000, watchdog);
 // ELECTRON PIN MAPPINGS
 
 int pinAssaySensor_Ready = A0;
-int pinControlSensor_Syn = A1;
+// int pinUnused = A1;
 int pinBarcode_Trigger = A2;
 int pinLaserAssay = A3;
 int pinSolenoid = A4;
@@ -133,7 +115,7 @@ int pinFan = B1;
 int pinControlSensor_Ready = B2;
 // int pinUnused = B3;
 // int pinUnused = B4;
-int pinAssaySensor_Syn = B5;
+int pinDoorOpen = B5;
 // int pinUnused = C0;
 // int pinUnused = C1;
 int pinGPS_RX = C2;
@@ -162,7 +144,8 @@ unsigned long finish_timeout;
 unsigned long upload_timeout;
 
 // device state
-bool device_open = false;
+volatile bool door_state_changed = false;
+bool door_open = false;
 bool cartridge_loaded = false;
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;
@@ -186,11 +169,7 @@ bool cartridge_is_heated;
 unsigned long next_sensor_reading_time = 0;
 
 // temperature control system
-int temperature_C, temperature_C_half;
-int temperature_F;
-int heater_turn_off_threshold_F = 100;
-int heater_turn_on_threshold_F = 98;
-int fan_on_off_threshold_F = 102;
+int temperature_C, temperature_C_half, temperature_F;
 bool heater_on = false;
 bool fan_on = false;
 void control_temperature(void);
@@ -249,7 +228,7 @@ struct Param {      // 32 bytes
     step_delay_us = 800;
     steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
-    solenoid_power = 0xFF6C;    // surge = 255, sustain = 108
+    solenoid_power = 0xA86C;    // surge = 168, sustain = 108
     solenoid_surge_period_ms = 150;
     start_test_heat_red_threshold = 7180;
   }
@@ -263,7 +242,7 @@ struct BrevitestSensorRecord {  // 14 bytes
     uint16_t green;
     uint16_t blue;
     uint16_t temperature;
-} sensor_reading, sensor_state;
+} state_reading;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;
