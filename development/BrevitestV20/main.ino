@@ -337,6 +337,17 @@ int scan_barcode() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                        BUZZER                           //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void turn_on_buzzer_for_duration(int frequency, int duration) {
+    Serial.printlnf("Turning on buzzer at frequency %d for duration %d", frequency, duration);
+    tone(pinBuzzer, frequency, duration);
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                          FAN                            //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1327,17 +1338,17 @@ int particle_command(String arg) {
             }
             read_sensors_command_param = param1;
             read_sensors_command_flag = true;
-            return 1;
+            return param1;
         case 5: // change threshold
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
         case 6: // turn on heater
             turn_on_heater_for_duration(param1);
-            return 1;
+            return param1;
         case 7: // turn on fan
             turn_on_fan_for_duration(param1);
-            return 1;
+            return param1;
         case 8: // reset params
             reset_eeprom();
             return (int) eeprom.data_format_version;
@@ -1363,6 +1374,9 @@ int particle_command(String arg) {
             }
             turn_on_both_lasers_for_duration(param1);
             return param1;
+        case 13: // turn on buzzer param1 frequency param2 duration
+            turn_on_buzzer_for_duration(param1, param2);
+            return 1;
 }
 
     return 0;
@@ -1492,7 +1506,7 @@ void setup() {
         turn_on_heater_for_duration(1000);
 
         Serial.println("Testing buzzer");
-        tone(pinBuzzer, 3000, 2000);
+        turn_on_buzzer_for_duration(3000, 2000);
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
@@ -1678,9 +1692,7 @@ void control_temperature() {
             RGB.control(true);
             RGB.color(255, 0, 0);
 
-            turn_on_heater();
-            delay(2000);
-            turn_off_heater();
+            turn_on_heater_for_duration(2000);
 
             RGB.control(false);
         }
@@ -1691,10 +1703,6 @@ void control_temperature() {
         if (temperature_F < TEMPERATURE_FAN_ON_OFF_THRESHOLD) {
             turn_off_fan();
         }
-    }
-    else {
-        turn_off_heater();
-        turn_off_fan();
     }
 }
 
