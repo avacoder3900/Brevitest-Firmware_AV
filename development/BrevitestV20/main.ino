@@ -386,7 +386,7 @@ void turn_on_heater() {
         Serial.println("Turning on heater");
         pinMode(pinInteriorLED, INPUT);
         pinMode(pinHeater, OUTPUT);
-        analogWrite(pinHeater, TEMPERATURE_PIN_VALUE, TEMPERATURE_PWM_FREQUENCY);
+        analogWrite(pinHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
         heater_on = true;
     }
 }
@@ -478,20 +478,155 @@ void turn_on_both_lasers_for_duration(int duration) {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//               ASSAY AND CONTROL SENSORS                 //
+//               CONTROLLER SENSOR STATUS                  //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void config_sensor(char sensor_code, int param, int addr) {
+bool enable_controller_sensors(bool force_read) {
+    if (Wire1.isEnabled()) {
+        return true;
+    }
+
+    if (Wire.isEnabled()) { // is other I2C bus busy?
+        if (force_read) {    // kill optical sensor bus if forced read
+            Wire.end();
+            pinMode(pinOpticalSensor_SCL, INPUT);
+            pinMode(pinOpticalSensor_SDA, INPUT);
+        }
+        else {
+            return false;
+        }
+    }
+
+    Wire1.setSpeed(CLOCK_SPEED_100KHZ);
+    Wire1.begin();
+    delay(100);
+
+    return Wire1.isEnabled();
+}
+
+void disable_controller_sensors() {
+    Wire1.end();
+    pinMode(pinControllerSensor_SCL, INPUT);
+    pinMode(pinControllerSensor_SDA, INPUT);
+}
+
+void read_all_controller_sensors() {
+    if (enable_controller_sensors(false)) {
+        imu_read();
+        peltier_temperature_read();
+        led_temperature_read('A');
+        led_temperature_read('C');
+
+        disable_controller_sensors();
+
+        /*if (cartridge_loaded) {
+            if (temperature_F > PELTIER_OFF_THRESHOLD) {
+                turn_off_heater();
+            }
+            if (temperature_F < PELTIER_ON_THRESHOLD) {
+                RGB.control(true);
+                RGB.color(255, 0, 0);
+
+                turn_on_heater_for_duration(2000);
+
+                RGB.control(false);
+            }
+
+            if (temperature_F > FAN_ON_OFF_THRESHOLD) {
+                turn_on_fan();
+            }
+            if (temperature_F < FAN_ON_OFF_THRESHOLD) {
+                turn_off_fan();
+            }
+        }*/
+    }
+    else {
+        Serial.printlnf("Controller I2C busy, read skipped");
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                  PELTIER TEMPERATURE                    //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void peltier_temperature_read() {
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                    LED TEMPERATURES                     //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void led_temperature_read(char channel) {
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                INERTIAL MEASUREMENT UNIT                //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void imu_config() {
     int bytes_sent, result;
 
-    /*Serial.printlnf("Configuring sensor %c", sensor_code);*/
+    /*Serial.printlnf("Configuring IMU");*/
+    Wire1.beginTransmission(IMU_ADDR);
+    bytes_sent = Wire1.write(IMU_REGISTER_CONFIG);
+    bytes_sent = Wire1.write(IMU_CONFIG_VALUE);
+    result = Wire1.endTransmission(true);
+    if (result != 0) {
+        Serial.printlnf("IMU config register, %d bytes, result: %d", bytes_sent, result);
+    }
+}
+
+void imu_read() {
+    int bytes_received, bytes_sent, result, read_lsb, read_msb, indx;
+
+    Serial.println("Reading IMU");
+    Wire1.beginTransmission(IMU_ADDR);
+    bytes_sent = Wire1.write(IMU_REGISTER_DATA);
+    result = Wire1.endTransmission();
+    if (result != 0) {
+        Serial.printlnf("IMU register %d, %d bytes sent, result: %d", IMU_REGISTER_DATA, bytes_sent, result);
+    }
+    bytes_received = Wire1.requestFrom(IMU_ADDR, 12);
+    delay(100);
+    if (Wire1.available() && bytes_received == 12) {
+        for (indx = 0; indx < 12; indx++) {
+            read_lsb = Wire1.read();
+            Serial.printf("%X ", read_lsb);
+        }
+        Serial.println();
+        /*read_msb = Wire1.read();*/
+        /*thermocouple_C = read_msb;
+        thermocouple_C <<= 4;
+        thermocouple_C += thermocouple_LB >> 4;
+        if ((thermocouple_UB & 0x80) == 0x80) {  // T < 0˚C
+            thermocouple_C = 1024 - thermocouple_C;
+        }*/
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                    OPTICAL SENSORS                      //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void config_optical_sensors(char channel, int param, int addr) {
+    int bytes_sent, result;
+
+    /*Serial.printlnf("Configuring optical sensor %c", channel);*/
     Wire.beginTransmission(addr);
     bytes_sent = Wire.write(0x00);
     bytes_sent += Wire.write(0x02);
     result = Wire.endTransmission(true);
     if (result != 0) {
-        Serial.printlnf("Config, %d bytes, result: %d", bytes_sent, result);
+        Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
     }
 
     Wire.beginTransmission(addr);
@@ -499,7 +634,7 @@ void config_sensor(char sensor_code, int param, int addr) {
     bytes_sent += Wire.write(param);
     result = Wire.endTransmission(true);
     if (result != 0) {
-        Serial.printlnf("Config, %d bytes, result: %d", bytes_sent, result);
+        Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
     }
 
     Wire.beginTransmission(addr);
@@ -507,27 +642,27 @@ void config_sensor(char sensor_code, int param, int addr) {
     bytes_sent += Wire.write(0x83);
     result = Wire.endTransmission(true);
     if (result != 0) {
-        Serial.printlnf("Config, %d bytes, result: %d", bytes_sent, result);
+        Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
     }
 }
 
-void get_data_from_one_sensor(char sensor_code, int param, bool is_a_test) {
+void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     int bytes, result;
     int addr, lsb, msb, ready_pin;
     int config, stat, tempC, tempF, x, y, z;
     unsigned long timeout;
-    BrevitestSensorRecord *reading;
+    BrevitestOpticalSensorRecord *reading;
 
     if (is_a_test) {
         reading = &(test_record.reading[test_record.number_of_readings]);
     }
     else {
-        reading = &state_reading;
+        reading = &optical_state_reading;
     }
 
     reading->red = reading->green = reading->blue = reading->temperature = reading->time_ms = reading->samples = 0;
 
-    if (sensor_code == 'A') {
+    if (channel == 'A') {
         addr = 0x74;
         ready_pin = pinAssaySensor_Ready;
         turn_on_assay_laser();
@@ -540,7 +675,7 @@ void get_data_from_one_sensor(char sensor_code, int param, bool is_a_test) {
 
     delay(50); // warm up laser
 
-    config_sensor(sensor_code, param, addr);
+    config_optical_sensors(channel, param, addr);
     timeout = millis() + 200;
     while (digitalRead(ready_pin) == HIGH && millis() < timeout) {
         Serial.print(".");
@@ -553,10 +688,10 @@ void get_data_from_one_sensor(char sensor_code, int param, bool is_a_test) {
     }
     turn_off_both_lasers();
     if (digitalRead(ready_pin) == LOW) {
-        Serial.println("Timeout, sensor read not completed");
+        Serial.printlnf("Timeout, optical sensor %c read not completed", channel);
     }
     else {
-        /*Serial.println("Starting sensor data read");*/
+        /*Serial.printlnf("Starting optical sensor data %c read", channel);*/
         Wire.beginTransmission(addr);
         bytes = Wire.write(0x00);
         result = Wire.endTransmission(false);
@@ -590,7 +725,7 @@ void get_data_from_one_sensor(char sensor_code, int param, bool is_a_test) {
             msb = Wire.read();
             z = (msb << 8) + lsb;
 
-            reading->channel = sensor_code;
+            reading->channel = channel;
             reading->red = x;
             reading->green = y;
             reading->blue = z;
@@ -598,44 +733,52 @@ void get_data_from_one_sensor(char sensor_code, int param, bool is_a_test) {
             reading->time_ms = millis();
             reading->samples = 1;
 
-            Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", sensor_code, config, stat, tempC, tempF, x, y, z);
+            Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, config, stat, tempC, tempF, x, y, z);
         }
     }
 }
 
-bool enable_sensors() {
-    if (Wire1.isEnabled()) {    // kill temperature measure if underway
-        Wire1.end();
-        pinMode(pinMain_SCL, INPUT);
-        pinMode(pinMain_SDA, INPUT);
+bool enable_optical_sensors(bool force_read) {
+    if (Wire.isEnabled()) {
+        return true;
     }
-    /*Serial.println("Attempting to read sensors");*/
+
+    if (Wire1.isEnabled()) {    // is other I2C bus busy?
+        if (force_read) {    // kill controller sensor bus if forced read
+            Wire1.end();
+            pinMode(pinControllerSensor_SCL, INPUT);
+            pinMode(pinControllerSensor_SDA, INPUT);
+        }
+        else {
+            return false;
+        }
+    }
+    /*Serial.println("Attempting to read optical sensors");*/
     Wire.setSpeed(CLOCK_SPEED_400KHZ);
-    Wire.stretchClock(false);
     Wire.begin();
     delay(100);
 
     return Wire.isEnabled();
 }
 
-void disable_sensors() {
+void disable_optical_sensors() {
     Wire.end();
-    pinMode(pinSensor_SCL, INPUT);
-    pinMode(pinSensor_SDA, INPUT);
+    pinMode(pinOpticalSensor_SCL, INPUT);
+    pinMode(pinOpticalSensor_SDA, INPUT);
 }
 
-void read_sensors(int param) {
+void read_optical_sensors(int param) {
         unsigned long elapsed = millis();
 
-        if (enable_sensors()) {
-            get_data_from_one_sensor('A', param, true);
-            get_data_from_one_sensor('C', param, true);
+        if (enable_optical_sensors(true)) {
+            get_data_from_one_optical_sensor('A', param, true);
+            get_data_from_one_optical_sensor('C', param, true);
         }
         else {
-            Serial.println("Unable to start communication with sensors");
+            Serial.println("Unable to start communication with optical sensors");
         }
 
-        disable_sensors();
+        disable_optical_sensors();
 
         Serial.printlnf("Elapsed time: %u", millis() - elapsed);
 }
@@ -678,10 +821,10 @@ bool load_assay_record(char *cartridgeId, char *assayString) {
     test_record.number_of_readings = 0;
 
     assay.duration = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
-    assay.sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
-    assay.sensor_gain = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+    assay.optical_sensor_integration_time = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+    assay.optical_sensor_gain = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     assay.reserved = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
-    assay.delay_between_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
+    assay.delay_between_optical_sensor_readings_ms = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     assay.BCODE_length = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     assay.BCODE_version = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
     crc_loaded = extract_int_from_delimited_string(assayString, &indx, TAB_DELIM);
@@ -952,7 +1095,7 @@ void write_test_record_to_eeprom() {
         process_test_record(test_index);
 }
 
-int append_test_reading(int start, BrevitestSensorRecord *reading) {
+int append_test_reading(int start, BrevitestOpticalSensorRecord *reading) {
     return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\n", \
         reading->channel, reading->time_ms, reading->red, reading->green, reading->blue, reading->temperature);
 }
@@ -1136,12 +1279,9 @@ int process_one_BCODE_command(int cmd, int index) {
                 update_progress("Rastering magnets", param1);
                 move_solenoid(param1);
                 break;
-        case 4: // Device LED on white
-                /*set_device_LED_color(255, 255, 255);
-                turn_on_device_LED();*/
+        case 4: // unused
                 break;
-        case 5: // Device LED off
-                /*turn_off_device_LED();*/
+        case 5: // unused
                 break;
         case 6: // Device LED on with color
                 index = get_BCODE_token(index, &param1); // red
@@ -1150,22 +1290,16 @@ int process_one_BCODE_command(int cmd, int index) {
                 /*set_device_LED_color((uint8_t) param1, (uint8_t) param2, (uint8_t) param3);
                 turn_on_device_LED();*/
                 break;
-        case 7: // Sensor LED on(power)
-                /*index = get_BCODE_token(index, &param1);
-                analogWrite(pinSensorLED, param1);*/
+        case 7: // unused
                 break;
-        case 8: // Sensor LED off
-                /*analogWrite(pinSensorLED, 0);*/
+        case 8: // unused
                 break;
-        case 9: // Read sensors with default values
-                read_sensors(SENSOR_DEFAULT_PARAM);
+        case 9: // Read optical sensors with default values
+                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM);
                 break;
-        case 10: // Read sensors with parameters
-                index = get_BCODE_token(index, &param1); // integration time
-                /*index = get_BCODE_token(index, &param2); // gain
-                index = get_BCODE_token(index, &param3); // samples
-                index = get_BCODE_token(index, &param4); // blink*/
-                read_sensors(param1);
+        case 10: // Read optical sensors with parameters
+                index = get_BCODE_token(index, &param1); // params
+                read_optical_sensors(param1);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
@@ -1331,13 +1465,13 @@ int particle_command(String arg) {
         case 3: // move steps
             wake_move_sleep_stepper(param1, param2);
             return cumulative_steps;
-        case 4: // read sensors (param)
+        case 4: // read optical sensors (param)
             steps_to_alignment = STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
             if (cumulative_steps != steps_to_alignment) {
                 wake_move_sleep_stepper(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
             }
-            read_sensors_command_param = param1;
-            read_sensors_command_flag = true;
+            read_optical_sensors_command_param = param1;
+            read_optical_sensors_command_flag = true;
             return param1;
         case 5: // change threshold
             eeprom.param.start_test_heat_red_threshold = param1;
@@ -1402,11 +1536,11 @@ void check_device_state() {
         cartridge_loaded = false;
     }
     else {
-        if (enable_sensors()) {
-            get_data_from_one_sensor('A', SENSOR_DEFAULT_PARAM, false);
-            cartridge_loaded = state_reading.red < STATE_CARTRIDGE_LOADED_THRESHOLD;
+        if (enable_optical_sensors(false)) {
+            get_data_from_one_optical_sensor('A', CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD, false);
+            cartridge_loaded = optical_state_reading.red < CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD;
+            disable_optical_sensors();
         }
-        disable_sensors();
     }
 
     Serial.printlnf("Door open? %c, Cartridge loaded? %c", door_open ? 'Y' : 'N',  cartridge_loaded ? 'Y' : 'N');
@@ -1449,6 +1583,23 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value) {
     }
 }
 
+void controller_i2c_bus_scan() {
+    int addr, bytes_sent, result;
+
+    if (enable_controller_sensors(true)) {
+        Serial.println("Starting I2C bus scan");
+        for (addr = 0; addr < 127; addr++) {
+            Wire1.beginTransmission(addr);
+            bytes_sent = Wire1.write(0x00);
+            result = Wire1.endTransmission();
+            if (result == 0) {
+                Serial.printlnf("I2C device found at address %X", addr);
+            }
+        }
+    }
+    disable_controller_sensors();
+}
+
 void setup() {
         Particle.variable("register", particle_register, STRING);
         Particle.variable("temperature", &temperature_F, INT);
@@ -1470,6 +1621,10 @@ void setup() {
         init_digital_pin(pinLaserAssay, OUTPUT, LOW);
         init_digital_pin(pinLaserControl, OUTPUT, LOW);
 
+        init_analog_pin(pinPeltierThermistor, INPUT, 0);
+        init_analog_pin(pinAssayThermistor, INPUT, 0);
+        init_analog_pin(pinControlThermistor, INPUT, 0);
+
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
@@ -1490,36 +1645,38 @@ void setup() {
             reset_eeprom();
         }
 
-        Serial.println("Resetting stage");
+        /*Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
         move_solenoid(1000);
 
         Serial.println("Turning on lasers");
-        turn_on_both_lasers_for_duration(1000);
+        turn_on_both_lasers_for_duration(1000);*/
 
         turn_on_interior_led_for_duration(2000);
 
-        turn_on_fan_for_duration(3000);
+        /*turn_on_fan_for_duration(3000);
 
         turn_on_heater_for_duration(1000);
 
         Serial.println("Testing buzzer");
-        turn_on_buzzer_for_duration(3000, 2000);
+        turn_on_buzzer_for_duration(3000, 2000);*/
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
 */
 
         reset_globals();
-        temperature_control_timer.start();
+        read_all_controller_sensors_timer.start();
 
         check_device_state();
         attachInterrupt(pinDoorOpen, door_open_interrupt, CHANGE);
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
+
+        controller_i2c_bus_scan();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1533,7 +1690,7 @@ void reset_globals() {
         test_startup_successful = false;
         cartridge_validated = false;
         callback_complete = false;
-        reading_sensors = false;
+        reading_optical_sensors = false;
 
         test_progress = 0;
         test_percent_complete = 0;
@@ -1653,59 +1810,6 @@ void upload_tests() {
         }
 }
 
-void update_temperature() {
-    int bytes_received;
-
-    /*Serial.println("Updating temperature");*/
-
-    if (Wire.isEnabled()) {
-        Serial.println("I2C bus busy, temperature update skipped");
-    }
-    else {
-        Wire1.setSpeed(CLOCK_SPEED_100KHZ);
-        Wire1.stretchClock(true);
-        Wire1.begin();
-        if (Wire1.isEnabled()) {
-            bytes_received = Wire1.requestFrom(0x4B, 2);
-            delay(100);
-            if (Wire1.available() && bytes_received == 2) {
-                temperature_C = Wire1.read();
-                temperature_C_half = Wire1.read() >> 7;
-                temperature_F = ((temperature_C * 9) / 5) + (temperature_C_half ? 33 : 32);
-                Serial.printlnf("Temperature %d˚F", temperature_F);
-            }
-        }
-        Wire1.end();
-        pinMode(pinMain_SCL, INPUT);
-        pinMode(pinMain_SDA, INPUT);
-    }
-}
-
-void control_temperature() {
-    update_temperature();
-
-    if (cartridge_loaded) {
-        if (temperature_F > TEMPERATURE_HEATER_OFF_THRESHOLD) {
-            turn_off_heater();
-        }
-        if (temperature_F < TEMPERATURE_HEATER_ON_THRESHOLD) {
-            RGB.control(true);
-            RGB.color(255, 0, 0);
-
-            turn_on_heater_for_duration(2000);
-
-            RGB.control(false);
-        }
-
-        if (temperature_F > TEMPERATURE_FAN_ON_OFF_THRESHOLD) {
-            turn_on_fan();
-        }
-        if (temperature_F < TEMPERATURE_FAN_ON_OFF_THRESHOLD) {
-            turn_off_fan();
-        }
-    }
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           LOOP                          //
@@ -1713,112 +1817,106 @@ void control_temperature() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-    /*read_sensors(0xAB);
-    delay(10000);*/
-    /*turn_on_interior_led_for_duration(200);
-    scan_barcode();
-    delay(10000);*/
+    if (callback_complete) {
+        Serial.println("Processing callback");
+        process_callback_buffer();
+        return;
+    }
 
-        if (callback_complete) {
-            Serial.println("Processing callback");
-            process_callback_buffer();
+    if (door_state_changed) {
+        Serial.println("Door open state changed");
+        check_device_state();
+    }
+
+    if (test_in_progress) {
+        if (cancelling_test) {
+            cancelling_test = false;
+            cancel_test();
             return;
         }
 
-        if (door_state_changed) {
-            Serial.println("Door open state changed");
-            check_device_state();
+        if (finishing_test) {
+            finishing_test = false;
+            finish_test();
+            return;
         }
 
-        if (test_in_progress) {
-            if (cancelling_test) {
-                cancelling_test = false;
-                cancel_test();
-                return;
-            }
+        if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
+            cancel_test();
+            return;
+        }
 
-            if (finishing_test) {
-                finishing_test = false;
-                finish_test();
-                return;
-            }
+        if (waiting_for_finish_confirmation && millis() > finish_timeout) {
+            finish_test();
+            return;
+        }
+    }
+    else {
+        if (waiting_for_start_confirmation && millis() > start_timeout) {
+            start_test();
+            return;
+        }
 
-            if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
-                cancel_test();
-                return;
+        if (test_startup_successful) {
+            if (millis() > next_optical_sensor_reading_time) {
+                // check indicator well color
             }
-
-            if (waiting_for_finish_confirmation && millis() > finish_timeout) {
-                finish_test();
+            if (cartridge_is_heated) {
+                test_startup_successful = false;
+                if (door_open) {
+                    cancelling_test = true;
+                }
+                else {
+                    run_test();
+                }
                 return;
             }
         }
-        else {
-            if (waiting_for_start_confirmation && millis() > start_timeout) {
-                start_test();
-                return;
-            }
 
-            if (test_startup_successful) {
-                if (millis() > next_sensor_reading_time) {
-                    // check indicator well color
-                }
-                if (cartridge_is_heated) {
-                    test_startup_successful = false;
-                    if (door_open) {
-                        cancelling_test = true;
-                    }
-                    else {
-                        run_test();
-                    }
-                    return;
-                }
+        if (waiting_for_validation) {
+            if (millis() > validation_timeout) {
+                validate_cartridge();
             }
+            return;
+        }
 
-            if (waiting_for_validation) {
-                if (millis() > validation_timeout) {
+        if (ready_to_scan_barcode) {
+            ready_to_scan_barcode = false;
+            if (!door_open) {
+                if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
                     validate_cartridge();
                 }
-                return;
-            }
-
-            if (ready_to_scan_barcode) {
-                ready_to_scan_barcode = false;
-                if (!door_open) {
-                    if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
-                        validate_cartridge();
-                    }
-                    else {
-                        cartridge_validated = false;
-                    }
+                else {
+                    cartridge_validated = false;
                 }
-                return;
             }
+            return;
+        }
 
-            if (starting_test) {
-                starting_test = false;
-                start_test();
-                return;
-            }
+        if (starting_test) {
+            starting_test = false;
+            start_test();
+            return;
+        }
 
-            if (waiting_for_upload_confirmation) {
-                if (millis() > upload_timeout) {
-                    upload_tests();
-                }
-                return;
-            }
-
-            if (tests_to_upload()) {
+        if (waiting_for_upload_confirmation) {
+            if (millis() > upload_timeout) {
                 upload_tests();
-                return;
             }
-
+            return;
         }
 
-        if (read_sensors_command_flag) {
-            read_sensors_command_flag = false;
-            SINGLE_THREADED_BLOCK() {
-                read_sensors(read_sensors_command_param);
-            }
+        if (tests_to_upload()) {
+            upload_tests();
+            return;
         }
+
+    }
+
+    if (read_optical_sensors_command_flag) {
+        read_optical_sensors_command_flag = false;
+        SINGLE_THREADED_BLOCK() {
+            read_optical_sensors(read_optical_sensors_command_param);
+        }
+    }
 }

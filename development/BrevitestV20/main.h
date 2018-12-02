@@ -23,9 +23,9 @@
 // serial number
 #define SERIAL_NUMBER_LENGTH 19
 
-// sensors
-#define SENSOR_NUMBER_OF_SAMPLES 3
-#define SENSOR_DEFAULT_PARAM 0xAB
+// optical sensors
+#define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 3
+#define OPTICAL_SENSOR_DEFAULT_PARAM 0xAB
 
 // lasers
 #define LASER_WARMUP_DELAY_MS 1000
@@ -70,13 +70,26 @@
 #define STEPS_TO_MICROBEAD_WELL 2500
 // #define STEPS_TO_FINAL_READ_POSITION 4400
 
-// temperature control system
-#define TEMPERATURE_CONTROL_INTERVAL 5000
-#define TEMPERATURE_PIN_VALUE 160
-#define TEMPERATURE_PWM_FREQUENCY 256
-#define TEMPERATURE_HEATER_OFF_THRESHOLD 100
-#define TEMPERATURE_HEATER_ON_THRESHOLD 98
-#define TEMPERATURE_FAN_ON_OFF_THRESHOLD 102
+// controller sensor readings
+#define CONTROLLER_SENSORS_READ_INTERVAL 5000
+
+// peltier
+#define PELTIER_PIN_VALUE 160
+#define PELTIER_PWM_FREQUENCY 256
+#define PELTIER_OFF_THRESHOLD 100
+#define PELTIER_ON_THRESHOLD 98
+
+// fan
+#define FAN_ON_OFF_THRESHOLD 102
+
+// inertial measurement unit
+#define IMU_ADDR 0x6A
+#define IMU_BUFFER_SIZE 14
+#define IMU_REGISTER_CONFIG 0x1A
+#define IMU_CONFIG_VALUE 0x00
+#define IMU_REGISTER_DATA 0x20
+#define IMU_REGISTER_TEMP_L 0x20
+#define IMU_REGISTER_TEMP_H 0x21
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 1047
@@ -85,7 +98,7 @@
 #define UPLOAD_INTERVAL 20000
 
 // state
-#define STATE_CARTRIDGE_LOADED_THRESHOLD 16500
+#define CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD 16500
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
@@ -103,7 +116,7 @@ ApplicationWatchdog wd(30000, watchdog);
 // ELECTRON PIN MAPPINGS
 
 int pinAssaySensor_Ready = A0;
-// int pinUnused = A1;
+int pinPeltierThermistor = A1;
 int pinBarcode_Trigger = A2;
 int pinLaserAssay = A3;
 int pinSolenoid = A4;
@@ -113,17 +126,17 @@ int pinBarcode_Success = WKP;
 int pinBuzzer = B0;
 int pinFan = B1;
 int pinControlSensor_Ready = B2;
-// int pinUnused = B3;
-// int pinUnused = B4;
+int pinControlThermistor = B3;
+int pinAssayThermistor = B4;
 int pinDoorOpen = B5;
 // int pinUnused = C0;
 // int pinUnused = C1;
 int pinGPS_RX = C2;
 int pinGPS_TX = C3;
-int pinMain_SDA = C4;
-int pinMain_SCL = C5;
-int pinSensor_SDA = D0;
-int pinSensor_SCL = D1;
+int pinControllerSensor_SDA = C4;
+int pinControllerSensor_SCL = C5;
+int pinOpticalSensor_SDA = D0;
+int pinOpticalSensor_SCL = D1;
 int pinInteriorLED = D2;
 // int pinUnused = D3;
 int pinLimitSwitch = D4;
@@ -152,7 +165,7 @@ bool barcode_being_scanned = false;
 
 bool test_startup_successful = false;
 bool test_in_progress = false;
-bool reading_sensors = false;
+bool reading_optical_sensors = false;
 
 bool cartridge_validated = false;
 bool waiting_for_validation = false;
@@ -166,19 +179,25 @@ bool uploading_test = false;
 bool waiting_for_upload_confirmation = false;
 
 bool cartridge_is_heated;
-unsigned long next_sensor_reading_time = 0;
+unsigned long next_optical_sensor_reading_time = 0;
+
+// controller sensors read timer
+void read_all_controller_sensors(void);
+Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_all_controller_sensors);
+
+// IMU
+uint8_t imu_buffer[IMU_BUFFER_SIZE];
+int imu_temperature;
 
 // temperature control system
 int temperature_C, temperature_C_half, temperature_F;
 bool heater_on = false;
 bool fan_on = false;
-void control_temperature(void);
-Timer temperature_control_timer(TEMPERATURE_CONTROL_INTERVAL, control_temperature);
 
-// sensors
-unsigned long last_sensor_reading_time = 0;
-bool read_sensors_command_flag = false;
-int read_sensors_command_param;
+// optical sensors
+unsigned long last_optical_sensor_reading_time = 0;
+bool read_optical_sensors_command_flag = false;
+int read_optical_sensors_command_param;
 
 // progress
 int test_progress;
@@ -206,14 +225,6 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-struct BrevitestSensorSampleRecord {        // 12 bytes
-    unsigned long sample_time;
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
-    uint16_t temperature;
-} assay_buffer[SENSOR_NUMBER_OF_SAMPLES], control_buffer[SENSOR_NUMBER_OF_SAMPLES];
-
 struct Param {      // 32 bytes
   uint16_t reset_steps;
   uint16_t step_delay_us;
@@ -234,7 +245,7 @@ struct Param {      // 32 bytes
   }
 };
 
-struct BrevitestSensorRecord {  // 14 bytes
+struct BrevitestOpticalSensorRecord {  // 14 bytes
     char channel;
     uint8_t samples;
     unsigned long time_ms;
@@ -242,7 +253,7 @@ struct BrevitestSensorRecord {  // 14 bytes
     uint16_t green;
     uint16_t blue;
     uint16_t temperature;
-} state_reading;
+} optical_state_reading;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;
@@ -250,16 +261,16 @@ struct BrevitestTestRecord {    // 74 bytes
     char test_uuid[TEST_UUID_LENGTH + 1];    // 26 bytes w padding
     uint8_t number_of_readings;
     uint16_t reserved;
-    BrevitestSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];
+    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];
 } test_record;
 
 struct BrevitestAssayRecord {
     char uuid[ASSAY_UUID_LENGTH + 1];
     int duration;
-    int sensor_integration_time;
-    int sensor_gain;
+    int optical_sensor_integration_time;
+    int optical_sensor_gain;
     int reserved;
-    int delay_between_sensor_readings_ms;
+    int delay_between_optical_sensor_readings_ms;
     uint16_t BCODE_length;
     uint8_t BCODE_version;
     char BCODE[ASSAY_BCODE_CAPACITY];
