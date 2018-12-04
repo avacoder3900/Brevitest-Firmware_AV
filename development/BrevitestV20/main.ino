@@ -1,4 +1,4 @@
-/*#include "TCS34725.h"*/
+#include "LSM6DS3_L3.h"
 #include "main.h"
 #include "Serial4/Serial4.h"
 
@@ -484,10 +484,12 @@ void turn_on_both_lasers_for_duration(int duration) {
 
 bool enable_controller_sensors(bool force_read) {
     if (Wire1.isEnabled()) {
+        Serial.println("Wire1 already enabled");
         return true;
     }
 
     if (Wire.isEnabled()) { // is other I2C bus busy?
+        Serial.println("Wire busy");
         if (force_read) {    // kill optical sensor bus if forced read
             Wire.end();
             pinMode(pinOpticalSensor_SCL, INPUT);
@@ -570,45 +572,30 @@ void led_temperature_read(char channel) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void imu_config() {
-    int bytes_sent, result;
-
-    /*Serial.printlnf("Configuring IMU");*/
-    Wire1.beginTransmission(IMU_ADDR);
-    bytes_sent = Wire1.write(IMU_REGISTER_CONFIG);
-    bytes_sent = Wire1.write(IMU_CONFIG_VALUE);
-    result = Wire1.endTransmission(true);
-    if (result != 0) {
-        Serial.printlnf("IMU config register, %d bytes, result: %d", bytes_sent, result);
-    }
-}
-
 void imu_read() {
-    int bytes_received, bytes_sent, result, read_lsb, read_msb, indx;
+    /*Serial.print("\nAccelerometer:\n");
+    Serial.print(" X = ");
+    Serial.println(myIMU.readRawAccelX());
+    Serial.print(" Y = ");
+    Serial.println(myIMU.readRawAccelY());
+    Serial.print(" Z = ");
+    Serial.println(myIMU.readRawAccelZ());
 
-    Serial.println("Reading IMU");
-    Wire1.beginTransmission(IMU_ADDR);
-    bytes_sent = Wire1.write(IMU_REGISTER_DATA);
-    result = Wire1.endTransmission();
-    if (result != 0) {
-        Serial.printlnf("IMU register %d, %d bytes sent, result: %d", IMU_REGISTER_DATA, bytes_sent, result);
-    }
-    bytes_received = Wire1.requestFrom(IMU_ADDR, 12);
-    delay(100);
-    if (Wire1.available() && bytes_received == 12) {
-        for (indx = 0; indx < 12; indx++) {
-            read_lsb = Wire1.read();
-            Serial.printf("%X ", read_lsb);
-        }
-        Serial.println();
-        /*read_msb = Wire1.read();*/
-        /*thermocouple_C = read_msb;
-        thermocouple_C <<= 4;
-        thermocouple_C += thermocouple_LB >> 4;
-        if ((thermocouple_UB & 0x80) == 0x80) {  // T < 0˚C
-            thermocouple_C = 1024 - thermocouple_C;
-        }*/
-    }
+    Serial.print("\nGyroscope:\n");
+    Serial.print(" X = ");
+    Serial.println(myIMU.readRawGyroX());
+    Serial.print(" Y = ");
+    Serial.println(myIMU.readRawGyroY());
+    Serial.print(" Z = ");
+    Serial.println(myIMU.readRawGyroZ());*/
+
+    tempC_raw = myIMU.readRawTemp() + 400;
+    tempC_integer = tempC_raw >> 4;
+    tempC_decimal = (tempC_raw & 0x0F) * 625;
+    tempF_raw = ((tempC_raw * 9) / 10) + 256;
+    tempF_integer = tempF_raw >> 3;
+    tempF_decimal = (tempF_raw & 0x07) * 125;
+    Serial.printlnf("Temperature: %d.%04d˚C, %d.%03d˚F", tempC_integer, tempC_decimal, tempF_integer, tempF_decimal);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1666,7 +1653,6 @@ void setup() {
         /*Serial.println("Scanning barcode");
         scan_barcode();
 */
-
         reset_globals();
         read_all_controller_sensors_timer.start();
 
@@ -1677,6 +1663,8 @@ void setup() {
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
         controller_i2c_bus_scan();
+
+        myIMU.begin();
 }
 
 /////////////////////////////////////////////////////////////

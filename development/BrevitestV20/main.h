@@ -1,4 +1,5 @@
-// #include "TCS34725.h"
+#include "LSM6DS3_L3.h"
+
 //
 // GLOBAL VARIABLES AND DEFINES
 
@@ -81,15 +82,6 @@
 
 // fan
 #define FAN_ON_OFF_THRESHOLD 102
-
-// inertial measurement unit
-#define IMU_ADDR 0x6A
-#define IMU_BUFFER_SIZE 14
-#define IMU_REGISTER_CONFIG 0x1A
-#define IMU_CONFIG_VALUE 0x00
-#define IMU_REGISTER_DATA 0x20
-#define IMU_REGISTER_TEMP_L 0x20
-#define IMU_REGISTER_TEMP_H 0x21
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 1047
@@ -186,8 +178,10 @@ void read_all_controller_sensors(void);
 Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_all_controller_sensors);
 
 // IMU
-uint8_t imu_buffer[IMU_BUFFER_SIZE];
-int imu_temperature;
+LSM6DS3 myIMU;
+int tempC_raw, tempF_raw;
+int tempC_integer, tempF_integer;
+int tempC_decimal, tempF_decimal;
 
 // temperature control system
 int temperature_C, temperature_C_half, temperature_F;
