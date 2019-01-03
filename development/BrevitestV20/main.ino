@@ -6,34 +6,17 @@ SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(4347);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
+
+
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                        UTLITY                           //
+//                        TABLES                           //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int extract_int_from_string(char *str, int pos, int len) {
-        char buf[12];
-
-        len = len > 12 ? 12 : len;
-        strncpy(buf, &str[pos], len);
-        buf[len] = '\0';
-        return atoi(buf);
-}
-
-int extract_int_from_delimited_string(char *str, int *posPtr, char *delim) {
-        char buf[14];
-        char *mark;
-        int len;
-
-        mark = &str[*posPtr];
-        len = strstr(mark, delim) - mark;
-        len = len > 14 ? 14 : len;
-        strncpy(buf, mark, len);
-        *posPtr += len + strlen(delim);
-        buf[len] = '\0';
-        return atoi(buf);
-}
+// peltier temperature is 10x to get one decimal place of accuracy
+static int table_peltier_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
+static int table_peltier_ratio[] = { 9074, 10340, 11822, 13592, 15680, 18194, 21183, 24714, 28952, 34170, 40545, 48015, 57103, 68635, 82976, 100000, 124150, 149200, 184380, 229070, 286650 };
 
 static uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -80,6 +63,64 @@ static uint32_t crc32_tab[] = {
 	0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
+
+int table_lookup(int table_number, int value) {
+    int len, result, indx1, indx2;
+    int *value_table, *result_table;
+
+    switch (table_number) {
+        case TABLE_PELTIER :
+            value_table = table_peltier_ratio;
+            result_table = table_peltier_temperature;
+            len = TABLE_PELTIER_LENGTH;
+            break;
+        default:
+            return -1;
+    }
+
+    if (value < value_table[0]) {
+        return -1000;
+    }
+
+    for (indx1 = 0, indx2 = 1; indx1 < (len - 1); indx1++, indx2++) {
+        if (value >= value_table[indx1] && value < value_table[indx2]) {
+            result = result_table[indx1] + (((value - value_table[indx1]) * (result_table[indx2] - result_table[indx1])) / (value_table[indx2] - value_table[indx1]));
+            /*Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
+            return result;
+        }
+    }
+
+    return 1000;
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                        UTLITY                           //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+int extract_int_from_string(char *str, int pos, int len) {
+        char buf[12];
+
+        len = len > 12 ? 12 : len;
+        strncpy(buf, &str[pos], len);
+        buf[len] = '\0';
+        return atoi(buf);
+}
+
+int extract_int_from_delimited_string(char *str, int *posPtr, char *delim) {
+        char buf[14];
+        char *mark;
+        int len;
+
+        mark = &str[*posPtr];
+        len = strstr(mark, delim) - mark;
+        len = len > 14 ? 14 : len;
+        strncpy(buf, mark, len);
+        *posPtr += len + strlen(delim);
+        buf[len] = '\0';
+        return atoi(buf);
+}
 
 uint32_t checksum(char *buf, int size) {
 	uint8_t *p;
@@ -555,6 +596,13 @@ void read_all_controller_sensors() {
 /////////////////////////////////////////////////////////////
 
 void peltier_temperature_read() {
+    int raw = analogRead(pinPeltierThermistor);
+    int resistance = (PELTIER_THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
+    int ratio = resistance * THERMISTOR_SCALE / PELTIER_THERMISTOR_BASE_RESISTANCE;
+    int peltier_temperature_10X = table_lookup(TABLE_PELTIER, ratio);
+    int peltier_temperature_int = peltier_temperature_10X / 10;
+    int peltier_temperature_dec = peltier_temperature_10X % 10;
+    Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, peltier_temperature_int, peltier_temperature_dec);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1632,14 +1680,14 @@ void setup() {
             reset_eeprom();
         /*}*/
 
-        Serial.println("Resetting stage");
+        /*Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
         move_solenoid(1000);
 
         Serial.println("Turning on lasers");
-        turn_on_both_lasers_for_duration(1000);
+        turn_on_both_lasers_for_duration(1000);*/
 
         turn_on_interior_led_for_duration(2000);
 
