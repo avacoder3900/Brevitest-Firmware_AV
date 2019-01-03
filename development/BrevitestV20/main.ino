@@ -631,7 +631,7 @@ void control_peltier_temperature() {
     else {
         dt = peltier_read_time - prev_read_time;
         error = peltier_target_C_10X - peltier_temp_C_10X;
-        peltier_integral += (error * dt) / 10000;
+        peltier_integral += (error * dt) / 100000;
         derivative = (1000 * (error - peltier_previous_error)) / dt;
         output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
 
@@ -640,8 +640,7 @@ void control_peltier_temperature() {
             output = output > 500 ? 500 : output;
             turn_on_heater_for_duration(output);
         }
-        else if (output < -100) {
-            output = output < -900 ? -900 : output;
+        else if (output < -500) {
             turn_on_fan_for_duration(-output);
             action = 'C';
         }
@@ -1612,6 +1611,7 @@ int particle_command(String arg) {
         case 14: // turn on buzzer param1 frequency param2 duration
             if (param1 > 0 && param1 < 600) {
                 peltier_target_C_10X = param1;
+                peltier_read_time = 0;
             }
             return param1;
 }
