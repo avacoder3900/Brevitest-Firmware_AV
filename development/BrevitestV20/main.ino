@@ -599,10 +599,14 @@ void peltier_temperature_read() {
     int raw = analogRead(pinPeltierThermistor);
     int resistance = (PELTIER_THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
     int ratio = resistance * THERMISTOR_SCALE / PELTIER_THERMISTOR_BASE_RESISTANCE;
-    int peltier_temperature_10X = table_lookup(TABLE_PELTIER, ratio);
-    int peltier_temperature_int = peltier_temperature_10X / 10;
-    int peltier_temperature_dec = peltier_temperature_10X % 10;
-    Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, peltier_temperature_int, peltier_temperature_dec);
+    peltier_temp_C_10X = table_lookup(TABLE_PELTIER, ratio);
+    int temp_C_int = peltier_temp_C_10X / 10;
+    int temp_C_dec = peltier_temp_C_10X % 10;
+    int temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
+    int temp_F_int = temp_F_10X / 10;
+    int temp_F_dec = temp_F_10X % 10;
+    /*Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, peltier_temperature_int, peltier_temperature_dec);*/
+    Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);
 }
 
 /////////////////////////////////////////////////////////////
@@ -637,13 +641,14 @@ void imu_read() {
     Serial.print(" Z = ");
     Serial.println(myIMU.readRawGyroZ());*/
 
-    tempC_raw = myIMU.readRawTemp() + 400;
-    tempC_integer = tempC_raw >> 4;
-    tempC_decimal = (tempC_raw & 0x0F) * 625;
-    tempF_raw = ((tempC_raw * 9) / 10) + 256;
-    tempF_integer = tempF_raw >> 3;
-    tempF_decimal = (tempF_raw & 0x07) * 125;
-    Serial.printlnf("Temperature: %d.%04d˚C, %d.%03d˚F", tempC_integer, tempC_decimal, tempF_integer, tempF_decimal);
+    int tempC_raw = myIMU.readRawTemp() + 400;
+    imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
+    int temp_C_int = imu_temp_C_10X / 10;
+    int temp_C_dec = imu_temp_C_10X % 10;
+    int temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
+    int temp_F_int = temp_F_10X / 10;
+    int temp_F_dec = temp_F_10X % 10;
+    Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1637,7 +1642,6 @@ void controller_i2c_bus_scan() {
 
 void setup() {
         Particle.variable("register", particle_register, STRING);
-        Particle.variable("temperature", &temperature_F, INT);
         Particle.function("command", particle_command);
         Particle.function("run_test", particle_run_test);
 

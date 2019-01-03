@@ -190,12 +190,12 @@ Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_a
 
 // IMU
 LSM6DS3 myIMU;
-int tempC_raw, tempF_raw;
-int tempC_integer, tempF_integer;
-int tempC_decimal, tempF_decimal;
 
 // temperature control system
-int temperature_C, temperature_C_half, temperature_F;
+int imu_temp_C_10X;
+int peltier_temp_C_10X;
+int assay_temp_C_10X;
+int control_temp_C_10X;
 bool heater_on = false;
 bool fan_on = false;
 
