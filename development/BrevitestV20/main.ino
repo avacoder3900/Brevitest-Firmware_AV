@@ -1628,27 +1628,27 @@ void setup() {
         Serial.begin(115200); // standard serial port
 
         load_eeprom();
-        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
+        /*if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {*/
             reset_eeprom();
-        }
+        /*}*/
 
-        /*Serial.println("Resetting stage");
+        Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
         move_solenoid(1000);
 
         Serial.println("Turning on lasers");
-        turn_on_both_lasers_for_duration(1000);*/
+        turn_on_both_lasers_for_duration(1000);
 
         turn_on_interior_led_for_duration(2000);
 
-        /*turn_on_fan_for_duration(3000);
+        turn_on_fan_for_duration(3000);
 
-        turn_on_heater_for_duration(1000);
+        turn_on_heater_for_duration(3000);
 
         Serial.println("Testing buzzer");
-        turn_on_buzzer_for_duration(3000, 2000);*/
+        turn_on_buzzer_for_duration(3000, 2000);
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
