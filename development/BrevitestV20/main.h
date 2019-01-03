@@ -45,11 +45,15 @@
 #define TEST_CACHE_SIZE 3
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
-// tables
-#define TABLE_PELTIER 0
-#define TABLE_ASSAY 1
-#define TABLE_CONTROL 2
+// thermistors
+#define PELTIER_THERMISTOR 0
+#define PELTIER_THERMISTOR_BALANCE_RESISTANCE 5000
+#define PELTIER_THERMISTOR_BASE_RESISTANCE 10000
 #define TABLE_PELTIER_LENGTH 21
+#define LED_THERMISTOR 1
+#define LED_THERMISTOR_BALANCE_RESISTANCE 200
+#define LED_THERMISTOR_BASE_RESISTANCE 10000
+#define TABLE_LED_LENGTH 21
 
 // particle
 #define PARTICLE_REGISTER_SIZE 622
@@ -85,13 +89,12 @@
 // peltier
 #define PELTIER_PIN_VALUE 255
 #define PELTIER_PWM_FREQUENCY 256
-#define PELTIER_THERMISTOR_BALANCE_RESISTANCE 5000
-#define PELTIER_THERMISTOR_BETA 3988
-#define PELTIER_THERMISTOR_BASE_RESISTANCE 10000
 #define PELTIER_K_P 30
 #define PELTIER_K_I 5
 #define PELTIER_K_D 2
 #define CONTROL_PELTIER_TEMPERATURE_INTERVAL 1000
+
+// LED thermistors
 
 // fan
 #define FAN_ON_OFF_THRESHOLD 102
@@ -202,6 +205,8 @@ int peltier_integral;
 unsigned long peltier_read_time;
 int imu_temp_C_10X;
 int peltier_temp_C_10X;
+int assay_LED_temp_C_10X;
+int control_LED_temp_C_10X;
 int peltier_target_C_10X = 450;
 int assay_temp_C_10X;
 int control_temp_C_10X;

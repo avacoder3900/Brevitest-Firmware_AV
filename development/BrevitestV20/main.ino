@@ -18,6 +18,9 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 static int table_peltier_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
 static int table_peltier_ratio[] = { 9074, 10340, 11822, 13592, 15680, 18194, 21183, 24714, 28952, 34170, 40545, 48015, 57103, 68635, 82976, 100000, 124150, 149200, 184380, 229070, 286650 };
 
+static int table_LED_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
+static int table_LED_ratio[] = { 6871, 7980, 9310, 10900, 12780, 15040, 17770, 21110, 25180, 30180, 36350, 44010, 53560, 65560, 80720, 100000, 124700, 156700, 198100, 252400, 323700 };
+
 static uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
 	0xe963a535, 0x9e6495a3,	0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
@@ -64,19 +67,8 @@ static uint32_t crc32_tab[] = {
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-int table_lookup(int table_number, int value) {
-    int len, result, indx1, indx2;
-    int *value_table, *result_table;
-
-    switch (table_number) {
-        case TABLE_PELTIER :
-            value_table = table_peltier_ratio;
-            result_table = table_peltier_temperature;
-            len = TABLE_PELTIER_LENGTH;
-            break;
-        default:
-            return -1;
-    }
+int table_lookup(int table_number, int value, int *value_table, int *result_table, int len) {
+    int result, indx1, indx2;
 
     if (value < value_table[0]) {
         return -1000;
@@ -519,160 +511,63 @@ void turn_on_both_LEDs_for_duration(int duration) {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//               CONTROLLER SENSOR STATUS                  //
+//                      THEMISTORS                         //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-bool enable_controller_sensors(bool force_read) {
-    if (Wire1.isEnabled()) {
-        Serial.println("Wire1 already enabled");
-        return true;
+int get_thermistor_temperature(int pin, int table_number) {
+    int balance_resistance, base_resistance, len, ratio, raw, resistance, result;
+    int *value_table, *result_table;
+
+    switch (table_number) {
+        case PELTIER_THERMISTOR :
+            value_table = table_peltier_ratio;
+            result_table = table_peltier_temperature;
+            len = TABLE_PELTIER_LENGTH;
+            balance_resistance = PELTIER_THERMISTOR_BALANCE_RESISTANCE;
+            base_resistance = PELTIER_THERMISTOR_BASE_RESISTANCE;
+            break;
+        case LED_THERMISTOR :
+            value_table = table_LED_ratio;
+            result_table = table_LED_temperature;
+            len = TABLE_LED_LENGTH;
+            balance_resistance = LED_THERMISTOR_BALANCE_RESISTANCE;
+            base_resistance = LED_THERMISTOR_BASE_RESISTANCE;
+            break;
+        default:
+            return -1;
     }
 
-    if (Wire.isEnabled()) { // is other I2C bus busy?
-        Serial.println("Wire busy");
-        if (force_read) {    // kill optical sensor bus if forced read
-            Wire.end();
-            pinMode(pinOpticalSensor_SCL, INPUT);
-            pinMode(pinOpticalSensor_SDA, INPUT);
-        }
-        else {
-            return false;
-        }
-    }
+    raw = analogRead(pin);
 
-    Wire1.setSpeed(CLOCK_SPEED_100KHZ);
-    Wire1.begin();
-    delay(100);
+    resistance = (balance_resistance * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
+    ratio = resistance * THERMISTOR_SCALE / base_resistance;
 
-    return Wire1.isEnabled();
+    result = table_lookup(table_number, ratio, value_table, result_table, len);
+    /*Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, result / 10, result % 10);*/
+
+    return result;
 }
-
-void disable_controller_sensors() {
-    Wire1.end();
-    pinMode(pinControllerSensor_SCL, INPUT);
-    pinMode(pinControllerSensor_SDA, INPUT);
-}
-
-void read_all_controller_sensors() {
-    if (enable_controller_sensors(false)) {
-        imu_read();
-        peltier_temperature_read();
-        led_temperature_read('A');
-        led_temperature_read('C');
-
-        disable_controller_sensors();
-
-        /*if (cartridge_loaded) {
-            if (temperature_F > PELTIER_OFF_THRESHOLD) {
-                turn_off_heater();
-            }
-            if (temperature_F < PELTIER_ON_THRESHOLD) {
-                RGB.control(true);
-                RGB.color(255, 0, 0);
-
-                turn_on_heater_for_duration(2000);
-
-                RGB.control(false);
-            }
-
-            if (temperature_F > FAN_ON_OFF_THRESHOLD) {
-                turn_on_fan();
-            }
-            if (temperature_F < FAN_ON_OFF_THRESHOLD) {
-                turn_off_fan();
-            }
-        }*/
-    }
-    else {
-        Serial.printlnf("Controller I2C busy, read skipped");
-    }
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                  PELTIER TEMPERATURE                    //
-//                                                         //
-/////////////////////////////////////////////////////////////
 
 void peltier_temperature_read() {
-    int ratio, raw, resistance;
-    /*int temp_C_dec, temp_C_dec, temp_F_10X, temp_F_dec, temp_F_int;*/
+    int temp_F_10X;
 
-    raw = analogRead(pinPeltierThermistor);
+    peltier_temp_C_10X = get_thermistor_temperature(pinPeltierThermistor, PELTIER_THERMISTOR);
 
-    resistance = (PELTIER_THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
-    ratio = resistance * THERMISTOR_SCALE / PELTIER_THERMISTOR_BASE_RESISTANCE;
-    peltier_temp_C_10X = table_lookup(TABLE_PELTIER, ratio);
-
-    /*temp_C_int = peltier_temp_C_10X / 10;
-    temp_C_dec = peltier_temp_C_10X % 10;
     temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
-    temp_F_int = temp_F_10X / 10;
-    temp_F_dec = temp_F_10X % 10;*/
-    /*Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, peltier_temperature_int, peltier_temperature_dec);*/
-    /*Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);*/
+    Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", peltier_temp_C_10X / 10, peltier_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 }
-
-void control_peltier_temperature() {
-    int dt, error, derivative, output;
-    int i, d;
-    unsigned long prev_read_time;
-    char action;
-
-    prev_read_time = peltier_read_time;
-    peltier_temperature_read();
-    peltier_read_time = millis();
-
-    if (prev_read_time == 0) {
-        peltier_previous_error = 0;
-        peltier_integral = 0;
-    }
-    else {
-        dt = peltier_read_time - prev_read_time;
-        error = peltier_target_C_10X - peltier_temp_C_10X;
-        peltier_integral += (error * dt) / 100000;
-        derivative = (1000 * (error - peltier_previous_error)) / dt;
-        output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
-
-        if (output > 0) {
-            action = 'H';
-            output = output > 500 ? 500 : output;
-            turn_on_heater_for_duration(output);
-        }
-        else if (output < -500) {
-            turn_on_fan_for_duration(-output);
-            action = 'C';
-        }
-        else {
-            action = '-';
-        }
-
-        i = peltier_temp_C_10X / 10;
-        d = peltier_temp_C_10X % 10;
-        Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);
-        peltier_previous_error = error;
-    }
-}
-
-void start_peltier_temperature_control() {
-    peltier_read_time = 0;
-    control_peltier_temperature_timer.start();
-    Serial.println("Peltier temperature control system started");
-}
-
-void stop_peltier_temperature_control() {
-    control_peltier_temperature_timer.stop();
-    Serial.println("Peltier temperature control system stopped");
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                    LED TEMPERATURES                     //
-//                                                         //
-/////////////////////////////////////////////////////////////
 
 void led_temperature_read(char channel) {
+    /*int temp_F_10X;
+
+    assay_LED_temp_C_10X = get_thermistor_temperature(pinAssayThermistor, LED_THERMISTOR);
+    temp_F_10X = ((assay_LED_temp_C_10X * 9) / 5) + 320;
+    Serial.printlnf("Assay LED temperature: %d.%d˚C, %d.%d˚F", assay_LED_temp_C_10X / 10, assay_LED_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+
+    control_LED_temp_C_10X = get_thermistor_temperature(pinControlThermistor, LED_THERMISTOR);
+    temp_F_10X = ((control_LED_temp_C_10X * 9) / 5) + 320;
+    Serial.printlnf("Control LED temperature: %d.%d˚C, %d.%d˚F", control_LED_temp_C_10X / 10, control_LED_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -705,7 +600,7 @@ void imu_read() {
     int temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
     int temp_F_int = temp_F_10X / 10;
     int temp_F_dec = temp_F_10X % 10;
-    /*Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);*/
+    Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);
 }
 
 /////////////////////////////////////////////////////////////
@@ -878,6 +773,136 @@ void read_optical_sensors(int param) {
         disable_optical_sensors();
 
         Serial.printlnf("Elapsed time: %u", millis() - elapsed);
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//               CONTROLLER SENSOR STATUS                  //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+bool enable_controller_sensors(bool force_read) {
+    if (Wire1.isEnabled()) {
+        Serial.println("Wire1 already enabled");
+        return true;
+    }
+
+    if (Wire.isEnabled()) { // is other I2C bus busy?
+        Serial.println("Wire busy");
+        if (force_read) {    // kill optical sensor bus if forced read
+            Wire.end();
+            pinMode(pinOpticalSensor_SCL, INPUT);
+            pinMode(pinOpticalSensor_SDA, INPUT);
+        }
+        else {
+            return false;
+        }
+    }
+
+    Wire1.setSpeed(CLOCK_SPEED_100KHZ);
+    Wire1.begin();
+    delay(100);
+
+    return Wire1.isEnabled();
+}
+
+void disable_controller_sensors() {
+    Wire1.end();
+    pinMode(pinControllerSensor_SCL, INPUT);
+    pinMode(pinControllerSensor_SDA, INPUT);
+}
+
+void read_all_controller_sensors() {
+    if (enable_controller_sensors(false)) {
+        imu_read();
+        peltier_temperature_read();
+        led_temperature_read('A');
+        led_temperature_read('C');
+
+        disable_controller_sensors();
+
+        /*if (cartridge_loaded) {
+            if (temperature_F > PELTIER_OFF_THRESHOLD) {
+                turn_off_heater();
+            }
+            if (temperature_F < PELTIER_ON_THRESHOLD) {
+                RGB.control(true);
+                RGB.color(255, 0, 0);
+
+                turn_on_heater_for_duration(2000);
+
+                RGB.control(false);
+            }
+
+            if (temperature_F > FAN_ON_OFF_THRESHOLD) {
+                turn_on_fan();
+            }
+            if (temperature_F < FAN_ON_OFF_THRESHOLD) {
+                turn_off_fan();
+            }
+        }*/
+    }
+    else {
+        Serial.printlnf("Controller I2C busy, read skipped");
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//              PELTIER TEMPERATURE CONTROL                //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void control_peltier_temperature() {
+    int dt, error, derivative, output;
+    int i, d;
+    unsigned long prev_read_time;
+    char action;
+
+    prev_read_time = peltier_read_time;
+    peltier_temperature_read();
+    peltier_read_time = millis();
+
+    if (prev_read_time == 0) {
+        peltier_previous_error = 0;
+        peltier_integral = 0;
+    }
+    else {
+        dt = peltier_read_time - prev_read_time;
+        error = peltier_target_C_10X - peltier_temp_C_10X;
+        peltier_integral += (error * dt) / 100000;
+        derivative = (1000 * (error - peltier_previous_error)) / dt;
+        output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
+
+        if (output > 0) {
+            action = 'H';
+            output = output > 500 ? 500 : output;
+            turn_on_heater_for_duration(output);
+        }
+        else if (output < -500) {
+            turn_on_fan_for_duration(-output);
+            action = 'C';
+        }
+        else {
+            action = '-';
+        }
+
+        i = peltier_temp_C_10X / 10;
+        d = peltier_temp_C_10X % 10;
+        /*Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);*/
+        peltier_previous_error = error;
+    }
+}
+
+void start_peltier_temperature_control() {
+    peltier_read_time = 0;
+    control_peltier_temperature_timer.start();
+    Serial.println("Peltier temperature control system started");
+}
+
+void stop_peltier_temperature_control() {
+    control_peltier_temperature_timer.stop();
+    Serial.println("Peltier temperature control system stopped");
 }
 
 /////////////////////////////////////////////////////////////
@@ -1705,7 +1730,7 @@ void controller_i2c_bus_scan() {
 
 void setup() {
         Particle.variable("register", particle_register, STRING);
-        Particle.variable("target_10X", &peltier_target_C_10X, INT);
+        Particle.variable("tempC_10X", &imu_temp_C_10X, INT);
         Particle.function("command", particle_command);
         Particle.function("run_test", particle_run_test);
 
