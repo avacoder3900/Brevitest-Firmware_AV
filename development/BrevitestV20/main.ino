@@ -395,7 +395,7 @@ void turn_on_buzzer_for_duration(int frequency, int duration) {
 
 void turn_on_fan() {
     if (!fan_on) {
-        Serial.println("Turning on fan");
+        /*Serial.println("Turning on fan");*/
         pinMode(pinFan, OUTPUT);
         analogWrite(pinFan, 255);
         fan_on = true;
@@ -404,7 +404,7 @@ void turn_on_fan() {
 
 void turn_off_fan() {
     if (fan_on) {
-        Serial.println("Turning off fan");
+        /*Serial.println("Turning off fan");*/
         analogWrite(pinFan, 0);
         fan_on = false;
     }
@@ -424,7 +424,7 @@ void turn_on_fan_for_duration(int duration) {
 
 void turn_on_heater() {
     if (!heater_on) {
-        Serial.println("Turning on heater");
+        /*Serial.println("Turning on heater");*/
         pinMode(pinInteriorLED, INPUT);
         pinMode(pinHeater, OUTPUT);
         analogWrite(pinHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
@@ -434,7 +434,7 @@ void turn_on_heater() {
 
 void turn_off_heater() {
     if (heater_on) {
-        Serial.println("Turning off heater");
+        /*Serial.println("Turning off heater");*/
         analogWrite(pinHeater, 0);
         heater_on = false;
     }
@@ -472,49 +472,49 @@ void turn_on_interior_led_for_duration(int duration) {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                        LASERS                           //
+//                         LEDS                            //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_assay_laser() {
-    digitalWrite(pinLaserAssay, HIGH);
+void turn_on_assay_LED() {
+    digitalWrite(pinLEDAssay, HIGH);
 }
 
-void turn_on_control_laser() {
-    digitalWrite(pinLaserControl, HIGH);
+void turn_on_control_LED() {
+    digitalWrite(pinLEDControl, HIGH);
 }
 
-void turn_off_assay_laser() {
-    digitalWrite(pinLaserAssay, LOW);
+void turn_off_assay_LED() {
+    digitalWrite(pinLEDAssay, LOW);
 }
 
-void turn_off_control_laser() {
-    digitalWrite(pinLaserControl, LOW);
+void turn_off_control_LED() {
+    digitalWrite(pinLEDControl, LOW);
 }
 
-void turn_off_both_lasers() {
-    digitalWrite(pinLaserAssay, LOW);
-    digitalWrite(pinLaserControl, LOW);
+void turn_off_both_LEDs() {
+    digitalWrite(pinLEDAssay, LOW);
+    digitalWrite(pinLEDControl, LOW);
 }
 
-void turn_on_assay_laser_for_duration(int duration) {
-    turn_on_assay_laser();
+void turn_on_assay_LED_for_duration(int duration) {
+    turn_on_assay_LED();
     delay(duration);
-    turn_off_assay_laser();
+    turn_off_assay_LED();
 }
 
-void turn_on_control_laser_for_duration(int duration) {
-    turn_on_control_laser();
+void turn_on_control_LED_for_duration(int duration) {
+    turn_on_control_LED();
     delay(duration);
-    turn_off_control_laser();
+    turn_off_control_LED();
 }
 
-void turn_on_both_lasers_for_duration(int duration) {
-    turn_on_assay_laser();
-    turn_on_control_laser();
+void turn_on_both_LEDs_for_duration(int duration) {
+    turn_on_assay_LED();
+    turn_on_control_LED();
     delay(duration);
-    turn_off_assay_laser();
-    turn_off_control_laser();
+    turn_off_assay_LED();
+    turn_off_control_LED();
 }
 
 /////////////////////////////////////////////////////////////
@@ -596,17 +596,75 @@ void read_all_controller_sensors() {
 /////////////////////////////////////////////////////////////
 
 void peltier_temperature_read() {
-    int raw = analogRead(pinPeltierThermistor);
-    int resistance = (PELTIER_THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
-    int ratio = resistance * THERMISTOR_SCALE / PELTIER_THERMISTOR_BASE_RESISTANCE;
+    int ratio, raw, resistance;
+    /*int temp_C_dec, temp_C_dec, temp_F_10X, temp_F_dec, temp_F_int;*/
+
+    raw = analogRead(pinPeltierThermistor);
+
+    resistance = (PELTIER_THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
+    ratio = resistance * THERMISTOR_SCALE / PELTIER_THERMISTOR_BASE_RESISTANCE;
     peltier_temp_C_10X = table_lookup(TABLE_PELTIER, ratio);
-    int temp_C_int = peltier_temp_C_10X / 10;
-    int temp_C_dec = peltier_temp_C_10X % 10;
-    int temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
-    int temp_F_int = temp_F_10X / 10;
-    int temp_F_dec = temp_F_10X % 10;
+
+    /*temp_C_int = peltier_temp_C_10X / 10;
+    temp_C_dec = peltier_temp_C_10X % 10;
+    temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
+    temp_F_int = temp_F_10X / 10;
+    temp_F_dec = temp_F_10X % 10;*/
     /*Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, peltier_temperature_int, peltier_temperature_dec);*/
-    Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);
+    /*Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);*/
+}
+
+void control_peltier_temperature() {
+    int dt, error, derivative, output;
+    int i, d;
+    unsigned long prev_read_time;
+    char action;
+
+    prev_read_time = peltier_read_time;
+    peltier_temperature_read();
+    peltier_read_time = millis();
+
+    if (prev_read_time == 0) {
+        peltier_previous_error = 0;
+        peltier_integral = 0;
+    }
+    else {
+        dt = peltier_read_time - prev_read_time;
+        error = peltier_target_C_10X - peltier_temp_C_10X;
+        peltier_integral += (error * dt) / 10000;
+        derivative = (1000 * (error - peltier_previous_error)) / dt;
+        output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
+
+        if (output > 0) {
+            action = 'H';
+            output = output > 500 ? 500 : output;
+            turn_on_heater_for_duration(output);
+        }
+        else if (output < -100) {
+            output = output < -900 ? -900 : output;
+            turn_on_fan_for_duration(-output);
+            action = 'C';
+        }
+        else {
+            action = '-';
+        }
+
+        i = peltier_temp_C_10X / 10;
+        d = peltier_temp_C_10X % 10;
+        Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);
+        peltier_previous_error = error;
+    }
+}
+
+void start_peltier_temperature_control() {
+    peltier_read_time = 0;
+    control_peltier_temperature_timer.start();
+    Serial.println("Peltier temperature control system started");
+}
+
+void stop_peltier_temperature_control() {
+    control_peltier_temperature_timer.stop();
+    Serial.println("Peltier temperature control system stopped");
 }
 
 /////////////////////////////////////////////////////////////
@@ -648,7 +706,7 @@ void imu_read() {
     int temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
     int temp_F_int = temp_F_10X / 10;
     int temp_F_dec = temp_F_10X % 10;
-    Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);
+    /*Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -705,15 +763,15 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     if (channel == 'A') {
         addr = 0x74;
         ready_pin = pinAssaySensor_Ready;
-        turn_on_assay_laser();
+        turn_on_assay_LED();
     }
     else {
         addr = 0x75;
         ready_pin = pinControlSensor_Ready;
-        turn_on_control_laser();
+        turn_on_control_LED();
     }
 
-    delay(50); // warm up laser
+    delay(50); // warm up LED
 
     config_optical_sensors(channel, param, addr);
     timeout = millis() + 200;
@@ -726,7 +784,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         /*Serial.print("*");*/
         delay(10);
     }
-    turn_off_both_lasers();
+    turn_off_both_LEDs();
     if (digitalRead(ready_pin) == LOW) {
         Serial.printlnf("Timeout, optical sensor %c read not completed", channel);
     }
@@ -1530,27 +1588,32 @@ int particle_command(String arg) {
             eeprom.param.solenoid_power = 0xFF00 + (uint8_t) param1;
             move_solenoid(2000);
             return eeprom.param.solenoid_power;
-        case 10: // turn on assay laser for param1 milliseconds
+        case 10: // turn on assay LED for param1 milliseconds
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_assay_laser_for_duration(param1);
+            turn_on_assay_LED_for_duration(param1);
             return param1;
-        case 11: // turn on control laser for param1 milliseconds
+        case 11: // turn on control LED for param1 milliseconds
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_control_laser_for_duration(param1);
+            turn_on_control_LED_for_duration(param1);
             return param1;
-        case 12: // turn on both lasers for param1 milliseconds
+        case 12: // turn on both LEDs for param1 milliseconds
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_both_lasers_for_duration(param1);
+            turn_on_both_LEDs_for_duration(param1);
             return param1;
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
+        case 14: // turn on buzzer param1 frequency param2 duration
+            if (param1 > 0 && param1 < 600) {
+                peltier_target_C_10X = param1;
+            }
+            return param1;
 }
 
     return 0;
@@ -1642,6 +1705,7 @@ void controller_i2c_bus_scan() {
 
 void setup() {
         Particle.variable("register", particle_register, STRING);
+        Particle.variable("target_10X", &peltier_target_C_10X, INT);
         Particle.function("command", particle_command);
         Particle.function("run_test", particle_run_test);
 
@@ -1657,8 +1721,8 @@ void setup() {
         init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
         init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
 
-        init_digital_pin(pinLaserAssay, OUTPUT, LOW);
-        init_digital_pin(pinLaserControl, OUTPUT, LOW);
+        init_digital_pin(pinLEDAssay, OUTPUT, LOW);
+        init_digital_pin(pinLEDControl, OUTPUT, LOW);
 
         init_analog_pin(pinPeltierThermistor, INPUT, 0);
         init_analog_pin(pinAssayThermistor, INPUT, 0);
@@ -1690,14 +1754,14 @@ void setup() {
         Serial.println("Firing solenoid");
         move_solenoid(1000);
 
-        Serial.println("Turning on lasers");
-        turn_on_both_lasers_for_duration(1000);*/
+        Serial.println("Turning on LEDs");
+        turn_on_both_LEDs_for_duration(1000);*/
 
         turn_on_interior_led_for_duration(2000);
 
         turn_on_fan_for_duration(3000);
 
-        turn_on_heater_for_duration(3000);
+        turn_on_heater_for_duration(500);
 
         Serial.println("Testing buzzer");
         turn_on_buzzer_for_duration(3000, 2000);
@@ -1717,6 +1781,9 @@ void setup() {
         controller_i2c_bus_scan();
 
         myIMU.begin();
+
+        /*tuning_cutoff_time = millis() + 60000;*/
+        start_peltier_temperature_control();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1857,7 +1924,11 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-    if (callback_complete) {
+    /*if (millis() > tuning_cutoff_time) {
+        stop_peltier_temperature_control();
+        tuning_cutoff_time = 0xFFFFFFFF;
+    }*/
+    /*if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
@@ -1958,5 +2029,5 @@ void loop() {
         SINGLE_THREADED_BLOCK() {
             read_optical_sensors(read_optical_sensors_command_param);
         }
-    }
+    }*/
 }

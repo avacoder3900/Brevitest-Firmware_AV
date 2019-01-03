@@ -30,8 +30,8 @@
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 3
 #define OPTICAL_SENSOR_DEFAULT_PARAM 0xAB
 
-// lasers
-#define LASER_WARMUP_DELAY_MS 1000
+// LEDs
+#define LED_WARMUP_DELAY_MS 1000
 
 // assay
 #define ASSAY_BCODE_CAPACITY 2000
@@ -83,13 +83,15 @@
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
 // peltier
-#define PELTIER_PIN_VALUE 160
+#define PELTIER_PIN_VALUE 255
 #define PELTIER_PWM_FREQUENCY 256
-#define PELTIER_OFF_THRESHOLD 100
-#define PELTIER_ON_THRESHOLD 98
 #define PELTIER_THERMISTOR_BALANCE_RESISTANCE 5000
 #define PELTIER_THERMISTOR_BETA 3988
 #define PELTIER_THERMISTOR_BASE_RESISTANCE 10000
+#define PELTIER_K_P 30
+#define PELTIER_K_I 5
+#define PELTIER_K_D 5
+#define CONTROL_PELTIER_TEMPERATURE_INTERVAL 1000
 
 // fan
 #define FAN_ON_OFF_THRESHOLD 102
@@ -121,10 +123,10 @@ ApplicationWatchdog wd(30000, watchdog);
 int pinAssaySensor_Ready = A0;
 int pinPeltierThermistor = A1;
 int pinBarcode_Trigger = A2;
-int pinLaserAssay = A3;
+int pinLEDAssay = A3;
 int pinSolenoid = A4;
 int pinHeater = A5;
-int pinLaserControl = DAC1;
+int pinLEDControl = DAC1;
 int pinBarcode_Success = WKP;
 int pinBuzzer = B0;
 int pinFan = B1;
@@ -192,8 +194,15 @@ Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_a
 LSM6DS3 myIMU;
 
 // temperature control system
+void control_peltier_temperature(void);
+Timer control_peltier_temperature_timer(CONTROL_PELTIER_TEMPERATURE_INTERVAL, control_peltier_temperature);
+unsigned long tuning_cutoff_time;
+int peltier_previous_error;
+int peltier_integral;
+unsigned long peltier_read_time;
 int imu_temp_C_10X;
 int peltier_temp_C_10X;
+int peltier_target_C_10X = 450;
 int assay_temp_C_10X;
 int control_temp_C_10X;
 bool heater_on = false;
