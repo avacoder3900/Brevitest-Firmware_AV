@@ -555,7 +555,6 @@ void peltier_temperature_read() {
     peltier_temp_C_10X = get_thermistor_temperature(pinPeltierThermistor, PELTIER_THERMISTOR);
 
     temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
-    Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", peltier_temp_C_10X / 10, peltier_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 }
 
 void led_temperature_read(char channel) {
@@ -595,12 +594,6 @@ void imu_read() {
 
     int tempC_raw = myIMU.readRawTemp() + 400;
     imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
-    int temp_C_int = imu_temp_C_10X / 10;
-    int temp_C_dec = imu_temp_C_10X % 10;
-    int temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
-    int temp_F_int = temp_F_10X / 10;
-    int temp_F_dec = temp_F_10X % 10;
-    Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", temp_C_int, temp_C_dec, temp_F_int, temp_F_dec);
 }
 
 /////////////////////////////////////////////////////////////
@@ -813,11 +806,18 @@ void disable_controller_sensors() {
 }
 
 void read_all_controller_sensors() {
+    int temp_F_10X;
+
     if (enable_controller_sensors(false)) {
         imu_read();
+        temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+
         peltier_temperature_read();
-        led_temperature_read('A');
-        led_temperature_read('C');
+        temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", peltier_temp_C_10X / 10, peltier_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+        /*led_temperature_read('A');
+        led_temperature_read('C');*/
 
         disable_controller_sensors();
 
@@ -1634,7 +1634,7 @@ int particle_command(String arg) {
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
         case 14: // turn on buzzer param1 frequency param2 duration
-            if (param1 > 0 && param1 < 600) {
+            if (param1 > 0 && param1 < 900) {
                 peltier_target_C_10X = param1;
                 peltier_read_time = 0;
             }
@@ -1949,11 +1949,7 @@ void upload_tests() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-    /*if (millis() > tuning_cutoff_time) {
-        stop_peltier_temperature_control();
-        tuning_cutoff_time = 0xFFFFFFFF;
-    }*/
-    /*if (callback_complete) {
+    if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
@@ -2054,5 +2050,5 @@ void loop() {
         SINGLE_THREADED_BLOCK() {
             read_optical_sensors(read_optical_sensors_command_param);
         }
-    }*/
+    }
 }
