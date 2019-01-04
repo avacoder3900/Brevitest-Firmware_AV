@@ -379,6 +379,18 @@ void turn_on_buzzer_for_duration(int frequency, int duration) {
     tone(pinBuzzer, frequency, duration);
 }
 
+void play_startup_tune() {
+    turn_on_buzzer_for_duration(392, 600);
+    delay(400);
+    turn_on_buzzer_for_duration(440, 600);
+    delay(400);
+    turn_on_buzzer_for_duration(349, 600);
+    delay(400);
+    turn_on_buzzer_for_duration(175, 600);
+    delay(400);
+    turn_on_buzzer_for_duration(262, 1200);
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                          FAN                            //
@@ -877,13 +889,15 @@ void control_peltier_temperature() {
         if (output > 0) {
             action = 'H';
             output = output > 500 ? 500 : output;
+            turn_off_fan();
             turn_on_heater_for_duration(output);
         }
-        else if (output < -500) {
-            turn_on_fan_for_duration(-output);
+        else if (output < -200) {
+            turn_on_fan();
             action = 'C';
         }
         else {
+            turn_off_fan();
             action = '-';
         }
 
@@ -1784,12 +1798,11 @@ void setup() {
 
         turn_on_interior_led_for_duration(2000);
 
-        turn_on_fan_for_duration(3000);
+        turn_on_fan_for_duration(2000);
 
         turn_on_heater_for_duration(500);
 
-        Serial.println("Testing buzzer");
-        turn_on_buzzer_for_duration(3000, 2000);
+        play_startup_tune();
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
