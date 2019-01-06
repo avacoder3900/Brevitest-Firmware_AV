@@ -552,6 +552,10 @@ int get_thermistor_temperature(int pin, int table_number) {
 
     raw = analogRead(pin);
 
+    if (raw == 0) {
+        return -1;
+    }
+
     resistance = (balance_resistance * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
     ratio = resistance * THERMISTOR_SCALE / base_resistance;
 
@@ -604,8 +608,79 @@ void imu_read() {
     Serial.print(" Z = ");
     Serial.println(myIMU.readRawGyroZ());*/
 
-    int tempC_raw = myIMU.readRawTemp() + 400;
-    imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
+    int error, tempC_raw;
+    error = myIMU.begin();
+    if (error) {
+        Serial.printlnf("Error setting up IMU, code: %d", error);
+    }
+    else {
+        int tempC_raw = myIMU.readRawTemp() + 400;
+        imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//               BAROMETRIC PRESSURE SENSOR                //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void pressure_read() {
+    int bytes_read, bytes_sent, result;
+    uint8_t data1, data2, data3;
+
+    Wire1.beginTransmission(PRESSURE_ADDRESS);
+    bytes_sent = Wire1.write(0x1E);
+    result = Wire1.endTransmission();
+    if (result != 0 || bytes_sent == 0) {
+        Serial.printlnf("Reset pressure sensor, %d bytes, result: %d", bytes_sent, result);
+    }
+
+    /*Wire1.beginTransmission(PRESSURE_ADDRESS);
+    bytes_sent = Wire1.write(0xA6);
+    result = Wire1.endTransmission();
+    if (result != 0) {
+        Serial.printlnf("Read pressure sensor PROM, %d bytes, result: %d", bytes_sent, result);
+    }
+
+    bytes_read = Wire1.requestFrom(PRESSURE_ADDRESS, 2);
+    Serial.printlnf("Data ready to read, %d bytes", bytes_read);
+
+    while (Wire1.available()) {
+        // read
+        data1 = Wire1.read();
+        data2 = Wire1.read();
+        Serial.printlnf("data1 - %d, data2 - %d", data1, data2);
+    }
+*/
+    Wire1.beginTransmission(PRESSURE_ADDRESS);
+    bytes_sent = Wire1.write(0x48);
+    result = Wire1.endTransmission();
+    if (result != 0 || bytes_sent == 0) {
+        Serial.printlnf("Read pressure, %d bytes, result: %d", bytes_sent, result);
+    }
+
+    Wire1.beginTransmission(PRESSURE_ADDRESS);
+    bytes_sent = Wire1.write(0x00);
+    result = Wire1.endTransmission();
+    if (result != 0 || bytes_sent == 0) {
+        Serial.printlnf("Read pressure, %d bytes, result: %d", bytes_sent, result);
+    }
+
+    delay(1000);
+
+    bytes_read = Wire1.requestFrom(PRESSURE_ADDRESS, 3);
+    Serial.printlnf("Data ready to read, %d bytes", bytes_read);
+
+    while (Wire1.available()) {
+        // read
+        data1 = Wire1.read();
+        data2 = Wire1.read();
+        data3 = Wire1.read();
+        Serial.printlnf("data1 - %d, data2 - %d, data3 - %d", data1, data2, data3);
+    }
+
+    pressure_10X = 0;
 }
 
 /////////////////////////////////////////////////////////////
@@ -828,8 +903,8 @@ void read_all_controller_sensors() {
         peltier_temperature_read();
         temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
         Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", peltier_temp_C_10X / 10, peltier_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
-        /*led_temperature_read('A');
-        led_temperature_read('C');*/
+
+        /*pressure_read();*/
 
         disable_controller_sensors();
 
@@ -874,37 +949,42 @@ void control_peltier_temperature() {
     prev_read_time = peltier_read_time;
     peltier_temperature_read();
     peltier_read_time = millis();
-
-    if (prev_read_time == 0) {
-        peltier_previous_error = 0;
-        peltier_integral = 0;
+    if (peltier_temp_C_10X == -1) {
+        turn_off_heater();
+        turn_off_fan();
     }
     else {
-        dt = peltier_read_time - prev_read_time;
-        error = peltier_target_C_10X - peltier_temp_C_10X;
-        peltier_integral += (error * dt) / 100000;
-        derivative = (1000 * (error - peltier_previous_error)) / dt;
-        output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
-
-        if (output > 0) {
-            action = 'H';
-            output = output > 500 ? 500 : output;
-            turn_off_fan();
-            turn_on_heater_for_duration(output);
-        }
-        else if (output < -200) {
-            turn_on_fan();
-            action = 'C';
+        if (prev_read_time == 0) {
+            peltier_previous_error = 0;
+            peltier_integral = 0;
         }
         else {
-            turn_off_fan();
-            action = '-';
-        }
+            dt = peltier_read_time - prev_read_time;
+            error = peltier_target_C_10X - peltier_temp_C_10X;
+            peltier_integral += (error * dt) / 100000;
+            derivative = (1000 * (error - peltier_previous_error)) / dt;
+            output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
 
-        i = peltier_temp_C_10X / 10;
-        d = peltier_temp_C_10X % 10;
-        /*Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);*/
-        peltier_previous_error = error;
+            if (output > 0) {
+                action = 'H';
+                output = output > 500 ? 500 : output;
+                turn_off_fan();
+                turn_on_heater_for_duration(output);
+            }
+            else if (output < -200) {
+                turn_on_fan();
+                action = 'C';
+            }
+            else {
+                turn_off_fan();
+                action = '-';
+            }
+
+            i = peltier_temp_C_10X / 10;
+            d = peltier_temp_C_10X % 10;
+            /*Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);*/
+            peltier_previous_error = error;
+        }
     }
 }
 
@@ -1690,142 +1770,6 @@ void check_device_state() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                          SETUP                          //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void watchdog() {
-    Serial.println("Watchdog!");
-}
-
-int particle_run_test(String arg) {
-    if (arg.length() == CARTRIDGE_UUID_LENGTH) {
-        arg.toCharArray(barcode_uuid, CARTRIDGE_UUID_LENGTH + 1);
-        barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-        Serial.printlnf("Running test for cartridge %s", barcode_uuid);
-        validate_cartridge();
-        return 1;
-    }
-    else {
-        return -1;
-    }
-}
-
-void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value) {
-    pinMode(pin, mode);
-    if (mode == OUTPUT) {
-        analogWrite(pin, value);
-    }
-}
-
-void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value) {
-    pinMode(pin, mode);
-    if (mode == OUTPUT) {
-        digitalWrite(pin, value);
-    }
-}
-
-void controller_i2c_bus_scan() {
-    int addr, bytes_sent, result;
-
-    if (enable_controller_sensors(true)) {
-        Serial.println("Starting I2C bus scan");
-        for (addr = 0; addr < 127; addr++) {
-            Wire1.beginTransmission(addr);
-            bytes_sent = Wire1.write(0x00);
-            result = Wire1.endTransmission();
-            if (result == 0) {
-                Serial.printlnf("I2C device found at address %X", addr);
-            }
-        }
-    }
-    disable_controller_sensors();
-}
-
-void setup() {
-        Particle.variable("register", particle_register, STRING);
-        Particle.variable("tempC_10X", &imu_temp_C_10X, INT);
-        Particle.function("command", particle_command);
-        Particle.function("run_test", particle_run_test);
-
-        device_id_string = System.deviceID();
-        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
-        device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
-        device_id[DEVICE_ID_LENGTH] = '\0';
-
-        init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
-        init_digital_pin(pinDoorOpen, INPUT_PULLDOWN, 0);
-
-        init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
-        init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
-
-        init_digital_pin(pinLEDAssay, OUTPUT, LOW);
-        init_digital_pin(pinLEDControl, OUTPUT, LOW);
-
-        init_analog_pin(pinPeltierThermistor, INPUT, 0);
-        init_analog_pin(pinAssayThermistor, INPUT, 0);
-        init_analog_pin(pinControlThermistor, INPUT, 0);
-
-        init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
-        init_digital_pin(pinControlSensor_Ready, INPUT, 0);
-
-        init_analog_pin(pinInteriorLED, OUTPUT, 0);
-        init_analog_pin(pinSolenoid, OUTPUT, 0);
-        init_analog_pin(pinHeater, OUTPUT, 0);
-        init_analog_pin(pinFan, OUTPUT, 0);
-        init_analog_pin(pinBuzzer, OUTPUT, 0);
-
-        init_digital_pin(pinStepper_Step, OUTPUT, LOW);
-        init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
-        init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
-
-        Serial.begin(115200); // standard serial port
-
-        load_eeprom();
-        /*if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {*/
-            reset_eeprom();
-        /*}*/
-
-        /*Serial.println("Resetting stage");
-        reset_stage();
-
-        Serial.println("Firing solenoid");
-        move_solenoid(1000);
-
-        Serial.println("Turning on LEDs");
-        turn_on_both_LEDs_for_duration(1000);*/
-
-        turn_on_interior_led_for_duration(2000);
-
-        turn_on_fan_for_duration(2000);
-
-        turn_on_heater_for_duration(500);
-
-        play_startup_tune();
-
-        /*Serial.println("Scanning barcode");
-        scan_barcode();
-*/
-        reset_globals();
-        read_all_controller_sensors_timer.start();
-
-        check_device_state();
-        attachInterrupt(pinDoorOpen, door_open_interrupt, CHANGE);
-
-        Serial.printlnf("device id: %s", device_id);
-        Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
-
-        controller_i2c_bus_scan();
-
-        myIMU.begin();
-
-        /*tuning_cutoff_time = millis() + 60000;*/
-        start_peltier_temperature_control();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                           TESTS                         //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1953,6 +1897,140 @@ void upload_tests() {
                 return;
             }
         }
+}
+
+int particle_run_test(String arg) {
+    if (arg.length() == CARTRIDGE_UUID_LENGTH) {
+        arg.toCharArray(barcode_uuid, CARTRIDGE_UUID_LENGTH + 1);
+        barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+        Serial.printlnf("Running test for cartridge %s", barcode_uuid);
+        validate_cartridge();
+        return 1;
+    }
+    else {
+        return -1;
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                          SETUP                          //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void watchdog() {
+    Serial.println("Watchdog!");
+}
+
+void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value) {
+    pinMode(pin, mode);
+    if (mode == OUTPUT) {
+        analogWrite(pin, value);
+    }
+}
+
+void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value) {
+    pinMode(pin, mode);
+    if (mode == OUTPUT) {
+        digitalWrite(pin, value);
+    }
+}
+
+void controller_i2c_bus_scan() {
+    int addr, bytes_sent, result;
+
+    if (enable_controller_sensors(true)) {
+        Serial.println("Starting I2C bus scan");
+        for (addr = 0; addr < 127; addr++) {
+            Wire1.beginTransmission(addr);
+            bytes_sent = Wire1.write(0x00);
+            result = Wire1.endTransmission();
+            if (result == 0) {
+                Serial.printlnf("I2C device found at address %X", addr);
+            }
+        }
+    }
+    disable_controller_sensors();
+}
+
+void setup() {
+        Particle.variable("register", particle_register, STRING);
+        Particle.variable("tempC_10X", &imu_temp_C_10X, INT);
+        Particle.function("command", particle_command);
+        Particle.function("run_test", particle_run_test);
+
+        device_id_string = System.deviceID();
+        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
+        device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
+        device_id[DEVICE_ID_LENGTH] = '\0';
+
+        init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
+        init_digital_pin(pinDoorOpen, INPUT_PULLDOWN, 0);
+
+        init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
+        init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
+
+        init_digital_pin(pinLEDAssay, OUTPUT, LOW);
+        init_digital_pin(pinLEDControl, OUTPUT, LOW);
+
+        init_analog_pin(pinPeltierThermistor, INPUT, 0);
+        init_analog_pin(pinAssayThermistor, INPUT, 0);
+        init_analog_pin(pinControlThermistor, INPUT, 0);
+
+        init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
+        init_digital_pin(pinControlSensor_Ready, INPUT, 0);
+
+        init_analog_pin(pinInteriorLED, OUTPUT, 0);
+        init_analog_pin(pinSolenoid, OUTPUT, 0);
+        init_analog_pin(pinHeater, OUTPUT, 0);
+        init_analog_pin(pinFan, OUTPUT, 0);
+        init_analog_pin(pinBuzzer, OUTPUT, 0);
+
+        init_digital_pin(pinStepper_Step, OUTPUT, LOW);
+        init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
+        init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
+
+        Serial.begin(115200); // standard serial port
+
+        load_eeprom();
+        /*if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {*/
+            reset_eeprom();
+        /*}*/
+
+        /*Serial.println("Resetting stage");
+        reset_stage();
+
+        Serial.println("Firing solenoid");
+        move_solenoid(1000);
+
+        Serial.println("Turning on LEDs");
+        turn_on_both_LEDs_for_duration(1000);*/
+
+        turn_on_interior_led_for_duration(2000);
+
+        turn_on_fan_for_duration(2000);
+
+        turn_on_heater_for_duration(500);
+
+        play_startup_tune();
+
+        /*Serial.println("Scanning barcode");
+        scan_barcode();
+*/
+        reset_globals();
+        read_all_controller_sensors_timer.start();
+
+        check_device_state();
+        attachInterrupt(pinDoorOpen, door_open_interrupt, CHANGE);
+
+        Serial.printlnf("device id: %s", device_id);
+        Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
+
+        controller_i2c_bus_scan();
+
+        /*tuning_cutoff_time = millis() + 60000;*/
+        start_peltier_temperature_control();
 }
 
 /////////////////////////////////////////////////////////////

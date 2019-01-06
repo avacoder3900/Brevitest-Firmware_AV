@@ -55,6 +55,9 @@
 #define LED_THERMISTOR_BASE_RESISTANCE 10000
 #define TABLE_LED_LENGTH 21
 
+// barometric pressure sensor
+#define PRESSURE_ADDRESS 0x76
+
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63
@@ -212,6 +215,9 @@ int assay_temp_C_10X;
 int control_temp_C_10X;
 bool heater_on = false;
 bool fan_on = false;
+
+// barometric pressure sensor
+int pressure_10X;
 
 // optical sensors
 unsigned long last_optical_sensor_reading_time = 0;

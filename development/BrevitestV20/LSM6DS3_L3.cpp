@@ -54,8 +54,8 @@ status_t LSM6DS3Core::beginCore(void) {
 	uint8_t readCheck;
 	status_t returnError = IMU_SUCCESS;
 
-	Wire1.begin();
-	delay(20);
+	// Wire1.begin();
+	// delay(20);
 
 	//Check the ID register to determine if the operation was a success.
 	readRegister(&readCheck, LSM6DS3_ACC_GYRO_WHO_AM_I_REG);
