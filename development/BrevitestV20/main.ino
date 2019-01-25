@@ -232,7 +232,7 @@ void move_solenoid(int duration) {
 void move_steps(int steps, int step_delay){
         //rotate a specific number of steps - negative for reverse movement
 
-        int dir = (steps > 0) ? LOW : HIGH;
+        int dir = (steps < 0) ? LOW : HIGH;
         digitalWrite(pinStepper_Dir, dir);
 
         steps = abs(steps);
@@ -245,7 +245,7 @@ void move_steps(int steps, int step_delay){
                         Particle.process();
                 }*/
 
-                if ((dir == HIGH) && (digitalRead(pinLimitSwitch) == LOW)) {
+                if ((dir == LOW) && (digitalRead(pinLimitSwitch) == LOW)) {
                     delay(20);  // debounce
                     if (digitalRead(pinLimitSwitch) == LOW) {
                         cumulative_steps = 0;
@@ -253,7 +253,7 @@ void move_steps(int steps, int step_delay){
                     }
                 }
 
-                if (dir == LOW) {
+                if (dir == HIGH) {
                         if (cumulative_steps > CUMULATIVE_STEP_LIMIT) {
                                 break;
                         }
