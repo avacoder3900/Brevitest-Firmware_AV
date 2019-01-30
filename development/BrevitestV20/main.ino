@@ -1745,27 +1745,27 @@ int particle_command(String arg) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void door_open_interrupt() {
+void door_locked_interrupt() {
     door_state_changed = true;
 }
 
 void check_device_state() {
     delay(50); // debounce
     door_state_changed = false;
-    door_open = digitalRead(pinDoorOpen) == LOW;
+    door_locked = digitalRead(pinDoorOpen) == HIGH;
 
-    if (door_open) {
-        cartridge_loaded = false;
-    }
-    else {
-        if (enable_optical_sensors(false)) {
+    if (door_locked) {
+		if (enable_optical_sensors(false)) {
             get_data_from_one_optical_sensor('A', CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD, false);
             cartridge_loaded = optical_state_reading.red < CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD;
             disable_optical_sensors();
         }
     }
+    else {
+		cartridge_loaded = false;
+    }
 
-    Serial.printlnf("Door open? %c, Cartridge loaded? %c", door_open ? 'Y' : 'N',  cartridge_loaded ? 'Y' : 'N');
+    Serial.printlnf("Door locked? %c, Cartridge loaded? %c", door_locked ? 'Y' : 'N',  cartridge_loaded ? 'Y' : 'N');
 }
 
 /////////////////////////////////////////////////////////////
@@ -1994,9 +1994,11 @@ void setup() {
         Serial.begin(115200); // standard serial port
 
         load_eeprom();
-        /*if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {*/
+        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
             reset_eeprom();
-        /*}*/
+        }
+
+		controller_i2c_bus_scan();
 
         /*Serial.println("Resetting stage");
         reset_stage();
@@ -2007,13 +2009,13 @@ void setup() {
         Serial.println("Turning on LEDs");
         turn_on_both_LEDs_for_duration(1000);*/
 
-        turn_on_interior_led_for_duration(2000);
+        /*turn_on_interior_led_for_duration(2000);*/
 
-        turn_on_fan_for_duration(2000);
+        /*turn_on_fan_for_duration(2000);*/
 
-        turn_on_heater_for_duration(500);
+        /*turn_on_heater_for_duration(500);*/
 
-        play_startup_tune();
+        /*play_startup_tune();*/
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
@@ -2022,12 +2024,10 @@ void setup() {
         read_all_controller_sensors_timer.start();
 
         check_device_state();
-        attachInterrupt(pinDoorOpen, door_open_interrupt, CHANGE);
+        attachInterrupt(pinDoorOpen, door_locked_interrupt, CHANGE);
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
-
-        controller_i2c_bus_scan();
 
         /*tuning_cutoff_time = millis() + 60000;*/
         start_peltier_temperature_control();
@@ -2040,7 +2040,9 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-    if (callback_complete) {
+	controller_i2c_bus_scan();
+	delay(5000);
+    /*if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
@@ -2086,7 +2088,7 @@ void loop() {
             }
             if (cartridge_is_heated) {
                 test_startup_successful = false;
-                if (door_open) {
+                if (!door_locked) {
                     cancelling_test = true;
                 }
                 else {
@@ -2105,7 +2107,7 @@ void loop() {
 
         if (ready_to_scan_barcode) {
             ready_to_scan_barcode = false;
-            if (!door_open) {
+            if (door_locked) {
                 if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
                     validate_cartridge();
                 }
@@ -2141,5 +2143,5 @@ void loop() {
         SINGLE_THREADED_BLOCK() {
             read_optical_sensors(read_optical_sensors_command_param);
         }
-    }
+    }*/
 }

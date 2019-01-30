@@ -169,7 +169,7 @@ unsigned long upload_timeout;
 
 // device state
 volatile bool door_state_changed = false;
-bool door_open = false;
+bool door_locked = false;
 bool cartridge_loaded = false;
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;
