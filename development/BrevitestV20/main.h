@@ -1,4 +1,5 @@
 #include "LSM6DS3_L3.h"
+#include "BaroSensor.h"
 
 //
 // GLOBAL VARIABLES AND DEFINES
@@ -198,6 +199,9 @@ Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_a
 
 // IMU
 LSM6DS3 myIMU;
+
+/// barometric pressure sensor
+// BaroSensorClass BaroSensor;
 
 // temperature control system
 void control_peltier_temperature(void);

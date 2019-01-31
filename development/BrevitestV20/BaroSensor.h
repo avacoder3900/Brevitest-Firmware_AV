@@ -42,6 +42,7 @@ class BaroSensorClass {
  public:
   BaroSensorClass() : initialised(false), err(ERR_NEEDS_BEGIN) { }
   void begin();
+  void end();
 
   /* Return temperature in C or Fahrenheit */
   int getTemperature(TempUnit scale = CELSIUS,

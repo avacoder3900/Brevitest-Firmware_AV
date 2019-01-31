@@ -87,7 +87,6 @@ status_t LSM6DS3Core::readRegisterRegion(uint8_t *outputPointer , uint8_t offset
 	//define pointer that will point to the external space
 	uint8_t i = 0;
 	uint8_t c = 0;
-	uint8_t tempFFCounter = 0;
 
 	Wire1.beginTransmission(I2CAddress);
 	Wire1.write(offset);
@@ -119,7 +118,7 @@ status_t LSM6DS3Core::readRegisterRegion(uint8_t *outputPointer , uint8_t offset
 //****************************************************************************//
 status_t LSM6DS3Core::readRegister(uint8_t* outputPointer, uint8_t offset) {
 	//Return value
-	uint8_t result;
+	uint8_t result = 0xFF;
 	uint8_t numBytes = 1;
 	status_t returnError = IMU_SUCCESS;
 

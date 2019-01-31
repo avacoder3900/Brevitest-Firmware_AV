@@ -49,6 +49,7 @@ void BaroSensorClass::begin()
     int req = Wire1.requestFrom(BARO_ADDR, 2);
     if(req != 2) {
       err = ERR_BAD_READLEN;
+      Serial.printlnf("Barometric pressure sensor error, %d", err);
       return;
     }
     prom[i] = ((uint16_t)Wire1.read()) << 8;
@@ -86,61 +87,33 @@ int BaroSensorClass::getPressure(BaroOversampleLevel level)
 
 bool BaroSensorClass::getTempAndPressure(int *temperature, int *pressure, TempUnit tempScale, BaroOversampleLevel level)
 {
-  if(err || !initialised)
-    return false;
+    if (err || !initialised) {
+        return false;
+    }
 
-  int d2 = takeReading(CMD_START_D2(level), level);
-  if(d2 == 0)
-    return false;
-  int dt = d2 - c5 * (1L<<8);
+    int64_t d2 = takeReading(CMD_START_D2(level), level);
+    if (d2 == 0) {
+        return false;
+    }
 
-  *temperature = 2000 + (dt * c6) / (1L<<23);
-
-  // /* Second order temperature compensation */
-  // int t2;
-  // if(temp >= 2000) {
-  //   /* High temperature */
-  //   t2 = 5 * (dt * dt) / (1LL<<38);
-  // } else {
-  //     /* Low temperature */
-  //   t2 = 3 * (dt * dt) / (1LL<<33);
-  // }
-  //
-  // if(temperature != NULL) {
-  //   *temperature = (temp - t2) / 100;
-    if(tempScale == FAHRENHEIT) {
+    int64_t dT = d2 - ((int64_t) c5 << 8);
+    *temperature = (2000 + ((dT * (int64_t) c6) >> 23)) / 10;
+    if (tempScale == FAHRENHEIT) {
       *temperature = *temperature * 9 / 5 + 32;
     }
 
-  if(pressure != NULL) {
-    int d1 = takeReading(CMD_START_D1(level), level);
-    if(d1 == 0)
-      return false;
+    if(pressure != NULL) {
+        int64_t d1 = takeReading(CMD_START_D1(level), level);
+        if (d1 == 0) {
+            return false;
+        }
 
-    int off = c2 * (1LL<<17) + (c4 * dt) / (1LL<<6);
-    int sens = c1 * (1LL<<16) + (c3 * dt) / (1LL<<7);
+        int64_t OFF  = ((int64_t) c2 << 17) + ((dT * (int64_t) c4) >> 6);
+        int64_t SENS = ((int64_t) c1 << 16) + ((dT * (int64_t) c3) >> 7);
+        *pressure = (((((d1 * SENS) >> 21) - OFF) >> 15) + 2000) * 2953 / 1000000;
+    }
 
-    // /* Second order temperature compensation for pressure */
-    // if(temp < 2000) {
-    //   /* Low temperature */
-    //   int tx = temp-2000;
-    //   tx *= tx;
-    //   int off2 = 61 * tx / (1<<4);
-    //   int sens2 = 29 * tx / (1<<4);
-    //   if(temp < -1500) {
-    //     /* Very low temperature */
-    //     tx = temp+1500;
-    //     tx *= tx;
-    //     off2 += 17 * tx;
-    //     sens2 += 9 * tx;
-    //   }
-    //   off -= off2;
-    //   sens -= sens2;
-    // }
-
-    *pressure = (d1 * sens/(1LL<<21) - off) / (1LL << 15);
-  }
-  return true;
+    return true;
 }
 
 int BaroSensorClass::takeReading(uint8_t trigger_cmd, BaroOversampleLevel oversample_level)

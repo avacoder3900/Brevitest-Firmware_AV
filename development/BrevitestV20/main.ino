@@ -1,4 +1,5 @@
-#include "LSM6DS3_L3.h"
+/*#include "LSM6DS3_L3.h"
+#include "BaroSensor.h"*/
 #include "main.h"
 #include "Serial4/Serial4.h"
 
@@ -313,7 +314,7 @@ void reset_stage() {
 
 int scan_barcode() {
         unsigned long timeout;
-        int buf, i = 0;
+        int i = 0;
         bool read_success = false;
 
         barcode_being_scanned = true;
@@ -566,11 +567,11 @@ int get_thermistor_temperature(int pin, int table_number) {
 }
 
 void peltier_temperature_read() {
-    int temp_F_10X;
+    /*int temp_F_10X;*/
 
     peltier_temp_C_10X = get_thermistor_temperature(pinPeltierThermistor, PELTIER_THERMISTOR);
 
-    temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
+    /*temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;*/
 }
 
 void led_temperature_read(char channel) {
@@ -614,7 +615,7 @@ void imu_read() {
         Serial.printlnf("Error setting up IMU, code: %d", error);
     }
     else {
-        int tempC_raw = myIMU.readRawTemp() + 400;
+        tempC_raw = myIMU.readRawTemp() + 400;
         imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
     }
 }
@@ -626,61 +627,11 @@ void imu_read() {
 /////////////////////////////////////////////////////////////
 
 void pressure_read() {
-    int bytes_read, bytes_sent, result;
-    uint8_t data1, data2, data3;
+	int temp, press;
 
-    Wire1.beginTransmission(PRESSURE_ADDRESS);
-    bytes_sent = Wire1.write(0x1E);
-    result = Wire1.endTransmission();
-    if (result != 0 || bytes_sent == 0) {
-        Serial.printlnf("Reset pressure sensor, %d bytes, result: %d", bytes_sent, result);
-    }
-
-    /*Wire1.beginTransmission(PRESSURE_ADDRESS);
-    bytes_sent = Wire1.write(0xA6);
-    result = Wire1.endTransmission();
-    if (result != 0) {
-        Serial.printlnf("Read pressure sensor PROM, %d bytes, result: %d", bytes_sent, result);
-    }
-
-    bytes_read = Wire1.requestFrom(PRESSURE_ADDRESS, 2);
-    Serial.printlnf("Data ready to read, %d bytes", bytes_read);
-
-    while (Wire1.available()) {
-        // read
-        data1 = Wire1.read();
-        data2 = Wire1.read();
-        Serial.printlnf("data1 - %d, data2 - %d", data1, data2);
-    }
-*/
-    Wire1.beginTransmission(PRESSURE_ADDRESS);
-    bytes_sent = Wire1.write(0x48);
-    result = Wire1.endTransmission();
-    if (result != 0 || bytes_sent == 0) {
-        Serial.printlnf("Read pressure, %d bytes, result: %d", bytes_sent, result);
-    }
-
-    Wire1.beginTransmission(PRESSURE_ADDRESS);
-    bytes_sent = Wire1.write(0x00);
-    result = Wire1.endTransmission();
-    if (result != 0 || bytes_sent == 0) {
-        Serial.printlnf("Read pressure, %d bytes, result: %d", bytes_sent, result);
-    }
-
-    delay(1000);
-
-    bytes_read = Wire1.requestFrom(PRESSURE_ADDRESS, 3);
-    Serial.printlnf("Data ready to read, %d bytes", bytes_read);
-
-    while (Wire1.available()) {
-        // read
-        data1 = Wire1.read();
-        data2 = Wire1.read();
-        data3 = Wire1.read();
-        Serial.printlnf("data1 - %d, data2 - %d, data3 - %d", data1, data2, data3);
-    }
-
-    pressure_10X = 0;
+    BaroSensor.begin();
+    BaroSensor.getTempAndPressure(&temp, &press, CELSIUS, OSR_512);
+	Serial.printlnf("Temperature: %d.%d˚C, Pressure: %d.%d mmHg", temp / 10, temp % 10, press / 10, press % 10);
 }
 
 /////////////////////////////////////////////////////////////
@@ -904,7 +855,7 @@ void read_all_controller_sensors() {
         temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
         Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", peltier_temp_C_10X / 10, peltier_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 
-        /*pressure_read();*/
+        pressure_read();
 
         disable_controller_sensors();
 
@@ -942,8 +893,8 @@ void read_all_controller_sensors() {
 
 void control_peltier_temperature() {
     int dt, error, derivative, output;
-    int i, d;
     unsigned long prev_read_time;
+	/*int i, d;*/
     char action;
 
     prev_read_time = peltier_read_time;
@@ -980,9 +931,9 @@ void control_peltier_temperature() {
                 action = '-';
             }
 
-            i = peltier_temp_C_10X / 10;
+            /*i = peltier_temp_C_10X / 10;
             d = peltier_temp_C_10X % 10;
-            /*Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);*/
+            Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);*/
             peltier_previous_error = error;
         }
     }
@@ -2009,7 +1960,7 @@ void setup() {
         Serial.println("Turning on LEDs");
         turn_on_both_LEDs_for_duration(1000);*/
 
-        /*turn_on_interior_led_for_duration(2000);*/
+        turn_on_interior_led_for_duration(2000);
 
         /*turn_on_fan_for_duration(2000);*/
 
@@ -2040,8 +1991,8 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-	controller_i2c_bus_scan();
-	delay(5000);
+	/*controller_i2c_bus_scan();
+	delay(5000);*/
     /*if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
