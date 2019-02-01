@@ -1706,6 +1706,10 @@ void check_device_state() {
     door_locked = digitalRead(pinDoorOpen) == HIGH;
 
     if (door_locked) {
+		RGB.control(true);
+		RGB.color(0, 255, 0);
+		delay(1000);
+		RGB.control(false);
 		if (enable_optical_sensors(false)) {
             get_data_from_one_optical_sensor('A', CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD, false);
             cartridge_loaded = optical_state_reading.red < CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD;
@@ -1951,22 +1955,22 @@ void setup() {
 
 		controller_i2c_bus_scan();
 
-        /*Serial.println("Resetting stage");
+        Serial.println("Resetting stage");
         reset_stage();
 
-        Serial.println("Firing solenoid");
-        move_solenoid(1000);
+        /*Serial.println("Firing solenoid");
+        move_solenoid(1000);*/
 
         Serial.println("Turning on LEDs");
-        turn_on_both_LEDs_for_duration(1000);*/
+        turn_on_both_LEDs_for_duration(1000);
 
         turn_on_interior_led_for_duration(2000);
 
-        /*turn_on_fan_for_duration(2000);*/
+        turn_on_fan_for_duration(2000);
 
-        /*turn_on_heater_for_duration(500);*/
+        turn_on_heater_for_duration(500);
 
-        /*play_startup_tune();*/
+        play_startup_tune();
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
@@ -1991,9 +1995,7 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-	/*controller_i2c_bus_scan();
-	delay(5000);*/
-    /*if (callback_complete) {
+    if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
@@ -2094,5 +2096,5 @@ void loop() {
         SINGLE_THREADED_BLOCK() {
             read_optical_sensors(read_optical_sensors_command_param);
         }
-    }*/
+    }
 }
