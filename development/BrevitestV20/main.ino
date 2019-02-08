@@ -381,15 +381,21 @@ void turn_on_buzzer_for_duration(int frequency, int duration) {
 }
 
 void play_startup_tune() {
-    turn_on_buzzer_for_duration(392, 600);
-    delay(400);
-    turn_on_buzzer_for_duration(440, 600);
-    delay(400);
-    turn_on_buzzer_for_duration(349, 600);
-    delay(400);
-    turn_on_buzzer_for_duration(175, 600);
-    delay(400);
-    turn_on_buzzer_for_duration(262, 1200);
+    turn_on_buzzer_for_duration(392, 250);
+    delay(250);
+	turn_on_buzzer_for_duration(392, 250);
+    delay(250);
+	turn_on_buzzer_for_duration(392, 250);
+    delay(250);
+    turn_on_buzzer_for_duration(311, 1200);
+	delay(2000);
+	turn_on_buzzer_for_duration(349, 250);
+    delay(250);
+	turn_on_buzzer_for_duration(349, 250);
+    delay(250);
+	turn_on_buzzer_for_duration(349, 250);
+    delay(250);
+    turn_on_buzzer_for_duration(294, 1200);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1653,10 +1659,9 @@ int particle_command(String arg) {
         case 8: // reset params
             reset_eeprom();
             return (int) eeprom.data_format_version;
-        case 9: // set solenoid sustain power
-            eeprom.param.solenoid_power = 0xFF00 + (uint8_t) param1;
-            move_solenoid(2000);
-            return eeprom.param.solenoid_power;
+        case 9: // fire solenoid
+            move_solenoid(param1);
+            return param1;
         case 10: // turn on assay LED for param1 milliseconds
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
@@ -1706,17 +1711,24 @@ void check_device_state() {
     door_locked = digitalRead(pinDoorOpen) == HIGH;
 
     if (door_locked) {
-		RGB.control(true);
-		RGB.color(0, 255, 0);
-		delay(1000);
-		RGB.control(false);
 		if (enable_optical_sensors(false)) {
+			turn_on_interior_led();
             get_data_from_one_optical_sensor('A', CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD, false);
+			Serial.printlnf("Cartridge loaded? reading: %d, threshold: %d", optical_state_reading.red, CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD);
             cartridge_loaded = optical_state_reading.red < CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD;
             disable_optical_sensors();
+			turn_off_interior_led();
+			if (cartridge_loaded) {
+				blinkCartridgeLoaded.setActive(true);
+			}
+			else {
+				blinkNoCartridge.setActive(true);
+			}
         }
     }
     else {
+		blinkCartridgeLoaded.setActive(false);
+		blinkNoCartridge.setActive(false);
 		cartridge_loaded = false;
     }
 
@@ -1958,15 +1970,15 @@ void setup() {
         Serial.println("Resetting stage");
         reset_stage();
 
-        /*Serial.println("Firing solenoid");
-        move_solenoid(1000);*/
+        Serial.println("Firing solenoid");
+        move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
-        turn_on_both_LEDs_for_duration(1000);
+        turn_on_both_LEDs_for_duration(500);
 
-        turn_on_interior_led_for_duration(2000);
+        turn_on_interior_led_for_duration(500);
 
-        turn_on_fan_for_duration(2000);
+        turn_on_fan_for_duration(500);
 
         turn_on_heater_for_duration(500);
 

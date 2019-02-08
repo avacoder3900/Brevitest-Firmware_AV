@@ -110,7 +110,7 @@
 #define UPLOAD_INTERVAL 20000
 
 // state
-#define CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD 16500
+#define CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD 5000
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
@@ -167,6 +167,11 @@ unsigned long start_timeout;
 unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
+
+// device LED
+LEDStatus blinkProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
+LEDStatus blinkCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_NORMAL);
+LEDStatus blinkNoCartridge(RGB_COLOR_GRAY, LED_PATTERN_BLINK, LED_SPEED_FAST);
 
 // device state
 volatile bool door_state_changed = false;
