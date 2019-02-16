@@ -436,7 +436,6 @@ void turn_on_fan_for_duration(int duration) {
 void turn_on_heater() {
     if (!heater_on) {
         /*Serial.println("Turning on heater");*/
-        pinMode(pinInteriorLED, INPUT);
         pinMode(pinHeater, OUTPUT);
         analogWrite(pinHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
         heater_on = true;
@@ -447,6 +446,8 @@ void turn_off_heater() {
     if (heater_on) {
         /*Serial.println("Turning off heater");*/
         analogWrite(pinHeater, 0);
+		pinMode(pinHeater, INPUT);
+	    pinMode(pinInteriorLED, INPUT);
         heater_on = false;
     }
 }
@@ -465,7 +466,6 @@ void turn_on_heater_for_duration(int duration) {
 
 void turn_on_interior_led() {
     Serial.println("Turning on interior LED");
-    pinMode(pinHeater, INPUT);
     pinMode(pinInteriorLED, OUTPUT);
     analogWrite(pinInteriorLED, 255);
 }
@@ -473,6 +473,8 @@ void turn_on_interior_led() {
 void turn_off_interior_led() {
     Serial.println("Turning off interior LED");
     analogWrite(pinInteriorLED, 0);
+	pinMode(pinHeater, INPUT);
+    pinMode(pinInteriorLED, INPUT);
 }
 
 void turn_on_interior_led_for_duration(int duration) {
@@ -1689,6 +1691,9 @@ int particle_command(String arg) {
                 peltier_read_time = 0;
             }
             return param1;
+		case 15: // set peltier target temperature
+            peltier_target_C_10X = param1;
+            return param1;
 }
 
     return 0;
@@ -1948,9 +1953,10 @@ void setup() {
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-        init_analog_pin(pinInteriorLED, OUTPUT, 0);
+        init_analog_pin(pinInteriorLED, INPUT, 0);
+		init_analog_pin(pinHeater, INPUT, 0);
+
         init_analog_pin(pinSolenoid, OUTPUT, 0);
-        init_analog_pin(pinHeater, OUTPUT, 0);
         init_analog_pin(pinFan, OUTPUT, 0);
         init_analog_pin(pinBuzzer, OUTPUT, 0);
 
