@@ -400,62 +400,61 @@ void play_startup_tune() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                          FAN                            //
+//                   PROXIMAL HEATER                       //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_fan() {
-    if (!fan_on) {
-        /*Serial.println("Turning on fan");*/
-        pinMode(pinFan, OUTPUT);
-        analogWrite(pinFan, 255);
-        fan_on = true;
+void turn_on_proximal_heater() {
+    if (!proximal_heater_on) {
+        /*Serial.println("Turning on proximal heater");*/
+        pinMode(pinProximalHeater, OUTPUT);
+        analogWrite(pinProximalHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
+        proximal_heater_on = true;
     }
 }
 
-void turn_off_fan() {
-    if (fan_on) {
-        /*Serial.println("Turning off fan");*/
-        analogWrite(pinFan, 0);
-        fan_on = false;
-    }
-}
-
-void turn_on_fan_for_duration(int duration) {
-    turn_on_fan();
-    delay(duration);
-    turn_off_fan();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                        HEATER                           //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void turn_on_heater() {
-    if (!heater_on) {
-        /*Serial.println("Turning on heater");*/
-        pinMode(pinHeater, OUTPUT);
-        analogWrite(pinHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
-        heater_on = true;
-    }
-}
-
-void turn_off_heater() {
-    if (heater_on) {
-        /*Serial.println("Turning off heater");*/
-        analogWrite(pinHeater, 0);
-		pinMode(pinHeater, INPUT);
+void turn_off_proximal_heater() {
+    if (proximal_heater_on) {
+        /*Serial.println("Turning off proximal heater");*/
+        analogWrite(pinProximalHeater, 0);
+		pinMode(pinProximalHeater, INPUT);
 	    pinMode(pinInteriorLED, INPUT);
-        heater_on = false;
+        proximal_heater_on = false;
     }
 }
 
-void turn_on_heater_for_duration(int duration) {
-    turn_on_heater();
+void turn_on_proximal_heater_for_duration(int duration) {
+    turn_on_proximal_heater();
     delay(duration);
-    turn_off_heater();
+    turn_off_proximal_heater();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                    DISTAL HEATER                        //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void turn_on_distal_heater() {
+    if (!distal_heater_on) {
+        /*Serial.println("Turning on distal heater");*/
+        analogWrite(pinDistalHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
+        distal_heater_on = true;
+    }
+}
+
+void turn_off_distal_heater() {
+    if (distal_heater_on) {
+        /*Serial.println("Turning off distal heater");*/
+        analogWrite(pinDistalHeater, 0);
+        distal_heater_on = false;
+    }
+}
+
+void turn_on_distal_heater_for_duration(int duration) {
+    turn_on_distal_heater();
+    delay(duration);
+    turn_off_distal_heater();
 }
 
 /////////////////////////////////////////////////////////////
@@ -473,7 +472,7 @@ void turn_on_interior_led() {
 void turn_off_interior_led() {
     Serial.println("Turning off interior LED");
     analogWrite(pinInteriorLED, 0);
-	pinMode(pinHeater, INPUT);
+	pinMode(pinProximalHeater, INPUT);
     pinMode(pinInteriorLED, INPUT);
 }
 
@@ -494,7 +493,7 @@ void turn_on_assay_LED() {
 }
 
 void turn_on_control_LED() {
-    digitalWrite(pinLEDControl, HIGH);
+	digitalWrite(pinLEDControl, HIGH);
 }
 
 void turn_off_assay_LED() {
@@ -506,8 +505,8 @@ void turn_off_control_LED() {
 }
 
 void turn_off_both_LEDs() {
-    digitalWrite(pinLEDAssay, LOW);
-    digitalWrite(pinLEDControl, LOW);
+	digitalWrite(pinLEDAssay, LOW);
+	digitalWrite(pinLEDControl, LOW);
 }
 
 void turn_on_assay_LED_for_duration(int duration) {
@@ -577,7 +576,7 @@ int get_thermistor_temperature(int pin, int table_number) {
 void peltier_temperature_read() {
     /*int temp_F_10X;*/
 
-    peltier_temp_C_10X = get_thermistor_temperature(pinPeltierThermistor, PELTIER_THERMISTOR);
+    peltier_temp_C_10X = get_thermistor_temperature(pinBaseThermistor, PELTIER_THERMISTOR);
 
     /*temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;*/
 }
@@ -585,11 +584,11 @@ void peltier_temperature_read() {
 void led_temperature_read(char channel) {
     /*int temp_F_10X;
 
-    assay_LED_temp_C_10X = get_thermistor_temperature(pinAssayThermistor, LED_THERMISTOR);
+    assay_LED_temp_C_10X = get_thermistor_temperature(pinProximalThermistor, LED_THERMISTOR);
     temp_F_10X = ((assay_LED_temp_C_10X * 9) / 5) + 320;
     Serial.printlnf("Assay LED temperature: %d.%d˚C, %d.%d˚F", assay_LED_temp_C_10X / 10, assay_LED_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 
-    control_LED_temp_C_10X = get_thermistor_temperature(pinControlThermistor, LED_THERMISTOR);
+    control_LED_temp_C_10X = get_thermistor_temperature(pinDistalThermistor, LED_THERMISTOR);
     temp_F_10X = ((control_LED_temp_C_10X * 9) / 5) + 320;
     Serial.printlnf("Control LED temperature: %d.%d˚C, %d.%d˚F", control_LED_temp_C_10X / 10, control_LED_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);*/
 }
@@ -866,27 +865,6 @@ void read_all_controller_sensors() {
         pressure_read();
 
         disable_controller_sensors();
-
-        /*if (cartridge_loaded) {
-            if (temperature_F > PELTIER_OFF_THRESHOLD) {
-                turn_off_heater();
-            }
-            if (temperature_F < PELTIER_ON_THRESHOLD) {
-                RGB.control(true);
-                RGB.color(255, 0, 0);
-
-                turn_on_heater_for_duration(2000);
-
-                RGB.control(false);
-            }
-
-            if (temperature_F > FAN_ON_OFF_THRESHOLD) {
-                turn_on_fan();
-            }
-            if (temperature_F < FAN_ON_OFF_THRESHOLD) {
-                turn_off_fan();
-            }
-        }*/
     }
     else {
         Serial.printlnf("Controller I2C busy, read skipped");
@@ -909,8 +887,7 @@ void control_peltier_temperature() {
     peltier_temperature_read();
     peltier_read_time = millis();
     if (peltier_temp_C_10X == -1) {
-        turn_off_heater();
-        turn_off_fan();
+        turn_off_proximal_heater();
     }
     else {
         if (prev_read_time == 0) {
@@ -927,16 +904,7 @@ void control_peltier_temperature() {
             if (output > 0) {
                 action = 'H';
                 output = output > 500 ? 500 : output;
-                turn_off_fan();
-                turn_on_heater_for_duration(output);
-            }
-            else if (output < -200) {
-                turn_on_fan();
-                action = 'C';
-            }
-            else {
-                turn_off_fan();
-                action = '-';
+                turn_on_proximal_heater_for_duration(output);
             }
 
             /*i = peltier_temp_C_10X / 10;
@@ -1652,12 +1620,12 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
-        case 6: // turn on heater
-            turn_on_heater_for_duration(param1);
+        case 6: // turn on proximal heater
+            turn_on_proximal_heater_for_duration(param1);
             return param1;
-        case 7: // turn on fan
-            turn_on_fan_for_duration(param1);
-            return param1;
+        case 7: // turn on distal heater
+			turn_on_distal_heater_for_duration(param1);
+			return param1;
         case 8: // reset params
             reset_eeprom();
             return (int) eeprom.data_format_version;
@@ -1946,18 +1914,18 @@ void setup() {
         init_digital_pin(pinLEDAssay, OUTPUT, LOW);
         init_digital_pin(pinLEDControl, OUTPUT, LOW);
 
-        init_analog_pin(pinPeltierThermistor, INPUT, 0);
-        init_analog_pin(pinAssayThermistor, INPUT, 0);
-        init_analog_pin(pinControlThermistor, INPUT, 0);
+        init_analog_pin(pinBaseThermistor, INPUT, 0);
+        init_analog_pin(pinProximalThermistor, INPUT, 0);
+        init_analog_pin(pinDistalThermistor, INPUT, 0);
 
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-        init_analog_pin(pinInteriorLED, INPUT, 0);
-		init_analog_pin(pinHeater, INPUT, 0);
+		init_analog_pin(pinProximalHeater, INPUT, 0);
+		init_analog_pin(pinDistalHeater, OUTPUT, 0);
 
-        init_analog_pin(pinSolenoid, OUTPUT, 0);
-        init_analog_pin(pinFan, OUTPUT, 0);
+		init_analog_pin(pinInteriorLED, INPUT, 0);
+    	init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinBuzzer, OUTPUT, 0);
 
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
@@ -1973,22 +1941,18 @@ void setup() {
 
 		controller_i2c_bus_scan();
 
-        Serial.println("Resetting stage");
-        reset_stage();
+        /*Serial.println("Resetting stage");
+        reset_stage();*/
 
-        Serial.println("Firing solenoid");
-        move_solenoid(1000);
+        /*Serial.println("Firing solenoid");
+        move_solenoid(1000);*/
 
-        Serial.println("Turning on LEDs");
-        turn_on_both_LEDs_for_duration(500);
+        /*Serial.println("Turning on LEDs");
+        turn_on_both_LEDs_for_duration(500);*/
 
         turn_on_interior_led_for_duration(500);
 
-        turn_on_fan_for_duration(500);
-
-        turn_on_heater_for_duration(500);
-
-        play_startup_tune();
+        /*play_startup_tune();*/
 
         /*Serial.println("Scanning barcode");
         scan_barcode();

@@ -128,18 +128,18 @@ ApplicationWatchdog wd(30000, watchdog);
 // ELECTRON PIN MAPPINGS
 
 int pinAssaySensor_Ready = A0;
-int pinPeltierThermistor = A1;
+int pinBaseThermistor = A1;
 int pinBarcode_Trigger = A2;
 int pinLEDAssay = A3;
 int pinSolenoid = A4;
-int pinHeater = A5;
+int pinProximalHeater = A5;
 int pinLEDControl = A6;
 int pinBarcode_Success = A7;
 int pinBuzzer = B0;
-int pinFan = B1;
+int pinDistalHeater = B1;
 int pinControlSensor_Ready = B2;
-int pinControlThermistor = B3;
-int pinAssayThermistor = B4;
+int pinDistalThermistor = B3;
+int pinProximalThermistor = B4;
 int pinDoorOpen = B5;
 // int pinUnused = C0;
 // int pinUnused = C1;
@@ -222,8 +222,8 @@ int control_LED_temp_C_10X;
 int peltier_target_C_10X = 450;
 int assay_temp_C_10X;
 int control_temp_C_10X;
-bool heater_on = false;
-bool fan_on = false;
+bool proximal_heater_on = false;
+bool distal_heater_on = false;
 
 // barometric pressure sensor
 int pressure_10X;
