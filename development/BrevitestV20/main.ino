@@ -489,24 +489,24 @@ void turn_on_interior_led_for_duration(int duration) {
 /////////////////////////////////////////////////////////////
 
 void turn_on_assay_LED() {
-    digitalWrite(pinLEDAssay, HIGH);
+    analogWrite(pinLEDAssay, 4000);
 }
 
 void turn_on_control_LED() {
-	digitalWrite(pinLEDControl, HIGH);
+	analogWrite(pinLEDControl, 4000);
 }
 
 void turn_off_assay_LED() {
-    digitalWrite(pinLEDAssay, LOW);
+    analogWrite(pinLEDAssay, 0);
 }
 
 void turn_off_control_LED() {
-    digitalWrite(pinLEDControl, LOW);
+    analogWrite(pinLEDControl, 0);
 }
 
 void turn_off_both_LEDs() {
-	digitalWrite(pinLEDAssay, LOW);
-	digitalWrite(pinLEDControl, LOW);
+	analogWrite(pinLEDAssay, 0);
+	analogWrite(pinLEDControl, 0);
 }
 
 void turn_on_assay_LED_for_duration(int duration) {
@@ -1911,8 +1911,8 @@ void setup() {
         init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
         init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
 
-        init_digital_pin(pinLEDAssay, OUTPUT, LOW);
-        init_digital_pin(pinLEDControl, OUTPUT, LOW);
+        init_analog_pin(pinLEDAssay, OUTPUT, 0);
+        init_analog_pin(pinLEDControl, OUTPUT, 0);
 
         init_analog_pin(pinBaseThermistor, INPUT, 0);
         init_analog_pin(pinProximalThermistor, INPUT, 0);
@@ -1977,7 +1977,11 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-    if (callback_complete) {
+	turn_on_assay_LED_for_duration(5000);
+	delay(5000);
+	turn_on_control_LED_for_duration(5000);
+	delay(5000);
+    /*if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
@@ -2078,5 +2082,5 @@ void loop() {
         SINGLE_THREADED_BLOCK() {
             read_optical_sensors(read_optical_sensors_command_param);
         }
-    }
+    }*/
 }
