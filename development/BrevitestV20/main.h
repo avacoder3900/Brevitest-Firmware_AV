@@ -174,6 +174,7 @@ LEDStatus blinkNoCartridge(RGB_COLOR_GRAY, LED_PATTERN_BLINK, LED_SPEED_FAST);
 
 // device state
 volatile bool cartridge_state_changed = false;
+bool cartridge_state_debounce = false;
 bool cartridge_loaded = false;
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;

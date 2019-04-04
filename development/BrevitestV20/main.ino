@@ -382,20 +382,20 @@ void turn_on_buzzer_for_duration(int frequency, int duration) {
 
 void play_startup_tune() {
     turn_on_buzzer_for_duration(392, 250);
+    /*delay(250);
+		turn_on_buzzer_for_duration(392, 250);
     delay(250);
-	turn_on_buzzer_for_duration(392, 250);
-    delay(250);
-	turn_on_buzzer_for_duration(392, 250);
+		turn_on_buzzer_for_duration(392, 250);
     delay(250);
     turn_on_buzzer_for_duration(311, 1200);
-	delay(2000);
-	turn_on_buzzer_for_duration(349, 250);
+		delay(2000);
+		turn_on_buzzer_for_duration(349, 250);
     delay(250);
-	turn_on_buzzer_for_duration(349, 250);
+		turn_on_buzzer_for_duration(349, 250);
     delay(250);
-	turn_on_buzzer_for_duration(349, 250);
+		turn_on_buzzer_for_duration(349, 250);
     delay(250);
-    turn_on_buzzer_for_duration(294, 1200);
+    turn_on_buzzer_for_duration(294, 1200);*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -1653,14 +1653,15 @@ void cartridge_loaded_interrupt() {
 }
 
 void check_device_state() {
-    delay(50); // debounce
-    cartridge_loaded = digitalRead(pinCartridgeLoaded) == HIGH;
+    cartridge_loaded = digitalRead(pinCartridgeLoaded) == LOW;
 
 			if (cartridge_loaded) {
 				blinkCartridgeLoaded.setActive(true);
+				turn_on_buzzer_for_duration(600, 500);
 			}
 			else {
 				blinkNoCartridge.setActive(true);
+				turn_on_buzzer_for_duration(300, 250);
 			}
 
     Serial.printlnf("Cartridge loaded? %c", cartridge_loaded ? 'Y' : 'N');
@@ -1858,13 +1859,13 @@ void setup() {
         Particle.function("run_test", particle_run_test);
 
         device_id_string = System.deviceID();
-        /*Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);*/
+        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
         init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
-        init_digital_pin(pinCartridgeLoaded, INPUT_PULLDOWN, 0);
+        init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
 
         init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
         init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
@@ -1895,22 +1896,18 @@ void setup() {
             reset_eeprom();
         }
 
-				delay(8000);
-
 				controller_i2c_bus_scan();
 
         /*Serial.println("Resetting stage");
         reset_stage();*/
 
-        /*Serial.println("Firing solenoid");
-        move_solenoid(1000);*/
+        Serial.println("Firing solenoid");
+        move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
 				turn_on_assay_LED_for_duration(500);
 				delay(500);
 				turn_on_control_LED_for_duration(500);
-
-        /*turn_on_interior_led_for_duration(500);*/
 
         play_startup_tune();
 
@@ -1920,14 +1917,14 @@ void setup() {
         reset_globals();
         /*read_all_controller_sensors_timer.start();*/
 
-        /*check_device_state();
-        attachInterrupt(pinCartridgeLoaded, cartridge_loaded_interrupt, CHANGE);*/
+        check_device_state();
+        attachInterrupt(pinCartridgeLoaded, cartridge_loaded_interrupt, CHANGE);
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
         /*tuning_cutoff_time = millis() + 60000;*/
-        start_distal_temperature_control();
+        /*start_distal_temperature_control();*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -1937,21 +1934,23 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-	Serial.println("Turning on LEDs");
-	turn_on_assay_LED_for_duration(500);
-	delay(500);
-	turn_on_control_LED_for_duration(500);
-	delay(5000);
-
-    /*if (callback_complete) {
+    if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
     }
 
     if (cartridge_state_changed) {
-        Serial.println("Cartridge state changed");
-        check_device_state();
+				if (cartridge_state_debounce) {
+					cartridge_state_debounce = false;
+					cartridge_state_changed = false;
+	        Serial.println("Cartridge state changed");
+	        check_device_state();
+				}
+				else {
+					delay(50);
+					cartridge_state_debounce = true;
+				}
     }
 
     if (test_in_progress) {
@@ -2044,5 +2043,5 @@ void loop() {
         SINGLE_THREADED_BLOCK() {
             read_optical_sensors(read_optical_sensors_command_param);
         }
-    }*/
+    }
 }
