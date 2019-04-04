@@ -15,9 +15,9 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-// peltier temperature is 10x to get one decimal place of accuracy
-static int table_peltier_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
-static int table_peltier_ratio[] = { 9074, 10340, 11822, 13592, 15680, 18194, 21183, 24714, 28952, 34170, 40545, 48015, 57103, 68635, 82976, 100000, 124150, 149200, 184380, 229070, 286650 };
+// distal temperature is 10x to get one decimal place of accuracy
+static int table_distal_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
+static int table_distal_ratio[] = { 9074, 10340, 11822, 13592, 15680, 18194, 21183, 24714, 28952, 34170, 40545, 48015, 57103, 68635, 82976, 100000, 124150, 149200, 184380, 229070, 286650 };
 
 static int table_LED_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
 static int table_LED_ratio[] = { 6871, 7980, 9310, 10900, 12780, 15040, 17770, 21110, 25180, 30180, 36350, 44010, 53560, 65560, 80720, 100000, 124700, 156700, 198100, 252400, 323700 };
@@ -408,7 +408,7 @@ void turn_on_proximal_heater() {
     if (!proximal_heater_on) {
         /*Serial.println("Turning on proximal heater");*/
         pinMode(pinProximalHeater, OUTPUT);
-        analogWrite(pinProximalHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
+        analogWrite(pinProximalHeater, DISTAL_PIN_VALUE, DISTAL_PWM_FREQUENCY);
         proximal_heater_on = true;
     }
 }
@@ -417,8 +417,7 @@ void turn_off_proximal_heater() {
     if (proximal_heater_on) {
         /*Serial.println("Turning off proximal heater");*/
         analogWrite(pinProximalHeater, 0);
-		pinMode(pinProximalHeater, INPUT);
-	    pinMode(pinInteriorLED, INPUT);
+				pinMode(pinProximalHeater, INPUT);
         proximal_heater_on = false;
     }
 }
@@ -438,7 +437,7 @@ void turn_on_proximal_heater_for_duration(int duration) {
 void turn_on_distal_heater() {
     if (!distal_heater_on) {
         /*Serial.println("Turning on distal heater");*/
-        analogWrite(pinDistalHeater, PELTIER_PIN_VALUE, PELTIER_PWM_FREQUENCY);
+        analogWrite(pinDistalHeater, DISTAL_PIN_VALUE, DISTAL_PWM_FREQUENCY);
         distal_heater_on = true;
     }
 }
@@ -459,41 +458,16 @@ void turn_on_distal_heater_for_duration(int duration) {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                    INTERIOR LED                         //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void turn_on_interior_led() {
-    Serial.println("Turning on interior LED");
-    pinMode(pinInteriorLED, OUTPUT);
-    analogWrite(pinInteriorLED, 255);
-}
-
-void turn_off_interior_led() {
-    Serial.println("Turning off interior LED");
-    analogWrite(pinInteriorLED, 0);
-	pinMode(pinProximalHeater, INPUT);
-    pinMode(pinInteriorLED, INPUT);
-}
-
-void turn_on_interior_led_for_duration(int duration) {
-    turn_on_interior_led();
-    delay(duration);
-    turn_off_interior_led();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                         LEDS                            //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
 void turn_on_assay_LED() {
-    analogWrite(pinLEDAssay, 4000);
+    analogWrite(pinLEDAssay, LED_LEVEL);
 }
 
 void turn_on_control_LED() {
-	analogWrite(pinLEDControl, 4000);
+		analogWrite(pinLEDControl, LED_LEVEL);
 }
 
 void turn_off_assay_LED() {
@@ -505,8 +479,8 @@ void turn_off_control_LED() {
 }
 
 void turn_off_both_LEDs() {
-	analogWrite(pinLEDAssay, 0);
-	analogWrite(pinLEDControl, 0);
+		analogWrite(pinLEDAssay, 0);
+		analogWrite(pinLEDControl, 0);
 }
 
 void turn_on_assay_LED_for_duration(int duration) {
@@ -540,12 +514,12 @@ int get_thermistor_temperature(int pin, int table_number) {
     int *value_table, *result_table;
 
     switch (table_number) {
-        case PELTIER_THERMISTOR :
-            value_table = table_peltier_ratio;
-            result_table = table_peltier_temperature;
-            len = TABLE_PELTIER_LENGTH;
-            balance_resistance = PELTIER_THERMISTOR_BALANCE_RESISTANCE;
-            base_resistance = PELTIER_THERMISTOR_BASE_RESISTANCE;
+        case DISTAL_THERMISTOR :
+            value_table = table_distal_ratio;
+            result_table = table_distal_temperature;
+            len = TABLE_DISTAL_LENGTH;
+            balance_resistance = DISTAL_THERMISTOR_BALANCE_RESISTANCE;
+            base_resistance = DISTAL_THERMISTOR_BASE_RESISTANCE;
             break;
         case LED_THERMISTOR :
             value_table = table_LED_ratio;
@@ -568,17 +542,17 @@ int get_thermistor_temperature(int pin, int table_number) {
     ratio = resistance * THERMISTOR_SCALE / base_resistance;
 
     result = table_lookup(table_number, ratio, value_table, result_table, len);
-    /*Serial.printlnf("Peltier: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, result / 10, result % 10);*/
+    /*Serial.printlnf("Distal: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, result / 10, result % 10);*/
 
     return result;
 }
 
-void peltier_temperature_read() {
+void distal_temperature_read() {
     /*int temp_F_10X;*/
 
-    peltier_temp_C_10X = get_thermistor_temperature(pinBaseThermistor, PELTIER_THERMISTOR);
+    distal_temp_C_10X = get_thermistor_temperature(pinDistalThermistor, DISTAL_THERMISTOR);
 
-    /*temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;*/
+    /*temp_F_10X = ((distal_temp_C_10X * 9) / 5) + 320;*/
 }
 
 void led_temperature_read(char channel) {
@@ -858,9 +832,9 @@ void read_all_controller_sensors() {
         temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
         Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 
-        peltier_temperature_read();
-        temp_F_10X = ((peltier_temp_C_10X * 9) / 5) + 320;
-        Serial.printlnf("Peltier temperature: %d.%d˚C, %d.%d˚F", peltier_temp_C_10X / 10, peltier_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+        distal_temperature_read();
+        temp_F_10X = ((distal_temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal_temp_C_10X / 10, distal_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 
         pressure_read();
 
@@ -873,33 +847,33 @@ void read_all_controller_sensors() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//              PELTIER TEMPERATURE CONTROL                //
+//               DISTAL TEMPERATURE CONTROL                //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void control_peltier_temperature() {
+void control_distal_temperature() {
     int dt, error, derivative, output;
     unsigned long prev_read_time;
 	/*int i, d;*/
     char action;
 
-    prev_read_time = peltier_read_time;
-    peltier_temperature_read();
-    peltier_read_time = millis();
-    if (peltier_temp_C_10X == -1) {
+    prev_read_time = distal_read_time;
+    distal_temperature_read();
+    distal_read_time = millis();
+    if (distal_temp_C_10X == -1) {
         turn_off_proximal_heater();
     }
     else {
         if (prev_read_time == 0) {
-            peltier_previous_error = 0;
-            peltier_integral = 0;
+            distal_previous_error = 0;
+            distal_integral = 0;
         }
         else {
-            dt = peltier_read_time - prev_read_time;
-            error = peltier_target_C_10X - peltier_temp_C_10X;
-            peltier_integral += (error * dt) / 100000;
-            derivative = (1000 * (error - peltier_previous_error)) / dt;
-            output = PELTIER_K_P * error + PELTIER_K_I * peltier_integral + PELTIER_K_D * derivative;
+            dt = distal_read_time - prev_read_time;
+            error = distal_target_C_10X - distal_temp_C_10X;
+            distal_integral += (error * dt) / 100000;
+            derivative = (1000 * (error - distal_previous_error)) / dt;
+            output = DISTAL_K_P * error + DISTAL_K_I * distal_integral + DISTAL_K_D * derivative;
 
             if (output > 0) {
                 action = 'H';
@@ -907,23 +881,23 @@ void control_peltier_temperature() {
                 turn_on_proximal_heater_for_duration(output);
             }
 
-            /*i = peltier_temp_C_10X / 10;
-            d = peltier_temp_C_10X % 10;
-            Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, peltier_integral, derivative, output);*/
-            peltier_previous_error = error;
+            /*i = distal_temp_C_10X / 10;
+            d = distal_temp_C_10X % 10;
+            Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, distal_integral, derivative, output);*/
+            distal_previous_error = error;
         }
     }
 }
 
-void start_peltier_temperature_control() {
-    peltier_read_time = 0;
-    control_peltier_temperature_timer.start();
-    Serial.println("Peltier temperature control system started");
+void start_distal_temperature_control() {
+    distal_read_time = 0;
+    control_distal_temperature_timer.start();
+    Serial.println("Distal temperature control system started");
 }
 
-void stop_peltier_temperature_control() {
-    control_peltier_temperature_timer.stop();
-    Serial.println("Peltier temperature control system stopped");
+void stop_distal_temperature_control() {
+    control_distal_temperature_timer.stop();
+    Serial.println("Distal temperature control system stopped");
 }
 
 /////////////////////////////////////////////////////////////
@@ -1655,12 +1629,12 @@ int particle_command(String arg) {
             return 1;
         case 14: // turn on buzzer param1 frequency param2 duration
             if (param1 > 0 && param1 < 900) {
-                peltier_target_C_10X = param1;
-                peltier_read_time = 0;
+                distal_target_C_10X = param1;
+                distal_read_time = 0;
             }
             return param1;
-		case 15: // set peltier target temperature
-            peltier_target_C_10X = param1;
+		case 15: // set distal target temperature
+            distal_target_C_10X = param1;
             return param1;
 }
 
@@ -1674,38 +1648,22 @@ int particle_command(String arg) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void door_locked_interrupt() {
-    door_state_changed = true;
+void cartridge_loaded_interrupt() {
+    cartridge_state_changed = true;
 }
 
 void check_device_state() {
     delay(50); // debounce
-    door_state_changed = false;
-    door_locked = digitalRead(pinDoorOpen) == HIGH;
+    cartridge_loaded = digitalRead(pinCartridgeLoaded) == HIGH;
 
-    if (door_locked) {
-		if (enable_optical_sensors(false)) {
-			turn_on_interior_led();
-            get_data_from_one_optical_sensor('A', CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD, false);
-			Serial.printlnf("Cartridge loaded? reading: %d, threshold: %d", optical_state_reading.red, CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD);
-            cartridge_loaded = optical_state_reading.red < CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD;
-            disable_optical_sensors();
-			turn_off_interior_led();
 			if (cartridge_loaded) {
 				blinkCartridgeLoaded.setActive(true);
 			}
 			else {
 				blinkNoCartridge.setActive(true);
 			}
-        }
-    }
-    else {
-		blinkCartridgeLoaded.setActive(false);
-		blinkNoCartridge.setActive(false);
-		cartridge_loaded = false;
-    }
 
-    Serial.printlnf("Door locked? %c, Cartridge loaded? %c", door_locked ? 'Y' : 'N',  cartridge_loaded ? 'Y' : 'N');
+    Serial.printlnf("Cartridge loaded? %c", cartridge_loaded ? 'Y' : 'N');
 }
 
 /////////////////////////////////////////////////////////////
@@ -1900,13 +1858,13 @@ void setup() {
         Particle.function("run_test", particle_run_test);
 
         device_id_string = System.deviceID();
-        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
+        /*Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);*/
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
         init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
-        init_digital_pin(pinDoorOpen, INPUT_PULLDOWN, 0);
+        init_digital_pin(pinCartridgeLoaded, INPUT_PULLDOWN, 0);
 
         init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
         init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
@@ -1914,18 +1872,16 @@ void setup() {
         init_analog_pin(pinLEDAssay, OUTPUT, 0);
         init_analog_pin(pinLEDControl, OUTPUT, 0);
 
-        init_analog_pin(pinBaseThermistor, INPUT, 0);
         init_analog_pin(pinProximalThermistor, INPUT, 0);
         init_analog_pin(pinDistalThermistor, INPUT, 0);
 
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-		init_analog_pin(pinProximalHeater, INPUT, 0);
-		init_analog_pin(pinDistalHeater, OUTPUT, 0);
+				init_analog_pin(pinProximalHeater, INPUT, 0);
+				init_analog_pin(pinDistalHeater, OUTPUT, 0);
 
-		init_analog_pin(pinInteriorLED, INPUT, 0);
-    	init_analog_pin(pinSolenoid, OUTPUT, 0);
+    		init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinBuzzer, OUTPUT, 0);
 
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
@@ -1939,7 +1895,9 @@ void setup() {
             reset_eeprom();
         }
 
-		controller_i2c_bus_scan();
+				delay(8000);
+
+				controller_i2c_bus_scan();
 
         /*Serial.println("Resetting stage");
         reset_stage();*/
@@ -1947,27 +1905,29 @@ void setup() {
         /*Serial.println("Firing solenoid");
         move_solenoid(1000);*/
 
-        /*Serial.println("Turning on LEDs");
-        turn_on_both_LEDs_for_duration(500);*/
+        Serial.println("Turning on LEDs");
+				turn_on_assay_LED_for_duration(500);
+				delay(500);
+				turn_on_control_LED_for_duration(500);
 
-        turn_on_interior_led_for_duration(500);
+        /*turn_on_interior_led_for_duration(500);*/
 
-        /*play_startup_tune();*/
+        play_startup_tune();
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
 */
         reset_globals();
-        read_all_controller_sensors_timer.start();
+        /*read_all_controller_sensors_timer.start();*/
 
-        check_device_state();
-        attachInterrupt(pinDoorOpen, door_locked_interrupt, CHANGE);
+        /*check_device_state();
+        attachInterrupt(pinCartridgeLoaded, cartridge_loaded_interrupt, CHANGE);*/
 
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
         /*tuning_cutoff_time = millis() + 60000;*/
-        start_peltier_temperature_control();
+        start_distal_temperature_control();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1977,18 +1937,20 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
-	turn_on_assay_LED_for_duration(5000);
+	Serial.println("Turning on LEDs");
+	turn_on_assay_LED_for_duration(500);
+	delay(500);
+	turn_on_control_LED_for_duration(500);
 	delay(5000);
-	turn_on_control_LED_for_duration(5000);
-	delay(5000);
+
     /*if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
     }
 
-    if (door_state_changed) {
-        Serial.println("Door open state changed");
+    if (cartridge_state_changed) {
+        Serial.println("Cartridge state changed");
         check_device_state();
     }
 
@@ -2027,7 +1989,7 @@ void loop() {
             }
             if (cartridge_is_heated) {
                 test_startup_successful = false;
-                if (!door_locked) {
+                if (!cartridge_loaded) {
                     cancelling_test = true;
                 }
                 else {
@@ -2046,7 +2008,7 @@ void loop() {
 
         if (ready_to_scan_barcode) {
             ready_to_scan_barcode = false;
-            if (door_locked) {
+            if (cartridge_loaded) {
                 if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
                     validate_cartridge();
                 }

@@ -47,10 +47,10 @@
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // thermistors
-#define PELTIER_THERMISTOR 0
-#define PELTIER_THERMISTOR_BALANCE_RESISTANCE 4990
-#define PELTIER_THERMISTOR_BASE_RESISTANCE 10000
-#define TABLE_PELTIER_LENGTH 21
+#define DISTAL_THERMISTOR 0
+#define DISTAL_THERMISTOR_BALANCE_RESISTANCE 4990
+#define DISTAL_THERMISTOR_BASE_RESISTANCE 10000
+#define TABLE_DISTAL_LENGTH 21
 #define LED_THERMISTOR 1
 #define LED_THERMISTOR_BALANCE_RESISTANCE 200
 #define LED_THERMISTOR_BASE_RESISTANCE 10000
@@ -90,18 +90,16 @@
 // controller sensor readings
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
-// peltier
-#define PELTIER_PIN_VALUE 255
-#define PELTIER_PWM_FREQUENCY 256
-#define PELTIER_K_P 30
-#define PELTIER_K_I 5
-#define PELTIER_K_D 2
-#define CONTROL_PELTIER_TEMPERATURE_INTERVAL 1000
+// distal
+#define DISTAL_PIN_VALUE 255
+#define DISTAL_PWM_FREQUENCY 256
+#define DISTAL_K_P 30
+#define DISTAL_K_I 5
+#define DISTAL_K_D 2
+#define CONTROL_DISTAL_TEMPERATURE_INTERVAL 1000
 
-// LED thermistors
-
-// fan
-#define FAN_ON_OFF_THRESHOLD 102
+// LEDs
+#define LED_LEVEL 1000
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 1047
@@ -127,20 +125,23 @@ ApplicationWatchdog wd(30000, watchdog);
 
 // ELECTRON PIN MAPPINGS
 
-int pinAssaySensor_Ready = A0;
-int pinBaseThermistor = A1;
+int pinControlSensor_Ready = A0;
+int pinProximalThermistor = A1;
 int pinBarcode_Trigger = A2;
 int pinLEDAssay = DAC2;
 int pinSolenoid = A4;
 int pinProximalHeater = A5;
 int pinLEDControl = DAC1;
 int pinBarcode_Success = A7;
+int pinBarcode_RX = RX;
+// int pinUnused = TX;
+
 int pinBuzzer = B0;
 int pinDistalHeater = B1;
-int pinControlSensor_Ready = B2;
+int pinAssaySensor_Ready = B2;
 int pinDistalThermistor = B3;
-int pinProximalThermistor = B4;
-int pinDoorOpen = B5;
+// int pinUnused = B4;
+int pinCartridgeLoaded = B5;
 // int pinUnused = C0;
 // int pinUnused = C1;
 int pinGPS_RX = C2;
@@ -149,14 +150,12 @@ int pinControllerSensor_SDA = C4;
 int pinControllerSensor_SCL = C5;
 int pinOpticalSensor_SDA = D0;
 int pinOpticalSensor_SCL = D1;
-int pinInteriorLED = D2;
-// int pinUnused = D3;
+// int pinUnused = D2; AVOID DUE TO PWM CONFLICT WITH A5
+// int pinUnused = D3; AVOID DUE TO PWM CONFLICT WITH A4
 int pinLimitSwitch = D4;
 int pinStepper_Sleep = D5;
 int pinStepper_Dir = D6;
 int pinStepper_Step = D7;
-int pinBarcode_RX = RX;
-// int pinUnused = TX;
 
 // global variables
 int cumulative_steps = CUMULATIVE_STEP_LIMIT;
@@ -174,8 +173,7 @@ LEDStatus blinkCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_NOR
 LEDStatus blinkNoCartridge(RGB_COLOR_GRAY, LED_PATTERN_BLINK, LED_SPEED_FAST);
 
 // device state
-volatile bool door_state_changed = false;
-bool door_locked = false;
+volatile bool cartridge_state_changed = false;
 bool cartridge_loaded = false;
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;
@@ -209,17 +207,17 @@ LSM6DS3 myIMU;
 // BaroSensorClass BaroSensor;
 
 // temperature control system
-void control_peltier_temperature(void);
-Timer control_peltier_temperature_timer(CONTROL_PELTIER_TEMPERATURE_INTERVAL, control_peltier_temperature);
+void control_distal_temperature(void);
+Timer control_distal_temperature_timer(CONTROL_DISTAL_TEMPERATURE_INTERVAL, control_distal_temperature);
 unsigned long tuning_cutoff_time;
-int peltier_previous_error;
-int peltier_integral;
-unsigned long peltier_read_time;
+int distal_previous_error;
+int distal_integral;
+unsigned long distal_read_time;
 int imu_temp_C_10X;
-int peltier_temp_C_10X;
+int distal_temp_C_10X;
 int assay_LED_temp_C_10X;
 int control_LED_temp_C_10X;
-int peltier_target_C_10X = 450;
+int distal_target_C_10X = 450;
 int assay_temp_C_10X;
 int control_temp_C_10X;
 bool proximal_heater_on = false;
