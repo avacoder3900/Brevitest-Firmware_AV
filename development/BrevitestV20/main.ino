@@ -15,12 +15,9 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-// distal temperature is 10x to get one decimal place of accuracy
-static int table_distal_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
-static int table_distal_ratio[] = { 9074, 10340, 11822, 13592, 15680, 18194, 21183, 24714, 28952, 34170, 40545, 48015, 57103, 68635, 82976, 100000, 124150, 149200, 184380, 229070, 286650 };
-
-static int table_LED_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
-static int table_LED_ratio[] = { 6871, 7980, 9310, 10900, 12780, 15040, 17770, 21110, 25180, 30180, 36350, 44010, 53560, 65560, 80720, 100000, 124700, 156700, 198100, 252400, 323700 };
+//  temperature is 10x to get one decimal place of accuracy
+static int table_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
+static int table_ratio[] = { 6975, 8054, 9336, 10867, 12703, 14917, 17598, 20864, 24862, 29784, 35882, 43481, 53015, 65055, 80371, 100000, 125353, 158371, 201746, 259246, 336206 };
 
 static uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -68,16 +65,16 @@ static uint32_t crc32_tab[] = {
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-int table_lookup(int table_number, int value, int *value_table, int *result_table, int len) {
+int table_lookup(int ratio) {
     int result, indx1, indx2;
 
-    if (value < value_table[0]) {
+    if (ratio < table_ratio[0]) {
         return -1000;
     }
 
-    for (indx1 = 0, indx2 = 1; indx1 < (len - 1); indx1++, indx2++) {
-        if (value >= value_table[indx1] && value < value_table[indx2]) {
-            result = result_table[indx1] + (((value - value_table[indx1]) * (result_table[indx2] - result_table[indx1])) / (value_table[indx2] - value_table[indx1]));
+    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++) {
+        if (ratio >= table_ratio[indx1] && ratio < table_ratio[indx2]) {
+            result = table_temperature[indx1] + (((ratio - table_ratio[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_ratio[indx2] - table_ratio[indx1]));
             /*Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
             return result;
         }
@@ -400,60 +397,29 @@ void play_startup_tune() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                   PROXIMAL HEATER                       //
+//                       HEATER                            //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_proximal_heater() {
-    if (!proximal_heater_on) {
+void turn_on_heater(HeatingElement &elem, int power) {
+    if (!elem.heater_on) {
         /*Serial.println("Turning on proximal heater");*/
-        pinMode(pinProximalHeater, OUTPUT);
-        analogWrite(pinProximalHeater, DISTAL_PIN_VALUE, DISTAL_PWM_FREQUENCY);
-        proximal_heater_on = true;
+        analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
+        elem.heater_on = true;
     }
 }
 
-void turn_off_proximal_heater() {
-    if (proximal_heater_on) {
+void turn_off_heater(HeatingElement &elem) {
+    if (elem.heater_on) {
         /*Serial.println("Turning off proximal heater");*/
-        analogWrite(pinProximalHeater, 0);
-				pinMode(pinProximalHeater, INPUT);
-        proximal_heater_on = false;
+        analogWrite(elem.heater_pin, 0);
+        elem.heater_on = false;
     }
 }
 
-void turn_on_proximal_heater_for_duration(int duration) {
-    turn_on_proximal_heater();
-    delay(duration);
-    turn_off_proximal_heater();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                    DISTAL HEATER                        //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void turn_on_distal_heater() {
-    if (!distal_heater_on) {
-        /*Serial.println("Turning on distal heater");*/
-        analogWrite(pinDistalHeater, DISTAL_PIN_VALUE, DISTAL_PWM_FREQUENCY);
-        distal_heater_on = true;
-    }
-}
-
-void turn_off_distal_heater() {
-    if (distal_heater_on) {
-        /*Serial.println("Turning off distal heater");*/
-        analogWrite(pinDistalHeater, 0);
-        distal_heater_on = false;
-    }
-}
-
-void turn_on_distal_heater_for_duration(int duration) {
-    turn_on_distal_heater();
-    delay(duration);
-    turn_off_distal_heater();
+void set_heater_value(HeatingElement &elem, int value) {
+	analogWrite(elem.heater_pin, value, HEATER_PWM_FREQUENCY);
+	elem.heater_on = value != 0;
 }
 
 /////////////////////////////////////////////////////////////
@@ -501,70 +467,6 @@ void turn_on_both_LEDs_for_duration(int duration) {
     delay(duration);
     turn_off_assay_LED();
     turn_off_control_LED();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                      THEMISTORS                         //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-int get_thermistor_temperature(int pin, int table_number) {
-    int balance_resistance, base_resistance, len, ratio, raw, resistance, result;
-    int *value_table, *result_table;
-
-    switch (table_number) {
-        case DISTAL_THERMISTOR :
-            value_table = table_distal_ratio;
-            result_table = table_distal_temperature;
-            len = TABLE_DISTAL_LENGTH;
-            balance_resistance = DISTAL_THERMISTOR_BALANCE_RESISTANCE;
-            base_resistance = DISTAL_THERMISTOR_BASE_RESISTANCE;
-            break;
-        case LED_THERMISTOR :
-            value_table = table_LED_ratio;
-            result_table = table_LED_temperature;
-            len = TABLE_LED_LENGTH;
-            balance_resistance = LED_THERMISTOR_BALANCE_RESISTANCE;
-            base_resistance = LED_THERMISTOR_BASE_RESISTANCE;
-            break;
-        default:
-            return -1;
-    }
-
-    raw = analogRead(pin);
-
-    if (raw == 0) {
-        return -1;
-    }
-
-    resistance = (balance_resistance * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
-    ratio = resistance * THERMISTOR_SCALE / base_resistance;
-
-    result = table_lookup(table_number, ratio, value_table, result_table, len);
-    /*Serial.printlnf("Distal: raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, result / 10, result % 10);*/
-
-    return result;
-}
-
-void distal_temperature_read() {
-    /*int temp_F_10X;*/
-
-    distal_temp_C_10X = get_thermistor_temperature(pinDistalThermistor, DISTAL_THERMISTOR);
-
-    /*temp_F_10X = ((distal_temp_C_10X * 9) / 5) + 320;*/
-}
-
-void led_temperature_read(char channel) {
-    /*int temp_F_10X;
-
-    assay_LED_temp_C_10X = get_thermistor_temperature(pinProximalThermistor, LED_THERMISTOR);
-    temp_F_10X = ((assay_LED_temp_C_10X * 9) / 5) + 320;
-    Serial.printlnf("Assay LED temperature: %d.%d˚C, %d.%d˚F", assay_LED_temp_C_10X / 10, assay_LED_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
-
-    control_LED_temp_C_10X = get_thermistor_temperature(pinDistalThermistor, LED_THERMISTOR);
-    temp_F_10X = ((control_LED_temp_C_10X * 9) / 5) + 320;
-    Serial.printlnf("Control LED temperature: %d.%d˚C, %d.%d˚F", control_LED_temp_C_10X / 10, control_LED_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -832,9 +734,11 @@ void read_all_controller_sensors() {
         temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
         Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 
-        distal_temperature_read();
-        temp_F_10X = ((distal_temp_C_10X * 9) / 5) + 320;
-        Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal_temp_C_10X / 10, distal_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+        heater_temperature_read();
+        temp_F_10X = ((proximal.temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("Proximal temperature: %d.%d˚C, %d.%d˚F", proximal.temp_C_10X / 10, proximal.temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+		temp_F_10X = ((distal.temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal.temp_C_10X / 10, distal.temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
 
         pressure_read();
 
@@ -847,57 +751,86 @@ void read_all_controller_sensors() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//               DISTAL TEMPERATURE CONTROL                //
+//               TEMPERATURE CONTROL SYSTEM                //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void control_distal_temperature() {
+int get_heater_temperature(int pin) {
+    int ratio, raw, resistance, temperature;
+
+    raw = analogRead(pin);
+
+    if (raw == 0) {
+        return -1;
+    }
+
+    resistance = (THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
+    ratio = resistance * THERMISTOR_SCALE / THERMISTOR_BASE_RESISTANCE;
+
+    temperature = table_lookup(ratio);
+    /*Serial.printlnf("Raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, temperature / 10, temperature % 10);*/
+
+    return temperature;
+}
+
+void heater_temperature_read() {
+	distal.temp_C_10X = get_heater_temperature(pinDistalThermistor);
+	proximal.temp_C_10X = get_heater_temperature(pinProximalThermistor);
+
+    /*temp_F_10X = ((distal.temp_C_10X * 9) / 5) + 320;*/
+}
+
+void pid_controller(HeatingElement &elem) {
     int dt, error, derivative, output;
     unsigned long prev_read_time;
-	/*int i, d;*/
-    char action;
+	int i, d;
 
-    prev_read_time = distal_read_time;
-    distal_temperature_read();
-    distal_read_time = millis();
-    if (distal_temp_C_10X == -1) {
-        turn_off_proximal_heater();
+	prev_read_time = elem.read_time;
+	elem.temp_C_10X = get_heater_temperature(elem.heater_pin);
+	elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 32;
+    elem.read_time = millis();
+    if (elem.temp_C_10X == -1) {
+        set_heater_value(elem, 0);
     }
     else {
         if (prev_read_time == 0) {
-            distal_previous_error = 0;
-            distal_integral = 0;
+            elem.previous_error = 0;
+            elem.integral = 0;
         }
         else {
-            dt = distal_read_time - prev_read_time;
-            error = distal_target_C_10X - distal_temp_C_10X;
-            distal_integral += (error * dt) / 100000;
-            derivative = (1000 * (error - distal_previous_error)) / dt;
-            output = DISTAL_K_P * error + DISTAL_K_I * distal_integral + DISTAL_K_D * derivative;
+            dt = elem.read_time - prev_read_time;
+            error = elem.target_C_10X - elem.temp_C_10X;
+            elem.integral += (error * dt) / 100000;
+            derivative = (1000 * (error - elem.previous_error)) / dt;
+            output = elem.k_p * error + elem.k_i * elem.integral + elem.k_d * derivative;
 
             if (output > 0) {
-                action = 'H';
-                output = output > 500 ? 500 : output;
-                turn_on_proximal_heater_for_duration(output);
+				output = output > 255 ? 255 : (output < 0 ? 0 : output);
+                set_heater_value(elem, output);
             }
 
-            /*i = distal_temp_C_10X / 10;
-            d = distal_temp_C_10X % 10;
-            Serial.printlnf("Control: action = %c, T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", action, i, d, dt, error, distal_integral, derivative, output);*/
-            distal_previous_error = error;
+            i = elem.temp_C_10X / 10;
+            d = elem.temp_C_10X % 10;
+            Serial.printlnf("Control: T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", i, d, dt, error, elem.integral, derivative, output);
+            elem.previous_error = error;
         }
     }
 }
 
-void start_distal_temperature_control() {
-    distal_read_time = 0;
-    control_distal_temperature_timer.start();
-    Serial.println("Distal temperature control system started");
+void control_heater_temperature() {
+	pid_controller(proximal);
+	pid_controller(distal);
 }
 
-void stop_distal_temperature_control() {
-    control_distal_temperature_timer.stop();
-    Serial.println("Distal temperature control system stopped");
+void start_temperature_control() {
+    distal.read_time = 0;
+	control_heater_temperature_timer.start();
+    Serial.println("Temperature control system started");
+}
+
+void stop_temperature_control() {
+    control_heater_temperature_timer.stop();
+    Serial.println("Temperature control system stopped");
 }
 
 /////////////////////////////////////////////////////////////
@@ -1594,11 +1527,15 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
-        case 6: // turn on proximal heater
-            turn_on_proximal_heater_for_duration(param1);
+        case 6: // turn on proximal heater for param1 milliseconds at power param2
+            turn_on_heater(proximal, param2);
+			delay(param1);
+			turn_off_heater(proximal);
             return param1;
         case 7: // turn on distal heater
-			turn_on_distal_heater_for_duration(param1);
+			turn_on_heater(distal, param2);
+			delay(param1);
+			turn_off_heater(distal);
 			return param1;
         case 8: // reset params
             reset_eeprom();
@@ -1627,14 +1564,17 @@ int particle_command(String arg) {
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
-        case 14: // turn on buzzer param1 frequency param2 duration
+        case 14: // set distal target temperature
             if (param1 > 0 && param1 < 900) {
-                distal_target_C_10X = param1;
-                distal_read_time = 0;
+                distal.target_C_10X = param1;
+                distal.read_time = 0;
             }
             return param1;
-		case 15: // set distal target temperature
-            distal_target_C_10X = param1;
+		case 15: // set proximal target temperature
+			if (param1 > 0 && param1 < 900) {
+				proximal.target_C_10X = param1;
+				proximal.read_time = 0;
+			}
             return param1;
 }
 
@@ -1854,7 +1794,6 @@ void controller_i2c_bus_scan() {
 
 void setup() {
         Particle.variable("register", particle_register, STRING);
-        Particle.variable("tempC_10X", &imu_temp_C_10X, INT);
         Particle.function("command", particle_command);
         Particle.function("run_test", particle_run_test);
 
@@ -1888,6 +1827,11 @@ void setup() {
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
         init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
         init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
+
+		proximal.heater_pin = pinProximalHeater;
+		proximal.thermistor_pin = pinProximalThermistor;
+		distal.heater_pin = pinDistalHeater;
+		distal.thermistor_pin = pinDistalThermistor;
 
         Serial.begin(115200); // standard serial port
 
@@ -1924,7 +1868,7 @@ void setup() {
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
         /*tuning_cutoff_time = millis() + 60000;*/
-        /*start_distal_temperature_control();*/
+        /*start_temperature_control();*/
 }
 
 /////////////////////////////////////////////////////////////
