@@ -1879,10 +1879,10 @@ void setup() {
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-				init_analog_pin(pinProximalHeater, INPUT, 0);
-				init_analog_pin(pinDistalHeater, OUTPUT, 0);
+		init_analog_pin(pinProximalHeater, INPUT, 0);
+		init_analog_pin(pinDistalHeater, OUTPUT, 0);
 
-    		init_analog_pin(pinSolenoid, OUTPUT, 0);
+    	init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinBuzzer, OUTPUT, 0);
 
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
@@ -1891,12 +1891,12 @@ void setup() {
 
         Serial.begin(115200); // standard serial port
 
-        load_eeprom();
-        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
+        /*load_eeprom();
+        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {*/
             reset_eeprom();
-        }
+        /*}*/
 
-				controller_i2c_bus_scan();
+		controller_i2c_bus_scan();
 
         /*Serial.println("Resetting stage");
         reset_stage();*/
@@ -1905,9 +1905,9 @@ void setup() {
         move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
-				turn_on_assay_LED_for_duration(500);
-				delay(500);
-				turn_on_control_LED_for_duration(500);
+		turn_on_assay_LED_for_duration(500);
+		delay(500);
+		turn_on_control_LED_for_duration(500);
 
         play_startup_tune();
 

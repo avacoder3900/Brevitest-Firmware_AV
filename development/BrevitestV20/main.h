@@ -272,7 +272,7 @@ struct Param {      // 32 bytes
     step_delay_us = 800;
     steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
-    solenoid_power = 0xFF80;    // surge = 255, sustain = 128
+    solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 100;
     start_test_heat_red_threshold = 7180;
   }
