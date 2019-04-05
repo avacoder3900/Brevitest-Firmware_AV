@@ -16,7 +16,6 @@
 #define COMMA_DELIM ","
 #define BCODE_END "99"
 #define MAX_ANALOG_READ 4095
-#define THERMISTOR_SCALE 100000
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -47,14 +46,10 @@
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // thermistors
-#define DISTAL_THERMISTOR 0
-#define DISTAL_THERMISTOR_BALANCE_RESISTANCE 4990
-#define DISTAL_THERMISTOR_BASE_RESISTANCE 10000
-#define TABLE_DISTAL_LENGTH 21
-#define LED_THERMISTOR 1
-#define LED_THERMISTOR_BALANCE_RESISTANCE 200
-#define LED_THERMISTOR_BASE_RESISTANCE 10000
-#define TABLE_LED_LENGTH 21
+#define THERMISTOR_SCALE 100000
+#define THERMISTOR_BALANCE_RESISTANCE 4990
+#define THERMISTOR_BASE_RESISTANCE 100000
+#define TERMISTOR_TABLE_LENGTH 21
 
 // barometric pressure sensor
 #define PRESSURE_ADDRESS 0x76
@@ -90,13 +85,9 @@
 // controller sensor readings
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
-// distal
-#define DISTAL_PIN_VALUE 255
-#define DISTAL_PWM_FREQUENCY 256
-#define DISTAL_K_P 30
-#define DISTAL_K_I 5
-#define DISTAL_K_D 2
-#define CONTROL_DISTAL_TEMPERATURE_INTERVAL 1000
+// heater
+#define HEATER_PWM_FREQUENCY 256
+#define CONTROL_TEMPERATURE_INTERVAL 1000
 
 // LEDs
 #define LED_LEVEL 1000
@@ -201,31 +192,43 @@ unsigned long next_optical_sensor_reading_time = 0;
 void read_all_controller_sensors(void);
 Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_all_controller_sensors);
 
-// IMU
+// inertial measurement unit
 LSM6DS3 myIMU;
-
-/// barometric pressure sensor
-// BaroSensorClass BaroSensor;
+int imu_temp_C_10X;
 
 // temperature control system
-void control_distal_temperature(void);
-Timer control_distal_temperature_timer(CONTROL_DISTAL_TEMPERATURE_INTERVAL, control_distal_temperature);
+struct HeatingElement {
+    int heater_pin;
+    int thermistor_pin;
+    bool heater_on;
+    int previous_error;
+    int integral;
+    unsigned long read_time;
+    int temp_C_10X;
+    int target_C_10X;
+    int temp_F_10X;
+    int k_p;
+    int k_i;
+    int k_d;
+    HeatingElement() {
+        heater_on = false;
+        previous_error = 0;
+        integral = 0;
+        target_C_10X = 400;
+        k_p = 30;
+        k_i = 5;
+        k_d = 2;
+    }
+} proximal, distal;
+
+void control_heater_temperature(void);
+Timer control_heater_temperature_timer(CONTROL_TEMPERATURE_INTERVAL, control_heater_temperature);
 unsigned long tuning_cutoff_time;
-int distal_previous_error;
-int distal_integral;
-unsigned long distal_read_time;
-int imu_temp_C_10X;
-int distal_temp_C_10X;
-int assay_LED_temp_C_10X;
-int control_LED_temp_C_10X;
-int distal_target_C_10X = 450;
-int assay_temp_C_10X;
-int control_temp_C_10X;
-bool proximal_heater_on = false;
-bool distal_heater_on = false;
 
 // barometric pressure sensor
+// BaroSensorClass BaroSensor;
 int pressure_10X;
+int bps_temp_C_10X;
 
 // optical sensors
 unsigned long last_optical_sensor_reading_time = 0;
