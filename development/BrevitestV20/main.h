@@ -164,7 +164,7 @@ char serial_buffer[SERIAL_BUFFER_SIZE];
 
 // device LED
 LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
-LEDStatus ledCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_SOLID, LED_SPEED_NORMAL);
+LEDStatus ledCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_SLOW);
 
 // device state
 volatile bool cartridge_state_changed = false;
