@@ -16,6 +16,7 @@
 #define COMMA_DELIM ","
 #define BCODE_END "99"
 #define MAX_ANALOG_READ 4095
+#define SERIAL_BUFFER_SIZE 40
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -86,9 +87,9 @@
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
 // heater
-#define HEATER_MAX_POWER 128
-#define HEATER_PWM_FREQUENCY 512
-#define CONTROL_TEMPERATURE_INTERVAL 5000
+#define HEATER_MAX_POWER 64
+#define HEATER_PWM_FREQUENCY 20000
+#define HEATER_CONTROL_INTERVAL 2000
 
 // LEDs
 #define LED_LEVEL 1000
@@ -97,7 +98,7 @@
 #define SOLENOID_PWM_FREQUENCY 1500
 
 // upload
-#define UPLOAD_INTERVAL 20000
+#define UPLOAD_INTERVAL 60000
 
 // state
 #define CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD 5000
@@ -158,11 +159,12 @@ unsigned long start_timeout;
 unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
+int serial_buffer_index = 0;
+char serial_buffer[SERIAL_BUFFER_SIZE];
 
 // device LED
-LEDStatus blinkProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
-LEDStatus blinkCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_NORMAL);
-LEDStatus blinkNoCartridge(RGB_COLOR_GRAY, LED_PATTERN_BLINK, LED_SPEED_FAST);
+LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
+LEDStatus ledCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_SOLID, LED_SPEED_NORMAL);
 
 // device state
 volatile bool cartridge_state_changed = false;
@@ -209,22 +211,28 @@ struct HeatingElement {
     int temp_C_10X;
     int target_C_10X;
     int temp_F_10X;
-    int k_p;
-    int k_i;
-    int k_d;
+    int k_p_num;
+    int k_p_den;
+    int k_i_num;
+    int k_i_den;
+    int k_d_num;
+    int k_d_den;
     HeatingElement() {
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 400;
-        k_p = 30;
-        k_i = 5;
-        k_d = 2;
+        target_C_10X = 425;
+        k_p_num = 1;
+        k_p_den = 2;
+        k_i_num = 1;
+        k_i_den = 100000;
+        k_d_num = 0;
+        k_d_den = 1000;
     }
 } proximal, distal;
 
 void control_heater_temperature(void);
-Timer control_heater_temperature_timer(CONTROL_TEMPERATURE_INTERVAL, control_heater_temperature);
+Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
 unsigned long tuning_cutoff_time;
 
 // barometric pressure sensor

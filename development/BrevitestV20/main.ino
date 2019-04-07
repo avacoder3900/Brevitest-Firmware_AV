@@ -251,6 +251,7 @@ void move_steps(int steps, int step_delay){
 
         int dir = (steps < 0) ? LOW : HIGH;
         digitalWrite(pinStepper_Dir, dir);
+		Serial.printlnf("Stepping, direction = %c", dir == LOW ? 'L' : 'H');
 
         steps = abs(steps);
         for(long i = 0; i < steps; i += 1) {
@@ -271,9 +272,9 @@ void move_steps(int steps, int step_delay){
                 }
 
                 if (dir == HIGH) {
-                        if (cumulative_steps > CUMULATIVE_STEP_LIMIT) {
+                        /*if (cumulative_steps > CUMULATIVE_STEP_LIMIT) {
                                 break;
-                        }
+                        }*/
 
                         /*if (cumulative_steps < LIMIT_SWITCH_RELEASE_LENGTH) {
                                 pinMode(pinLimitSwitch, OUTPUT);
@@ -398,7 +399,7 @@ void turn_on_buzzer_for_duration(int frequency, int duration) {
 
 void play_startup_tune() {
     turn_on_buzzer_for_duration(392, 250);
-    /*delay(250);
+    delay(250);
 		turn_on_buzzer_for_duration(392, 250);
     delay(250);
 		turn_on_buzzer_for_duration(392, 250);
@@ -411,7 +412,7 @@ void play_startup_tune() {
     delay(250);
 		turn_on_buzzer_for_duration(349, 250);
     delay(250);
-    turn_on_buzzer_for_duration(294, 1200);*/
+    turn_on_buzzer_for_duration(294, 1200);
 }
 
 /////////////////////////////////////////////////////////////
@@ -441,7 +442,9 @@ void set_heater_value(HeatingElement &elem, int power) {
 	power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
 	analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
 	elem.heater_on = power != 0;
-	Serial.printlnf("Heater %c set to power %d", elem.code, power);
+	if (elem.heater_on) {
+		Serial.printlnf("Heater %c set to power %d", elem.code, power);
+	}
 }
 
 /////////////////////////////////////////////////////////////
@@ -777,44 +780,35 @@ void read_all_controller_sensors() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int get_heater_temperature(int pin) {
-    int ratio, raw, resistance, temperature;
-
-    raw = analogRead(pin);
-
+int get_heater_temperature(HeatingElement &elem) {
+    int raw = analogRead(elem.thermistor_pin);
     if (raw == 0) {
-        return -1;
+		elem.temp_C_10X = -1;
+		elem.temp_F_10X = -1;
     }
-
-    /*resistance = THERMISTOR_BALANCE_RESISTANCE / ((MAX_ANALOG_READ / raw) - 1);
-    ratio = (resistance * THERMISTOR_SCALE) / THERMISTOR_BASE_RESISTANCE;*/
-
-	/*temperature = table_lookup(raw);*/
-	temperature = raw_table_lookup(raw);
-	/*Serial.printlnf("Pin: %d, raw %d, resistance: %d, ratio: %d, temperature: %d.%d", pin, raw, resistance, ratio, temperature / 10, temperature % 10);*/
-	Serial.printlnf("Pin: %d, raw %d, temperature: %d.%d", pin, raw, temperature / 10, temperature % 10);
-
-    return temperature;
+	else {
+		elem.temp_C_10X = raw_table_lookup(raw);
+		elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 320;
+	}
+	/*Serial.printlnf("Raw reading on pin %d = %d", pin, raw);*/
+    return raw;
 }
 
 void heater_temperature_read() {
-	distal.temp_C_10X = get_heater_temperature(pinDistalThermistor);
-	proximal.temp_C_10X = get_heater_temperature(pinProximalThermistor);
-
-    /*temp_F_10X = ((distal.temp_C_10X * 9) / 5) + 320;*/
+	get_heater_temperature(distal);
+	get_heater_temperature(proximal);
 }
 
 void pid_controller(HeatingElement &elem) {
-    int dt, error, derivative, output;
+    int dt, error, derivative, output, raw;
     unsigned long prev_read_time;
-	int i, d;
 
+	/*Serial.printlnf("Adjusting temperature on %c heater", elem.code);*/
 	prev_read_time = elem.read_time;
-	elem.temp_C_10X = get_heater_temperature(elem.heater_pin);
-	elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 32;
+	raw = get_heater_temperature(elem);
     elem.read_time = millis();
-    if (elem.temp_C_10X == -1) {
-         (elem, 0);
+    if (raw == 0) {
+         set_heater_value(elem, 0);
     }
     else {
         if (prev_read_time == 0) {
@@ -824,18 +818,14 @@ void pid_controller(HeatingElement &elem) {
         else {
             dt = elem.read_time - prev_read_time;
             error = elem.target_C_10X - elem.temp_C_10X;
-            elem.integral += (error * dt) / 100000;
+            elem.integral += (error * dt) / 1000;
             derivative = (1000 * (error - elem.previous_error)) / dt;
-            output = elem.k_p * error + elem.k_i * elem.integral + elem.k_d * derivative;
+            output = (elem.k_p_num * error) / elem.k_p_den;
+			output += (elem.k_i_num * elem.integral) / elem.k_i_den;
+			output += (elem.k_d_num * derivative) / elem.k_d_den;
+            set_heater_value(elem, output);
 
-            if (output > 0) {
-				output = output > 255 ? 255 : (output < 0 ? 0 : output);
-                set_heater_value(elem, output);
-            }
-
-            i = elem.temp_C_10X / 10;
-            d = elem.temp_C_10X % 10;
-            /*Serial.printlnf("Control: T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", i, d, dt, error, elem.integral, derivative, output);*/
+            Serial.printlnf("Element = %c, raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
             elem.previous_error = error;
         }
     }
@@ -855,6 +845,8 @@ void start_temperature_control() {
 
 void stop_temperature_control() {
     control_heater_temperature_timer.stop();
+	set_heater_value(proximal, 0);
+	set_heater_value(distal, 0);
     Serial.println("Temperature control system stopped");
 }
 
@@ -1547,15 +1539,13 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
-        case 6: // turn on proximal heater for param1 milliseconds
-            turn_on_heater(proximal, param2);
-			delay(param1);
-			turn_off_heater(proximal);
+        case 6: // read proximal heater temperature
+			param1 = get_heater_temperature(proximal);
+			Serial.printlnf("Proximal heater: raw = %d, T = %d.%d˚C", param1, proximal.temp_C_10X / 10, proximal.temp_C_10X % 10);
             return param1;
-        case 7: // turn on distal heater for param1 milliseconds
-			turn_on_heater(distal, param2);
-			delay(param1);
-			turn_off_heater(distal);
+        case 7: // read distal heater temperature
+			param1 = get_heater_temperature(distal);
+			Serial.printlnf("Distal heater: raw = %d, T = %d.%d˚C", param1, distal.temp_C_10X / 10, distal.temp_C_10X % 10);
 			return param1;
         case 8: // reset params
             reset_eeprom();
@@ -1608,6 +1598,12 @@ int particle_command(String arg) {
         case 19: // turn off distal heater
 			turn_off_heater(distal);
 			return 1;
+		case 20: // start temperature control
+			start_temperature_control();
+			return 1;
+		case 21: // stop temperature control
+			stop_temperature_control();
+			return 1;
 }
 
     return 0;
@@ -1628,11 +1624,11 @@ void check_device_state() {
     cartridge_loaded = digitalRead(pinCartridgeLoaded) == LOW;
 
 			if (cartridge_loaded) {
-				blinkCartridgeLoaded.setActive(true);
+				ledCartridgeLoaded.setActive(true);
 				turn_on_buzzer_for_duration(600, 350);
 			}
 			else {
-				blinkNoCartridge.setActive(true);
+				ledCartridgeLoaded.setActive(false);
 				turn_on_buzzer_for_duration(300, 200);
 			}
 
@@ -1887,13 +1883,13 @@ void setup() {
 		delay(500);
 		turn_on_control_LED_for_duration(500);
 
-        play_startup_tune();
+        /*play_startup_tune();*/
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
 */
         reset_globals();
-        read_all_controller_sensors_timer.start();
+        /*read_all_controller_sensors_timer.start();*/
 
         check_device_state();
         attachInterrupt(pinCartridgeLoaded, cartridge_loaded_interrupt, CHANGE);
@@ -1912,6 +1908,21 @@ void setup() {
 /////////////////////////////////////////////////////////////
 
 void loop() {
+	while (Serial.available()) {
+		char c = Serial.read();
+		serial_buffer[serial_buffer_index] = c;
+		if (Serial.available()) {
+			serial_buffer_index++;
+			serial_buffer_index %= SERIAL_BUFFER_SIZE;
+		}
+		else {
+			serial_buffer[serial_buffer_index] = '\0';
+			Serial.println(serial_buffer);
+			serial_buffer_index = 0;
+			particle_command(String(serial_buffer));
+		}
+	}
+
     if (callback_complete) {
         Serial.println("Processing callback");
         process_callback_buffer();
