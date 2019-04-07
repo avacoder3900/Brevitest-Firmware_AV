@@ -46,7 +46,7 @@
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
 // thermistors
-#define THERMISTOR_SCALE 100000
+#define THERMISTOR_SCALE 10000
 #define THERMISTOR_BALANCE_RESISTANCE 4990
 #define THERMISTOR_BASE_RESISTANCE 100000
 #define TERMISTOR_TABLE_LENGTH 21
@@ -86,14 +86,15 @@
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
 // heater
-#define HEATER_PWM_FREQUENCY 256
-#define CONTROL_TEMPERATURE_INTERVAL 1000
+#define HEATER_MAX_POWER 128
+#define HEATER_PWM_FREQUENCY 512
+#define CONTROL_TEMPERATURE_INTERVAL 5000
 
 // LEDs
 #define LED_LEVEL 1000
 
 // solenoid
-#define SOLENOID_PWM_FREQUENCY 1047
+#define SOLENOID_PWM_FREQUENCY 1500
 
 // upload
 #define UPLOAD_INTERVAL 20000
@@ -198,6 +199,7 @@ int imu_temp_C_10X;
 
 // temperature control system
 struct HeatingElement {
+    char code;
     int heater_pin;
     int thermistor_pin;
     bool heater_on;

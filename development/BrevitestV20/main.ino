@@ -17,7 +17,8 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 
 //  temperature is 10x to get one decimal place of accuracy
 static int table_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
-static int table_ratio[] = { 6975, 8054, 9336, 10867, 12703, 14917, 17598, 20864, 24862, 29784, 35882, 43481, 53015, 65055, 80371, 100000, 125353, 158371, 201746, 259246, 336206 };
+static int table_raw[] = { 1707, 1566, 1426, 1288, 1154, 1026, 904, 790, 684, 587, 499, 421, 352, 291, 239, 194, 156, 125, 98, 77, 59 };
+/*static int table_ratio[] = { 6975, 8054, 9336, 10867, 12703, 14917, 17598, 20864, 24862, 29784, 35882, 43481, 53015, 65055, 80371, 100000, 125353, 158371, 201746, 259246, 336206 };*/
 
 static uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -65,7 +66,7 @@ static uint32_t crc32_tab[] = {
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-int table_lookup(int ratio) {
+/*int table_lookup(int ratio) {
     int result, indx1, indx2;
 
     if (ratio < table_ratio[0]) {
@@ -75,12 +76,30 @@ int table_lookup(int ratio) {
     for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++) {
         if (ratio >= table_ratio[indx1] && ratio < table_ratio[indx2]) {
             result = table_temperature[indx1] + (((ratio - table_ratio[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_ratio[indx2] - table_ratio[indx1]));
-            /*Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
+            Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);
             return result;
         }
     }
 
     return 1000;
+}*/
+
+int raw_table_lookup(int raw) {
+    int result, indx1, indx2;
+
+    if (raw > table_raw[0]) {
+        return 1000;
+    }
+
+    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++) {
+        if (raw <= table_raw[indx1] && raw > table_raw[indx2]) {
+            result = table_temperature[indx1] + (((raw - table_raw[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_raw[indx2] - table_raw[indx1]));
+            /*Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
+            return result;
+        }
+    }
+
+    return 0;
 }
 
 /////////////////////////////////////////////////////////////
@@ -202,7 +221,7 @@ void move_solenoid(int duration) {
         uint8_t sustain = (uint8_t) eeprom.param.solenoid_power;
 
         if (cancelling_test) {
-                return;
+            return;
         }
 
         int sustain_time = abs(duration) - eeprom.param.solenoid_surge_period_ms;
@@ -212,8 +231,8 @@ void move_solenoid(int duration) {
         delay(eeprom.param.solenoid_surge_period_ms);
 
         if (sustain_time) {
-                analogWrite(pinSolenoid, sustain, SOLENOID_PWM_FREQUENCY);
-                delay(sustain_time);
+            analogWrite(pinSolenoid, sustain, SOLENOID_PWM_FREQUENCY);
+            delay(sustain_time);
         }
 
         analogWrite(pinSolenoid, 0);
@@ -404,6 +423,7 @@ void play_startup_tune() {
 void turn_on_heater(HeatingElement &elem, int power) {
     if (!elem.heater_on) {
         /*Serial.println("Turning on proximal heater");*/
+		power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
         analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
         elem.heater_on = true;
     }
@@ -417,9 +437,11 @@ void turn_off_heater(HeatingElement &elem) {
     }
 }
 
-void set_heater_value(HeatingElement &elem, int value) {
-	analogWrite(elem.heater_pin, value, HEATER_PWM_FREQUENCY);
-	elem.heater_on = value != 0;
+void set_heater_value(HeatingElement &elem, int power) {
+	power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
+	analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
+	elem.heater_on = power != 0;
+	Serial.printlnf("Heater %c set to power %d", elem.code, power);
 }
 
 /////////////////////////////////////////////////////////////
@@ -764,11 +786,13 @@ int get_heater_temperature(int pin) {
         return -1;
     }
 
-    resistance = (THERMISTOR_BALANCE_RESISTANCE * (((MAX_ANALOG_READ * THERMISTOR_SCALE) / raw) - THERMISTOR_SCALE)) / THERMISTOR_SCALE;
-    ratio = resistance * THERMISTOR_SCALE / THERMISTOR_BASE_RESISTANCE;
+    /*resistance = THERMISTOR_BALANCE_RESISTANCE / ((MAX_ANALOG_READ / raw) - 1);
+    ratio = (resistance * THERMISTOR_SCALE) / THERMISTOR_BASE_RESISTANCE;*/
 
-    temperature = table_lookup(ratio);
-    /*Serial.printlnf("Raw %d, resistance: %d, ratio: %d, temperature: %d.%d", raw, resistance, ratio, temperature / 10, temperature % 10);*/
+	/*temperature = table_lookup(raw);*/
+	temperature = raw_table_lookup(raw);
+	/*Serial.printlnf("Pin: %d, raw %d, resistance: %d, ratio: %d, temperature: %d.%d", pin, raw, resistance, ratio, temperature / 10, temperature % 10);*/
+	Serial.printlnf("Pin: %d, raw %d, temperature: %d.%d", pin, raw, temperature / 10, temperature % 10);
 
     return temperature;
 }
@@ -790,7 +814,7 @@ void pid_controller(HeatingElement &elem) {
 	elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 32;
     elem.read_time = millis();
     if (elem.temp_C_10X == -1) {
-        set_heater_value(elem, 0);
+         (elem, 0);
     }
     else {
         if (prev_read_time == 0) {
@@ -811,7 +835,7 @@ void pid_controller(HeatingElement &elem) {
 
             i = elem.temp_C_10X / 10;
             d = elem.temp_C_10X % 10;
-            Serial.printlnf("Control: T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", i, d, dt, error, elem.integral, derivative, output);
+            /*Serial.printlnf("Control: T = %d.%d˚C, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", i, d, dt, error, elem.integral, derivative, output);*/
             elem.previous_error = error;
         }
     }
@@ -823,7 +847,8 @@ void control_heater_temperature() {
 }
 
 void start_temperature_control() {
-    distal.read_time = 0;
+	proximal.read_time = 0;
+	distal.read_time = 0;
 	control_heater_temperature_timer.start();
     Serial.println("Temperature control system started");
 }
@@ -1333,12 +1358,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 break;
         case 5: // unused
                 break;
-        case 6: // Device LED on with color
-                index = get_BCODE_token(index, &param1); // red
-                index = get_BCODE_token(index, &param2); // green
-                index = get_BCODE_token(index, &param3); // blue
-                /*set_device_LED_color((uint8_t) param1, (uint8_t) param2, (uint8_t) param3);
-                turn_on_device_LED();*/
+        case 6: // unused
                 break;
         case 7: // unused
                 break;
@@ -1527,12 +1547,12 @@ int particle_command(String arg) {
             eeprom.param.start_test_heat_red_threshold = param1;
             store_eeprom();
             return param1;
-        case 6: // turn on proximal heater for param1 milliseconds at power param2
+        case 6: // turn on proximal heater for param1 milliseconds
             turn_on_heater(proximal, param2);
 			delay(param1);
 			turn_off_heater(proximal);
             return param1;
-        case 7: // turn on distal heater
+        case 7: // turn on distal heater for param1 milliseconds
 			turn_on_heater(distal, param2);
 			delay(param1);
 			turn_off_heater(distal);
@@ -1576,6 +1596,18 @@ int particle_command(String arg) {
 				proximal.read_time = 0;
 			}
             return param1;
+		case 16: // turn on proximal heater at power param1
+            turn_on_heater(proximal, param1);
+            return param1;
+        case 17: // turn off proximal heater
+			turn_off_heater(proximal);
+			return 1;
+		case 18: // turn on distal heater at power param1
+			turn_on_heater(distal, param1);
+            return param1;
+        case 19: // turn off distal heater
+			turn_off_heater(distal);
+			return 1;
 }
 
     return 0;
@@ -1597,11 +1629,11 @@ void check_device_state() {
 
 			if (cartridge_loaded) {
 				blinkCartridgeLoaded.setActive(true);
-				turn_on_buzzer_for_duration(600, 500);
+				turn_on_buzzer_for_duration(600, 350);
 			}
 			else {
 				blinkNoCartridge.setActive(true);
-				turn_on_buzzer_for_duration(300, 250);
+				turn_on_buzzer_for_duration(300, 200);
 			}
 
     Serial.printlnf("Cartridge loaded? %c", cartridge_loaded ? 'Y' : 'N');
@@ -1818,7 +1850,7 @@ void setup() {
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-		init_analog_pin(pinProximalHeater, INPUT, 0);
+		init_analog_pin(pinProximalHeater, OUTPUT, 0);
 		init_analog_pin(pinDistalHeater, OUTPUT, 0);
 
     	init_analog_pin(pinSolenoid, OUTPUT, 0);
@@ -1828,17 +1860,19 @@ void setup() {
         init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
         init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
 
+		proximal.code = 'P';
 		proximal.heater_pin = pinProximalHeater;
 		proximal.thermistor_pin = pinProximalThermistor;
+		distal.code = 'D';
 		distal.heater_pin = pinDistalHeater;
 		distal.thermistor_pin = pinDistalThermistor;
 
         Serial.begin(115200); // standard serial port
 
-        /*load_eeprom();
-        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {*/
+        load_eeprom();
+        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
             reset_eeprom();
-        /*}*/
+        }
 
 		controller_i2c_bus_scan();
 
@@ -1859,7 +1893,7 @@ void setup() {
         scan_barcode();
 */
         reset_globals();
-        /*read_all_controller_sensors_timer.start();*/
+        read_all_controller_sensors_timer.start();
 
         check_device_state();
         attachInterrupt(pinCartridgeLoaded, cartridge_loaded_interrupt, CHANGE);
@@ -1885,16 +1919,16 @@ void loop() {
     }
 
     if (cartridge_state_changed) {
-				if (cartridge_state_debounce) {
-					cartridge_state_debounce = false;
-					cartridge_state_changed = false;
+		if (cartridge_state_debounce) {
+			cartridge_state_debounce = false;
+			cartridge_state_changed = false;
 	        Serial.println("Cartridge state changed");
 	        check_device_state();
-				}
-				else {
-					delay(50);
-					cartridge_state_debounce = true;
-				}
+		}
+		else {
+			delay(50);
+			cartridge_state_debounce = true;
+		}
     }
 
     if (test_in_progress) {
