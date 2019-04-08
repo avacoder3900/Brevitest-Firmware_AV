@@ -66,24 +66,6 @@ static uint32_t crc32_tab[] = {
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-/*int table_lookup(int ratio) {
-    int result, indx1, indx2;
-
-    if (ratio < table_ratio[0]) {
-        return -1000;
-    }
-
-    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++) {
-        if (ratio >= table_ratio[indx1] && ratio < table_ratio[indx2]) {
-            result = table_temperature[indx1] + (((ratio - table_ratio[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_ratio[indx2] - table_ratio[indx1]));
-            Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);
-            return result;
-        }
-    }
-
-    return 1000;
-}*/
-
 int raw_table_lookup(int raw) {
     int result, indx1, indx2;
 
@@ -94,7 +76,7 @@ int raw_table_lookup(int raw) {
     for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++) {
         if (raw <= table_raw[indx1] && raw > table_raw[indx2]) {
             result = table_temperature[indx1] + (((raw - table_raw[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_raw[indx2] - table_raw[indx1]));
-            /*Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
+            /*if (serial_messaging_on) Serial.printlnf("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
             return result;
         }
     }
@@ -393,26 +375,20 @@ int scan_barcode() {
 /////////////////////////////////////////////////////////////
 
 void turn_on_buzzer_for_duration(int frequency, int duration) {
-    Serial.printlnf("Turning on buzzer at frequency %d for duration %d", frequency, duration);
+    if (serial_messaging_on) Serial.printlnf("Turning on buzzer at frequency %d for duration %d", frequency, duration);
     tone(pinBuzzer, frequency, duration);
 }
 
 void play_startup_tune() {
-    turn_on_buzzer_for_duration(392, 250);
-    delay(250);
-		turn_on_buzzer_for_duration(392, 250);
-    delay(250);
-		turn_on_buzzer_for_duration(392, 250);
-    delay(250);
-    turn_on_buzzer_for_duration(311, 1200);
-		delay(2000);
-		turn_on_buzzer_for_duration(349, 250);
-    delay(250);
-		turn_on_buzzer_for_duration(349, 250);
-    delay(250);
-		turn_on_buzzer_for_duration(349, 250);
-    delay(250);
-    turn_on_buzzer_for_duration(294, 1200);
+	Serial.println("Playing startup tune");
+	turn_on_buzzer_for_duration(262, 150);
+	turn_on_buzzer_for_duration(294, 150);
+	turn_on_buzzer_for_duration(330, 150);
+	turn_on_buzzer_for_duration(349, 150);
+	turn_on_buzzer_for_duration(392, 150);
+	turn_on_buzzer_for_duration(440, 150);
+	turn_on_buzzer_for_duration(494, 150);
+	turn_on_buzzer_for_duration(523, 150);
 }
 
 /////////////////////////////////////////////////////////////
@@ -441,9 +417,11 @@ void turn_off_heater(HeatingElement &elem) {
 void set_heater_value(HeatingElement &elem, int power) {
 	power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
 	analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
+	delay(500);
+	analogWrite(elem.heater_pin, 0);
 	elem.heater_on = power != 0;
 	if (elem.heater_on) {
-		Serial.printlnf("Heater %c set to power %d", elem.code, power);
+		if (serial_messaging_on) Serial.printlnf("Heater %c set to power %d", elem.code, power);
 	}
 }
 
@@ -501,21 +479,12 @@ void turn_on_both_LEDs_for_duration(int duration) {
 /////////////////////////////////////////////////////////////
 
 void imu_read() {
-    /*Serial.print("\nAccelerometer:\n");
-    Serial.print(" X = ");
-    Serial.println(myIMU.readRawAccelX());
-    Serial.print(" Y = ");
-    Serial.println(myIMU.readRawAccelY());
-    Serial.print(" Z = ");
-    Serial.println(myIMU.readRawAccelZ());
+	int temp_F_10X;
 
-    Serial.print("\nGyroscope:\n");
-    Serial.print(" X = ");
-    Serial.println(myIMU.readRawGyroX());
-    Serial.print(" Y = ");
-    Serial.println(myIMU.readRawGyroY());
-    Serial.print(" Z = ");
-    Serial.println(myIMU.readRawGyroZ());*/
+	if (serial_messaging_on) {
+		Serial.printlnf("Accelerometer: X = %d, Y = %d, Z = %d", myIMU.readRawAccelX(), myIMU.readRawAccelY(), myIMU.readRawAccelZ());
+	    Serial.printlnf("Gyroscope: X = %d, Y = %d, Z = %d", myIMU.readRawGyroX(), myIMU.readRawGyroY(), myIMU.readRawGyroZ());
+	}
 
     int error, tempC_raw;
     error = myIMU.begin();
@@ -525,6 +494,8 @@ void imu_read() {
     else {
         tempC_raw = myIMU.readRawTemp() + 400;
         imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
+		temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
+        if (serial_messaging_on) Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
     }
 }
 
@@ -539,7 +510,7 @@ void pressure_read() {
 
     BaroSensor.begin();
     BaroSensor.getTempAndPressure(&temp, &press, CELSIUS, OSR_512);
-	Serial.printlnf("Temperature: %d.%d˚C, Pressure: %d.%d mmHg", temp / 10, temp % 10, press / 10, press % 10);
+	if (serial_messaging_on) Serial.printlnf("Temperature: %d.%d˚C, Pressure: %d.%d mmHg", temp / 10, temp % 10, press / 10, press % 10);
 }
 
 /////////////////////////////////////////////////////////////
@@ -551,7 +522,7 @@ void pressure_read() {
 void config_optical_sensors(char channel, int param, int addr) {
     int bytes_sent, result;
 
-    /*Serial.printlnf("Configuring optical sensor %c", channel);*/
+    if (serial_messaging_on) Serial.printlnf("Configuring optical sensor %c", channel);
     Wire.beginTransmission(addr);
     bytes_sent = Wire.write(0x00);
     bytes_sent += Wire.write(0x02);
@@ -622,7 +593,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         Serial.printlnf("Timeout, optical sensor %c read not completed", channel);
     }
     else {
-        /*Serial.printlnf("Starting optical sensor data %c read", channel);*/
+        if (serial_messaging_on) Serial.printlnf("Starting optical sensor data %c read", channel);
         Wire.beginTransmission(addr);
         bytes = Wire.write(0x00);
         result = Wire.endTransmission(false);
@@ -631,12 +602,12 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         }
 
         bytes = Wire.requestFrom(addr, 10);
-        /*Serial.printlnf("Data ready to read, %d bytes", bytes);*/
+        if (serial_messaging_on) Serial.printlnf("Data ready to read, %d bytes", bytes);
         while (Wire.available()) {
             // status
             stat = Wire.read();
             config = Wire.read();
-            /*Serial.printlnf("Config - %d, Status - %d");*/
+            if (serial_messaging_on) Serial.printlnf("Config - %d, Status - %d");
 
             // temperature
             lsb = Wire.read();
@@ -664,7 +635,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
             reading->time_ms = millis();
             reading->samples = 1;
 
-            Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, config, stat, tempC, tempF, x, y, z);
+            if (serial_messaging_on) Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, config, stat, tempC, tempF, x, y, z);
         }
     }
 }
@@ -711,7 +682,7 @@ void read_optical_sensors(int param) {
 
         disable_optical_sensors();
 
-        Serial.printlnf("Elapsed time: %u", millis() - elapsed);
+        if (serial_messaging_on) Serial.printlnf("Elapsed time: %u", millis() - elapsed);
 }
 
 /////////////////////////////////////////////////////////////
@@ -752,25 +723,15 @@ void disable_controller_sensors() {
 }
 
 void read_all_controller_sensors() {
-    int temp_F_10X;
-
     if (enable_controller_sensors(false)) {
         imu_read();
-        temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
-        Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
-
         heater_temperature_read();
-        temp_F_10X = ((proximal.temp_C_10X * 9) / 5) + 320;
-        Serial.printlnf("Proximal temperature: %d.%d˚C, %d.%d˚F", proximal.temp_C_10X / 10, proximal.temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
-		temp_F_10X = ((distal.temp_C_10X * 9) / 5) + 320;
-        Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal.temp_C_10X / 10, distal.temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
-
         pressure_read();
-
         disable_controller_sensors();
+		if (serial_messaging_on) Serial.println();
     }
     else {
-        Serial.printlnf("Controller I2C busy, read skipped");
+        if (serial_messaging_on) Serial.printlnf("Controller I2C busy, read skipped");
     }
 }
 
@@ -790,20 +751,20 @@ int get_heater_temperature(HeatingElement &elem) {
 		elem.temp_C_10X = raw_table_lookup(raw);
 		elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 320;
 	}
-	/*Serial.printlnf("Raw reading on pin %d = %d", pin, raw);*/
     return raw;
 }
 
 void heater_temperature_read() {
 	get_heater_temperature(distal);
+	if (serial_messaging_on) Serial.printlnf("Proximal temperature: %d.%d˚C, %d.%d˚F", proximal.temp_C_10X / 10, proximal.temp_C_10X % 10, proximal.temp_F_10X / 10, proximal.temp_F_10X % 10);
 	get_heater_temperature(proximal);
+	if (serial_messaging_on) Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal.temp_C_10X / 10, distal.temp_C_10X % 10, distal.temp_F_10X / 10, distal.temp_F_10X % 10);
 }
 
 void pid_controller(HeatingElement &elem) {
     int dt, error, derivative, output, raw;
     unsigned long prev_read_time;
 
-	/*Serial.printlnf("Adjusting temperature on %c heater", elem.code);*/
 	prev_read_time = elem.read_time;
 	raw = get_heater_temperature(elem);
     elem.read_time = millis();
@@ -825,7 +786,7 @@ void pid_controller(HeatingElement &elem) {
 			output += (elem.k_d_num * derivative) / elem.k_d_den;
             set_heater_value(elem, output);
 
-            Serial.printlnf("Element = %c, raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
+            if (serial_messaging_on) Serial.printlnf("%c: raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
             elem.previous_error = error;
         }
     }
@@ -1227,10 +1188,10 @@ bool tests_to_upload() {
         if (millis() < next_upload) {
                 return false;
         }
-        Serial.println("Looking for test to upload");
+        if (serial_messaging_on) Serial.printlnf("Looking for test to upload");
         for (i = 0; i < TEST_CACHE_SIZE; i += 1) {
                 if (eeprom.test_cache[i].test_uuid[0] != '\0') {
-                        Serial.printlnf("Test found: %s", eeprom.test_cache[i].test_uuid[0]);
+                        if (serial_messaging_on) Serial.printlnf("Test found: %s", eeprom.test_cache[i].test_uuid[0]);
                         return true;
                 }
         }
@@ -1382,7 +1343,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 index = get_BCODE_token(index, &param1);    // total steps
                 index = get_BCODE_token(index, &param2);    // step_delay_us
                 index = get_BCODE_token(index, &param3);    // number of rasters
-                Serial.printlnf("Raster well - total steps: %d, rasters: %d", param1, param3);
+                if (serial_messaging_on) Serial.printlnf("Raster well - total steps: %d, rasters: %d", param1, param3);
                 if (param3 == 1) {
                     steps = param1;
                 }
@@ -1430,7 +1391,7 @@ int process_one_BCODE_command(int cmd, int index) {
                 index = get_BCODE_token(index, &param1);    // step_delay_us
                 index = get_BCODE_token(index, &param2);    // gather_time_ms
                 index = get_BCODE_token(index, &param3);    // number of segments
-                Serial.printlnf("Well transit - segments: %d", param3);
+                if (serial_messaging_on) Serial.printlnf("Well transit - segments: %d", param3);
                 for (i = 0; i < param3; i++) {
                         if (cancelling_test) {
                                 break;
@@ -1604,7 +1565,19 @@ int particle_command(String arg) {
 		case 21: // stop temperature control
 			stop_temperature_control();
 			return 1;
-}
+		case 22: // turn on serial messaging
+			serial_messaging_on = true;
+			return 1;
+		case 23: // turn off serial messaging
+			serial_messaging_on = false;
+			return 0;
+		case 24: // start reading sensors
+			read_all_controller_sensors_timer.start();
+			return 1;
+		case 25: // stop reading sensors
+			read_all_controller_sensors_timer.stop();
+			return 1;
+	}
 
     return 0;
 

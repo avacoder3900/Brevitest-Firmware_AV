@@ -46,12 +46,6 @@
 #define TEST_CACHE_SIZE 3
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
-// thermistors
-#define THERMISTOR_SCALE 10000
-#define THERMISTOR_BALANCE_RESISTANCE 4990
-#define THERMISTOR_BASE_RESISTANCE 100000
-#define TERMISTOR_TABLE_LENGTH 21
-
 // barometric pressure sensor
 #define PRESSURE_ADDRESS 0x76
 
@@ -87,15 +81,21 @@
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
 // heater
-#define HEATER_MAX_POWER 64
+#define HEATER_MAX_POWER 128
 #define HEATER_PWM_FREQUENCY 20000
 #define HEATER_CONTROL_INTERVAL 2000
+
+// thermistors
+#define THERMISTOR_SCALE 10000
+#define THERMISTOR_BALANCE_RESISTANCE 4990
+#define THERMISTOR_BASE_RESISTANCE 100000
+#define TERMISTOR_TABLE_LENGTH 21
 
 // LEDs
 #define LED_LEVEL 1000
 
 // solenoid
-#define SOLENOID_PWM_FREQUENCY 1500
+#define SOLENOID_PWM_FREQUENCY 10000
 
 // upload
 #define UPLOAD_INTERVAL 60000
@@ -161,6 +161,7 @@ unsigned long finish_timeout;
 unsigned long upload_timeout;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_BUFFER_SIZE];
+bool serial_messaging_on = true;
 
 // device LED
 LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
@@ -221,9 +222,9 @@ struct HeatingElement {
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 425;
-        k_p_num = 1;
-        k_p_den = 2;
+        target_C_10X = 400;
+        k_p_num = 10;
+        k_p_den = 1;
         k_i_num = 1;
         k_i_den = 100000;
         k_d_num = 0;
