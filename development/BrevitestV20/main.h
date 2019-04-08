@@ -30,6 +30,7 @@
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 3
 #define OPTICAL_SENSOR_DEFAULT_PARAM 0xAB
+#define OPTICAL_SENSORS_TEST_INTERVAL 5000
 
 // LEDs
 #define LED_WARMUP_DELAY_MS 1000
@@ -92,10 +93,10 @@
 #define TERMISTOR_TABLE_LENGTH 21
 
 // LEDs
-#define LED_LEVEL 1000
+#define LED_LEVEL 500
 
 // solenoid
-#define SOLENOID_PWM_FREQUENCY 10000
+#define SOLENOID_PWM_FREQUENCY 6000
 
 // upload
 #define UPLOAD_INTERVAL 60000
@@ -195,6 +196,10 @@ unsigned long next_optical_sensor_reading_time = 0;
 // controller sensors read timer
 void read_all_controller_sensors(void);
 Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_all_controller_sensors);
+
+// optical sensors read timer
+void test_optical_sensors(void);
+Timer test_optical_sensors_timer(OPTICAL_SENSORS_TEST_INTERVAL, test_optical_sensors);
 
 // inertial measurement unit
 LSM6DS3 myIMU;

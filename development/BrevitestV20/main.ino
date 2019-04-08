@@ -437,6 +437,24 @@ void set_heater_value(HeatingElement &elem, int power) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void turn_on_LED(char channel) {
+	if (channel == 'A') {
+		turn_on_assay_LED();
+	}
+	else {
+		turn_on_control_LED();
+	}
+}
+
+void turn_off_LED(char channel) {
+	if (channel == 'A') {
+		turn_off_assay_LED();
+	}
+	else {
+		turn_off_control_LED();
+	}
+}
+
 void turn_on_assay_LED() {
     analogWrite(pinLEDAssay, LED_LEVEL);
 }
@@ -525,6 +543,10 @@ void pressure_read() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void test_optical_sensors() {
+	read_optical_sensors_command_flag = true;
+}
+
 void config_optical_sensors(char channel, int param, int addr) {
     int bytes_sent, result;
 
@@ -539,25 +561,21 @@ void config_optical_sensors(char channel, int param, int addr) {
 
     Wire.beginTransmission(addr);
     bytes_sent = Wire.write(0x06);
-    bytes_sent += Wire.write(param);
-    result = Wire.endTransmission(true);
-    if (result != 0) {
-        Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
-    }
-
-    Wire.beginTransmission(addr);
-    bytes_sent = Wire.write(0x00);
-    bytes_sent += Wire.write(0x83);
+    bytes_sent += Wire.write((uint8_t) param);
     result = Wire.endTransmission(true);
     if (result != 0) {
         Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
     }
 }
 
+void read_registers() {
+
+}
+
 void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
-    int bytes, result;
+    int bytes, ready, result;
     int addr, lsb, msb, ready_pin;
-    int config, stat, tempC, tempF, x, y, z;
+    int osr, status, tempC, tempF, x, y, z;
     unsigned long timeout;
     BrevitestOpticalSensorRecord *reading;
 
@@ -573,77 +591,81 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     if (channel == 'A') {
         addr = 0x74;
         ready_pin = pinAssaySensor_Ready;
-        turn_on_assay_LED();
     }
     else {
         addr = 0x75;
         ready_pin = pinControlSensor_Ready;
-        turn_on_control_LED();
     }
 
-    delay(50); // warm up LED
+    /*delay(10); // warm up LED*/
 
     config_optical_sensors(channel, param, addr);
-    timeout = millis() + 200;
-    while (digitalRead(ready_pin) == HIGH && millis() < timeout) {
-        Serial.print(".");
-        delay(10);
+	turn_on_LED(channel);
+
+    Wire.beginTransmission(addr);
+    bytes = Wire.write(0x00);
+    bytes += Wire.write(0x83);
+    result = Wire.endTransmission(true);
+    if (result != 0) {
+        Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes, result);
     }
-    timeout = millis() + 10000;
-    while (digitalRead(ready_pin) == LOW && millis() < timeout) {
-        /*Serial.print("*");*/
-        delay(10);
-    }
-    turn_off_both_LEDs();
-    if (digitalRead(ready_pin) == LOW) {
-        Serial.printlnf("Timeout, optical sensor %c read not completed", channel);
-    }
-    else {
-        if (serial_messaging_on) Serial.printlnf("Starting optical sensor data %c read", channel);
-        Wire.beginTransmission(addr);
-        bytes = Wire.write(0x00);
-        result = Wire.endTransmission(false);
-        if (result != 0) {
-            Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
-        }
 
-        bytes = Wire.requestFrom(addr, 10);
-        if (serial_messaging_on) Serial.printlnf("Data ready to read, %d bytes", bytes);
-        while (Wire.available()) {
-            // status
-            stat = Wire.read();
-            config = Wire.read();
-            if (serial_messaging_on) Serial.printlnf("Config - %d, Status - %d");
+	timeout = millis() + 10000;
+	ready = false;
+	while (!ready && millis() < timeout) {
+		Wire.beginTransmission(addr);
+		bytes = Wire.write(0x00);
+		result = Wire.endTransmission(false);
+		if (result != 0) {
+			Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
+		}
 
-            // temperature
-            lsb = Wire.read();
-            msb = Wire.read();
-            tempC = ((((msb << 8) + lsb) * 5) / 100) - 67;
-            tempF = ((tempC * 9) / 5) + 32;
+		bytes = Wire.requestFrom(addr, 10);
+		osr = Wire.read();
+		status = Wire.read();
+		if (serial_messaging_on) Serial.printf("Status = %d, OSR = %d", status, osr);
+		ready = (osr == 3) && ((status & 0x04) == 0);
+	}
 
-            lsb = Wire.read();
-            msb = Wire.read();
-            x = (msb << 8) + lsb;
+	turn_off_LED(channel);
 
-            lsb = Wire.read();
-            msb = Wire.read();
-            y = (msb << 8) + lsb;
+	if (serial_messaging_on) Serial.printlnf("Starting optical sensor data %c read", channel);
 
-            lsb = Wire.read();
-            msb = Wire.read();
-            z = (msb << 8) + lsb;
+    // temperature
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", msb);
+    tempC = ((((msb << 8) + lsb) * 5) / 100) - 67;
+    tempF = ((tempC * 9) / 5) + 32;
 
-            reading->channel = channel;
-            reading->red = x;
-            reading->green = y;
-            reading->blue = z;
-            reading->temperature = tempC;
-            reading->time_ms = millis();
-            reading->samples = 1;
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", msb);
+    x = (msb << 8) + lsb;
 
-            if (serial_messaging_on) Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, config, stat, tempC, tempF, x, y, z);
-        }
-    }
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", msb);
+    y = (msb << 8) + lsb;
+
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printlnf("%d ", msb);
+    z = (msb << 8) + lsb;
+
+    reading->channel = channel;
+    reading->red = x;
+    reading->green = y;
+    reading->blue = z;
+    reading->temperature = tempC;
+    reading->time_ms = millis();
+    reading->samples = 1;
+
+    Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, osr, status, tempC, tempF, x, y, z);
 }
 
 bool enable_optical_sensors(bool force_read) {
@@ -662,7 +684,7 @@ bool enable_optical_sensors(bool force_read) {
         }
     }
     /*Serial.println("Attempting to read optical sensors");*/
-    Wire.setSpeed(CLOCK_SPEED_400KHZ);
+    Wire.setSpeed(CLOCK_SPEED_100KHZ);
     Wire.begin();
     delay(100);
 
@@ -1495,10 +1517,10 @@ int particle_command(String arg) {
             wake_move_sleep_stepper(param1, param2);
             return cumulative_steps;
         case 4: // read optical sensors (param)
-            steps_to_alignment = STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
+            /*steps_to_alignment = STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
             if (cumulative_steps != steps_to_alignment) {
                 wake_move_sleep_stepper(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
-            }
+            }*/
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_flag = true;
             return param1;
@@ -1582,6 +1604,21 @@ int particle_command(String arg) {
 			return 1;
 		case 25: // stop reading sensors
 			read_all_controller_sensors_timer.stop();
+			return 1;
+		case 26: // start reading sensors
+			controller_i2c_bus_scan();
+			return 1;
+		case 27: // stop reading sensors
+			optical_i2c_bus_scan();
+			return 1;
+		case 28: // start optical sensor reading test, param = param1
+			serial_messaging_on = false;
+			read_optical_sensors_command_param = param1;
+			read_optical_sensors_command_flag = true;
+			test_optical_sensors_timer.start();
+			return 1;
+		case 29: // stop optical sensor reading test
+			test_optical_sensors_timer.stop();
 			return 1;
 	}
 
@@ -1786,7 +1823,7 @@ void controller_i2c_bus_scan() {
     int addr, bytes_sent, result;
 
     if (enable_controller_sensors(true)) {
-        Serial.println("Starting I2C bus scan");
+        Serial.println("Starting controller I2C bus scan");
         for (addr = 0; addr < 127; addr++) {
             Wire1.beginTransmission(addr);
             bytes_sent = Wire1.write(0x00);
@@ -1797,6 +1834,23 @@ void controller_i2c_bus_scan() {
         }
     }
     disable_controller_sensors();
+}
+
+void optical_i2c_bus_scan() {
+    int addr, bytes_sent, result;
+
+    if (enable_optical_sensors(true)) {
+        Serial.println("Starting optical I2C bus scan");
+        for (addr = 0; addr < 127; addr++) {
+            Wire.beginTransmission(addr);
+            bytes_sent = Wire.write(0x00);
+            result = Wire.endTransmission();
+            if (result == 0) {
+                Serial.printlnf("I2C device found at address %X", addr);
+            }
+        }
+    }
+    disable_optical_sensors();
 }
 
 void setup() {
