@@ -380,15 +380,21 @@ void turn_on_buzzer_for_duration(int frequency, int duration) {
 }
 
 void play_startup_tune() {
-	Serial.println("Playing startup tune");
-	turn_on_buzzer_for_duration(262, 150);
-	turn_on_buzzer_for_duration(294, 150);
-	turn_on_buzzer_for_duration(330, 150);
-	turn_on_buzzer_for_duration(349, 150);
-	turn_on_buzzer_for_duration(392, 150);
-	turn_on_buzzer_for_duration(440, 150);
-	turn_on_buzzer_for_duration(494, 150);
-	turn_on_buzzer_for_duration(523, 150);
+	turn_on_buzzer_for_duration(262, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(294, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(330, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(349, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(392, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(440, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(494, 250);
+	delay(50);
+	turn_on_buzzer_for_duration(523, 250);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1856,7 +1862,8 @@ void setup() {
 		delay(500);
 		turn_on_control_LED_for_duration(500);
 
-        /*play_startup_tune();*/
+		Serial.println("Playing startup tune");
+        play_startup_tune();
 
         /*Serial.println("Scanning barcode");
         scan_barcode();
