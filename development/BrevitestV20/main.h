@@ -93,7 +93,7 @@
 #define TERMISTOR_TABLE_LENGTH 21
 
 // LEDs
-#define LED_LEVEL 500
+#define LED_LEVEL 600
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 6000

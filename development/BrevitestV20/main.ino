@@ -439,10 +439,10 @@ void set_heater_value(HeatingElement &elem, int power) {
 
 void turn_on_LED(char channel) {
 	if (channel == 'A') {
-		turn_on_assay_LED();
+		turn_on_assay_LED(600);
 	}
 	else {
-		turn_on_control_LED();
+		turn_on_control_LED(645);
 	}
 }
 
@@ -455,12 +455,12 @@ void turn_off_LED(char channel) {
 	}
 }
 
-void turn_on_assay_LED() {
-    analogWrite(pinLEDAssay, LED_LEVEL);
+void turn_on_assay_LED(int power) {
+    analogWrite(pinLEDAssay, power);
 }
 
-void turn_on_control_LED() {
-		analogWrite(pinLEDControl, LED_LEVEL);
+void turn_on_control_LED(int power) {
+	analogWrite(pinLEDControl, power);
 }
 
 void turn_off_assay_LED() {
@@ -472,25 +472,25 @@ void turn_off_control_LED() {
 }
 
 void turn_off_both_LEDs() {
-		analogWrite(pinLEDAssay, 0);
-		analogWrite(pinLEDControl, 0);
+	analogWrite(pinLEDAssay, 0);
+	analogWrite(pinLEDControl, 0);
 }
 
-void turn_on_assay_LED_for_duration(int duration) {
-    turn_on_assay_LED();
+void turn_on_assay_LED_for_duration(int duration, int power) {
+    turn_on_assay_LED(power);
     delay(duration);
     turn_off_assay_LED();
 }
 
-void turn_on_control_LED_for_duration(int duration) {
-    turn_on_control_LED();
+void turn_on_control_LED_for_duration(int duration, int power) {
+    turn_on_control_LED(power);
     delay(duration);
     turn_off_control_LED();
 }
 
-void turn_on_both_LEDs_for_duration(int duration) {
-    turn_on_assay_LED();
-    turn_on_control_LED();
+void turn_on_both_LEDs_for_duration(int duration, int power) {
+    turn_on_assay_LED(power);
+    turn_on_control_LED(power);
     delay(duration);
     turn_off_assay_LED();
     turn_off_control_LED();
@@ -548,12 +548,12 @@ void test_optical_sensors() {
 }
 
 void config_optical_sensors(char channel, int param, int addr) {
-    int bytes_sent, result;
+    int bytes_received, bytes_sent, reg, result;
 
     if (serial_messaging_on) Serial.printlnf("Configuring optical sensor %c", channel);
     Wire.beginTransmission(addr);
     bytes_sent = Wire.write(0x00);
-    bytes_sent += Wire.write(0x02);
+    bytes_sent += Wire.write(0x02);	// enter configuration mode
     result = Wire.endTransmission(true);
     if (result != 0) {
         Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
@@ -561,21 +561,48 @@ void config_optical_sensors(char channel, int param, int addr) {
 
     Wire.beginTransmission(addr);
     bytes_sent = Wire.write(0x06);
-    bytes_sent += Wire.write((uint8_t) param);
+	bytes_sent += Wire.write((uint8_t) param);	// write param to CREG1
     result = Wire.endTransmission(true);
     if (result != 0) {
         Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
     }
+
+	Wire.beginTransmission(addr);
+	bytes_sent = Wire.write(0x06);	// confirm register was written
+	result = Wire.endTransmission(false);
+	if (result != 0) {
+		Serial.printlnf("Send error, %d bytes, result: %d", bytes_sent, result);
+	}
+	bytes_received = Wire.requestFrom(addr, 1);
+
+	reg = Wire.read();
+	if (serial_messaging_on) Serial.printlnf("param = %d, CREG1 = %d", param, reg);
 }
 
-void read_registers() {
+bool optical_sensor_ready(uint8_t addr) {
+	int bytes, reg, result;
+	uint8_t osr, status, lsb, msb;
 
+	Wire.beginTransmission(addr);
+	bytes = Wire.write(0x00);
+	result = Wire.endTransmission(false);
+	if (result != 0) {
+		Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
+	}
+	bytes = Wire.requestFrom(addr, 4);
+
+	// status
+	osr = Wire.read();
+	status = Wire.read();
+	if (serial_messaging_on) Serial.printlnf("Status = %d, OSR = %d", status, osr);
+
+	return ((status & 0x04) == 0 && osr == 3);
 }
 
 void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
-    int bytes, ready, result;
-    int addr, lsb, msb, ready_pin;
-    int osr, status, tempC, tempF, x, y, z;
+    int bytes, ready, ready_pin, result;
+    uint8_t osr, status, addr, lsb, msb;
+    int tempC, tempF, x, y, z;
     unsigned long timeout;
     BrevitestOpticalSensorRecord *reading;
 
@@ -589,18 +616,18 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     reading->red = reading->green = reading->blue = reading->temperature = reading->time_ms = reading->samples = 0;
 
     if (channel == 'A') {
-        addr = 0x74;
+        addr = 0x75;
         ready_pin = pinAssaySensor_Ready;
     }
     else {
-        addr = 0x75;
+        addr = 0x74;
         ready_pin = pinControlSensor_Ready;
     }
 
-    /*delay(10); // warm up LED*/
-
     config_optical_sensors(channel, param, addr);
+
 	turn_on_LED(channel);
+	/*delay(100);*/
 
     Wire.beginTransmission(addr);
     bytes = Wire.write(0x00);
@@ -610,26 +637,55 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes, result);
     }
 
-	timeout = millis() + 10000;
-	ready = false;
+	timeout = millis() + 5000;
+	ready = optical_sensor_ready(addr);
 	while (!ready && millis() < timeout) {
-		Wire.beginTransmission(addr);
-		bytes = Wire.write(0x00);
-		result = Wire.endTransmission(false);
-		if (result != 0) {
-			Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
-		}
-
-		bytes = Wire.requestFrom(addr, 10);
-		osr = Wire.read();
-		status = Wire.read();
-		if (serial_messaging_on) Serial.printf("Status = %d, OSR = %d", status, osr);
-		ready = (osr == 3) && ((status & 0x04) == 0);
+		Serial.print('.');
+		delay(20);
+		ready = optical_sensor_ready(addr);
 	}
+
+	/*timeout = millis() + 1000;
+	ready = digitalRead(ready_pin) == LOW;
+	while (!ready && millis() < timeout) {
+		ready = digitalRead(ready_pin) == LOW;
+		Serial.print('.');
+		if (!ready) {
+			delay(20);
+		}
+	}
+
+	timeout = millis() + 5000;
+	ready = digitalRead(ready_pin) == HIGH;
+	while (!ready && millis() < timeout) {
+		ready = digitalRead(ready_pin) == HIGH;
+		Serial.print('*');
+		if (!ready) {
+			delay(20);
+		}
+	}*/
 
 	turn_off_LED(channel);
 
+	if (!ready) {
+		Serial.printlnf("Read failure: %c", channel);
+		return;
+	}
+
 	if (serial_messaging_on) Serial.printlnf("Starting optical sensor data %c read", channel);
+
+	Wire.beginTransmission(addr);
+	bytes = Wire.write(0x00);
+	result = Wire.endTransmission(false);
+	if (result != 0) {
+		Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
+	}
+	bytes = Wire.requestFrom(addr, 10);
+
+	// status
+	osr = Wire.read();
+	status = Wire.read();
+	if (serial_messaging_on) Serial.printlnf("Status = %d, OSR = %d", status, osr);
 
     // temperature
     lsb = Wire.read();
@@ -639,6 +695,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     tempC = ((((msb << 8) + lsb) * 5) / 100) - 67;
     tempF = ((tempC * 9) / 5) + 32;
 
+	// light
     lsb = Wire.read();
 	if (serial_messaging_on) Serial.printf("%d ", lsb);
     msb = Wire.read();
@@ -1542,23 +1599,32 @@ int particle_command(String arg) {
         case 9: // fire solenoid
             move_solenoid(param1);
             return param1;
-        case 10: // turn on assay LED for param1 milliseconds
+        case 10: // turn on assay LED for param1 milliseconds at power param2
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_assay_LED_for_duration(param1);
+			if (param2 > 1000 || param2 < 0) {
+                param2 = 600;
+            }
+            turn_on_assay_LED_for_duration(param1, param2);
             return param1;
-        case 11: // turn on control LED for param1 milliseconds
+        case 11: // turn on control LED for param1 milliseconds at power param2
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_control_LED_for_duration(param1);
+			if (param2 > 1000 || param2 < 0) {
+                param2 = 600;
+            }
+            turn_on_control_LED_for_duration(param1, param2);
             return param1;
-        case 12: // turn on both LEDs for param1 milliseconds
+        case 12: // turn on both LEDs for param1 milliseconds at power param2
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-            turn_on_both_LEDs_for_duration(param1);
+			if (param2 > 1000 || param2 < 0) {
+                param2 = 600;
+            }
+            turn_on_both_LEDs_for_duration(param1, param2);
             return param1;
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
@@ -1912,9 +1978,9 @@ void setup() {
         move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
-		turn_on_assay_LED_for_duration(500);
+		turn_on_assay_LED_for_duration(500, LED_LEVEL);
 		delay(500);
-		turn_on_control_LED_for_duration(500);
+		turn_on_control_LED_for_duration(500, LED_LEVEL);
 
 		Serial.println("Playing startup tune");
         play_startup_tune();
