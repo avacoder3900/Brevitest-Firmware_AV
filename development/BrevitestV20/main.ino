@@ -1974,8 +1974,8 @@ void setup() {
 
 		controller_i2c_bus_scan();
 
-        /*Serial.println("Resetting stage");
-        reset_stage();*/
+        Serial.println("Resetting stage");
+        reset_stage();
 
         Serial.println("Firing solenoid");
         move_solenoid(1000);
@@ -2000,7 +2000,6 @@ void setup() {
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
-        /*tuning_cutoff_time = millis() + 60000;*/
         /*start_temperature_control();*/
 }
 
