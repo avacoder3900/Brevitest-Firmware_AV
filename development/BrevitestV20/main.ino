@@ -229,14 +229,18 @@ void move_solenoid(int duration) {
 /////////////////////////////////////////////////////////////
 
 void move_steps(int steps, int step_delay){
-        //rotate a specific number of steps - negative for reverse movement
+        // rotate a specific number of steps - negative for reverse movement
+		// steps: positive => move proximally, negative => move distally
+		// controller: dir = LOW => move proximally, dir = HIGH => move distally
 
-        int dir = (steps < 0) ? LOW : HIGH;
-        digitalWrite(pinStepper_Dir, dir);
-		Serial.printlnf("Stepping, direction = %c", dir == LOW ? 'L' : 'H');
+		int abs_steps, dir, i;
 
-        steps = abs(steps);
-        for(long i = 0; i < steps; i += 1) {
+        dir = (steps > 0) ? LOW : HIGH;
+		digitalWrite(pinStepper_Dir, dir);
+		Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
+
+        abs_steps = abs(steps);
+        for(i = 0; i < abs_steps; i++) {
                 /*if (cancelling_test) {
                         break;
                 }*/
@@ -248,23 +252,25 @@ void move_steps(int steps, int step_delay){
                 if ((dir == LOW) && (digitalRead(pinLimitSwitch) == LOW)) {
                     delay(20);  // debounce
                     if (digitalRead(pinLimitSwitch) == LOW) {
+						Serial.println("Carriage limit switch detected");
                         cumulative_steps = 0;
                         break;
                     }
                 }
 
                 if (dir == HIGH) {
-                        /*if (cumulative_steps > CUMULATIVE_STEP_LIMIT) {
-                                break;
-                        }*/
+                    if (cumulative_steps >= CUMULATIVE_STEP_LIMIT) {
+						Serial.println("Carriage distal limit reached");
+                        break;
+                    }
 
-                        /*if (cumulative_steps < LIMIT_SWITCH_RELEASE_LENGTH) {
-                                pinMode(pinLimitSwitch, OUTPUT);
-                                digitalWrite(pinLimitSwitch, LOW);
-                        }
-                        else {
-                                pinMode(pinLimitSwitch, INPUT_PULLUP);
-                        }*/
+                    /*if (cumulative_steps < LIMIT_SWITCH_RELEASE_LENGTH) {
+                            pinMode(pinLimitSwitch, OUTPUT);
+                            digitalWrite(pinLimitSwitch, LOW);
+                    }
+                    else {
+                            pinMode(pinLimitSwitch, INPUT_PULLUP);
+                    }*/
                 }
 
                 digitalWrite(pinStepper_Step, HIGH);
@@ -273,9 +279,9 @@ void move_steps(int steps, int step_delay){
                 digitalWrite(pinStepper_Step, LOW);
                 delayMicroseconds(step_delay);
 
-                cumulative_steps += dir == LOW ? 1 : -1;
+                cumulative_steps += dir == LOW ? -1 : 1;
         }
-
+		Serial.printlnf("Move complete, cumulative steps = %d, step limit = %d", cumulative_steps, CUMULATIVE_STEP_LIMIT);
         //sleep_stepper();
 }
 
@@ -286,20 +292,20 @@ void wake_move_sleep_stepper(int steps, int step_delay) {
 }
 
 void sleep_stepper() {
-        digitalWrite(pinStepper_Sleep, LOW);
+    digitalWrite(pinStepper_Sleep, LOW);
 }
 
 void wake_stepper() {
-        digitalWrite(pinStepper_Sleep, HIGH);
-        /*delay(eeprom.param.stepper_wake_delay_ms);*/
-        delay(10);
+    digitalWrite(pinStepper_Sleep, HIGH);
+    /*delay(eeprom.param.stepper_wake_delay_ms);*/
+    delay(10);
 }
 
 void reset_stage() {
         cumulative_steps = CUMULATIVE_STEP_LIMIT;
         wake_stepper();
-        move_steps(-14000, 800);
-        move_steps(3000, 800);
+        move_steps(14000, RESET_STEP_DELAY);
+        move_steps(-STEPS_TO_MICROBEAD_WELL, RESET_STEP_DELAY);
         /*move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
         move_steps(STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);*/
         sleep_stepper();
@@ -420,7 +426,7 @@ void turn_off_heater(HeatingElement &elem) {
     }
 }
 
-void set_heater_value(HeatingElement &elem, int power) {
+void pulse_heater(HeatingElement &elem, int power) {
 	power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
 	analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
 	delay(500);
@@ -505,10 +511,8 @@ void turn_on_both_LEDs_for_duration(int duration, int power) {
 void imu_read() {
 	int temp_F_10X;
 
-	if (serial_messaging_on) {
-		Serial.printlnf("Accelerometer: X = %d, Y = %d, Z = %d", myIMU.readRawAccelX(), myIMU.readRawAccelY(), myIMU.readRawAccelZ());
-	    Serial.printlnf("Gyroscope: X = %d, Y = %d, Z = %d", myIMU.readRawGyroX(), myIMU.readRawGyroY(), myIMU.readRawGyroZ());
-	}
+	Serial.printlnf("IMU accelerometer: X = %d, Y = %d, Z = %d", myIMU.readRawAccelX(), myIMU.readRawAccelY(), myIMU.readRawAccelZ());
+    Serial.printlnf("IMU gyroscope: X = %d, Y = %d, Z = %d", myIMU.readRawGyroX(), myIMU.readRawGyroY(), myIMU.readRawGyroZ());
 
     int error, tempC_raw;
     error = myIMU.begin();
@@ -519,7 +523,7 @@ void imu_read() {
         tempC_raw = myIMU.readRawTemp() + 400;
         imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
 		temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
-        if (serial_messaging_on) Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
+        Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
     }
 }
 
@@ -534,7 +538,7 @@ void pressure_read() {
 
     BaroSensor.begin();
     BaroSensor.getTempAndPressure(&temp, &press, CELSIUS, OSR_512);
-	if (serial_messaging_on) Serial.printlnf("Temperature: %d.%d˚C, Pressure: %d.%d mmHg", temp / 10, temp % 10, press / 10, press % 10);
+	Serial.printlnf("Temperature: %d.%d˚C, Pressure: %d.%d mmHg", temp / 10, temp % 10, press / 10, press % 10);
 }
 
 /////////////////////////////////////////////////////////////
@@ -722,7 +726,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     reading->time_ms = millis();
     reading->samples = 1;
 
-    Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, osr, status, tempC, tempF, x, y, z);
+    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, millis() % 1000000, osr, status, tempC, tempF, x, y, z);
 }
 
 bool enable_optical_sensors(bool force_read) {
@@ -778,12 +782,11 @@ void read_optical_sensors(int param) {
 
 bool enable_controller_sensors(bool force_read) {
     if (Wire1.isEnabled()) {
-        Serial.println("Wire1 already enabled");
         return true;
     }
 
     if (Wire.isEnabled()) { // is other I2C bus busy?
-        Serial.println("Wire busy");
+        Serial.println("Optical sensors busy");
         if (force_read) {    // kill optical sensor bus if forced read
             Wire.end();
             pinMode(pinOpticalSensor_SCL, INPUT);
@@ -854,7 +857,7 @@ void pid_controller(HeatingElement &elem) {
 	raw = get_heater_temperature(elem);
     elem.read_time = millis();
     if (raw == 0) {
-         set_heater_value(elem, 0);
+         pulse_heater(elem, 0);
     }
     else {
         if (prev_read_time == 0) {
@@ -869,7 +872,7 @@ void pid_controller(HeatingElement &elem) {
             output = (elem.k_p_num * error) / elem.k_p_den;
 			output += (elem.k_i_num * elem.integral) / elem.k_i_den;
 			output += (elem.k_d_num * derivative) / elem.k_d_den;
-            set_heater_value(elem, output);
+            pulse_heater(elem, output);
 
             if (serial_messaging_on) Serial.printlnf("%c: raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
             elem.previous_error = error;
@@ -891,8 +894,8 @@ void start_temperature_control() {
 
 void stop_temperature_control() {
     control_heater_temperature_timer.stop();
-	set_heater_value(proximal, 0);
-	set_heater_value(distal, 0);
+	pulse_heater(proximal, 0);
+	pulse_heater(distal, 0);
     Serial.println("Temperature control system stopped");
 }
 
@@ -1630,13 +1633,13 @@ int particle_command(String arg) {
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
         case 14: // set distal target temperature
-            if (param1 > 0 && param1 < 900) {
+            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
                 distal.target_C_10X = param1;
                 distal.read_time = 0;
             }
             return param1;
 		case 15: // set proximal target temperature
-			if (param1 > 0 && param1 < 900) {
+			if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
 				proximal.target_C_10X = param1;
 				proximal.read_time = 0;
 			}

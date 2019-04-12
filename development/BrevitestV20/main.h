@@ -69,14 +69,15 @@
 #define VALIDATE_CARTRIDGE_TIMEOUT 20000
 
 // stepper
-#define CUMULATIVE_STEP_LIMIT 11000
+#define CUMULATIVE_STEP_LIMIT 9600
+#define RESET_STEP_DELAY 800
 #define LIMIT_SWITCH_RELEASE_LENGTH 250
   //Well #1
   //#define STEPS_TO_MICROBEAD_WELL 1300
 
   //Well #2  - steps to the proximal edge of microbead well
-#define STEPS_TO_MICROBEAD_WELL 2500
-// #define STEPS_TO_FINAL_READ_POSITION 4400
+#define STEPS_TO_RESET (CUMULATIVE_STEP_LIMIT + 2000)
+#define STEPS_TO_MICROBEAD_WELL 7000
 
 // controller sensor readings
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
@@ -85,6 +86,7 @@
 #define HEATER_MAX_POWER 128
 #define HEATER_PWM_FREQUENCY 20000
 #define HEATER_CONTROL_INTERVAL 2000
+#define HEATER_MAX_TEMPERATURE 700
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -152,8 +154,8 @@ int pinStepper_Dir = D6;
 int pinStepper_Step = D7;
 
 // global variables
-int cumulative_steps = CUMULATIVE_STEP_LIMIT;
-int power_status = 0;
+int cumulative_steps = 0;
+// int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 unsigned long next_upload;
 unsigned long validation_timeout;
 unsigned long start_timeout;
@@ -227,7 +229,7 @@ struct HeatingElement {
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 400;
+        target_C_10X = 530;
         k_p_num = 10;
         k_p_den = 1;
         k_i_num = 1;
