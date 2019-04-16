@@ -426,15 +426,31 @@ void turn_off_heater(HeatingElement &elem) {
     }
 }
 
-void pulse_heater(HeatingElement &elem, int power) {
-	power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
-	analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
-	delay(500);
-	analogWrite(elem.heater_pin, 0);
-	elem.heater_on = power != 0;
-	if (elem.heater_on) {
-		if (serial_messaging_on) Serial.printlnf("Heater %c set to power %d", elem.code, power);
+int limit(int value, int max, int min) {
+	return value > max ? max : (value < min ? min : value);
+}
+
+int pulse_heaters(int proximal_power, int distal_power) {
+	unsigned long start = millis();
+	proximal_power = limit(proximal_power, HEATER_MAX_POWER, 0);
+	distal_power = limit(distal_power, HEATER_MAX_POWER, 0);
+	analogWrite(proximal.heater_pin, proximal_power, HEATER_PWM_FREQUENCY);
+	analogWrite(distal.heater_pin, distal_power, HEATER_PWM_FREQUENCY);
+	if (proximal_power > 0 || distal_power > 0) {
+		delay(pulse_duration);
+		analogWrite(proximal.heater_pin, 0);
+		analogWrite(distal.heater_pin, 0);
 	}
+	proximal.heater_on = proximal_power != 0;
+	distal.heater_on = distal_power != 0;
+	if (proximal.heater_on) {
+		if (serial_messaging_on) Serial.printlnf("Proximal heater set to power %d", proximal_power);
+	}
+	if (distal.heater_on) {
+		if (serial_messaging_on) Serial.printlnf("Distal heater set to power %d", distal_power);
+	}
+
+	return (int) (millis() - start);
 }
 
 /////////////////////////////////////////////////////////////
@@ -849,17 +865,15 @@ void heater_temperature_read() {
 	if (serial_messaging_on) Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal.temp_C_10X / 10, distal.temp_C_10X % 10, distal.temp_F_10X / 10, distal.temp_F_10X % 10);
 }
 
-void pid_controller(HeatingElement &elem) {
-    int dt, error, derivative, output, raw;
+int pid_controller(HeatingElement &elem) {
+    int dt, error, derivative, raw;
+	int output = 0;
     unsigned long prev_read_time;
 
 	prev_read_time = elem.read_time;
 	raw = get_heater_temperature(elem);
     elem.read_time = millis();
-    if (raw == 0) {
-         pulse_heater(elem, 0);
-    }
-    else {
+    if (raw != 0) {
         if (prev_read_time == 0) {
             elem.previous_error = 0;
             elem.integral = 0;
@@ -872,17 +886,17 @@ void pid_controller(HeatingElement &elem) {
             output = (elem.k_p_num * error) / elem.k_p_den;
 			output += (elem.k_i_num * elem.integral) / elem.k_i_den;
 			output += (elem.k_d_num * derivative) / elem.k_d_den;
-            pulse_heater(elem, output);
 
             if (serial_messaging_on) Serial.printlnf("%c: raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
             elem.previous_error = error;
         }
     }
+
+	return output;
 }
 
 void control_heater_temperature() {
-	pid_controller(proximal);
-	pid_controller(distal);
+	pulse_heaters(pid_controller(proximal), pid_controller(distal));
 }
 
 void start_temperature_control() {
@@ -894,8 +908,7 @@ void start_temperature_control() {
 
 void stop_temperature_control() {
     control_heater_temperature_timer.stop();
-	pulse_heater(proximal, 0);
-	pulse_heater(distal, 0);
+	pulse_heaters(0, 0);
     Serial.println("Temperature control system stopped");
 }
 
@@ -1366,6 +1379,15 @@ void update_progress(char *message, int duration) {
         }
 }
 
+int BCODE_delay(int duration) {
+	int pulse_time = 0;
+
+	if (duration > HEATER_PULSE_DURATION + 10) {
+		pulse_time = pulse_heaters(pid_controller(proximal), pid_controller(distal));
+	}
+	delay(duration - pulse_time);
+}
+
 int process_one_BCODE_command(int cmd, int index) {
         int i, j, mark, param1, param2, param3, param4, param5, param6, param7, param8, start_index, steps;
 
@@ -1382,7 +1404,7 @@ int process_one_BCODE_command(int cmd, int index) {
         case 1: // Delay(milliseconds)
                 index = get_BCODE_token(index, &param1);
                 update_progress("", param1);
-                delay(param1);
+                BCODE_delay(param1);
                 break;
         case 2: // Move(number of steps, step delay)
                 index = get_BCODE_token(index, &param1);    // number of steps
@@ -1453,7 +1475,7 @@ int process_one_BCODE_command(int cmd, int index) {
                                 index = get_BCODE_token(index, &param8);    // delay time
                             }
                             move_solenoid(param7);
-                            delay(param8);
+                            BCODE_delay(param8);
                         }
                         move_steps(steps, param2);
                 }
@@ -1465,7 +1487,7 @@ int process_one_BCODE_command(int cmd, int index) {
                         index = get_BCODE_token(index, &param8);    // delay time
                     }
                     move_solenoid(param7);
-                    delay(param8);
+                    BCODE_delay(param8);
                 }
 
                 steps = param1 - steps * (param3 - 1);
@@ -1473,7 +1495,7 @@ int process_one_BCODE_command(int cmd, int index) {
                     move_steps(steps, param2);
                 }
 
-                delay(param5);   // gather beads
+                BCODE_delay(param5);   // gather beads
                 break;
         case 18: // Well transit
                 index = get_BCODE_token(index, &param1);    // step_delay_us
@@ -1490,10 +1512,10 @@ int process_one_BCODE_command(int cmd, int index) {
                         index = get_BCODE_token(index, &param6);    // delay between steps, in milliseconds
                         for (j = 0; j < param4; j++) {
                             move_steps(param5, param1);
-                            delay(param6);
+                            BCODE_delay(param6);
                         }
                 }
-                delay(param2);   // gather beads
+                BCODE_delay(param2);   // gather beads
                 break;
         case 19: // no action
                 break;
@@ -2000,7 +2022,7 @@ void setup() {
         Serial.printlnf("device id: %s", device_id);
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
-        /*start_temperature_control();*/
+        start_temperature_control();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2074,10 +2096,10 @@ void loop() {
         }
 
         if (test_startup_successful) {
-            if (millis() > next_optical_sensor_reading_time) {
+            /*if (millis() > next_optical_sensor_reading_time) {
                 // check indicator well color
-            }
-            if (cartridge_is_heated) {
+            }*/
+            /*if (cartridge_is_heated) {*/
                 test_startup_successful = false;
                 if (!cartridge_loaded) {
                     cancelling_test = true;
@@ -2086,7 +2108,7 @@ void loop() {
                     run_test();
                 }
                 return;
-            }
+            /*}*/
         }
 
         if (waiting_for_validation) {

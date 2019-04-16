@@ -87,6 +87,7 @@
 #define HEATER_PWM_FREQUENCY 20000
 #define HEATER_CONTROL_INTERVAL 2000
 #define HEATER_MAX_TEMPERATURE 700
+#define HEATER_PULSE_DURATION 500
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -238,6 +239,7 @@ struct HeatingElement {
         k_d_den = 1000;
     }
 } proximal, distal;
+int pulse_duration = HEATER_PULSE_DURATION;
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
