@@ -71,7 +71,7 @@
 // stepper
 #define CUMULATIVE_STEP_LIMIT 9600
 #define RESET_STEP_DELAY 800
-#define LIMIT_SWITCH_RELEASE_LENGTH 250
+#define OPTICAL_SENSOR_READ_POSITION 8000
   //Well #1
   //#define STEPS_TO_MICROBEAD_WELL 1300
 
@@ -85,9 +85,9 @@
 // heater
 #define HEATER_MAX_POWER 128
 #define HEATER_PWM_FREQUENCY 20000
-#define HEATER_CONTROL_INTERVAL 500
 #define HEATER_MAX_TEMPERATURE 700
-#define HEATER_PULSE_DURATION 150
+#define HEATER_CONTROL_INTERVAL 200
+#define HEATER_PULSE_DURATION 100
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -165,7 +165,7 @@ unsigned long finish_timeout;
 unsigned long upload_timeout;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_BUFFER_SIZE];
-bool serial_messaging_on = true;
+bool serial_messaging_on = false;
 
 // device LED
 LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
@@ -231,12 +231,12 @@ struct HeatingElement {
         previous_error = 0;
         integral = 0;
         target_C_10X = 530;
-        k_p_num = 10;
+        k_p_num = 7;
         k_p_den = 1;
         k_i_num = 1;
         k_i_den = 100000;
-        k_d_num = 0;
-        k_d_den = 1000;
+        k_d_num = 1;
+        k_d_den = 1;
     }
 } proximal, distal;
 int pulse_duration = HEATER_PULSE_DURATION;

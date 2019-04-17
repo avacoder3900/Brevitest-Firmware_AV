@@ -219,7 +219,7 @@ void move_solenoid(int duration) {
 
         analogWrite(pinSolenoid, 0);
 
-        Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);
+        /*Serial.printlnf("surge: %d, surge_time: %d, sustain: %d, sustain_time: %d", surge, eeprom.param.solenoid_surge_period_ms, sustain, sustain_time);*/
 }
 
 /////////////////////////////////////////////////////////////
@@ -237,7 +237,7 @@ void move_steps(int steps, int step_delay){
 
         dir = (steps > 0) ? LOW : HIGH;
 		digitalWrite(pinStepper_Dir, dir);
-		Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
+		/*Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
 
         abs_steps = abs(steps);
         for(i = 0; i < abs_steps; i++) {
@@ -263,14 +263,6 @@ void move_steps(int steps, int step_delay){
 						Serial.println("Carriage distal limit reached");
                         break;
                     }
-
-                    /*if (cumulative_steps < LIMIT_SWITCH_RELEASE_LENGTH) {
-                            pinMode(pinLimitSwitch, OUTPUT);
-                            digitalWrite(pinLimitSwitch, LOW);
-                    }
-                    else {
-                            pinMode(pinLimitSwitch, INPUT_PULLUP);
-                    }*/
                 }
 
                 digitalWrite(pinStepper_Step, HIGH);
@@ -281,7 +273,7 @@ void move_steps(int steps, int step_delay){
 
                 cumulative_steps += dir == LOW ? -1 : 1;
         }
-		Serial.printlnf("Move complete, cumulative steps = %d, step limit = %d", cumulative_steps, CUMULATIVE_STEP_LIMIT);
+		/*Serial.printlnf("Move complete, cumulative steps = %d, step limit = %d", cumulative_steps, CUMULATIVE_STEP_LIMIT);*/
         //sleep_stepper();
 }
 
@@ -868,29 +860,32 @@ void heater_temperature_read() {
 int pid_controller(HeatingElement &elem) {
     int dt, error, derivative, raw;
 	int output = 0;
-    unsigned long prev_read_time;
+    unsigned long current_read_time, prev_read_time;
 
+	current_read_time = millis();
 	prev_read_time = elem.read_time;
-	raw = get_heater_temperature(elem);
-    elem.read_time = millis();
-    if (raw != 0) {
-        if (prev_read_time == 0) {
-            elem.previous_error = 0;
-            elem.integral = 0;
-        }
-        else {
-            dt = elem.read_time - prev_read_time;
-            error = elem.target_C_10X - elem.temp_C_10X;
-            elem.integral += (error * dt) / 1000;
-            derivative = (1000 * (error - elem.previous_error)) / dt;
-            output = (elem.k_p_num * error) / elem.k_p_den;
-			output += (elem.k_i_num * elem.integral) / elem.k_i_den;
-			output += (elem.k_d_num * derivative) / elem.k_d_den;
+	if ((current_read_time - prev_read_time) >= HEATER_CONTROL_INTERVAL) {
+		raw = get_heater_temperature(elem);
+	    elem.read_time = current_read_time;
+	    if (raw != 0) {
+	        if (prev_read_time == 0) {
+	            elem.previous_error = 0;
+	            elem.integral = 0;
+	        }
+	        else {
+	            dt = elem.read_time - prev_read_time;
+	            error = elem.target_C_10X - elem.temp_C_10X;
+	            elem.integral += (error * dt) / 1000;
+	            derivative = (1000 * (error - elem.previous_error)) / dt;
+	            output = (elem.k_p_num * error) / elem.k_p_den;
+				output += (elem.k_i_num * elem.integral) / elem.k_i_den;
+				output += (elem.k_d_num * derivative) / elem.k_d_den;
 
-            if (serial_messaging_on) Serial.printlnf("%c: raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
-            elem.previous_error = error;
-        }
-    }
+	            if (serial_messaging_on) Serial.printlnf("%c: raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
+	            elem.previous_error = error;
+	        }
+	    }
+	}
 
 	return output;
 }
@@ -1377,15 +1372,32 @@ void update_progress(char *message, int duration) {
                     test_percent_complete = new_percent_complete;
                 }
         }
+		Serial.printlnf("%s, %d percent complete, temp: P = %d.%d, D = %d.%d", message, test_percent_complete, proximal.temp_C_10X / 10, proximal.temp_C_10X % 10, distal.temp_C_10X / 10, distal.temp_C_10X % 10);
 }
 
-int BCODE_delay(int duration) {
-	int pulse_time = 0;
+void BCODE_delay(int target_duration) {
+	int i, pulse_time, residual_duration;
+	unsigned long total_duration, cycle_start;
+	int cycles = 1;
 
-	if (duration > HEATER_PULSE_DURATION + 10) {
-		pulse_time = pulse_heaters(pid_controller(proximal), pid_controller(distal));
+	total_duration = millis();
+	if (target_duration >= HEATER_CONTROL_INTERVAL) {
+		cycles = target_duration / HEATER_CONTROL_INTERVAL;
+		for (i = 0; i < cycles; i++) {
+			cycle_start = millis();
+			pulse_heaters(pid_controller(proximal), pid_controller(distal));
+			residual_duration = HEATER_CONTROL_INTERVAL - (int) (millis() - cycle_start);
+			if (residual_duration > 0) {
+				delay(residual_duration);
+			}
+		}
 	}
-	delay(duration - pulse_time);
+	total_duration = millis() - total_duration;
+	residual_duration = target_duration - (int) total_duration;
+	if (serial_messaging_on) Serial.printlnf("BCODE_delay: target_duration = %d, cycles = %d, total_duration = %d, residual_duration = %d", target_duration, cycles, total_duration, residual_duration);
+	if (residual_duration > 0) {
+		delay(target_duration - (int) total_duration);
+	}
 }
 
 int process_one_BCODE_command(int cmd, int index) {
@@ -1400,10 +1412,17 @@ int process_one_BCODE_command(int cmd, int index) {
         switch(cmd) {
         case 0: // Start test()
                 test_record.start_time = Time.now();
+				update_progress("Starting test", 1800);
+				turn_on_buzzer_for_duration(300, 500);
+				BCODE_delay(300);
+				turn_on_buzzer_for_duration(300, 500);
+				BCODE_delay(300);
+				turn_on_buzzer_for_duration(300, 500);
+				BCODE_delay(300);
                 break;
         case 1: // Delay(milliseconds)
                 index = get_BCODE_token(index, &param1);
-                update_progress("", param1);
+                update_progress("Pausing", param1);
                 BCODE_delay(param1);
                 break;
         case 2: // Move(number of steps, step delay)
@@ -1417,7 +1436,11 @@ int process_one_BCODE_command(int cmd, int index) {
                 update_progress("Rastering magnets", param1);
                 move_solenoid(param1);
                 break;
-        case 4: // unused
+        case 4: // Buzzer on(milliseconds, frequency)
+				index = get_BCODE_token(index, &param1);    // duration_ms
+				index = get_BCODE_token(index, &param2);    // frequency
+				update_progress("Buzzing", param1);
+				turn_on_buzzer_for_duration(param1, param2);
                 break;
         case 5: // unused
                 break;
@@ -1428,10 +1451,16 @@ int process_one_BCODE_command(int cmd, int index) {
         case 8: // unused
                 break;
         case 9: // Read optical sensors with default values
+				steps = cumulative_steps - OPTICAL_SENSOR_READ_POSITION;
+				update_progress("Moving magnets to prepare for reading", (abs(steps) * RESET_STEP_DELAY) / 1000);
+				move_steps(steps, RESET_STEP_DELAY);	// move stage away from optical sensors
                 read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM);
                 break;
         case 10: // Read optical sensors with parameters
                 index = get_BCODE_token(index, &param1); // params
+				steps = cumulative_steps - OPTICAL_SENSOR_READ_POSITION;
+				update_progress("Moving magnets to prepare for reading", (abs(steps) * RESET_STEP_DELAY) / 1000);
+				move_steps(steps, RESET_STEP_DELAY);	// move stage away from optical sensors
                 read_optical_sensors(param1);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
@@ -1449,6 +1478,22 @@ int process_one_BCODE_command(int cmd, int index) {
         case 13: // Repeat end
                 return -index;
                 break;
+		case 14: // Set proximal target (scaled 10X)
+				index = get_BCODE_token(index, &param1);
+				update_progress("Setting proximal target temperature", 0);
+				if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
+					proximal.target_C_10X = param1;
+					proximal.read_time = 0;
+				}
+				break;
+		case 15: // set distal target temperature
+				index = get_BCODE_token(index, &param1);
+				update_progress("Setting distal target temperature", 0);
+				if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
+					distal.target_C_10X = param1;
+					distal.read_time = 0;
+				}
+				break;
         case 17: // Raster well
                 index = get_BCODE_token(index, &param1);    // total steps
                 index = get_BCODE_token(index, &param2);    // step_delay_us
@@ -1474,9 +1519,11 @@ int process_one_BCODE_command(int cmd, int index) {
                                 index = get_BCODE_token(index, &param7);    // energize time
                                 index = get_BCODE_token(index, &param8);    // delay time
                             }
+							update_progress("Rastering magnets", param7);
                             move_solenoid(param7);
                             BCODE_delay(param8);
                         }
+						update_progress("Moving magnets", (abs(steps) * param2) / 1000);
                         move_steps(steps, param2);
                 }
 
@@ -1486,15 +1533,18 @@ int process_one_BCODE_command(int cmd, int index) {
                         index = get_BCODE_token(index, &param7);    // energize time
                         index = get_BCODE_token(index, &param8);    // delay time
                     }
+					update_progress("Rastering magnets", param7);
                     move_solenoid(param7);
                     BCODE_delay(param8);
                 }
 
                 steps = param1 - steps * (param3 - 1);
                 if (steps) {
+					update_progress("Moving magnets", (abs(steps) * param2) / 1000);
                     move_steps(steps, param2);
                 }
 
+				update_progress("Pausing to gather microspheres", param5);
                 BCODE_delay(param5);   // gather beads
                 break;
         case 18: // Well transit
@@ -1511,10 +1561,12 @@ int process_one_BCODE_command(int cmd, int index) {
                         index = get_BCODE_token(index, &param5);    // steps per iteration
                         index = get_BCODE_token(index, &param6);    // delay between steps, in milliseconds
                         for (j = 0; j < param4; j++) {
+							update_progress("Moving magnets", (abs(param5) * param1) / 1000);
                             move_steps(param5, param1);
                             BCODE_delay(param6);
                         }
                 }
+				update_progress("Pausing to gather microspheres", param5);
                 BCODE_delay(param2);   // gather beads
                 break;
         case 19: // no action
@@ -1654,16 +1706,16 @@ int particle_command(String arg) {
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
-        case 14: // set distal target temperature
+        case 14: // set proximal target temperature
             if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-                distal.target_C_10X = param1;
-                distal.read_time = 0;
+                proximal.target_C_10X = param1;
+                proximal.read_time = 0;
             }
             return param1;
-		case 15: // set proximal target temperature
+		case 15: // set distal target temperature
 			if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-				proximal.target_C_10X = param1;
-				proximal.read_time = 0;
+				distal.target_C_10X = param1;
+				distal.read_time = 0;
 			}
             return param1;
 		case 16: // turn on proximal heater at power param1
@@ -1817,7 +1869,7 @@ void finish_test() {
 }
 
 void run_test() {
-    test_in_progress = true;
+	test_in_progress = true;
     /*start_blinking_device_LED(0, 500, 0, 255, 0);*/
     Serial.println("Running test");
 
@@ -1835,9 +1887,13 @@ void run_test() {
         delay(PARTICLE_CLOUD_DELAY);
     }
 
+	control_heater_temperature_timer.stop();
+
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
     }
+
+	control_heater_temperature_timer.start();
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -2102,7 +2158,7 @@ void loop() {
             /*if (cartridge_is_heated) {*/
                 test_startup_successful = false;
                 if (!cartridge_loaded) {
-                    cancelling_test = true;
+					cancel_test();
                 }
                 else {
                     run_test();
