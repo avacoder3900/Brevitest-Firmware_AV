@@ -1412,13 +1412,9 @@ int process_one_BCODE_command(int cmd, int index) {
         switch(cmd) {
         case 0: // Start test()
                 test_record.start_time = Time.now();
-				update_progress("Starting test", 1800);
-				turn_on_buzzer_for_duration(300, 500);
-				BCODE_delay(300);
-				turn_on_buzzer_for_duration(300, 500);
-				BCODE_delay(300);
-				turn_on_buzzer_for_duration(300, 500);
-				BCODE_delay(300);
+				update_progress("Starting test", 6000);
+				turn_on_buzzer_for_duration(2000, 600);
+				BCODE_delay(1000);
                 break;
         case 1: // Delay(milliseconds)
                 index = get_BCODE_token(index, &param1);
@@ -1461,6 +1457,7 @@ int process_one_BCODE_command(int cmd, int index) {
 				steps = cumulative_steps - OPTICAL_SENSOR_READ_POSITION;
 				update_progress("Moving magnets to prepare for reading", (abs(steps) * RESET_STEP_DELAY) / 1000);
 				move_steps(steps, RESET_STEP_DELAY);	// move stage away from optical sensors
+				update_progress("Reading optical sensors", 6000);
                 read_optical_sensors(param1);
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
@@ -1519,7 +1516,7 @@ int process_one_BCODE_command(int cmd, int index) {
                                 index = get_BCODE_token(index, &param7);    // energize time
                                 index = get_BCODE_token(index, &param8);    // delay time
                             }
-							update_progress("Rastering magnets", param7);
+							update_progress("Rastering magnets", param7 + param8);
                             move_solenoid(param7);
                             BCODE_delay(param8);
                         }
@@ -1533,7 +1530,7 @@ int process_one_BCODE_command(int cmd, int index) {
                         index = get_BCODE_token(index, &param7);    // energize time
                         index = get_BCODE_token(index, &param8);    // delay time
                     }
-					update_progress("Rastering magnets", param7);
+					update_progress("Rastering magnets", param7 + param8);
                     move_solenoid(param7);
                     BCODE_delay(param8);
                 }
@@ -1561,12 +1558,12 @@ int process_one_BCODE_command(int cmd, int index) {
                         index = get_BCODE_token(index, &param5);    // steps per iteration
                         index = get_BCODE_token(index, &param6);    // delay between steps, in milliseconds
                         for (j = 0; j < param4; j++) {
-							update_progress("Moving magnets", (abs(param5) * param1) / 1000);
+							update_progress("Moving magnets", param6 + (abs(param5) * param1) / 1000);
                             move_steps(param5, param1);
                             BCODE_delay(param6);
                         }
                 }
-				update_progress("Pausing to gather microspheres", param5);
+				update_progress("Pausing to gather microspheres", param2);
                 BCODE_delay(param2);   // gather beads
                 break;
         case 19: // no action
