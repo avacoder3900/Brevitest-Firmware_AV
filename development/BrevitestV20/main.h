@@ -33,6 +33,7 @@
 #define OPTICAL_SENSORS_TEST_INTERVAL 5000
 
 // LEDs
+#define LED_LEVEL 600
 #define LED_WARMUP_DELAY_MS 1000
 
 // assay
@@ -94,9 +95,6 @@
 #define THERMISTOR_BALANCE_RESISTANCE 4990
 #define THERMISTOR_BASE_RESISTANCE 100000
 #define TERMISTOR_TABLE_LENGTH 21
-
-// LEDs
-#define LED_LEVEL 600
 
 // solenoid
 #define SOLENOID_PWM_FREQUENCY 6000
@@ -243,7 +241,7 @@ int pulse_duration = HEATER_PULSE_DURATION;
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
-unsigned long tuning_cutoff_time;
+unsigned long control_heater_temperature_flag = false;
 
 // barometric pressure sensor
 // BaroSensorClass BaroSensor;
@@ -295,7 +293,7 @@ struct Param {      // 32 bytes
     step_delay_us = 800;
     steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
     stepper_wake_delay_ms = 5;
-    solenoid_power = 0xFFC0;    // surge = 255, sustain = 192
+    solenoid_power = 0xFFFF;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 100;
     start_test_heat_red_threshold = 7180;
   }

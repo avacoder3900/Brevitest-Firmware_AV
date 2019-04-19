@@ -456,7 +456,7 @@ void turn_on_LED(char channel) {
 		turn_on_assay_LED(600);
 	}
 	else {
-		turn_on_control_LED(645);
+		turn_on_control_LED(600);
 	}
 }
 
@@ -636,10 +636,10 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         ready_pin = pinControlSensor_Ready;
     }
 
-    config_optical_sensors(channel, param, addr);
-
 	turn_on_LED(channel);
-	/*delay(100);*/
+	delay(LED_WARMUP_DELAY_MS);
+
+    config_optical_sensors(channel, param, addr);
 
     Wire.beginTransmission(addr);
     bytes = Wire.write(0x00);
@@ -891,7 +891,7 @@ int pid_controller(HeatingElement &elem) {
 }
 
 void control_heater_temperature() {
-	pulse_heaters(pid_controller(proximal), pid_controller(distal));
+	control_heater_temperature_flag = true;
 }
 
 void start_temperature_control() {
@@ -2084,6 +2084,85 @@ void setup() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void test_loop() {
+	if (test_in_progress) {
+        if (cancelling_test) {
+            cancelling_test = false;
+            cancel_test();
+        }
+        else if (finishing_test) {
+            finishing_test = false;
+            finish_test();
+        }
+        else if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
+			Serial.println("Timeout waiting for cancel confirmation. Cancelling test again");
+            cancel_test();
+        }
+        else if (waiting_for_finish_confirmation && millis() > finish_timeout) {
+			Serial.println("Timeout waiting for finish confirmation. Finishing test again");
+            finish_test();
+        }
+    }
+    else if (waiting_for_start_confirmation && millis() > start_timeout) {
+		Serial.println("Timeout waiting for start confirmation. Starting test again");
+        start_test();
+    }
+    else if (test_startup_successful) {
+        test_startup_successful = false;
+        if (!cartridge_loaded) {
+			Serial.println("Cartridge not loaded. Waiting...");
+			turn_on_buzzer_for_duration(500, 700);
+        }
+        else {
+            run_test();
+        }
+    }
+	else if (starting_test) {
+        starting_test = false;
+        start_test();
+    }
+	else if (waiting_for_upload_confirmation) {
+        if (millis() > upload_timeout) {
+            upload_tests();
+        }
+    }
+	else if (tests_to_upload()) {
+        upload_tests();
+    }
+}
+
+void cartridge_loop() {
+	if (cartridge_state_changed) {
+		if (cartridge_state_debounce) {
+			cartridge_state_debounce = false;
+			cartridge_state_changed = false;
+	        Serial.println("Cartridge state changed");
+	        check_device_state();
+		}
+		else {
+			delay(50);
+			cartridge_state_debounce = true;
+		}
+	}
+	if (waiting_for_validation) {
+	    if (millis() > validation_timeout) {
+			Serial.println("Timeout waiting for cartridge validation. Validating cartridge again");
+	        validate_cartridge();
+	    }
+	}
+	else if (ready_to_scan_barcode) {
+	    ready_to_scan_barcode = false;
+	    if (cartridge_loaded) {
+	        if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
+	            validate_cartridge();
+	        }
+	        else {
+	            cartridge_validated = false;
+	        }
+	    }
+	}
+}
+
 void loop() {
 	while (Serial.available()) {
 		char c = Serial.read();
@@ -2106,108 +2185,16 @@ void loop() {
         return;
     }
 
-    if (cartridge_state_changed) {
-		if (cartridge_state_debounce) {
-			cartridge_state_debounce = false;
-			cartridge_state_changed = false;
-	        Serial.println("Cartridge state changed");
-	        check_device_state();
-		}
-		else {
-			delay(50);
-			cartridge_state_debounce = true;
-		}
-    }
-
-    if (test_in_progress) {
-        if (cancelling_test) {
-            cancelling_test = false;
-            cancel_test();
-            return;
-        }
-
-        if (finishing_test) {
-            finishing_test = false;
-            finish_test();
-            return;
-        }
-
-        if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
-            cancel_test();
-            return;
-        }
-
-        if (waiting_for_finish_confirmation && millis() > finish_timeout) {
-            finish_test();
-            return;
-        }
-    }
-    else {
-        if (waiting_for_start_confirmation && millis() > start_timeout) {
-            start_test();
-            return;
-        }
-
-        if (test_startup_successful) {
-            /*if (millis() > next_optical_sensor_reading_time) {
-                // check indicator well color
-            }*/
-            /*if (cartridge_is_heated) {*/
-                test_startup_successful = false;
-                if (!cartridge_loaded) {
-					cancel_test();
-                }
-                else {
-                    run_test();
-                }
-                return;
-            /*}*/
-        }
-
-        if (waiting_for_validation) {
-            if (millis() > validation_timeout) {
-                validate_cartridge();
-            }
-            return;
-        }
-
-        if (ready_to_scan_barcode) {
-            ready_to_scan_barcode = false;
-            if (cartridge_loaded) {
-                if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
-                    validate_cartridge();
-                }
-                else {
-                    cartridge_validated = false;
-                }
-            }
-            return;
-        }
-
-        if (starting_test) {
-            starting_test = false;
-            start_test();
-            return;
-        }
-
-        if (waiting_for_upload_confirmation) {
-            if (millis() > upload_timeout) {
-                upload_tests();
-            }
-            return;
-        }
-
-        if (tests_to_upload()) {
-            upload_tests();
-            return;
-        }
-
-    }
+	cartridge_loop();
+	test_loop();
 
     if (read_optical_sensors_command_flag) {
         read_optical_sensors_command_flag = false;
-        SINGLE_THREADED_BLOCK() {
-            read_optical_sensors(read_optical_sensors_command_param);
-        }
+        read_optical_sensors(read_optical_sensors_command_param);
     }
+
+	if (control_heater_temperature_flag) {
+		control_heater_temperature_flag = false;
+		pulse_heaters(pid_controller(proximal), pid_controller(distal));
+	}
 }
