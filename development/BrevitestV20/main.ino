@@ -2108,12 +2108,13 @@ void test_loop() {
         start_test();
     }
     else if (test_startup_successful) {
-        test_startup_successful = false;
         if (!cartridge_loaded) {
 			Serial.println("Cartridge not loaded. Waiting...");
 			turn_on_buzzer_for_duration(500, 700);
+			delay(2000);
         }
         else {
+			test_startup_successful = false;
             run_test();
         }
     }
