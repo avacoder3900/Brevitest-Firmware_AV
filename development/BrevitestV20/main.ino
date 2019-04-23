@@ -840,12 +840,15 @@ void read_all_controller_sensors() {
 int get_heater_temperature(HeatingElement &elem) {
     int raw = analogRead(elem.thermistor_pin);
     if (raw == 0) {
-		elem.temp_C_10X = -1;
-		elem.temp_F_10X = -1;
+		stop_temperature_control();
     }
 	else {
 		elem.temp_C_10X = raw_table_lookup(raw);
 		elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 320;
+		if (elem.temp_C_10X > HEATER_MAX_TEMPERATURE) {
+			stop_temperature_control();
+			raw = 0;
+		}
 	}
     return raw;
 }
