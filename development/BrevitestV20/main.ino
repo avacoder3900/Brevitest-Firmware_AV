@@ -313,33 +313,35 @@ int scan_barcode() {
         unsigned long timeout;
         int i = 0;
         bool read_success = false;
+		int buf;
 
         barcode_being_scanned = true;
 
         /*Serial.println("Start scan_barcode");
-        Serial1.begin(115200); // barcode scanner interface through RX/TX pins*/
+        Serial1.begin(9600); // barcode scanner interface through RX/TX pins
 
-        /*Serial.println("Trigger barcode reader");*/
+        Serial.println("Trigger barcode reader");
         digitalWrite(pinBarcode_Trigger, LOW);
 
         timeout = millis() + BARCODE_READ_TIMEOUT;
 
-        /*Serial.println("Wait for success");*/
+        Serial.println("Wait for success");
         do {
             read_success = digitalRead(pinBarcode_Success) == HIGH;
+			Serial.print('.');
             Particle.process();
             delay(200);
         } while (!read_success && millis() < timeout);
 
-        /*Serial.printlnf("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');*/
+        Serial.printlnf("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
         digitalWrite(pinBarcode_Trigger, HIGH);
 
-        /*Serial.println("Wait for barcode data");
+        Serial.println("Wait for barcode data");
         while (!Serial1.available() && millis() < timeout) {
                 Particle.process();
-        };*/
+        };
 
-        /*delay(100); // allow barcode buffer to fill before reading
+        delay(100); // allow barcode buffer to fill before reading
 
         Serial.println("Reading barcode from Serial1");
         do {
@@ -453,10 +455,10 @@ int pulse_heaters(int proximal_power, int distal_power) {
 
 void turn_on_LED(char channel) {
 	if (channel == 'A') {
-		turn_on_assay_LED(600);
+		turn_on_assay_LED(led_power_assay);
 	}
 	else {
-		turn_on_control_LED(600);
+		turn_on_control_LED(led_power_control);
 	}
 }
 
@@ -1650,12 +1652,15 @@ int particle_command(String arg) {
         case 3: // move steps
             wake_move_sleep_stepper(param1, param2);
             return cumulative_steps;
-        case 4: // read optical sensors (param)
+        case 4: // read optical sensors (param, led_power)
             /*steps_to_alignment = STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
             if (cumulative_steps != steps_to_alignment) {
                 wake_move_sleep_stepper(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
             }*/
             read_optical_sensors_command_param = param1;
+			param2 = limit(param2, 0, LED_MAX_POWER);
+			led_power_assay = param2;
+			led_power_control = param2;
             read_optical_sensors_command_flag = true;
             return param1;
         case 5: // change threshold
@@ -1754,14 +1759,20 @@ int particle_command(String arg) {
 		case 27: // stop reading sensors
 			optical_i2c_bus_scan();
 			return 1;
-		case 28: // start optical sensor reading test, param = param1
+		case 28: // start optical sensor reading test, param = param1, led power = param2
 			serial_messaging_on = false;
 			read_optical_sensors_command_param = param1;
+			param2 = limit(param2, 0, LED_MAX_POWER);
+			led_power_assay = param2;
+			led_power_control = param2;
 			read_optical_sensors_command_flag = true;
 			test_optical_sensors_timer.start();
 			return 1;
 		case 29: // stop optical sensor reading test
 			test_optical_sensors_timer.stop();
+			return 1;
+		case 30: // scan barcode
+			scan_barcode();
 			return 1;
 	}
 
@@ -2052,16 +2063,16 @@ void setup() {
 
 		controller_i2c_bus_scan();
 
-        Serial.println("Resetting stage");
+        /*Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
         move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
-		turn_on_assay_LED_for_duration(500, LED_LEVEL);
+		turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
 		delay(500);
-		turn_on_control_LED_for_duration(500, LED_LEVEL);
+		turn_on_control_LED_for_duration(500, LED_DEFAULT_POWER);*/
 
 		Serial.println("Playing startup tune");
         play_startup_tune();
