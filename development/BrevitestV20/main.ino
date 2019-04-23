@@ -1658,9 +1658,10 @@ int particle_command(String arg) {
                 wake_move_sleep_stepper(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
             }*/
             read_optical_sensors_command_param = param1;
-			param2 = limit(param2, 0, LED_MAX_POWER);
+			param2 = limit(param2, LED_MAX_POWER, 0);
 			led_power_assay = param2;
 			led_power_control = param2;
+			Serial.printlnf("LED power: %d", param2);
             read_optical_sensors_command_flag = true;
             return param1;
         case 5: // change threshold
@@ -1762,9 +1763,10 @@ int particle_command(String arg) {
 		case 28: // start optical sensor reading test, param = param1, led power = param2
 			serial_messaging_on = false;
 			read_optical_sensors_command_param = param1;
-			param2 = limit(param2, 0, LED_MAX_POWER);
+			param2 = limit(param2, LED_MAX_POWER, 0);
 			led_power_assay = param2;
 			led_power_control = param2;
+			Serial.printlnf("LED power: %d", param2);
 			read_optical_sensors_command_flag = true;
 			test_optical_sensors_timer.start();
 			return 1;
