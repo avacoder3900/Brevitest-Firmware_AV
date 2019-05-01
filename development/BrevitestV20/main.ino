@@ -2065,7 +2065,7 @@ void setup() {
 
 		controller_i2c_bus_scan();
 
-        /*Serial.println("Resetting stage");
+        Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
@@ -2074,7 +2074,7 @@ void setup() {
         Serial.println("Turning on LEDs");
 		turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
 		delay(500);
-		turn_on_control_LED_for_duration(500, LED_DEFAULT_POWER);*/
+		turn_on_control_LED_for_duration(500, LED_DEFAULT_POWER);
 
 		Serial.println("Playing startup tune");
         play_startup_tune();
