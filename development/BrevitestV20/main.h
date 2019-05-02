@@ -71,7 +71,7 @@
 #define VALIDATE_CARTRIDGE_TIMEOUT 20000
 
 // stepper
-#define CUMULATIVE_STEP_LIMIT 9600
+#define CUMULATIVE_STEP_LIMIT 11800
 #define RESET_STEP_DELAY 800
 #define OPTICAL_SENSOR_READ_POSITION 8000
   //Well #1
@@ -79,7 +79,7 @@
 
   //Well #2  - steps to the proximal edge of microbead well
 #define STEPS_TO_RESET (CUMULATIVE_STEP_LIMIT + 2000)
-#define STEPS_TO_MICROBEAD_WELL 7000
+#define STEPS_TO_STARTING_POSITION 11600
 
 // controller sensor readings
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
@@ -122,20 +122,20 @@ ApplicationWatchdog wd(30000, watchdog);
 // ELECTRON PIN MAPPINGS
 
 int pinControlSensor_Ready = A0;
-int pinProximalThermistor = A1;
+// int pinUnused = A1;
 int pinBarcode_Trigger = A2;
 int pinLEDAssay = DAC2;
 int pinSolenoid = A4;
-int pinProximalHeater = A5;
+// int pinUnused = A5;
 int pinLEDControl = DAC1;
 int pinBarcode_Success = A7;
 int pinBarcode_RX = RX;
 // int pinUnused = TX;
 
 int pinBuzzer = B0;
-int pinDistalHeater = B1;
+int pinHeater = B1;
 int pinAssaySensor_Ready = B2;
-int pinDistalThermistor = B3;
+int pinThermistor = B3;
 // int pinUnused = B4;
 int pinCartridgeLoaded = B5;
 // int pinUnused = C0;
@@ -209,10 +209,10 @@ int imu_temp_C_10X;
 
 // temperature control system
 struct HeatingElement {
-    char code;
     int heater_pin;
     int thermistor_pin;
     bool heater_on;
+    int power;
     int previous_error;
     int integral;
     unsigned long read_time;
@@ -226,10 +226,13 @@ struct HeatingElement {
     int k_d_num;
     int k_d_den;
     HeatingElement() {
+        heater_pin = pinHeater;
+        thermistor_pin = pinThermistor;
+        power = 0;
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 530;
+        target_C_10X = 400;
         k_p_num = 7;
         k_p_den = 1;
         k_i_num = 1;
@@ -237,7 +240,7 @@ struct HeatingElement {
         k_d_num = 1;
         k_d_den = 1;
     }
-} proximal, distal;
+} heater;
 int pulse_duration = HEATER_PULSE_DURATION;
 
 void control_heater_temperature(void);
