@@ -33,8 +33,8 @@
 #define OPTICAL_SENSORS_TEST_INTERVAL 3125
 
 // LEDs
-#define LED_DEFAULT_POWER 600
-#define LED_MAX_POWER 1000
+#define LED_DEFAULT_POWER 4000
+#define LED_MAX_POWER 4000
 #define LED_WARMUP_DELAY_MS 1000
 
 // assay
@@ -253,8 +253,7 @@ int bps_temp_C_10X;
 unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
-int led_power_assay = LED_DEFAULT_POWER;
-int led_power_control = LED_DEFAULT_POWER;
+int led_power = LED_DEFAULT_POWER;
 // progress
 int test_progress;
 int test_percent_complete;

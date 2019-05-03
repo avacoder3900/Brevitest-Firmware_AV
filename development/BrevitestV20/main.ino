@@ -455,10 +455,10 @@ int pulse_heaters(int proximal_power, int distal_power) {
 
 void turn_on_LED(char channel) {
 	if (channel == 'A') {
-		turn_on_assay_LED(led_power_assay);
+		turn_on_assay_LED(led_power);
 	}
 	else {
-		turn_on_control_LED(led_power_control);
+		turn_on_control_LED(led_power);
 	}
 }
 
@@ -469,6 +469,11 @@ void turn_off_LED(char channel) {
 	else {
 		turn_off_control_LED();
 	}
+}
+
+void turn_on_both_LEDs(int power) {
+	analogWrite(pinLEDAssay, power);
+	analogWrite(pinLEDControl, power);
 }
 
 void turn_on_assay_LED(int power) {
@@ -617,7 +622,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     int bytes, ready, ready_pin, result;
     uint8_t osr, status, addr, lsb, msb;
     int tempC, tempF, x, y, z;
-    unsigned long timeout;
+    unsigned long timeout, duration;
     BrevitestOpticalSensorRecord *reading;
 
     if (is_a_test) {
@@ -638,48 +643,30 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         ready_pin = pinControlSensor_Ready;
     }
 
-	turn_on_LED(channel);
-	delay(LED_WARMUP_DELAY_MS);
+	duration = millis();
 
-    config_optical_sensors(channel, param, addr);
+  config_optical_sensors(channel, param, addr);
 
-    Wire.beginTransmission(addr);
-    bytes = Wire.write(0x00);
-    bytes += Wire.write(0x83);
-    result = Wire.endTransmission(true);
-    if (result != 0) {
-        Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes, result);
-    }
+  Wire.beginTransmission(addr);
+  bytes = Wire.write(0x00);
+  bytes += Wire.write(0x83);
+  result = Wire.endTransmission(true);
+  if (result != 0) {
+      Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes, result);
+  }
 
 	timeout = millis() + 5000;
 	ready = optical_sensor_ready(addr);
 	while (!ready && millis() < timeout) {
-		Serial.print('.');
-		delay(20);
+		/*Serial.print('.');*/
+		turn_on_both_LEDs(led_power);
+		delay(1);
+		turn_off_both_LEDs();
+		delay(1);
 		ready = optical_sensor_ready(addr);
 	}
 
-	/*timeout = millis() + 1000;
-	ready = digitalRead(ready_pin) == LOW;
-	while (!ready && millis() < timeout) {
-		ready = digitalRead(ready_pin) == LOW;
-		Serial.print('.');
-		if (!ready) {
-			delay(20);
-		}
-	}
-
-	timeout = millis() + 5000;
-	ready = digitalRead(ready_pin) == HIGH;
-	while (!ready && millis() < timeout) {
-		ready = digitalRead(ready_pin) == HIGH;
-		Serial.print('*');
-		if (!ready) {
-			delay(20);
-		}
-	}*/
-
-	turn_off_LED(channel);
+	duration = millis() - duration;
 
 	if (!ready) {
 		Serial.printlnf("Read failure: %c", channel);
@@ -736,7 +723,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     reading->time_ms = millis();
     reading->samples = 1;
 
-    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, millis() % 1000000, osr, status, tempC, tempF, x, y, z);
+    Serial.printlnf("S: %c %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z);
 }
 
 bool enable_optical_sensors(bool force_read) {
@@ -769,19 +756,19 @@ void disable_optical_sensors() {
 }
 
 void read_optical_sensors(int param) {
-        unsigned long elapsed = millis();
+	unsigned long elapsed = millis();
 
-        if (enable_optical_sensors(true)) {
-            get_data_from_one_optical_sensor('A', param, true);
-            get_data_from_one_optical_sensor('C', param, true);
-        }
-        else {
-            Serial.println("Unable to start communication with optical sensors");
-        }
+  if (enable_optical_sensors(true)) {
+    get_data_from_one_optical_sensor('A', param, true);
+    get_data_from_one_optical_sensor('C', param, true);
+  }
+  else {
+      Serial.println("Unable to start communication with optical sensors");
+  }
 
-        disable_optical_sensors();
+  disable_optical_sensors();
 
-        if (serial_messaging_on) Serial.printlnf("Elapsed time: %u", millis() - elapsed);
+  if (serial_messaging_on) Serial.printlnf("Elapsed time: %u", millis() - elapsed);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1658,10 +1645,8 @@ int particle_command(String arg) {
                 wake_move_sleep_stepper(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
             }*/
             read_optical_sensors_command_param = param1;
-			param2 = limit(param2, LED_MAX_POWER, 0);
-			led_power_assay = param2;
-			led_power_control = param2;
-			Serial.printlnf("LED power: %d", param2);
+			led_power = limit(param2, LED_MAX_POWER, 0);
+			Serial.printlnf("LED power: %d", led_power);
             read_optical_sensors_command_flag = true;
             return param1;
         case 5: // change threshold
@@ -1763,10 +1748,8 @@ int particle_command(String arg) {
 		case 28: // start optical sensor reading test, param = param1, led power = param2
 			serial_messaging_on = false;
 			read_optical_sensors_command_param = param1;
-			param2 = limit(param2, LED_MAX_POWER, 0);
-			led_power_assay = param2;
-			led_power_control = param2;
-			Serial.printlnf("LED power: %d", param2);
+			led_power = limit(param2, LED_MAX_POWER, 0);
+			Serial.printlnf("LED power: %d", led_power);
 			read_optical_sensors_command_flag = true;
 			test_optical_sensors_timer.start();
 			return 1;
@@ -2039,22 +2022,22 @@ void setup() {
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-		init_analog_pin(pinProximalHeater, OUTPUT, 0);
-		init_analog_pin(pinDistalHeater, OUTPUT, 0);
+				init_analog_pin(pinProximalHeater, OUTPUT, 0);
+				init_analog_pin(pinDistalHeater, OUTPUT, 0);
 
-    	init_analog_pin(pinSolenoid, OUTPUT, 0);
+    		init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinBuzzer, OUTPUT, 0);
 
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
         init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
         init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
 
-		proximal.code = 'P';
-		proximal.heater_pin = pinProximalHeater;
-		proximal.thermistor_pin = pinProximalThermistor;
-		distal.code = 'D';
-		distal.heater_pin = pinDistalHeater;
-		distal.thermistor_pin = pinDistalThermistor;
+				proximal.code = 'P';
+				proximal.heater_pin = pinProximalHeater;
+				proximal.thermistor_pin = pinProximalThermistor;
+				distal.code = 'D';
+				distal.heater_pin = pinDistalHeater;
+				distal.thermistor_pin = pinDistalThermistor;
 
         Serial.begin(115200); // standard serial port
 
@@ -2063,7 +2046,7 @@ void setup() {
             reset_eeprom();
         }
 
-		controller_i2c_bus_scan();
+				controller_i2c_bus_scan();
 
         /*Serial.println("Resetting stage");
         reset_stage();
@@ -2076,7 +2059,7 @@ void setup() {
 		delay(500);
 		turn_on_control_LED_for_duration(500, LED_DEFAULT_POWER);*/
 
-		Serial.println("Playing startup tune");
+				Serial.println("Playing startup tune");
         play_startup_tune();
 
         /*Serial.println("Scanning barcode");
@@ -2196,19 +2179,19 @@ void loop() {
 		}
 	}
 
-    if (callback_complete) {
-        Serial.println("Processing callback");
-        process_callback_buffer();
-        return;
-    }
+  if (callback_complete) {
+      Serial.println("Processing callback");
+      process_callback_buffer();
+      return;
+  }
 
 	cartridge_loop();
 	test_loop();
 
-    if (read_optical_sensors_command_flag) {
-        read_optical_sensors_command_flag = false;
-        read_optical_sensors(read_optical_sensors_command_param);
-    }
+  if (read_optical_sensors_command_flag) {
+      read_optical_sensors_command_flag = false;
+      read_optical_sensors(read_optical_sensors_command_param);
+  }
 
 	if (control_heater_temperature_flag) {
 		control_heater_temperature_flag = false;
