@@ -125,7 +125,35 @@ uint32_t checksum(char *buf, int size) {
 	return crc ^ ~0U;
 }
 
-/////////////////////////////////////////////////////////////
+int integerSqrt(int n) {
+    int shift, nShifted, result, candidateResult;
+
+    if (n < 0) {
+        return -1;
+    }
+
+    shift = 2;
+    nShifted = n >> shift;
+    while ((nShifted != 0) && (nShifted != n)) {
+        shift += 2;
+        nShifted = n >> shift;
+    }
+    shift -= 2;
+
+    result = 0;
+    while (shift >= 0) {
+        result <<= 1;
+        candidateResult = result + 1;
+        if ((candidateResult * candidateResult) <= (n >> shift)) {
+            result = candidateResult;
+        }
+        shift -= 2;
+    }
+
+    return result;
+}
+
+////////////////////////////////////////////////////////////
 //                                                         //
 //                         EEPROM                          //
 //                                                         //
@@ -453,12 +481,12 @@ int pulse_heaters(int proximal_power, int distal_power) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_LED(char channel) {
+void turn_on_LED(char channel, int power) {
 	if (channel == 'A') {
-		turn_on_assay_LED(led_power);
+		turn_on_assay_LED(power);
 	}
 	else {
-		turn_on_control_LED(led_power);
+		turn_on_control_LED(power);
 	}
 }
 
@@ -621,7 +649,7 @@ bool optical_sensor_ready(uint8_t addr) {
 void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     int bytes, ready, ready_pin, result;
     uint8_t osr, status, addr, lsb, msb;
-    int tempC, tempF, x, y, z;
+    int tempC, tempF, x, y, z, l_value;
     unsigned long timeout, duration;
     BrevitestOpticalSensorRecord *reading;
 
@@ -629,7 +657,11 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
         reading = &(test_record.reading[test_record.number_of_readings]);
     }
     else {
-        reading = &optical_state_reading;
+			if (channel == 'A') {
+				reading = &reading_assay;
+			} else {
+				reading = &reading_control;
+			}
     }
 
     reading->red = reading->green = reading->blue = reading->temperature = reading->time_ms = reading->samples = 0;
@@ -659,9 +691,9 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	ready = optical_sensor_ready(addr);
 	while (!ready && millis() < timeout) {
 		/*Serial.print('.');*/
-		turn_on_both_LEDs(led_power);
+		turn_on_LED(channel, led_power);
 		delay(1);
-		turn_off_both_LEDs();
+		turn_off_LED(channel);
 		delay(1);
 		ready = optical_sensor_ready(addr);
 	}
@@ -722,8 +754,9 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     reading->temperature = tempC;
     reading->time_ms = millis();
     reading->samples = 1;
+		l_value = integerSqrt((x * x) + (y * y) + (z * z));
 
-    Serial.printlnf("S: %c %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d", channel, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z);
+    Serial.printlnf("S: %c %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L=%d", channel, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z, l_value);
 }
 
 bool enable_optical_sensors(bool force_read) {
@@ -756,11 +789,17 @@ void disable_optical_sensors() {
 }
 
 void read_optical_sensors(int param) {
+	int l_value, d_x, d_y, d_z;
 	unsigned long elapsed = millis();
 
   if (enable_optical_sensors(true)) {
-    get_data_from_one_optical_sensor('A', param, true);
-    get_data_from_one_optical_sensor('C', param, true);
+    get_data_from_one_optical_sensor('A', param, false);
+    get_data_from_one_optical_sensor('C', param, false);
+		d_x = reading_assay.red - reading_control.red;
+		d_y = reading_assay.green - reading_control.green;
+		d_z = reading_assay.blue - reading_control.blue;
+		l_value = integerSqrt((d_x * d_x) + (d_y * d_y) + (d_z * d_z));
+		Serial.printlnf("Delta: dX = %d, dY = %d, dZ = %d, L=%d", d_x, d_y, d_z, l_value);
   }
   else {
       Serial.println("Unable to start communication with optical sensors");

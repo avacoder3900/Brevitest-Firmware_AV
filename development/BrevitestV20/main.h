@@ -308,7 +308,7 @@ struct BrevitestOpticalSensorRecord {  // 14 bytes
     uint16_t green;
     uint16_t blue;
     uint16_t temperature;
-} optical_state_reading;
+} reading_assay, reading_control;
 
 struct BrevitestTestRecord {    // 74 bytes
     int start_time;
