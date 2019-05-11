@@ -29,12 +29,13 @@
 
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 3
-#define OPTICAL_SENSOR_DEFAULT_PARAM 0xAB
-#define OPTICAL_SENSORS_TEST_INTERVAL 3125
+#define OPTICAL_SENSOR_DEFAULT_PARAM 0x43
+#define OPTICAL_SENSORS_TEST_INTERVAL 1000
+#define OPTICAL_L_VALUE_THRESHOLD 5
 
 // LEDs
 #define LED_DEFAULT_POWER 4000
-#define LED_MAX_POWER 4000
+#define LED_POWER 4000
 #define LED_WARMUP_DELAY_MS 1000
 
 // assay
@@ -102,9 +103,6 @@
 
 // upload
 #define UPLOAD_INTERVAL 60000
-
-// state
-#define CARTRIDGE_LOADED_OPTICAL_RED_THRESHOLD 5000
 
 // timeouts
 #define TIMEOUT_VALIDATION 10000
@@ -253,7 +251,6 @@ int bps_temp_C_10X;
 unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
-int led_power = LED_DEFAULT_POWER;
 // progress
 int test_progress;
 int test_percent_complete;
@@ -287,8 +284,7 @@ struct Param {      // 32 bytes
   uint16_t stepper_wake_delay_ms;
   uint16_t solenoid_power;  // surge << 8 + sustain
   uint16_t solenoid_surge_period_ms;
-  uint16_t start_test_heat_red_threshold;
-  uint16_t reserved[10];
+  uint16_t reserved[11];
   Param() {
     reset_steps = 14000;
     step_delay_us = 800;
@@ -296,7 +292,6 @@ struct Param {      // 32 bytes
     stepper_wake_delay_ms = 5;
     solenoid_power = 0xFFFF;    // surge = 255, sustain = 192
     solenoid_surge_period_ms = 100;
-    start_test_heat_red_threshold = 7180;
   }
 };
 
@@ -304,9 +299,9 @@ struct BrevitestOpticalSensorRecord {  // 14 bytes
     char channel;
     uint8_t samples;
     unsigned long time_ms;
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
+    uint16_t x;
+    uint16_t y;
+    uint16_t z;
     uint16_t temperature;
 } reading_assay, reading_control;
 
