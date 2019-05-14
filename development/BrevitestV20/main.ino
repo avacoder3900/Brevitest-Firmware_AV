@@ -649,12 +649,13 @@ bool optical_sensor_ready(uint8_t addr) {
 void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	int bytes, ready, ready_pin, result;
 	uint8_t osr, status, addr, lsb, msb;
-	int tempC, tempF, x, y, z, l_value;
+	uint16_t tempC, tempF, x, y, z, l_value;
 	unsigned long timeout, duration;
 	BrevitestOpticalSensorRecord *reading;
 
 	if (is_a_test) {
-	    reading = &(test_record.reading[test_record.number_of_readings++]);
+	    reading = &(test_record.reading[test_record.number_of_readings]);
+			test_record.number_of_readings++;
 	}
 	else {
 		reading = channel == 'A' ? &reading_assay : &reading_control;
@@ -750,9 +751,9 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     reading->temperature = tempC;
     reading->time_ms = millis();
     reading->samples = 1;
-	l_value = integerSqrt((x * x) + (y * y) + (z * z));
+		l_value = integerSqrt((x * x) + (y * y) + (z * z));
 
-    Serial.printlnf("S: %c %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L=%d", channel, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z, l_value);
+    Serial.printlnf("S: %c %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z, l_value);
 }
 
 bool enable_optical_sensors(bool force_read) {
@@ -791,11 +792,6 @@ void read_optical_sensors(int param, bool is_a_test) {
   if (enable_optical_sensors(true)) {
     get_data_from_one_optical_sensor('A', param, is_a_test);
     get_data_from_one_optical_sensor('C', param, is_a_test);
-	d_x = reading_assay.x - reading_control.x;
-	d_y = reading_assay.y - reading_control.y;
-	d_z = reading_assay.z - reading_control.z;
-	l_value = integerSqrt((d_x * d_x) + (d_y * d_y) + (d_z * d_z));
-	Serial.printlnf("Delta: dX = %d, dY = %d, dZ = %d, L=%d", d_x, d_y, d_z, l_value);
   }
   else {
   	Serial.println("Unable to start communication with optical sensors");
@@ -807,37 +803,30 @@ void read_optical_sensors(int param, bool is_a_test) {
 }
 
 void read_optical_sensor_baselines(int param) {
-	BrevitestOpticalSensorRecord prev_a, prev_c, *a, *c;
-	int l_value_assay, l_value_control, d_x, d_y, d_z;
+	BrevitestOpticalSensorRecord *a, *c;
+	int prev_x_assay, prev_x_control, d_a, d_c;
+	int tries = OPTICAL_BASELINE_MAX_READINGS;
 	bool converged = false;
 	unsigned long elapsed = millis();
 
   	if (enable_optical_sensors(true)) {
-		prev_a.x = prev_a.y = prev_a.z = 0;
-		prev_c.x = prev_c.y = prev_c.z = 0;
-	  	while (!converged) {
-			test_record.number_of_readings = 0;
-			get_data_from_one_optical_sensor('A', param, true);
-			get_data_from_one_optical_sensor('C', param, true);
-			a = &(test_record.reading[0]);
-			c = &(test_record.reading[1]);
-			d_x = a->x - prev_a.x;
-			d_y = a->y - prev_a.y;
-			d_z = a->z - prev_a.z;
-			l_value_assay = integerSqrt((d_x * d_x) + (d_y * d_y) + (d_z * d_z));
-			d_x = c->x - prev_c.x;
-			d_y = c->y - prev_c.y;
-			d_z = c->z - prev_c.z;
-			converged = l_value_assay < OPTICAL_L_VALUE_THRESHOLD && l_value_control < OPTICAL_L_VALUE_THRESHOLD;
-			Serial.printlnf("L(assay)=%d, L(control)=%d, converged=%c", l_value_assay, l_value_control, converged ? 'Y' : 'N');
-			if (!converged) {
-				prev_a.x = a->x;
-				prev_a.y = a->y;
-				prev_a.z = a->z;
-				prev_c.x = c->x;
-				prev_c.y = c->y;
-				prev_c.z = c->z;
-			}
+			prev_x_assay = prev_x_control = 0;
+	  	while (!converged && tries-- > 0) {
+				test_record.number_of_readings = 0;
+				get_data_from_one_optical_sensor('A', param, true);
+				get_data_from_one_optical_sensor('C', param, true);
+				a = &(test_record.reading[0]);
+				c = &(test_record.reading[1]);
+				d_a = abs(a->x - prev_x_assay);
+				d_c = abs(c->x - prev_x_control);
+				converged = d_a < OPTICAL_BASELINE_THRESHOLD && d_c < OPTICAL_BASELINE_THRESHOLD;
+				if (converged) {
+					Serial.printlnf("d_a=%d, d_c=%d, converged=%c, tries=%d", d_a, d_c, converged ? 'Y' : 'N', OPTICAL_BASELINE_MAX_READINGS - tries);
+				} else {
+					prev_x_assay = a->x;
+					prev_x_control = c->x;
+				}
+				delay(OPTICAL_SENSORS_TEST_INTERVAL);
 	  	}
   }
   else {
@@ -2131,16 +2120,16 @@ void setup() {
 
 				controller_i2c_bus_scan();
 
-        Serial.println("Resetting stage");
+        /*Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
-        move_solenoid(1000);
+        move_solenoid(1000);*/
 
         Serial.println("Turning on LEDs");
-		turn_on_assay_LED_for_duration(5, LED_POWER);
-		delay(100);
-		turn_on_control_LED_for_duration(5, LED_POWER);
+				turn_on_assay_LED_for_duration(5, LED_POWER);
+				delay(100);
+				turn_on_control_LED_for_duration(5, LED_POWER);
 
 				Serial.println("Playing startup tune");
         play_startup_tune();

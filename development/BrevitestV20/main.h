@@ -31,7 +31,8 @@
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 3
 #define OPTICAL_SENSOR_DEFAULT_PARAM 0x43
 #define OPTICAL_SENSORS_TEST_INTERVAL 1000
-#define OPTICAL_L_VALUE_THRESHOLD 5
+#define OPTICAL_BASELINE_THRESHOLD 10
+#define OPTICAL_BASELINE_MAX_READINGS 50
 
 // LEDs
 #define LED_DEFAULT_POWER 4000
@@ -252,7 +253,7 @@ unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
 bool read_optical_sensor_baselines_command_flag = false;
-bool read_optical_sensor_baselines_command_param;
+int read_optical_sensor_baselines_command_param;
 // progress
 int test_progress;
 int test_percent_complete;
