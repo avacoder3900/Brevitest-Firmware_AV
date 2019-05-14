@@ -1838,6 +1838,10 @@ int particle_command(String arg) {
 		case 30: // scan barcode
 			scan_barcode();
 			return 1;
+		case 31: // determine sensor baselines
+			read_optical_sensor_baselines_command_param = param1;
+			read_optical_sensor_baselines_command_flag = true;
+			return 1;
 	}
 
     return 0;
@@ -2267,10 +2271,15 @@ void loop() {
 	cartridge_loop();
 	test_loop();
 
-  if (read_optical_sensors_command_flag) {
-      read_optical_sensors_command_flag = false;
-      read_optical_sensors(read_optical_sensors_command_param, false);
-  }
+	if (read_optical_sensors_command_flag) {
+		read_optical_sensors_command_flag = false;
+		read_optical_sensors(read_optical_sensors_command_param, false);
+	}
+
+	if (read_optical_sensor_baselines_command_flag) {
+		read_optical_sensor_baselines_command_flag = false;
+		read_optical_sensor_baselines(read_optical_sensor_baselines_command_param);
+	}
 
 	if (control_heater_temperature_flag) {
 		control_heater_temperature_flag = false;
