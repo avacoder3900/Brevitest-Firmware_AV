@@ -965,8 +965,6 @@ void validate_cartridge() {
     if (Particle.connected()) {
         waiting_for_validation = true;
         validation_timeout = millis() + TIMEOUT_VALIDATION;
-
-        /*start_blinking_device_LED(0, 100, 255, 0, 255);*/
         cartridge_validated = false;
         brevitest_publish("validate-cartridge", barcode_uuid, false);
     }
@@ -974,9 +972,6 @@ void validate_cartridge() {
         Serial.println("Validation failed - not connected to the cloud");
         waiting_for_validation = false;
         cartridge_validated = false;
-        /*stop_blinking_device_LED();
-        set_device_LED_color(255, 0, 0);    // not connected to the cloud*/
-        /*turn_on_device_LED();*/
     }
 }
 
@@ -1699,10 +1694,8 @@ int particle_command(String arg) {
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_flag = true;
             return param1;
-        case 5: // change threshold
-            eeprom.param.start_test_heat_red_threshold = param1;
-            store_eeprom();
-            return param1;
+        case 5: // not used
+            return 0;
         case 6: // not used
             return 0;
         case 7: // read heater temperature
@@ -2046,8 +2039,8 @@ void setup() {
         Particle.function("run_test", particle_run_test);
 
         device_id_string = System.deviceID();
-        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
+        Particle.subscribe(String("hook-response/brevitest-" + device_id_string), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String("hook-error/brevitest-" + device_id_string), brevitest_error, MY_DEVICES);
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
@@ -2083,11 +2076,11 @@ void setup() {
 
 		controller_i2c_bus_scan();
 
-        /*Serial.println("Resetting stage");
+        Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
-        move_solenoid(1000);*/
+        move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
 		turn_on_assay_LED_for_duration(5, LED_POWER);
