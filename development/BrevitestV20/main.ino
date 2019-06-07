@@ -644,8 +644,8 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	BrevitestOpticalSensorRecord *reading;
 
 	if (is_a_test) {
-	    reading = &(test_record.reading[test_record.number_of_readings]);
-			test_record.number_of_readings++;
+	    reading = &(test_record.reading[test_record.number_of_readings % TEST_MAXIMUM_NUMBER_OF_READINGS]);
+		test_record.number_of_readings++;
 	}
 	else {
 		reading = channel == 'A' ? &reading_assay : &reading_control;
