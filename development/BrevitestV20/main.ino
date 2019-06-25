@@ -1799,6 +1799,13 @@ int particle_command(String arg) {
 			read_optical_sensor_baselines_command_param = param1;
 			read_optical_sensor_baselines_command_flag = true;
 			return 1;
+		case 32: // set solenoid power
+			if (param1 < 256) {
+				param1 = param1 * 256 + param1;
+			}
+			eeprom.param.solenoid_power = param1;
+			store_eeprom();
+			move_solenoid(1000);
 	}
 
     return 0;
