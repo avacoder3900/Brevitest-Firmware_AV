@@ -229,7 +229,7 @@ struct HeatingElement {
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 400;
+        target_C_10X = 500;
         k_p_num = 7;
         k_p_den = 1;
         k_i_num = 1;
