@@ -1715,8 +1715,8 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 1000 || param2 < 0) {
-                param2 = 600;
+			if (param2 > 800 || param2 < 0) {
+                param2 = LED_POWER;
             }
             turn_on_assay_LED_for_duration(param1, param2);
             return param1;
@@ -1724,8 +1724,8 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 1000 || param2 < 0) {
-                param2 = 600;
+			if (param2 > 800 || param2 < 0) {
+                param2 = LED_POWER;
             }
             turn_on_control_LED_for_duration(param1, param2);
             return param1;
@@ -1733,8 +1733,8 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 1000 || param2 < 0) {
-                param2 = 600;
+			if (param2 > 800 || param2 < 0) {
+                param2 = LED_POWER;
             }
             turn_on_both_LEDs_for_duration(param1, param2);
             return param1;
