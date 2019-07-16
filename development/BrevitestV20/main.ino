@@ -681,9 +681,11 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	ready = optical_sensor_ready(addr);
 	while (!ready && millis() < timeout) {
 		/*Serial.print('.');*/
-		turn_on_LED(channel, LED_POWER);
+		turn_on_LED('A', LED_POWER);
+		turn_on_LED('C', LED_POWER);
 		delay(1);
-		turn_off_LED(channel);
+		turn_off_LED('A');
+		turn_off_LED('C');
 		delay(1);
 		ready = optical_sensor_ready(addr);
 	}
