@@ -35,7 +35,7 @@
 #define OPTICAL_BASELINE_MAX_READINGS 50
 
 // LEDs
-#define LED_POWER 400
+#define LED_POWER 500
 #define LED_WARMUP_DELAY_MS 1000
 
 // assay
