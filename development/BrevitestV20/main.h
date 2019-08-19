@@ -1,9 +1,11 @@
+#include "LSM6DS3_L3.h"
+#include "BaroSensor.h"
 
 //
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 6
+#define FIRMWARE_VERSION 5
 #define DATA_FORMAT_VERSION 11
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
@@ -48,6 +50,9 @@
 #define TEST_CACHE_SIZE 3
 #define TEST_MAXIMUM_NUMBER_OF_READINGS 10
 
+// barometric pressure sensor
+#define PRESSURE_ADDRESS 0x76
+
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63
@@ -67,8 +72,6 @@
 #define VALIDATE_CARTRIDGE_TIMEOUT 20000
 
 // stepper
-#define MICRONS_PER_FULL_STEP 200
-#define MICRONS_PER_EIGHTH_STEP 245
 #define CUMULATIVE_STEP_LIMIT 11800
 #define RESET_STEP_DELAY 800
 #define OPTICAL_SENSOR_READ_POSITION 8000
@@ -78,6 +81,9 @@
   //Well #2  - steps to the proximal edge of microbead well
 #define STEPS_TO_RESET (CUMULATIVE_STEP_LIMIT + 2000)
 #define STEPS_TO_STARTING_POSITION 11600
+
+// controller sensor readings
+#define CONTROLLER_SENSORS_READ_INTERVAL 5000
 
 // heater
 #define HEATER_MAX_POWER 128
@@ -89,6 +95,9 @@
 // thermistors
 #define THERMISTOR_SCALE 10000
 #define TERMISTOR_TABLE_LENGTH 21
+
+// solenoid
+#define SOLENOID_PWM_FREQUENCY 6000
 
 // upload
 #define UPLOAD_INTERVAL 60000
@@ -102,36 +111,46 @@
 
 // application watchdog
 void watchdog(void);
-ApplicationWatchdog wd(60000, watchdog);
+ApplicationWatchdog wd(30000, watchdog);
 
 // pin definitions
 
 // ELECTRON PIN MAPPINGS
 
-int pinAssayLED = A0;
-int pinControlMidLED = A1;
-int pinControlEndLED = A2;
-int pinThermistor = A3;
-int pinStageLimit = A4;
-int pinBarcodeTrigger = A5;
-int pinBarcodeReady = SCK;
-int pinMotorSleep = MOSI;
-int pinCartridgeLoaded = MISO;
-int pinRX = RX;
-int pinTX = TX;
+int pinControlSensor_Ready = A0;
+// int pinUnused = A1;
+int pinBarcode_Trigger = A2;
+int pinLEDAssay = DAC2;
+int pinSolenoid = A4;
+// int pinUnused = A5;
+int pinLEDControl = DAC1;
+int pinBarcode_Success = A7;
+int pinBarcode_RX = RX;
+// int pinUnused = TX;
 
-int pinSDA = SDA;
-int pinSCL = SCL;
-int pinMotorPFD = D2; AVOID DUE TO PWM CONFLICT WITH A5
-int pinMotorMS2 = D3; AVOID DUE TO PWM CONFLICT WITH A4
-int pinMotorMS1 = D4;
-int pinMotorDir = D5;
-int pinMotorStep = D6;
-int pinBuzzer = D7;
-int pinHeater = D8;
+int pinBuzzer = B0;
+int pinHeater = B1;
+int pinAssaySensor_Ready = B2;
+int pinThermistor = B3;
+// int pinUnused = B4;
+int pinCartridgeLoaded = B5;
+// int pinUnused = C0;
+// int pinUnused = C1;
+int pinGPS_RX = C2;
+int pinGPS_TX = C3;
+int pinControllerSensor_SDA = C4;
+int pinControllerSensor_SCL = C5;
+int pinOpticalSensor_SDA = D0;
+int pinOpticalSensor_SCL = D1;
+// int pinUnused = D2; AVOID DUE TO PWM CONFLICT WITH A5
+// int pinUnused = D3; AVOID DUE TO PWM CONFLICT WITH A4
+int pinLimitSwitch = D4;
+int pinStepper_Sleep = D5;
+int pinStepper_Dir = D6;
+int pinStepper_Step = D7;
 
 // global variables
-int stage_location = 0;
+int cumulative_steps = 0;
 // int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 unsigned long next_upload;
 unsigned long validation_timeout;
@@ -169,11 +188,20 @@ bool waiting_for_finish_confirmation = false;
 bool uploading_test = false;
 bool waiting_for_upload_confirmation = false;
 
+bool cartridge_is_heated;
 unsigned long next_optical_sensor_reading_time = 0;
+
+// controller sensors read timer
+void read_all_controller_sensors(void);
+Timer read_all_controller_sensors_timer(CONTROLLER_SENSORS_READ_INTERVAL, read_all_controller_sensors);
 
 // optical sensors read timer
 void test_optical_sensors(void);
 Timer test_optical_sensors_timer(OPTICAL_SENSORS_TEST_INTERVAL, test_optical_sensors);
+
+// inertial measurement unit
+LSM6DS3 myIMU;
+int imu_temp_C_10X;
 
 // temperature control system
 struct HeatingElement {
@@ -215,13 +243,17 @@ void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
 unsigned long control_heater_temperature_flag = false;
 
+// barometric pressure sensor
+// BaroSensorClass BaroSensor;
+int pressure_10X;
+int bps_temp_C_10X;
+
 // optical sensors
 unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
 bool read_optical_sensor_baselines_command_flag = false;
 int read_optical_sensor_baselines_command_param;
-
 // progress
 int test_progress;
 int test_percent_complete;
