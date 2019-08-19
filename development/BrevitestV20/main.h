@@ -29,14 +29,13 @@
 
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 3
-#define OPTICAL_SENSOR_DEFAULT_PARAM 0x43
+#define OPTICAL_SENSOR_DEFAULT_PARAM 0x45
 #define OPTICAL_SENSORS_TEST_INTERVAL 1000
 #define OPTICAL_BASELINE_THRESHOLD 10
 #define OPTICAL_BASELINE_MAX_READINGS 50
 
 // LEDs
-#define LED_DEFAULT_POWER 4000
-#define LED_POWER 4000
+#define LED_POWER 500
 #define LED_WARMUP_DELAY_MS 1000
 
 // assay
@@ -73,7 +72,7 @@
 #define VALIDATE_CARTRIDGE_TIMEOUT 20000
 
 // stepper
-#define CUMULATIVE_STEP_LIMIT 9600
+#define CUMULATIVE_STEP_LIMIT 11800
 #define RESET_STEP_DELAY 800
 #define OPTICAL_SENSOR_READ_POSITION 8000
   //Well #1
@@ -81,7 +80,7 @@
 
   //Well #2  - steps to the proximal edge of microbead well
 #define STEPS_TO_RESET (CUMULATIVE_STEP_LIMIT + 2000)
-#define STEPS_TO_MICROBEAD_WELL 7000
+#define STEPS_TO_STARTING_POSITION 11600
 
 // controller sensor readings
 #define CONTROLLER_SENSORS_READ_INTERVAL 5000
@@ -95,8 +94,6 @@
 
 // thermistors
 #define THERMISTOR_SCALE 10000
-#define THERMISTOR_BALANCE_RESISTANCE 4990
-#define THERMISTOR_BASE_RESISTANCE 100000
 #define TERMISTOR_TABLE_LENGTH 21
 
 // solenoid
@@ -121,20 +118,20 @@ ApplicationWatchdog wd(30000, watchdog);
 // ELECTRON PIN MAPPINGS
 
 int pinControlSensor_Ready = A0;
-int pinProximalThermistor = A1;
+// int pinUnused = A1;
 int pinBarcode_Trigger = A2;
 int pinLEDAssay = DAC2;
 int pinSolenoid = A4;
-int pinProximalHeater = A5;
+// int pinUnused = A5;
 int pinLEDControl = DAC1;
 int pinBarcode_Success = A7;
 int pinBarcode_RX = RX;
 // int pinUnused = TX;
 
 int pinBuzzer = B0;
-int pinDistalHeater = B1;
+int pinHeater = B1;
 int pinAssaySensor_Ready = B2;
-int pinDistalThermistor = B3;
+int pinThermistor = B3;
 // int pinUnused = B4;
 int pinCartridgeLoaded = B5;
 // int pinUnused = C0;
@@ -208,10 +205,10 @@ int imu_temp_C_10X;
 
 // temperature control system
 struct HeatingElement {
-    char code;
     int heater_pin;
     int thermistor_pin;
     bool heater_on;
+    int power;
     int previous_error;
     int integral;
     unsigned long read_time;
@@ -225,10 +222,13 @@ struct HeatingElement {
     int k_d_num;
     int k_d_den;
     HeatingElement() {
+        heater_pin = pinHeater;
+        thermistor_pin = pinThermistor;
+        power = 0;
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 530;
+        target_C_10X = 400;
         k_p_num = 7;
         k_p_den = 1;
         k_i_num = 1;
@@ -236,7 +236,7 @@ struct HeatingElement {
         k_d_num = 1;
         k_d_den = 1;
     }
-} proximal, distal;
+} heater;
 int pulse_duration = HEATER_PULSE_DURATION;
 
 void control_heater_temperature(void);

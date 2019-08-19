@@ -17,7 +17,10 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 
 //  temperature is 10x to get one decimal place of accuracy
 static int table_temperature[] = { 1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0 };
-static int table_raw[] = { 1707, 1566, 1426, 1288, 1154, 1026, 904, 790, 684, 587, 499, 421, 352, 291, 239, 194, 156, 125, 98, 77, 59 };
+// new thermistor
+static int table_raw[] = { 3606, 3540, 3464, 3377, 3279, 3168, 3043, 2903, 2748, 2578, 2394, 2199, 1994, 1784, 1573, 1365, 1166, 979, 809, 657, 525 };
+// old thermistor
+/*static int table_raw[] = { 1707, 1566, 1426, 1288, 1154, 1026, 904, 790, 684, 587, 499, 421, 352, 291, 239, 194, 156, 125, 98, 77, 59 };*/
 /*static int table_ratio[] = { 6975, 8054, 9336, 10867, 12703, 14917, 17598, 20864, 24862, 29784, 35882, 43481, 53015, 65055, 80371, 100000, 125353, 158371, 201746, 259246, 336206 };*/
 
 static uint32_t crc32_tab[] = {
@@ -325,9 +328,9 @@ void reset_stage() {
         cumulative_steps = CUMULATIVE_STEP_LIMIT;
         wake_stepper();
         move_steps(14000, RESET_STEP_DELAY);
-        move_steps(-STEPS_TO_MICROBEAD_WELL, RESET_STEP_DELAY);
+        move_steps(-STEPS_TO_STARTING_POSITION, RESET_STEP_DELAY);
         /*move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
-        move_steps(STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);*/
+        move_steps(STEPS_TO_STARTING_POSITION + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);*/
         sleep_stepper();
 }
 
@@ -431,45 +434,35 @@ void play_startup_tune() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_heater(HeatingElement &elem, int power) {
-    if (!elem.heater_on) {
-        /*Serial.println("Turning on proximal heater");*/
-		power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
-        analogWrite(elem.heater_pin, power, HEATER_PWM_FREQUENCY);
-        elem.heater_on = true;
-    }
+void turn_on_heater(int power) {
+	power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
+    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+	heater.power = power;
+    heater.heater_on = true;
 }
 
-void turn_off_heater(HeatingElement &elem) {
-    if (elem.heater_on) {
-        /*Serial.println("Turning off proximal heater");*/
-        analogWrite(elem.heater_pin, 0);
-        elem.heater_on = false;
-    }
+void turn_off_heater() {
+    analogWrite(heater.heater_pin, 0);
+    heater.heater_on = false;
+	heater.power = 0;
 }
 
 int limit(int value, int max, int min) {
 	return value > max ? max : (value < min ? min : value);
 }
 
-int pulse_heaters(int proximal_power, int distal_power) {
+int pulse_heater(int power) {
 	unsigned long start = millis();
-	proximal_power = limit(proximal_power, HEATER_MAX_POWER, 0);
-	distal_power = limit(distal_power, HEATER_MAX_POWER, 0);
-	analogWrite(proximal.heater_pin, proximal_power, HEATER_PWM_FREQUENCY);
-	analogWrite(distal.heater_pin, distal_power, HEATER_PWM_FREQUENCY);
-	if (proximal_power > 0 || distal_power > 0) {
+	power = limit(power, HEATER_MAX_POWER, 0);
+	analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+	if (power > 0) {
 		delay(pulse_duration);
-		analogWrite(proximal.heater_pin, 0);
-		analogWrite(distal.heater_pin, 0);
+		analogWrite(heater.heater_pin, 0);
 	}
-	proximal.heater_on = proximal_power != 0;
-	distal.heater_on = distal_power != 0;
-	if (proximal.heater_on) {
-		if (serial_messaging_on) Serial.printlnf("Proximal heater set to power %d", proximal_power);
-	}
-	if (distal.heater_on) {
-		if (serial_messaging_on) Serial.printlnf("Distal heater set to power %d", distal_power);
+	heater.power = power;
+	heater.heater_on = power != 0;
+	if (heater.heater_on) {
+		if (serial_messaging_on) Serial.printlnf("Heater set to power %d", power);
 	}
 
 	return (int) (millis() - start);
@@ -654,8 +647,8 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	BrevitestOpticalSensorRecord *reading;
 
 	if (is_a_test) {
-	    reading = &(test_record.reading[test_record.number_of_readings]);
-			test_record.number_of_readings++;
+	    reading = &(test_record.reading[test_record.number_of_readings % TEST_MAXIMUM_NUMBER_OF_READINGS]);
+		test_record.number_of_readings++;
 	}
 	else {
 		reading = channel == 'A' ? &reading_assay : &reading_control;
@@ -688,9 +681,11 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	ready = optical_sensor_ready(addr);
 	while (!ready && millis() < timeout) {
 		/*Serial.print('.');*/
-		turn_on_LED(channel, LED_POWER);
+		turn_on_LED('A', LED_POWER);
+		turn_on_LED('C', LED_POWER);
 		delay(1);
-		turn_off_LED(channel);
+		turn_off_LED('A');
+		turn_off_LED('C');
 		delay(1);
 		ready = optical_sensor_ready(addr);
 	}
@@ -893,15 +888,15 @@ void read_all_controller_sensors() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int get_heater_temperature(HeatingElement &elem) {
-    int raw = analogRead(elem.thermistor_pin);
+int get_heater_temperature() {
+    int raw = analogRead(heater.thermistor_pin);
     if (raw == 0) {
 		stop_temperature_control();
     }
 	else {
-		elem.temp_C_10X = raw_table_lookup(raw);
-		elem.temp_F_10X = ((elem.temp_C_10X * 9) / 5) + 320;
-		if (elem.temp_C_10X > HEATER_MAX_TEMPERATURE) {
+		heater.temp_C_10X = raw_table_lookup(raw);
+		heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
+		if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE) {
 			stop_temperature_control();
 			raw = 0;
 		}
@@ -910,38 +905,36 @@ int get_heater_temperature(HeatingElement &elem) {
 }
 
 void heater_temperature_read() {
-	get_heater_temperature(distal);
-	if (serial_messaging_on) Serial.printlnf("Proximal temperature: %d.%d˚C, %d.%d˚F", proximal.temp_C_10X / 10, proximal.temp_C_10X % 10, proximal.temp_F_10X / 10, proximal.temp_F_10X % 10);
-	get_heater_temperature(proximal);
-	if (serial_messaging_on) Serial.printlnf("Distal temperature: %d.%d˚C, %d.%d˚F", distal.temp_C_10X / 10, distal.temp_C_10X % 10, distal.temp_F_10X / 10, distal.temp_F_10X % 10);
+	get_heater_temperature();
+	if (serial_messaging_on) Serial.printlnf("Temperature: %d.%d˚C, %d.%d˚F", heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.temp_F_10X / 10, heater.temp_F_10X % 10);
 }
 
-int pid_controller(HeatingElement &elem) {
+int pid_controller() {
     int dt, error, derivative, raw;
 	int output = 0;
     unsigned long current_read_time, prev_read_time;
 
 	current_read_time = millis();
-	prev_read_time = elem.read_time;
+	prev_read_time = heater.read_time;
 	if ((current_read_time - prev_read_time) >= HEATER_CONTROL_INTERVAL) {
-		raw = get_heater_temperature(elem);
-	    elem.read_time = current_read_time;
+		raw = get_heater_temperature();
+	    heater.read_time = current_read_time;
 	    if (raw != 0) {
 	        if (prev_read_time == 0) {
-	            elem.previous_error = 0;
-	            elem.integral = 0;
+	            heater.previous_error = 0;
+	            heater.integral = 0;
 	        }
 	        else {
-	            dt = elem.read_time - prev_read_time;
-	            error = elem.target_C_10X - elem.temp_C_10X;
-	            elem.integral += (error * dt) / 1000;
-	            derivative = (1000 * (error - elem.previous_error)) / dt;
-	            output = (elem.k_p_num * error) / elem.k_p_den;
-				output += (elem.k_i_num * elem.integral) / elem.k_i_den;
-				output += (elem.k_d_num * derivative) / elem.k_d_den;
+	            dt = heater.read_time - prev_read_time;
+	            error = heater.target_C_10X - heater.temp_C_10X;
+	            heater.integral += (error * dt) / 1000;
+	            derivative = (1000 * (error - heater.previous_error)) / dt;
+	            output = (heater.k_p_num * error) / heater.k_p_den;
+				output += (heater.k_i_num * heater.integral) / heater.k_i_den;
+				output += (heater.k_d_num * derivative) / heater.k_d_den;
 
-	            if (serial_messaging_on) Serial.printlnf("%c: raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", elem.code, raw, elem.temp_C_10X / 10, elem.temp_C_10X % 10, elem.target_C_10X / 10, elem.target_C_10X % 10, dt, error, elem.integral, derivative, output);
-	            elem.previous_error = error;
+	            if (serial_messaging_on) Serial.printlnf("raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", raw, heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.target_C_10X / 10, heater.target_C_10X % 10, dt, error, heater.integral, derivative, output);
+	            heater.previous_error = error;
 	        }
 	    }
 	}
@@ -954,15 +947,14 @@ void control_heater_temperature() {
 }
 
 void start_temperature_control() {
-	proximal.read_time = 0;
-	distal.read_time = 0;
+	heater.read_time = 0;
 	control_heater_temperature_timer.start();
     Serial.println("Temperature control system started");
 }
 
 void stop_temperature_control() {
     control_heater_temperature_timer.stop();
-	pulse_heaters(0, 0);
+	pulse_heater(0);
     Serial.println("Temperature control system stopped");
 }
 
@@ -978,8 +970,6 @@ void validate_cartridge() {
     if (Particle.connected()) {
         waiting_for_validation = true;
         validation_timeout = millis() + TIMEOUT_VALIDATION;
-
-        /*start_blinking_device_LED(0, 100, 255, 0, 255);*/
         cartridge_validated = false;
         brevitest_publish("validate-cartridge", barcode_uuid, false);
     }
@@ -987,9 +977,6 @@ void validate_cartridge() {
         Serial.println("Validation failed - not connected to the cloud");
         waiting_for_validation = false;
         cartridge_validated = false;
-        /*stop_blinking_device_LED();
-        set_device_LED_color(255, 0, 0);    // not connected to the cloud*/
-        /*turn_on_device_LED();*/
     }
 }
 
@@ -1431,7 +1418,7 @@ void update_progress(char *message, int duration) {
                     test_percent_complete = new_percent_complete;
                 }
         }
-		Serial.printlnf("%s, %d percent complete, temp: P = %d.%d, D = %d.%d", message, test_percent_complete, proximal.temp_C_10X / 10, proximal.temp_C_10X % 10, distal.temp_C_10X / 10, distal.temp_C_10X % 10);
+		Serial.printlnf("%s, %d percent complete, temp = %d.%d", message, test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 }
 
 void BCODE_delay(int target_duration) {
@@ -1444,7 +1431,7 @@ void BCODE_delay(int target_duration) {
 		cycles = target_duration / HEATER_CONTROL_INTERVAL;
 		for (i = 0; i < cycles; i++) {
 			cycle_start = millis();
-			pulse_heaters(pid_controller(proximal), pid_controller(distal));
+			pulse_heater(pid_controller());
 			residual_duration = HEATER_CONTROL_INTERVAL - (int) (millis() - cycle_start);
 			if (residual_duration > 0) {
 				delay(residual_duration);
@@ -1541,20 +1528,14 @@ int process_one_BCODE_command(int cmd, int index) {
         case 13: // Repeat end
                 return -index;
                 break;
-		case 14: // Set proximal target (scaled 10X)
-				index = get_BCODE_token(index, &param1);
-				update_progress("Setting proximal target temperature", 0);
-				if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-					proximal.target_C_10X = param1;
-					proximal.read_time = 0;
-				}
+		case 14: // unused
 				break;
-		case 15: // set distal target temperature
+		case 15: // set heater target temperature
 				index = get_BCODE_token(index, &param1);
-				update_progress("Setting distal target temperature", 0);
+				update_progress("Setting heater target temperature", 0);
 				if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-					distal.target_C_10X = param1;
-					distal.read_time = 0;
+					heater.target_C_10X = param1;
+					heater.read_time = 0;
 				}
 				break;
         case 17: // Raster well
@@ -1712,24 +1693,19 @@ int particle_command(String arg) {
             return cumulative_steps;
         case 3: // move steps
             wake_move_sleep_stepper(param1, param2);
+			Serial.printlnf("Move stepper %d steps, cumulative %d", param1, cumulative_steps);
             return cumulative_steps;
         case 4: // read optical sensors (param)
-            /*steps_to_alignment = STEPS_TO_MICROBEAD_WELL + eeprom.param.steps_to_calibration_point;
-            if (cumulative_steps != steps_to_alignment) {
-                wake_move_sleep_stepper(steps_to_alignment - cumulative_steps, eeprom.param.step_delay_us);
-            }*/
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_flag = true;
             return param1;
         case 5: // not used
-            return 1;
-        case 6: // read proximal heater temperature
-			param1 = get_heater_temperature(proximal);
-			Serial.printlnf("Proximal heater: raw = %d, T = %d.%d˚C", param1, proximal.temp_C_10X / 10, proximal.temp_C_10X % 10);
-            return param1;
-        case 7: // read distal heater temperature
-			param1 = get_heater_temperature(distal);
-			Serial.printlnf("Distal heater: raw = %d, T = %d.%d˚C", param1, distal.temp_C_10X / 10, distal.temp_C_10X % 10);
+            return 0;
+        case 6: // not used
+            return 0;
+        case 7: // read heater temperature
+			param1 = get_heater_temperature();
+			Serial.printlnf("Heater: raw = %d, T = %d.%d˚C", param1, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 			return param1;
         case 8: // reset params
             reset_eeprom();
@@ -1741,8 +1717,8 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 1000 || param2 < 0) {
-                param2 = 600;
+			if (param2 > 800 || param2 < 0) {
+                param2 = LED_POWER;
             }
             turn_on_assay_LED_for_duration(param1, param2);
             return param1;
@@ -1750,8 +1726,8 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 1000 || param2 < 0) {
-                param2 = 600;
+			if (param2 > 800 || param2 < 0) {
+                param2 = LED_POWER;
             }
             turn_on_control_LED_for_duration(param1, param2);
             return param1;
@@ -1759,37 +1735,31 @@ int particle_command(String arg) {
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 1000 || param2 < 0) {
-                param2 = 600;
+			if (param2 > 800 || param2 < 0) {
+                param2 = LED_POWER;
             }
             turn_on_both_LEDs_for_duration(param1, param2);
             return param1;
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
-        case 14: // set proximal target temperature
-            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-                proximal.target_C_10X = param1;
-                proximal.read_time = 0;
-            }
-            return param1;
-		case 15: // set distal target temperature
+        case 14: // not used
+            return 0;
+		case 15: // set heater target temperature
 			if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-				distal.target_C_10X = param1;
-				distal.read_time = 0;
+				heater.target_C_10X = param1;
+				heater.read_time = 0;
 			}
             return param1;
-		case 16: // turn on proximal heater at power param1
-            turn_on_heater(proximal, param1);
+		case 16: // not used
+            return 0;
+        case 17: // not used
+			return 0;
+		case 18: // turn on heater at power param1
+			turn_on_heater(param1);
             return param1;
-        case 17: // turn off proximal heater
-			turn_off_heater(proximal);
-			return 1;
-		case 18: // turn on distal heater at power param1
-			turn_on_heater(distal, param1);
-            return param1;
-        case 19: // turn off distal heater
-			turn_off_heater(distal);
+        case 19: // turn off heater
+			turn_off_heater();
 			return 1;
 		case 20: // start temperature control
 			start_temperature_control();
@@ -1831,6 +1801,13 @@ int particle_command(String arg) {
 			read_optical_sensor_baselines_command_param = param1;
 			read_optical_sensor_baselines_command_flag = true;
 			return 1;
+		case 32: // set solenoid power
+			if (param1 < 256) {
+				param1 = param1 * 256 + param1;
+			}
+			eeprom.param.solenoid_power = param1;
+			store_eeprom();
+			move_solenoid(1000);
 	}
 
     return 0;
@@ -2074,8 +2051,8 @@ void setup() {
         Particle.function("run_test", particle_run_test);
 
         device_id_string = System.deviceID();
-        Particle.subscribe(String(device_id_string + "/hook-response/brevitest"), brevitest_callback, MY_DEVICES);
-        Particle.subscribe(String(device_id_string + "/hook-error/brevitest"), brevitest_error, MY_DEVICES);
+        Particle.subscribe(String("hook-response/brevitest-" + device_id_string), brevitest_callback, MY_DEVICES);
+        Particle.subscribe(String("hook-error/brevitest-" + device_id_string), brevitest_error, MY_DEVICES);
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
@@ -2088,28 +2065,19 @@ void setup() {
         init_analog_pin(pinLEDAssay, OUTPUT, 0);
         init_analog_pin(pinLEDControl, OUTPUT, 0);
 
-        init_analog_pin(pinProximalThermistor, INPUT, 0);
-        init_analog_pin(pinDistalThermistor, INPUT, 0);
+        init_analog_pin(pinThermistor, INPUT, 0);
 
         init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
         init_digital_pin(pinControlSensor_Ready, INPUT, 0);
 
-				init_analog_pin(pinProximalHeater, OUTPUT, 0);
-				init_analog_pin(pinDistalHeater, OUTPUT, 0);
+		init_analog_pin(pinHeater, OUTPUT, 0);
 
-    		init_analog_pin(pinSolenoid, OUTPUT, 0);
+    	init_analog_pin(pinSolenoid, OUTPUT, 0);
         init_analog_pin(pinBuzzer, OUTPUT, 0);
 
         init_digital_pin(pinStepper_Step, OUTPUT, LOW);
         init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
         init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
-
-				proximal.code = 'P';
-				proximal.heater_pin = pinProximalHeater;
-				proximal.thermistor_pin = pinProximalThermistor;
-				distal.code = 'D';
-				distal.heater_pin = pinDistalHeater;
-				distal.thermistor_pin = pinDistalThermistor;
 
         Serial.begin(115200); // standard serial port
 
@@ -2118,20 +2086,20 @@ void setup() {
             reset_eeprom();
         }
 
-				controller_i2c_bus_scan();
+		controller_i2c_bus_scan();
 
-        /*Serial.println("Resetting stage");
+        Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Firing solenoid");
-        move_solenoid(1000);*/
+        move_solenoid(1000);
 
         Serial.println("Turning on LEDs");
-				turn_on_assay_LED_for_duration(5, LED_POWER);
-				delay(100);
-				turn_on_control_LED_for_duration(5, LED_POWER);
+		turn_on_assay_LED_for_duration(5, LED_POWER);
+		delay(100);
+		turn_on_control_LED_for_duration(5, LED_POWER);
 
-				Serial.println("Playing startup tune");
+		Serial.println("Playing startup tune");
         play_startup_tune();
 
         /*Serial.println("Scanning barcode");
@@ -2272,6 +2240,6 @@ void loop() {
 
 	if (control_heater_temperature_flag) {
 		control_heater_temperature_flag = false;
-		pulse_heaters(pid_controller(proximal), pid_controller(distal));
+		pulse_heater(pid_controller());
 	}
 }
