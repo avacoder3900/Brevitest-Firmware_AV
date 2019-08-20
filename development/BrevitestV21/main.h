@@ -66,18 +66,13 @@
 #define BARCODE_READ_TIMEOUT 2000
 #define VALIDATE_CARTRIDGE_TIMEOUT 20000
 
-// stepper
+// motor
 #define MICRONS_PER_FULL_STEP 200
-#define MICRONS_PER_EIGHTH_STEP 245
-#define CUMULATIVE_STEP_LIMIT 11800
+#define MICRONS_PER_EIGHTH_STEP 25
+#define STAGE_LOCATION_LIMIT 53000
 #define RESET_STEP_DELAY 800
 #define OPTICAL_SENSOR_READ_POSITION 8000
-  //Well #1
-  //#define STEPS_TO_MICROBEAD_WELL 1300
-
-  //Well #2  - steps to the proximal edge of microbead well
-#define STEPS_TO_RESET (CUMULATIVE_STEP_LIMIT + 2000)
-#define STEPS_TO_STARTING_POSITION 11600
+#define MICRONS_TO_STARTING_POSITION 6000
 
 // heater
 #define HEATER_MAX_POWER 128
@@ -108,10 +103,10 @@ ApplicationWatchdog wd(60000, watchdog);
 
 // ELECTRON PIN MAPPINGS
 
-int pinAssayLED = A0;
-int pinControlMidLED = A1;
-int pinControlEndLED = A2;
-int pinThermistor = A3;
+int pinLEDAssay = A0;
+int pinLEDControlMid = A1;
+int pinLEDControlEnd = A2;
+int pinLEDThermistor = A3;
 int pinStageLimit = A4;
 int pinBarcodeTrigger = A5;
 int pinBarcodeReady = SCK;

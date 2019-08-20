@@ -239,6 +239,10 @@ void move_steps(int microns, int step_delay){
         eighth_steps = microns_error / 25;
         microns_error %= 25;
 
+		digitalWrite(pinMotorMS1, LOW);
+		digitalWrite(pinMotorMS2, LOW);
+		digitalWrite(pinMotorPFD, HIGH);
+		delay(1);
         for(i = 0; i < full_steps; i++) {
                 /*if (cancelling_test) {
                         break;
@@ -252,54 +256,90 @@ void move_steps(int microns, int step_delay){
                     delay(20);  // debounce
                     if (digitalRead(pinStageLimit) == LOW) {
 						Serial.println("Stage limit switch detected");
-                        cumulative_steps = 0;
+                        stage_location = 0;
                         break;
                     }
                 }
 
                 if (dir == HIGH) {
-                    if (cumulative_steps >= CUMULATIVE_STEP_LIMIT) {
+                    if (stage_location >= STAGE_LOCATION_LIMIT) {
 						Serial.println("Carriage distal limit reached");
                         break;
                     }
                 }
 
-                digitalWrite(pinStepper_Step, HIGH);
+                digitalWrite(pinMotorStep, HIGH);
                 delayMicroseconds(step_delay);
 
-                digitalWrite(pinStepper_Step, LOW);
+                digitalWrite(pinMotorStep, LOW);
                 delayMicroseconds(step_delay);
 
                 stage_location += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
         }
-		/*Serial.printlnf("Move complete, cumulative steps = %d, step limit = %d", cumulative_steps, CUMULATIVE_STEP_LIMIT);*/
+
+		digitalWrite(pinMotorMS1, HIGH);
+		digitalWrite(pinMotorMS2, HIGH);
+		digitalWrite(pinMotorPFD, LOW);
+		delay(1);
+        for(i = 0; i < eighth_steps; i++) {
+                /*if (cancelling_test) {
+                        break;
+                }*/
+
+                /*if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
+                        Particle.process();
+                }*/
+
+                if ((dir == LOW) && (digitalRead(pinStageLimit) == LOW)) {
+                    delay(20);  // debounce
+                    if (digitalRead(pinStageLimit) == LOW) {
+						Serial.println("Stage limit switch detected");
+                        stage_location = 0;
+                        break;
+                    }
+                }
+
+                if (dir == HIGH) {
+                    if (stage_location >= STAGE_LOCATION_LIMIT) {
+						Serial.println("Carriage distal limit reached");
+                        break;
+                    }
+                }
+
+                digitalWrite(pinMotorStep, HIGH);
+                delayMicroseconds(step_delay);
+
+                digitalWrite(pinMotorStep, LOW);
+                delayMicroseconds(step_delay);
+
+                stage_location += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
+        }
+		/*Serial.printlnf("Move complete, stage location = %d, limit = %d", stage_location, STAGE_LOCATION_LIMIT);*/
         //sleep_stepper();
 }
 
-void wake_move_sleep_stepper(int steps, int step_delay) {
-    wake_stepper();
-    move_steps(steps, step_delay);
-    sleep_stepper();
+void wake_move_sleep_stepper(int microns, int step_delay) {
+    wake_motor();
+    move_steps(microns, step_delay);
+    sleep_motor();
 }
 
-void sleep_stepper() {
-    digitalWrite(pinStepper_Sleep, LOW);
+void sleep_motor() {
+    digitalWrite(pinMotorSleep, LOW);
 }
 
-void wake_stepper() {
-    digitalWrite(pinStepper_Sleep, HIGH);
+void wake_motor() {
+    digitalWrite(pinMotorSleep, HIGH);
     /*delay(eeprom.param.stepper_wake_delay_ms);*/
     delay(10);
 }
 
 void reset_stage() {
-        cumulative_steps = CUMULATIVE_STEP_LIMIT;
-        wake_stepper();
+        stage_location = stage_location;
+        wake_motor();
         move_steps(14000, RESET_STEP_DELAY);
-        move_steps(-STEPS_TO_STARTING_POSITION, RESET_STEP_DELAY);
-        /*move_steps(-eeprom.param.reset_steps, eeprom.param.step_delay_us);
-        move_steps(STEPS_TO_STARTING_POSITION + eeprom.param.steps_to_calibration_point, eeprom.param.step_delay_us);*/
-        sleep_stepper();
+        move_steps(-MICRONS_TO_STARTING_POSITION, RESET_STEP_DELAY);
+        wake_motor();
 }
 
 /////////////////////////////////////////////////////////////
@@ -446,8 +486,11 @@ void turn_on_LED(char channel, int power) {
 	if (channel == 'A') {
 		turn_on_assay_LED(power);
 	}
-	else {
-		turn_on_control_LED(power);
+	else if (channel == 'M'){
+		turn_on_control_mid_LED(power);
+	}
+	else if (channel == 'E'){
+		turn_on_control_end_LED(power);
 	}
 }
 
@@ -455,22 +498,30 @@ void turn_off_LED(char channel) {
 	if (channel == 'A') {
 		turn_off_assay_LED();
 	}
-	else {
-		turn_off_control_LED();
+	else if (channel == 'M'){
+		turn_off_control_mid_LED();
+	}
+	else if (channel == 'E'){
+		turn_off_control_end_LED();
 	}
 }
 
-void turn_on_both_LEDs(int power) {
-	analogWrite(pinLEDAssay, power);
-	analogWrite(pinLEDControl, power);
+void turn_on_all_LEDs(int power) {
+	turn_on_assay_LED(power);
+	turn_on_control_mid_LED(power);
+	turn_on_control_end_LED(power);
 }
 
 void turn_on_assay_LED(int power) {
     analogWrite(pinLEDAssay, power);
 }
 
-void turn_on_control_LED(int power) {
-	analogWrite(pinLEDControl, power);
+void turn_on_control_mid_LED(int power) {
+	analogWrite(pinLEDControlMid, power);
+}
+
+void turn_on_control_end_LED(int power) {
+	analogWrite(pinLEDControlEnd, power);
 }
 
 void turn_off_assay_LED() {
