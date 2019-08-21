@@ -4,7 +4,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 6
-#define DATA_FORMAT_VERSION 11
+#define DATA_FORMAT_VERSION 12
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -45,8 +45,8 @@
 #define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
-#define TEST_CACHE_SIZE 3
-#define TEST_MAXIMUM_NUMBER_OF_READINGS 10
+#define TEST_CACHE_SIZE 4
+#define TEST_MAXIMUM_NUMBER_OF_READINGS 12
 
 // particle
 #define PARTICLE_REGISTER_SIZE 622
@@ -69,8 +69,8 @@
 // motor
 #define MICRONS_PER_FULL_STEP 200
 #define MICRONS_PER_EIGHTH_STEP 25
-#define STAGE_LOCATION_LIMIT 53000
-#define RESET_STEP_DELAY 800
+#define STAGE_POSITION_LIMIT 53000
+#define FAST_STEP_DELAY 600
 #define OPTICAL_SENSOR_READ_POSITION 8000
 #define MICRONS_TO_STARTING_POSITION 6000
 
@@ -101,12 +101,12 @@ ApplicationWatchdog wd(60000, watchdog);
 
 // pin definitions
 
-// ELECTRON PIN MAPPINGS
+// BORON PIN MAPPINGS
 
 int pinLEDAssay = A0;
-int pinLEDControlMid = A1;
-int pinLEDControlEnd = A2;
-int pinLEDThermistor = A3;
+int pinLEDControl1 = A1;
+int pinLEDControl2 = A2;
+int pinThermistor = A3;
 int pinStageLimit = A4;
 int pinBarcodeTrigger = A5;
 int pinBarcodeReady = SCK;
@@ -115,10 +115,10 @@ int pinCartridgeLoaded = MISO;
 int pinRX = RX;
 int pinTX = TX;
 
-int pinSDA = SDA;
-int pinSCL = SCL;
-int pinMotorPFD = D2; AVOID DUE TO PWM CONFLICT WITH A5
-int pinMotorMS2 = D3; AVOID DUE TO PWM CONFLICT WITH A4
+// int pinSDA = SDA;
+// int pinSCL = SCL;
+int pinMotorPFD = D2;
+int pinMotorMS2 = D3;
 int pinMotorMS1 = D4;
 int pinMotorDir = D5;
 int pinMotorStep = D6;
@@ -126,7 +126,7 @@ int pinBuzzer = D7;
 int pinHeater = D8;
 
 // global variables
-int stage_location = 0;
+int stage_position = 0;
 // int cumulative_steps = CUMULATIVE_STEP_LIMIT;
 unsigned long next_upload;
 unsigned long validation_timeout;
@@ -243,24 +243,6 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-struct Param {      // 32 bytes
-  uint16_t reset_steps;
-  uint16_t step_delay_us;
-  uint16_t steps_to_calibration_point;
-  uint16_t stepper_wake_delay_ms;
-  uint16_t solenoid_power;  // surge << 8 + sustain
-  uint16_t solenoid_surge_period_ms;
-  uint16_t reserved[11];
-  Param() {
-    reset_steps = 14000;
-    step_delay_us = 800;
-    steps_to_calibration_point = 720;  // added to constant STEPS_TO_MICROBEAD_WELL on reset_stage
-    stepper_wake_delay_ms = 5;
-    solenoid_power = 0xFFFF;    // surge = 255, sustain = 192
-    solenoid_surge_period_ms = 100;
-  }
-};
-
 struct BrevitestOpticalSensorRecord {  // 14 bytes
     char channel;
     uint8_t samples;
@@ -269,15 +251,15 @@ struct BrevitestOpticalSensorRecord {  // 14 bytes
     uint16_t y;
     uint16_t z;
     uint16_t temperature;
-} reading_assay, reading_control;
+} reading_assay, reading_control_1, reading_control_2;
 
-struct BrevitestTestRecord {    // 74 bytes
+struct BrevitestTestRecord { // 206 bytes
     int start_time;
     int finish_time;
-    char test_uuid[TEST_UUID_LENGTH + 1];    // 26 bytes w padding
+    char test_uuid[TEST_UUID_LENGTH + 1];    // 27 bytes
     uint8_t number_of_readings;
     uint16_t reserved;
-    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];
+    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];  // 168 bytes
 } test_record;
 
 struct BrevitestAssayRecord {
@@ -296,12 +278,11 @@ struct Particle_EEPROM {
   uint8_t firmware_version;     // 8 bytes
   uint8_t data_format_version;
   uint8_t most_recent_test;
-  uint8_t reserved2[5];
   char serial_number[SERIAL_NUMBER_LENGTH + 1]; // 20 bytes, includes trailing \0
-  Param param;  // 32 bytes
-  BrevitestTestRecord test_cache[TEST_CACHE_SIZE];  // up to 6 test results cached
+  BrevitestTestRecord test_cache[TEST_CACHE_SIZE];  // up to 10 test results cached
   Particle_EEPROM() {
       firmware_version = FIRMWARE_VERSION;
       data_format_version = DATA_FORMAT_VERSION;
+      most_recent_test = 255;
   }
 } eeprom;

@@ -222,22 +222,23 @@ void dump_eeprom() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void move_steps(int microns, int step_delay){
+void move_stage(int microns, int step_delay){
         // move a specific number of microns - negative for reverse movement
 		// steps: positive => move proximally, negative => move distally
 		// controller: dir = LOW => move proximally, dir = HIGH => move distally
 
 		int full_steps, eighth_steps, microns_error, abs_microns, dir, i;
 
-        dir = (microns > 0) ? LOW : HIGH;
+        dir = (microns > 0) ? HIGH : LOW;
 		digitalWrite(pinMotorDir, dir);
 		/*Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
 
         abs_microns = abs(microns);
         full_steps = abs_microns / MICRONS_PER_FULL_STEP;
         microns_error = abs_microns % MICRONS_PER_FULL_STEP;
-        eighth_steps = microns_error / 25;
-        microns_error %= 25;
+        eighth_steps = microns_error / MICRONS_PER_EIGHTH_STEP;
+        microns_error %= MICRONS_PER_EIGHTH_STEP;
+		Serial.printlnf("move_stage: microns = %d, dir = %c, full_steps = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', full_steps, eighth_steps, microns_error);
 
 		digitalWrite(pinMotorMS1, LOW);
 		digitalWrite(pinMotorMS2, LOW);
@@ -248,7 +249,7 @@ void move_steps(int microns, int step_delay){
                         break;
                 }*/
 
-                /*if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
+                /*if (Particle.connected() && (i % move_stage_BETWEEN_PARTICLE_PROCESS) == 0) {
                         Particle.process();
                 }*/
 
@@ -256,13 +257,13 @@ void move_steps(int microns, int step_delay){
                     delay(20);  // debounce
                     if (digitalRead(pinStageLimit) == LOW) {
 						Serial.println("Stage limit switch detected");
-                        stage_location = 0;
+                        stage_position = 0;
                         break;
                     }
                 }
 
                 if (dir == HIGH) {
-                    if (stage_location >= STAGE_LOCATION_LIMIT) {
+                    if (stage_position >= STAGE_POSITION_LIMIT) {
 						Serial.println("Carriage distal limit reached");
                         break;
                     }
@@ -274,7 +275,7 @@ void move_steps(int microns, int step_delay){
                 digitalWrite(pinMotorStep, LOW);
                 delayMicroseconds(step_delay);
 
-                stage_location += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
+                stage_position += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
         }
 
 		digitalWrite(pinMotorMS1, HIGH);
@@ -294,13 +295,13 @@ void move_steps(int microns, int step_delay){
                     delay(20);  // debounce
                     if (digitalRead(pinStageLimit) == LOW) {
 						Serial.println("Stage limit switch detected");
-                        stage_location = 0;
+                        stage_position = 0;
                         break;
                     }
                 }
 
                 if (dir == HIGH) {
-                    if (stage_location >= STAGE_LOCATION_LIMIT) {
+                    if (stage_position >= STAGE_POSITION_LIMIT) {
 						Serial.println("Carriage distal limit reached");
                         break;
                     }
@@ -312,15 +313,15 @@ void move_steps(int microns, int step_delay){
                 digitalWrite(pinMotorStep, LOW);
                 delayMicroseconds(step_delay);
 
-                stage_location += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
+                stage_position += dir == LOW ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
         }
-		/*Serial.printlnf("Move complete, stage location = %d, limit = %d", stage_location, STAGE_LOCATION_LIMIT);*/
+		/*Serial.printlnf("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);*/
         //sleep_stepper();
 }
 
 void wake_move_sleep_stepper(int microns, int step_delay) {
     wake_motor();
-    move_steps(microns, step_delay);
+    move_stage(microns, step_delay);
     sleep_motor();
 }
 
@@ -330,16 +331,21 @@ void sleep_motor() {
 
 void wake_motor() {
     digitalWrite(pinMotorSleep, HIGH);
-    /*delay(eeprom.param.stepper_wake_delay_ms);*/
     delay(10);
 }
 
 void reset_stage() {
-        stage_location = stage_location;
+        stage_position = STAGE_POSITION_LIMIT;
         wake_motor();
-        move_steps(14000, RESET_STEP_DELAY);
-        move_steps(-MICRONS_TO_STARTING_POSITION, RESET_STEP_DELAY);
+        move_stage(-60000, FAST_STEP_DELAY);
+        move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
         wake_motor();
+}
+
+void move_stage_to_optical_read_position() {
+	int move_distance = stage_position - OPTICAL_SENSOR_READ_POSITION;
+	update_progress("Moving magnets to prepare for reading", (abs(move_distance) * FAST_STEP_DELAY) / 1000);
+	move_stage(move_distance, FAST_STEP_DELAY);	// move stage to optical read position
 }
 
 /////////////////////////////////////////////////////////////
@@ -487,10 +493,10 @@ void turn_on_LED(char channel, int power) {
 		turn_on_assay_LED(power);
 	}
 	else if (channel == 'M'){
-		turn_on_control_mid_LED(power);
+		turn_on_control_1_LED(power);
 	}
 	else if (channel == 'E'){
-		turn_on_control_end_LED(power);
+		turn_on_control_2_LED(power);
 	}
 }
 
@@ -499,42 +505,47 @@ void turn_off_LED(char channel) {
 		turn_off_assay_LED();
 	}
 	else if (channel == 'M'){
-		turn_off_control_mid_LED();
+		turn_off_control_1_LED();
 	}
 	else if (channel == 'E'){
-		turn_off_control_end_LED();
+		turn_off_control_2_LED();
 	}
 }
 
 void turn_on_all_LEDs(int power) {
 	turn_on_assay_LED(power);
-	turn_on_control_mid_LED(power);
-	turn_on_control_end_LED(power);
+	turn_on_control_1_LED(power);
+	turn_on_control_2_LED(power);
 }
 
 void turn_on_assay_LED(int power) {
     analogWrite(pinLEDAssay, power);
 }
 
-void turn_on_control_mid_LED(int power) {
-	analogWrite(pinLEDControlMid, power);
+void turn_on_control_1_LED(int power) {
+	analogWrite(pinLEDControl1, power);
 }
 
-void turn_on_control_end_LED(int power) {
-	analogWrite(pinLEDControlEnd, power);
+void turn_on_control_2_LED(int power) {
+	analogWrite(pinLEDControl2, power);
 }
 
 void turn_off_assay_LED() {
     analogWrite(pinLEDAssay, 0);
 }
 
-void turn_off_control_LED() {
-    analogWrite(pinLEDControl, 0);
+void turn_off_control_1_LED() {
+    analogWrite(pinLEDControl1, 0);
 }
 
-void turn_off_both_LEDs() {
-	analogWrite(pinLEDAssay, 0);
-	analogWrite(pinLEDControl, 0);
+void turn_off_control_2_LED() {
+    analogWrite(pinLEDControl2, 0);
+}
+
+void turn_off_all_LEDs() {
+	turn_off_assay_LED();
+	turn_off_control_1_LED();
+	turn_off_control_2_LED();
 }
 
 void turn_on_assay_LED_for_duration(int duration, int power) {
@@ -543,57 +554,26 @@ void turn_on_assay_LED_for_duration(int duration, int power) {
     turn_off_assay_LED();
 }
 
-void turn_on_control_LED_for_duration(int duration, int power) {
-    turn_on_control_LED(power);
+void turn_on_control_1_LED_for_duration(int duration, int power) {
+    turn_on_control_1_LED(power);
     delay(duration);
-    turn_off_control_LED();
+    turn_off_control_1_LED();
 }
 
-void turn_on_both_LEDs_for_duration(int duration, int power) {
+void turn_on_control_2_LED_for_duration(int duration, int power) {
+    turn_on_control_2_LED(power);
+    delay(duration);
+    turn_off_control_2_LED();
+}
+
+void turn_on_all_LEDs_for_duration(int duration, int power) {
     turn_on_assay_LED(power);
-    turn_on_control_LED(power);
+	turn_on_control_1_LED(power);
+	turn_on_control_2_LED(power);
     delay(duration);
     turn_off_assay_LED();
-    turn_off_control_LED();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                INERTIAL MEASUREMENT UNIT                //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void imu_read() {
-	int temp_F_10X;
-
-	Serial.printlnf("IMU accelerometer: X = %d, Y = %d, Z = %d", myIMU.readRawAccelX(), myIMU.readRawAccelY(), myIMU.readRawAccelZ());
-    Serial.printlnf("IMU gyroscope: X = %d, Y = %d, Z = %d", myIMU.readRawGyroX(), myIMU.readRawGyroY(), myIMU.readRawGyroZ());
-
-    int error, tempC_raw;
-    error = myIMU.begin();
-    if (error) {
-        Serial.printlnf("Error setting up IMU, code: %d", error);
-    }
-    else {
-        tempC_raw = myIMU.readRawTemp() + 400;
-        imu_temp_C_10X = ((tempC_raw >> 4) * 10) + (((tempC_raw & 0x0F) * 6250) / 10000);
-		temp_F_10X = ((imu_temp_C_10X * 9) / 5) + 320;
-        Serial.printlnf("IMU temperature: %d.%d˚C, %d.%d˚F", imu_temp_C_10X / 10, imu_temp_C_10X % 10, temp_F_10X / 10, temp_F_10X % 10);
-    }
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//               BAROMETRIC PRESSURE SENSOR                //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void pressure_read() {
-	int temp, press;
-
-    BaroSensor.begin();
-    BaroSensor.getTempAndPressure(&temp, &press, CELSIUS, OSR_512);
-	Serial.printlnf("Temperature: %d.%d˚C, Pressure: %d.%d mmHg", temp / 10, temp % 10, press / 10, press % 10);
+	turn_off_control_1_LED();
+	turn_off_control_2_LED();
 }
 
 /////////////////////////////////////////////////////////////
@@ -659,30 +639,35 @@ bool optical_sensor_ready(uint8_t addr) {
 }
 
 void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
-	int bytes, ready, ready_pin, result;
+	int bytes, ready, result;
 	uint8_t osr, status, addr, lsb, msb;
 	uint16_t tempC, tempF, x, y, z, l_value;
 	unsigned long timeout, duration;
 	BrevitestOpticalSensorRecord *reading;
 
+	if (channel == 'A') {
+	    addr = 0x74;
+	    reading = &reading_assay;
+	}
+	else if (channel == '1'){
+	    addr = 0x75;
+	    reading = &reading_control_1;
+	}
+	else if (channel == '2'){
+	    addr = 0x76;
+		reading = &reading_control_2;
+	}
+	else {
+		Serial.printlnf("ERROR: Channel %c not found", channel);
+		return;
+	}
+
 	if (is_a_test) {
 	    reading = &(test_record.reading[test_record.number_of_readings % TEST_MAXIMUM_NUMBER_OF_READINGS]);
 		test_record.number_of_readings++;
 	}
-	else {
-		reading = channel == 'A' ? &reading_assay : &reading_control;
-	}
 
 	reading->x = reading->y = reading->z = reading->temperature = reading->time_ms = reading->samples = 0;
-
-	if (channel == 'A') {
-	    addr = 0x75;
-	    ready_pin = pinAssaySensor_Ready;
-	}
-	else {
-	    addr = 0x74;
-	    ready_pin = pinControlSensor_Ready;
-	}
 
 	duration = millis();
 
@@ -775,16 +760,6 @@ bool enable_optical_sensors(bool force_read) {
         return true;
     }
 
-    if (Wire1.isEnabled()) {    // is other I2C bus busy?
-        if (force_read) {    // kill controller sensor bus if forced read
-            Wire1.end();
-            pinMode(pinControllerSensor_SCL, INPUT);
-            pinMode(pinControllerSensor_SDA, INPUT);
-        }
-        else {
-            return false;
-        }
-    }
     /*Serial.println("Attempting to read optical sensors");*/
     Wire.setSpeed(CLOCK_SPEED_100KHZ);
     Wire.begin();
@@ -795,8 +770,6 @@ bool enable_optical_sensors(bool force_read) {
 
 void disable_optical_sensors() {
     Wire.end();
-    pinMode(pinOpticalSensor_SCL, INPUT);
-    pinMode(pinOpticalSensor_SDA, INPUT);
 }
 
 void read_optical_sensors(int param, bool is_a_test) {
@@ -850,55 +823,6 @@ void read_optical_sensor_baselines(int param) {
   disable_optical_sensors();
 
   if (serial_messaging_on) Serial.printlnf("Elapsed time: %u", millis() - elapsed);
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//               CONTROLLER SENSOR STATUS                  //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-bool enable_controller_sensors(bool force_read) {
-    if (Wire1.isEnabled()) {
-        return true;
-    }
-
-    if (Wire.isEnabled()) { // is other I2C bus busy?
-        Serial.println("Optical sensors busy");
-        if (force_read) {    // kill optical sensor bus if forced read
-            Wire.end();
-            pinMode(pinOpticalSensor_SCL, INPUT);
-            pinMode(pinOpticalSensor_SDA, INPUT);
-        }
-        else {
-            return false;
-        }
-    }
-
-    Wire1.setSpeed(CLOCK_SPEED_100KHZ);
-    Wire1.begin();
-    delay(100);
-
-    return Wire1.isEnabled();
-}
-
-void disable_controller_sensors() {
-    Wire1.end();
-    pinMode(pinControllerSensor_SCL, INPUT);
-    pinMode(pinControllerSensor_SDA, INPUT);
-}
-
-void read_all_controller_sensors() {
-    if (enable_controller_sensors(false)) {
-        imu_read();
-        heater_temperature_read();
-        pressure_read();
-        disable_controller_sensors();
-		if (serial_messaging_on) Serial.println();
-    }
-    else {
-        if (serial_messaging_on) Serial.printlnf("Controller I2C busy, read skipped");
-    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -1306,39 +1230,6 @@ int process_test_record(int index) {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                         PARAMS                          //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-int reset_params() {
-        Param reset;
-
-        memcpy(&eeprom.param, &reset, (int) sizeof(Param));
-        store_params();
-
-        return 1;
-}
-
-void load_params() {
-        uint8_t *e = (uint8_t *) &eeprom.param;
-        int indx, addr = offsetof(Particle_EEPROM, param);
-
-        for (indx = 0; indx < (int) sizeof(Param); indx++, e++) {
-                *e = EEPROM.read(addr + indx);
-        }
-}
-
-void store_params() {
-        uint8_t *e = (uint8_t *) &eeprom.param;
-        int indx, addr = offsetof(Particle_EEPROM, param);
-
-        for (indx = 0; indx < (int) sizeof(Param); indx++, e++) {
-                EEPROM.write(addr + indx, *e);
-        }
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                 TEST RESULTS UPLOADING                  //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1466,7 +1357,7 @@ void BCODE_delay(int target_duration) {
 }
 
 int process_one_BCODE_command(int cmd, int index) {
-        int i, j, mark, param1, param2, param3, param4, param5, param6, param7, param8, start_index, steps;
+        int i, j, mark, param1, param2, param3, param4, param5, param6, param7, param8, start_index, move_distance;
 
         if (cancelling_test) {
                 return index;
@@ -1486,16 +1377,13 @@ int process_one_BCODE_command(int cmd, int index) {
                 update_progress("Pausing", param1);
                 BCODE_delay(param1);
                 break;
-        case 2: // Move(number of steps, step delay)
-                index = get_BCODE_token(index, &param1);    // number of steps
+        case 2: // Move(microns to move, step delay)
+                index = get_BCODE_token(index, &param1);    // microns
                 index = get_BCODE_token(index, &param2);    // step_delay_us
-                update_progress("Moving magnets", (abs(param1) * param2) / 1000);
-                move_steps(param1, param2);
+                update_progress("Moving magnets", (abs(param1) * param2 / MICRONS_PER_FULL_STEP) / 1000);
+                move_stage(param1, param2);
                 break;
-        case 3: // Solenoid on(milliseconds)
-                index = get_BCODE_token(index, &param1);
-                update_progress("Rastering magnets", param1);
-                move_solenoid(param1);
+        case 3: // solenoid - ignore
                 break;
         case 4: // Buzzer on(milliseconds, frequency)
 				index = get_BCODE_token(index, &param1);    // duration_ms
@@ -1508,27 +1396,28 @@ int process_one_BCODE_command(int cmd, int index) {
         case 6: // unused
                 break;
         case 7: // take initial sensor reading using default param
-				steps = cumulative_steps - OPTICAL_SENSOR_READ_POSITION;
+				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensor baselines", 6000);
 				read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM);
 				break;
         case 8: // take initial sensor reading with param = param1
 				index = get_BCODE_token(index, &param1); // params
+				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensor baselines", 6000);
 				read_optical_sensor_baselines(param1);
                 break;
         case 9: // Read optical sensors with default values
-				steps = cumulative_steps - OPTICAL_SENSOR_READ_POSITION;
-				update_progress("Moving magnets to prepare for reading", (abs(steps) * RESET_STEP_DELAY) / 1000);
-				move_steps(steps, RESET_STEP_DELAY);	// move stage away from optical sensors
+				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensors", 6000);
                 read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
                 break;
         case 10: // Read optical sensors with parameters
                 index = get_BCODE_token(index, &param1); // params
-				steps = cumulative_steps - OPTICAL_SENSOR_READ_POSITION;
-				update_progress("Moving magnets to prepare for reading", (abs(steps) * RESET_STEP_DELAY) / 1000);
-				move_steps(steps, RESET_STEP_DELAY);	// move stage away from optical sensors
+				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensors", 6000);
                 read_optical_sensors(param1, true);
                 break;
@@ -1557,60 +1446,9 @@ int process_one_BCODE_command(int cmd, int index) {
 					heater.read_time = 0;
 				}
 				break;
-        case 17: // Raster well
-                index = get_BCODE_token(index, &param1);    // total steps
-                index = get_BCODE_token(index, &param2);    // step_delay_us
-                index = get_BCODE_token(index, &param3);    // number of rasters
-                if (serial_messaging_on) Serial.printlnf("Raster well - total steps: %d, rasters: %d", param1, param3);
-                if (param3 == 1) {
-                    steps = param1;
-                }
-                else {
-                    steps = param1 / (param3 - 1);
-                }
-                index = get_BCODE_token(index, &param4);    // number of firings
-                index = get_BCODE_token(index, &param5);    // gather_time_ms
-                index = get_BCODE_token(index, &param6);    // number of firing segments
-                mark = index;
-                for (i = 0; i < param3 - 1; i++) {
-                        if (cancelling_test) {
-                                break;
-                        }
-                        index = mark;
-                        for (j = 0; j < param4; j++) {
-                            if (j < param6) {
-                                index = get_BCODE_token(index, &param7);    // energize time
-                                index = get_BCODE_token(index, &param8);    // delay time
-                            }
-							update_progress("Rastering magnets", param7 + param8);
-                            move_solenoid(param7);
-                            BCODE_delay(param8);
-                        }
-						update_progress("Moving magnets", (abs(steps) * param2) / 1000);
-                        move_steps(steps, param2);
-                }
-
-                index = mark;
-                for (j = 0; j < param4; j++) {
-                    if (j < param6) {
-                        index = get_BCODE_token(index, &param7);    // energize time
-                        index = get_BCODE_token(index, &param8);    // delay time
-                    }
-					update_progress("Rastering magnets", param7 + param8);
-                    move_solenoid(param7);
-                    BCODE_delay(param8);
-                }
-
-                steps = param1 - steps * (param3 - 1);
-                if (steps) {
-					update_progress("Moving magnets", (abs(steps) * param2) / 1000);
-                    move_steps(steps, param2);
-                }
-
-				update_progress("Pausing to gather microspheres", param5);
-                BCODE_delay(param5);   // gather beads
+        case 17: // Not used
                 break;
-        case 18: // Well transit
+        case 18: // Segemented move
                 index = get_BCODE_token(index, &param1);    // step_delay_us
                 index = get_BCODE_token(index, &param2);    // gather_time_ms
                 index = get_BCODE_token(index, &param3);    // number of segments
@@ -1621,11 +1459,11 @@ int process_one_BCODE_command(int cmd, int index) {
                         }
                         // read segment data
                         index = get_BCODE_token(index, &param4);    // number of iterations
-                        index = get_BCODE_token(index, &param5);    // steps per iteration
+                        index = get_BCODE_token(index, &param5);    // microns per iteration
                         index = get_BCODE_token(index, &param6);    // delay between steps, in milliseconds
                         for (j = 0; j < param4; j++) {
 							update_progress("Moving magnets", param6 + (abs(param5) * param1) / 1000);
-                            move_steps(param5, param1);
+                            move_stage(param5, param1);
                             BCODE_delay(param6);
                         }
                 }
@@ -1702,18 +1540,15 @@ int particle_command(String arg) {
     Serial.printlnf("Command: %d, param1: %d, param2: %d, param3: %d", cmd, param1, param2, param3);
 
     switch (cmd) {
-        case 1: // set and move to calibration point
-            eeprom.param.steps_to_calibration_point = param1;
-            store_eeprom();
-            reset_stage();
-            return param1;
+        case 1: // unused
+            return 0;
         case 2: // reset stage
             reset_stage();
-            return cumulative_steps;
+            return stage_position;
         case 3: // move steps
             wake_move_sleep_stepper(param1, param2);
-			Serial.printlnf("Move stepper %d steps, cumulative %d", param1, cumulative_steps);
-            return cumulative_steps;
+			Serial.printlnf("Move stepper %d steps, cumulative %d", param1, stage_position);
+            return stage_position;
         case 4: // read optical sensors (param)
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_flag = true;
@@ -1729,35 +1564,41 @@ int particle_command(String arg) {
         case 8: // reset params
             reset_eeprom();
             return (int) eeprom.data_format_version;
-        case 9: // fire solenoid
-            move_solenoid(param1);
-            return param1;
-        case 10: // turn on assay LED for param1 milliseconds at power param2
+        case 9: // turn on assay LED for param1 milliseconds at power param2
+			if (param1 > 10000 || param1 < 0) {
+				param1 = 2000;
+			}
+			if (param2 > 4096 || param2 < 0) {
+				param2 = LED_POWER;
+			}
+			turn_on_assay_LED_for_duration(param1, param2);
+		return param1;
+        case 10: // turn on control 1 LED for param1 milliseconds at power param2
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 800 || param2 < 0) {
+			if (param2 > 4096 || param2 < 0) {
                 param2 = LED_POWER;
             }
-            turn_on_assay_LED_for_duration(param1, param2);
+            turn_on_control_1_LED_for_duration(param1, param2);
             return param1;
-        case 11: // turn on control LED for param1 milliseconds at power param2
+        case 11: // turn on control 2 LED for param1 milliseconds at power param2
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 800 || param2 < 0) {
+			if (param2 > 4096 || param2 < 0) {
                 param2 = LED_POWER;
             }
-            turn_on_control_LED_for_duration(param1, param2);
+            turn_on_control_2_LED_for_duration(param1, param2);
             return param1;
-        case 12: // turn on both LEDs for param1 milliseconds at power param2
+        case 12: // turn on all LEDs for param1 milliseconds at power param2
             if (param1 > 10000 || param1 < 0) {
                 param1 = 2000;
             }
-			if (param2 > 800 || param2 < 0) {
+			if (param2 > 4096 || param2 < 0) {
                 param2 = LED_POWER;
             }
-            turn_on_both_LEDs_for_duration(param1, param2);
+            turn_on_all_LEDs_for_duration(param1, param2);
             return param1;
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
@@ -1792,17 +1633,14 @@ int particle_command(String arg) {
 		case 23: // turn off serial messaging
 			serial_messaging_on = false;
 			return 0;
-		case 24: // start reading sensors
-			read_all_controller_sensors_timer.start();
+		case 24: // start reading sensors - ignore
+			return 0;
+		case 25: // stop reading sensors - ignore
+			return 0;
+		case 26: // scan controller_i2c_bus_scan - ignore
 			return 1;
-		case 25: // stop reading sensors
-			read_all_controller_sensors_timer.stop();
-			return 1;
-		case 26: // start reading sensors
-			controller_i2c_bus_scan();
-			return 1;
-		case 27: // stop reading sensors
-			optical_i2c_bus_scan();
+		case 27: // scan i2c bus
+			i2c_bus_scan();
 			return 1;
 		case 28: // start optical sensor reading test, param = param1
 			serial_messaging_on = false;
@@ -1820,13 +1658,6 @@ int particle_command(String arg) {
 			read_optical_sensor_baselines_command_param = param1;
 			read_optical_sensor_baselines_command_flag = true;
 			return 1;
-		case 32: // set solenoid power
-			if (param1 < 256) {
-				param1 = param1 * 256 + param1;
-			}
-			eeprom.param.solenoid_power = param1;
-			store_eeprom();
-			move_solenoid(1000);
 	}
 
     return 0;
@@ -1896,7 +1727,7 @@ void start_test() {
 
     waiting_for_start_confirmation = true;
     start_timeout = millis() + TIMEOUT_START;
-    wake_stepper();
+    wake_motor();
 
     /*start_blinking_device_LED(0, 500, 0, 255, 0);*/
     brevitest_publish("test-start", test_record.test_uuid, false);
@@ -1911,7 +1742,7 @@ void cancel_test() {
     update_progress("Test cancelled", -1);
     brevitest_publish("test-cancel", test_record.test_uuid, false);
 
-    sleep_stepper();
+    sleep_motor();
     /*stop_blinking_device_LED();
     set_device_LED_color(255, 0, 0);
     turn_on_device_LED();*/
@@ -1926,7 +1757,7 @@ void finish_test() {
     update_progress("Test complete", -1);
     brevitest_publish("test-finish", test_record.test_uuid, false);
 
-    sleep_stepper();
+    sleep_motor();
     /*stop_blinking_device_LED();
     set_device_LED_color(0, 255, 0);
     turn_on_device_LED();*/
@@ -1939,9 +1770,6 @@ void run_test() {
 
     test_last_progress_update = 0;
     update_progress("Running test", 0);
-
-    pinMode(pinSolenoid, OUTPUT);
-    analogWrite(pinSolenoid, 0);
 
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -2030,24 +1858,7 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value) {
     }
 }
 
-void controller_i2c_bus_scan() {
-    int addr, bytes_sent, result;
-
-    if (enable_controller_sensors(true)) {
-        Serial.println("Starting controller I2C bus scan");
-        for (addr = 0; addr < 127; addr++) {
-            Wire1.beginTransmission(addr);
-            bytes_sent = Wire1.write(0x00);
-            result = Wire1.endTransmission();
-            if (result == 0) {
-                Serial.printlnf("I2C device found at address %X", addr);
-            }
-        }
-    }
-    disable_controller_sensors();
-}
-
-void optical_i2c_bus_scan() {
+void i2c_bus_scan() {
     int addr, bytes_sent, result;
 
     if (enable_optical_sensors(true)) {
@@ -2075,28 +1886,27 @@ void setup() {
         device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
         device_id[DEVICE_ID_LENGTH] = '\0';
 
-        init_digital_pin(pinLimitSwitch, INPUT_PULLUP, 0);
+        init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
         init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
 
-        init_digital_pin(pinBarcode_Trigger, OUTPUT, HIGH);
-        init_digital_pin(pinBarcode_Success, INPUT_PULLDOWN, 0);
+        init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
+        init_digital_pin(pinBarcodeReady, INPUT_PULLDOWN, 0);
 
         init_analog_pin(pinLEDAssay, OUTPUT, 0);
-        init_analog_pin(pinLEDControl, OUTPUT, 0);
+		init_analog_pin(pinLEDControl1, OUTPUT, 0);
+		init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
         init_analog_pin(pinThermistor, INPUT, 0);
 
-        init_digital_pin(pinAssaySensor_Ready, INPUT, 0);
-        init_digital_pin(pinControlSensor_Ready, INPUT, 0);
+		init_digital_pin(pinMotorSleep, OUTPUT, LOW);
+		init_digital_pin(pinMotorStep, OUTPUT, LOW);
+		init_digital_pin(pinMotorDir, OUTPUT, LOW);
+		init_digital_pin(pinMotorMS1, OUTPUT, LOW);
+		init_digital_pin(pinMotorMS2, OUTPUT, LOW);
+		init_analog_pin(pinMotorPFD, OUTPUT, 0);
 
+		init_analog_pin(pinBuzzer, OUTPUT, 0);
 		init_analog_pin(pinHeater, OUTPUT, 0);
-
-    	init_analog_pin(pinSolenoid, OUTPUT, 0);
-        init_analog_pin(pinBuzzer, OUTPUT, 0);
-
-        init_digital_pin(pinStepper_Step, OUTPUT, LOW);
-        init_digital_pin(pinStepper_Sleep, OUTPUT, LOW);
-        init_digital_pin(pinStepper_Dir, OUTPUT, LOW);
 
         Serial.begin(115200); // standard serial port
 
@@ -2105,18 +1915,17 @@ void setup() {
             reset_eeprom();
         }
 
-		controller_i2c_bus_scan();
+		i2c_bus_scan();
 
         Serial.println("Resetting stage");
         reset_stage();
 
-        Serial.println("Firing solenoid");
-        move_solenoid(1000);
-
         Serial.println("Turning on LEDs");
 		turn_on_assay_LED_for_duration(5, LED_POWER);
 		delay(100);
-		turn_on_control_LED_for_duration(5, LED_POWER);
+		turn_on_control_1_LED_for_duration(5, LED_POWER);
+		delay(100);
+		turn_on_control_2_LED_for_duration(5, LED_POWER);
 
 		Serial.println("Playing startup tune");
         play_startup_tune();
@@ -2238,11 +2047,11 @@ void loop() {
 		}
 	}
 
-  if (callback_complete) {
-      Serial.println("Processing callback");
-      process_callback_buffer();
-      return;
-  }
+	if (callback_complete) {
+		Serial.println("Processing callback");
+		process_callback_buffer();
+		return;
+	}
 
 	cartridge_loop();
 	test_loop();
@@ -2260,5 +2069,12 @@ void loop() {
 	if (control_heater_temperature_flag) {
 		control_heater_temperature_flag = false;
 		pulse_heater(pid_controller());
+	}
+
+	if (digitalRead(pinCartridgeLoaded) == LOW) {
+		delay(20);  // debounce
+		if (digitalRead(pinCartridgeLoaded) == LOW) {
+			Serial.println("Cartridge detected");
+		}
 	}
 }
