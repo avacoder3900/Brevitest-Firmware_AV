@@ -242,7 +242,7 @@ void move_stage(int microns, int step_delay){
 
 		digitalWrite(pinMotorMS1, LOW);
 		digitalWrite(pinMotorMS2, LOW);
-		digitalWrite(pinMotorPFD, HIGH);
+		analogWrite(pinMotorPFD, 4000);
 		delay(1);
         for(i = 0; i < full_steps; i++) {
                 /*if (cancelling_test) {
@@ -269,6 +269,7 @@ void move_stage(int microns, int step_delay){
                     }
                 }
 
+				Serial.printlnf("move_stage: start position = %d", stage_position);
                 digitalWrite(pinMotorStep, HIGH);
                 delayMicroseconds(step_delay);
 
@@ -276,11 +277,12 @@ void move_stage(int microns, int step_delay){
                 delayMicroseconds(step_delay);
 
                 stage_position += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
+				Serial.printlnf("move_stage: finish position = %d", stage_position);
         }
 
 		digitalWrite(pinMotorMS1, HIGH);
 		digitalWrite(pinMotorMS2, HIGH);
-		digitalWrite(pinMotorPFD, LOW);
+		analogWrite(pinMotorPFD, 0);
 		delay(1);
         for(i = 0; i < eighth_steps; i++) {
                 /*if (cancelling_test) {
@@ -319,7 +321,7 @@ void move_stage(int microns, int step_delay){
         //sleep_stepper();
 }
 
-void wake_move_sleep_stepper(int microns, int step_delay) {
+void wake_move_sleep_stage(int microns, int step_delay) {
     wake_motor();
     move_stage(microns, step_delay);
     sleep_motor();
@@ -338,6 +340,7 @@ void reset_stage() {
         stage_position = STAGE_POSITION_LIMIT;
         wake_motor();
         move_stage(-60000, FAST_STEP_DELAY);
+		stage_position = 0;
         move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
         wake_motor();
 }
@@ -1546,7 +1549,7 @@ int particle_command(String arg) {
             reset_stage();
             return stage_position;
         case 3: // move steps
-            wake_move_sleep_stepper(param1, param2);
+            wake_move_sleep_stage(param1, param2);
 			Serial.printlnf("Move stepper %d steps, cumulative %d", param1, stage_position);
             return stage_position;
         case 4: // read optical sensors (param)
