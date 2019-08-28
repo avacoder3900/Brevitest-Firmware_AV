@@ -1896,20 +1896,20 @@ void setup() {
         init_digital_pin(pinBarcodeReady, INPUT_PULLDOWN, 0);
 
         init_analog_pin(pinLEDAssay, OUTPUT, 0);
-		init_analog_pin(pinLEDControl1, OUTPUT, 0);
-		init_analog_pin(pinLEDControl2, OUTPUT, 0);
+				init_analog_pin(pinLEDControl1, OUTPUT, 0);
+				init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
         init_analog_pin(pinThermistor, INPUT, 0);
 
-		init_digital_pin(pinMotorSleep, OUTPUT, LOW);
-		init_digital_pin(pinMotorStep, OUTPUT, LOW);
-		init_digital_pin(pinMotorDir, OUTPUT, LOW);
-		init_digital_pin(pinMotorMS1, OUTPUT, LOW);
-		init_digital_pin(pinMotorMS2, OUTPUT, LOW);
-		init_analog_pin(pinMotorPFD, OUTPUT, 0);
+				init_digital_pin(pinMotorSleep, OUTPUT, LOW);
+				init_digital_pin(pinMotorStep, OUTPUT, LOW);
+				init_digital_pin(pinMotorDir, OUTPUT, LOW);
+				init_digital_pin(pinMotorMS1, OUTPUT, LOW);
+				init_digital_pin(pinMotorMS2, OUTPUT, LOW);
+				init_analog_pin(pinMotorPFD, OUTPUT, 0);
 
-		init_analog_pin(pinBuzzer, OUTPUT, 0);
-		init_analog_pin(pinHeater, OUTPUT, 0);
+				init_analog_pin(pinBuzzer, OUTPUT, 0);
+				init_analog_pin(pinHeater, OUTPUT, 0);
 
         Serial.begin(115200); // standard serial port
 
@@ -1918,19 +1918,19 @@ void setup() {
             reset_eeprom();
         }
 
-		i2c_bus_scan();
+				i2c_bus_scan();
 
         Serial.println("Resetting stage");
         reset_stage();
 
         Serial.println("Turning on LEDs");
-		turn_on_assay_LED_for_duration(5, LED_POWER);
-		delay(100);
-		turn_on_control_1_LED_for_duration(5, LED_POWER);
-		delay(100);
-		turn_on_control_2_LED_for_duration(5, LED_POWER);
+				turn_on_assay_LED_for_duration(5, LED_POWER);
+				delay(100);
+				turn_on_control_1_LED_for_duration(5, LED_POWER);
+				delay(100);
+				turn_on_control_2_LED_for_duration(5, LED_POWER);
 
-		Serial.println("Playing startup tune");
+				Serial.println("Playing startup tune");
         play_startup_tune();
 
         /*Serial.println("Scanning barcode");
