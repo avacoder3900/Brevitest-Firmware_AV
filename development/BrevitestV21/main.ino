@@ -242,8 +242,8 @@ void move_stage(int microns, int step_delay){
 
 		digitalWrite(pinMotorMS1, LOW);
 		digitalWrite(pinMotorMS2, LOW);
-		analogWrite(pinMotorPFD, 4000);
-		delay(1);
+		analogWrite(pinMotorPFD, 2048);
+		delay(10);
         for(i = 0; i < full_steps; i++) {
                 /*if (cancelling_test) {
                         break;
@@ -264,12 +264,12 @@ void move_stage(int microns, int step_delay){
 
                 if (dir == HIGH) {
                     if (stage_position >= STAGE_POSITION_LIMIT) {
-						Serial.println("Carriage distal limit reached");
+						Serial.println("Stage distal limit reached");
                         break;
                     }
                 }
 
-				Serial.printlnf("move_stage: start position = %d", stage_position);
+				/*Serial.printlnf("move_stage: start position = %d", stage_position);*/
                 digitalWrite(pinMotorStep, HIGH);
                 delayMicroseconds(step_delay);
 
@@ -277,13 +277,13 @@ void move_stage(int microns, int step_delay){
                 delayMicroseconds(step_delay);
 
                 stage_position += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
-				Serial.printlnf("move_stage: finish position = %d", stage_position);
+				/*Serial.printlnf("move_stage: finish position = %d", stage_position);*/
         }
 
 		digitalWrite(pinMotorMS1, HIGH);
 		digitalWrite(pinMotorMS2, HIGH);
-		analogWrite(pinMotorPFD, 0);
-		delay(1);
+		analogWrite(pinMotorPFD, 2048);
+		delay(10);
         for(i = 0; i < eighth_steps; i++) {
                 /*if (cancelling_test) {
                         break;
@@ -304,7 +304,7 @@ void move_stage(int microns, int step_delay){
 
                 if (dir == HIGH) {
                     if (stage_position >= STAGE_POSITION_LIMIT) {
-						Serial.println("Carriage distal limit reached");
+						Serial.println("Stage distal limit reached");
                         break;
                     }
                 }
@@ -1946,6 +1946,7 @@ void setup() {
         Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
 
         start_temperature_control();
+		periodic_event = millis() + 5000;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2079,5 +2080,11 @@ void loop() {
 		if (digitalRead(pinCartridgeLoaded) == LOW) {
 			Serial.println("Cartridge detected");
 		}
+	}
+
+	if (millis() > periodic_event) {
+		wake_move_sleep_stage(periodic_event_flag ? -20000 : 20000, 1000);
+		periodic_event_flag = !periodic_event_flag;
+		periodic_event = millis() + 5000;
 	}
 }

@@ -127,7 +127,8 @@ int pinHeater = D8;
 
 // global variables
 int stage_position = 0;
-// int cumulative_steps = CUMULATIVE_STEP_LIMIT;
+unsigned long periodic_event;
+bool periodic_event_flag = false;
 unsigned long next_upload;
 unsigned long validation_timeout;
 unsigned long start_timeout;
