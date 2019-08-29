@@ -242,21 +242,21 @@ void move_stage(int microns, int step_delay){
 
 		digitalWrite(pinMotorMS1, LOW);
 		digitalWrite(pinMotorMS2, LOW);
-		analogWrite(pinMotorPFD, 2048);
+		analogWrite(pinMotorPFD, 255);
 		delay(10);
         for(i = 0; i < full_steps; i++) {
                 /*if (cancelling_test) {
                         break;
-                }*/
+                }
 
-                /*if (Particle.connected() && (i % move_stage_BETWEEN_PARTICLE_PROCESS) == 0) {
+                if (Particle.connected() && (i % move_stage_BETWEEN_PARTICLE_PROCESS) == 0) {
                         Particle.process();
                 }*/
 
                 if ((dir == LOW) && (digitalRead(pinStageLimit) == LOW)) {
                     delay(20);  // debounce
                     if (digitalRead(pinStageLimit) == LOW) {
-						Serial.println("Stage limit switch detected");
+											Serial.println("Stage limit switch detected");
                         stage_position = 0;
                         break;
                     }
@@ -264,12 +264,12 @@ void move_stage(int microns, int step_delay){
 
                 if (dir == HIGH) {
                     if (stage_position >= STAGE_POSITION_LIMIT) {
-						Serial.println("Stage distal limit reached");
+												Serial.println("Stage distal limit reached");
                         break;
                     }
                 }
 
-				/*Serial.printlnf("move_stage: start position = %d", stage_position);*/
+								/*Serial.printlnf("move_stage: start position = %d", stage_position);*/
                 digitalWrite(pinMotorStep, HIGH);
                 delayMicroseconds(step_delay);
 
@@ -277,13 +277,13 @@ void move_stage(int microns, int step_delay){
                 delayMicroseconds(step_delay);
 
                 stage_position += dir == LOW ? -MICRONS_PER_FULL_STEP : MICRONS_PER_FULL_STEP;
-				/*Serial.printlnf("move_stage: finish position = %d", stage_position);*/
+								/*Serial.printlnf("move_stage: finish position = %d", stage_position);*/
         }
 
-		digitalWrite(pinMotorMS1, HIGH);
-		digitalWrite(pinMotorMS2, HIGH);
-		analogWrite(pinMotorPFD, 2048);
-		delay(10);
+				digitalWrite(pinMotorMS1, HIGH);
+				digitalWrite(pinMotorMS2, HIGH);
+				analogWrite(pinMotorPFD, 128);
+				delay(10);
         for(i = 0; i < eighth_steps; i++) {
                 /*if (cancelling_test) {
                         break;
@@ -296,7 +296,7 @@ void move_stage(int microns, int step_delay){
                 if ((dir == LOW) && (digitalRead(pinStageLimit) == LOW)) {
                     delay(20);  // debounce
                     if (digitalRead(pinStageLimit) == LOW) {
-						Serial.println("Stage limit switch detected");
+												Serial.println("Stage limit switch detected");
                         stage_position = 0;
                         break;
                     }
@@ -304,7 +304,7 @@ void move_stage(int microns, int step_delay){
 
                 if (dir == HIGH) {
                     if (stage_position >= STAGE_POSITION_LIMIT) {
-						Serial.println("Stage distal limit reached");
+												Serial.println("Stage distal limit reached");
                         break;
                     }
                 }
@@ -1895,9 +1895,9 @@ void setup() {
         init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
         init_digital_pin(pinBarcodeReady, INPUT_PULLDOWN, 0);
 
-        init_analog_pin(pinLEDAssay, OUTPUT, 0);
-				init_analog_pin(pinLEDControl1, OUTPUT, 0);
-				init_analog_pin(pinLEDControl2, OUTPUT, 0);
+        init_analog_pin(pinLEDAssay, OUTPUT, 255);
+				init_analog_pin(pinLEDControl1, OUTPUT, 255);
+				init_analog_pin(pinLEDControl2, OUTPUT, 255);
 
         init_analog_pin(pinThermistor, INPUT, 0);
 
@@ -1920,8 +1920,8 @@ void setup() {
 
 				i2c_bus_scan();
 
-        Serial.println("Resetting stage");
-        reset_stage();
+        /*Serial.println("Resetting stage");
+        reset_stage();*/
 
         Serial.println("Turning on LEDs");
 				turn_on_assay_LED_for_duration(5, LED_POWER);
@@ -2083,8 +2083,15 @@ void loop() {
 	}
 
 	if (millis() > periodic_event) {
-		wake_move_sleep_stage(periodic_event_flag ? -20000 : 20000, 1000);
-		periodic_event_flag = !periodic_event_flag;
+		wake_move_sleep_stage(-20000, 1200);
+		wake_move_sleep_stage(20000, 1200);
+		wake_move_sleep_stage(-5000, 1200);
+		wake_move_sleep_stage(5000, 1200);
+		wake_move_sleep_stage(-10000, 1200);
+		wake_move_sleep_stage(10000, 1200);
+		wake_move_sleep_stage(-10000, 1200);
+		wake_move_sleep_stage(10000, 1200);
+		/*periodic_event_flag = !periodic_event_flag;*/
 		periodic_event = millis() + 5000;
 	}
 }
