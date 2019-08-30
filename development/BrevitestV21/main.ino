@@ -944,7 +944,8 @@ void callback_validate(char *cartridgeId, char *assayString) {
     Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
     if (cartridge_validated) {    // cartridge found
         if (load_assay_record(cartridgeId, assayString)) {
-            starting_test = true;
+            /*starting_test = true;*/
+						Serial.printlnf("Cartridge validated. Assay string: %s", assayString);
         }
         else {
             Serial.println("Failed to load assay record");
