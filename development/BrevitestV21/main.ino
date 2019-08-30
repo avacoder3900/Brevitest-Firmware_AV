@@ -296,15 +296,19 @@ void wake_motor() {
     delay(10);
 }
 
-void reset_stage() {
+void reset_stage(bool sleep) {
     stage_position = STAGE_POSITION_LIMIT;
     wake_motor();
-	move_stage(-60000, FAST_STEP_DELAY);
-	move_stage(3000, FAST_STEP_DELAY);
-	move_stage(-4000, SLOW_STEP_DELAY);
-	stage_position = 0;
+		move_stage(-60000, FAST_STEP_DELAY);
+		delay(100);
+		move_stage(1000, FAST_STEP_DELAY);
+		delay(100);
+		move_stage(-2000, SLOW_STEP_DELAY);
+		stage_position = 0;
     move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
-    wake_motor();
+		if (sleep) {
+			sleep_motor();
+		}
 }
 
 void move_stage_to_optical_read_position() {
@@ -967,7 +971,7 @@ void callback_test_finish() {
     if (success) {
         Serial.println("Test finished");
         waiting_for_finish_confirmation = false;
-        reset_stage();
+        reset_stage(true);
         reset_globals();
         next_upload = 0;
     }
@@ -981,7 +985,7 @@ void callback_test_cancel() {
     if (success) {
         Serial.println("Test cancelled");
         waiting_for_cancel_confirmation = false;
-        reset_stage();
+        reset_stage(true);
         reset_globals();
         next_upload = 0;
     }
@@ -1508,7 +1512,7 @@ int particle_command(String arg) {
         case 1: // unused
             return 0;
         case 2: // reset stage
-            reset_stage();
+            reset_stage(true);
             return stage_position;
         case 3: // move steps
             wake_move_sleep_stage(param1, param2);
@@ -1744,13 +1748,14 @@ void run_test() {
         delay(PARTICLE_CLOUD_DELAY);
     }
 
-	control_heater_temperature_timer.stop();
-
+		control_heater_temperature_timer.stop();
+		
+		reset_stage(false);
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
     }
 
-	control_heater_temperature_timer.start();
+		control_heater_temperature_timer.start();
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -1880,10 +1885,10 @@ void setup() {
             reset_eeprom();
         }
 
-		i2c_bus_scan();
+				i2c_bus_scan();
 
         Serial.println("Resetting stage");
-        reset_stage();
+        reset_stage(true);
 
         Serial.println("Turning on LEDs");
 				turn_on_assay_LED_for_duration(5, LED_POWER);
@@ -1948,8 +1953,8 @@ void test_loop() {
         }
         else {
 			test_startup_successful = false;
-            run_test();
-        }
+        run_test();
+      }
     }
 	else if (starting_test) {
         starting_test = false;
