@@ -70,12 +70,13 @@
 #define MICRONS_PER_FULL_STEP 200
 #define MICRONS_PER_EIGHTH_STEP 25
 #define STAGE_POSITION_LIMIT 53000
-#define FAST_STEP_DELAY 600
+#define FAST_STEP_DELAY 100
+#define SLOW_STEP_DELAY 1000
 #define OPTICAL_SENSOR_READ_POSITION 8000
-#define MICRONS_TO_STARTING_POSITION 6000
+#define MICRONS_TO_STARTING_POSITION 10000
 
 // heater
-#define HEATER_MAX_POWER 128
+#define HEATER_MAX_POWER 255
 #define HEATER_PWM_FREQUENCY 20000
 #define HEATER_MAX_TEMPERATURE 700
 #define HEATER_CONTROL_INTERVAL 200
@@ -197,10 +198,10 @@ struct HeatingElement {
         previous_error = 0;
         integral = 0;
         target_C_10X = 400;
-        k_p_num = 7;
+        k_p_num = 100;
         k_p_den = 1;
         k_i_num = 1;
-        k_i_den = 100000;
+        k_i_den = 10;
         k_d_num = 1;
         k_d_den = 1;
     }
