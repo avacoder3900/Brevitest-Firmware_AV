@@ -327,28 +327,28 @@ int scan_barcode() {
         unsigned long timeout;
         int i = 0;
         bool read_success = false;
-		int buf;
+				int buf;
 
         barcode_being_scanned = true;
 
-        /*Serial.println("Start scan_barcode");
+        Serial.println("Start scan_barcode");
         Serial1.begin(9600); // barcode scanner interface through RX/TX pins
 
         Serial.println("Trigger barcode reader");
-        digitalWrite(pinBarcode_Trigger, LOW);
+        digitalWrite(pinBarcodeTrigger, LOW);
 
         timeout = millis() + BARCODE_READ_TIMEOUT;
 
         Serial.println("Wait for success");
         do {
-            read_success = digitalRead(pinBarcode_Success) == HIGH;
-			Serial.print('.');
+            read_success = digitalRead(pinBarcodeReady) == HIGH;
+						Serial.print('.');
             Particle.process();
             delay(200);
         } while (!read_success && millis() < timeout);
 
         Serial.printlnf("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
-        digitalWrite(pinBarcode_Trigger, HIGH);
+        digitalWrite(pinBarcodeTrigger, HIGH);
 
         Serial.println("Wait for barcode data");
         while (!Serial1.available() && millis() < timeout) {
@@ -375,7 +375,7 @@ int scan_barcode() {
         Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
 
         Serial1.end();
-        Serial.println("Finish reading barcode");*/
+        Serial.println("Finish reading barcode");
 
         barcode_being_scanned = false;
 
@@ -1649,6 +1649,7 @@ void check_device_state() {
 			if (cartridge_loaded) {
 				ledCartridgeLoaded.setActive(true);
 				turn_on_buzzer_for_duration(600, 350);
+				ready_to_scan_barcode = true;
 			}
 			else {
 				ledCartridgeLoaded.setActive(false);
@@ -1749,7 +1750,7 @@ void run_test() {
     }
 
 		control_heater_temperature_timer.stop();
-		
+
 		reset_stage(false);
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
@@ -1860,23 +1861,23 @@ void setup() {
         init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
 
         init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
-        init_digital_pin(pinBarcodeReady, INPUT_PULLDOWN, 0);
+        init_digital_pin(pinBarcodeReady, INPUT, 0);
 
         init_analog_pin(pinLEDAssay, OUTPUT, 255);
-		init_analog_pin(pinLEDControl1, OUTPUT, 255);
-		init_analog_pin(pinLEDControl2, OUTPUT, 255);
+				init_analog_pin(pinLEDControl1, OUTPUT, 255);
+				init_analog_pin(pinLEDControl2, OUTPUT, 255);
 
         init_analog_pin(pinThermistor, INPUT, 0);
 
-		init_digital_pin(pinMotorSleep, OUTPUT, LOW);
-		init_digital_pin(pinMotorStep, OUTPUT, LOW);
-		init_digital_pin(pinMotorDir, OUTPUT, LOW);
-		init_digital_pin(pinMotorMS1, OUTPUT, LOW);
-		init_digital_pin(pinMotorMS2, OUTPUT, LOW);
-		init_analog_pin(pinMotorPFD, OUTPUT, 0);
+				init_digital_pin(pinMotorSleep, OUTPUT, LOW);
+				init_digital_pin(pinMotorStep, OUTPUT, LOW);
+				init_digital_pin(pinMotorDir, OUTPUT, LOW);
+				init_digital_pin(pinMotorMS1, OUTPUT, LOW);
+				init_digital_pin(pinMotorMS2, OUTPUT, LOW);
+				init_analog_pin(pinMotorPFD, OUTPUT, 0);
 
-		init_analog_pin(pinBuzzer, OUTPUT, 0);
-		init_analog_pin(pinHeater, OUTPUT, 0);
+				init_analog_pin(pinBuzzer, OUTPUT, 0);
+				init_analog_pin(pinHeater, OUTPUT, 0);
 
         Serial.begin(115200); // standard serial port
 
@@ -2042,12 +2043,12 @@ void loop() {
 		pulse_heater(pid_controller());
 	}
 
-	if (digitalRead(pinCartridgeLoaded) == LOW) {
+	/*if (digitalRead(pinCartridgeLoaded) == LOW) {
 		delay(20);  // debounce
 		if (digitalRead(pinCartridgeLoaded) == LOW) {
 			Serial.println("Cartridge detected");
 		}
-	}
+	}*/
 
 	/*if (millis() > periodic_event) {
 		wake_move_sleep_stage(-20000, 1200);
