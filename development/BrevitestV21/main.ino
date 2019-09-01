@@ -238,7 +238,7 @@ void move_stage(int microns, int step_delay){
         microns_error = abs_microns % MICRONS_PER_FULL_STEP;
         eighth_steps = microns_error / MICRONS_PER_EIGHTH_STEP;
         microns_error %= MICRONS_PER_EIGHTH_STEP;
-		Serial.printlnf("move_stage: microns = %d, dir = %c, full_steps = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', full_steps, eighth_steps, microns_error);
+		/*Serial.printlnf("move_stage: microns = %d, dir = %c, full_steps = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', full_steps, eighth_steps, microns_error);*/
 
 		digitalWrite(pinMotorMS1, HIGH);
 		digitalWrite(pinMotorMS2, HIGH);
@@ -305,7 +305,7 @@ void reset_stage(bool sleep) {
 		delay(100);
 		move_stage(-2000, SLOW_STEP_DELAY);
 		stage_position = 0;
-    move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
+    	move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
 		if (sleep) {
 			sleep_motor();
 		}
@@ -316,6 +316,18 @@ void move_stage_to_optical_read_position() {
 	update_progress("Moving magnets to prepare for reading", (abs(move_distance) * FAST_STEP_DELAY) / 1000);
 	move_stage(move_distance, FAST_STEP_DELAY);	// move stage to optical read position
 }
+
+void oscillate_stage(int microns, int step_delay, int cycles) {
+	int i;
+
+	wake_motor();
+	for (i = 0; i < cycles; i++) {
+		move_stage(microns, step_delay);
+		move_stage(-microns, step_delay);
+	}
+	sleep_motor();
+}
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1628,6 +1640,11 @@ int particle_command(String arg) {
 			read_optical_sensor_baselines_command_param = param1;
 			read_optical_sensor_baselines_command_flag = true;
 			return 1;
+		case 32: // not used - formerly adjust solenoid power
+			return 0;
+		case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
+			oscillate_stage(param1, param2, param3);
+			return 1;
 	}
 
     return 0;
@@ -1865,20 +1882,20 @@ void setup() {
         init_digital_pin(pinBarcodeReady, INPUT, 0);
 
         init_analog_pin(pinLEDAssay, OUTPUT, 255);
-				init_analog_pin(pinLEDControl1, OUTPUT, 255);
-				init_analog_pin(pinLEDControl2, OUTPUT, 255);
+		init_analog_pin(pinLEDControl1, OUTPUT, 255);
+		init_analog_pin(pinLEDControl2, OUTPUT, 255);
 
         init_analog_pin(pinThermistor, INPUT, 0);
 
-				init_digital_pin(pinMotorSleep, OUTPUT, LOW);
-				init_digital_pin(pinMotorStep, OUTPUT, LOW);
-				init_digital_pin(pinMotorDir, OUTPUT, LOW);
-				init_digital_pin(pinMotorMS1, OUTPUT, LOW);
-				init_digital_pin(pinMotorMS2, OUTPUT, LOW);
-				init_analog_pin(pinMotorPFD, OUTPUT, 0);
+		init_digital_pin(pinMotorSleep, OUTPUT, LOW);
+		init_digital_pin(pinMotorStep, OUTPUT, LOW);
+		init_digital_pin(pinMotorDir, OUTPUT, LOW);
+		init_digital_pin(pinMotorMS1, OUTPUT, LOW);
+		init_digital_pin(pinMotorMS2, OUTPUT, LOW);
+		init_analog_pin(pinMotorPFD, OUTPUT, 0);
 
-				init_analog_pin(pinBuzzer, OUTPUT, 0);
-				init_analog_pin(pinHeater, OUTPUT, 0);
+		init_analog_pin(pinBuzzer, OUTPUT, 0);
+		init_analog_pin(pinHeater, OUTPUT, 0);
 
         Serial.begin(115200); // standard serial port
 
@@ -1887,19 +1904,19 @@ void setup() {
             reset_eeprom();
         }
 
-				i2c_bus_scan();
+		i2c_bus_scan();
 
         Serial.println("Resetting stage");
         reset_stage(true);
 
         Serial.println("Turning on LEDs");
-				turn_on_assay_LED_for_duration(5, LED_POWER);
-				delay(100);
-				turn_on_control_1_LED_for_duration(5, LED_POWER);
-				delay(100);
-				turn_on_control_2_LED_for_duration(5, LED_POWER);
+		turn_on_assay_LED_for_duration(5, LED_POWER);
+		delay(100);
+		turn_on_control_1_LED_for_duration(5, LED_POWER);
+		delay(100);
+		turn_on_control_2_LED_for_duration(5, LED_POWER);
 
-				Serial.println("Playing startup tune");
+		Serial.println("Playing startup tune");
         play_startup_tune();
 
         /*Serial.println("Scanning barcode");
@@ -1926,11 +1943,14 @@ void setup() {
 
 void test_loop() {
 	if (test_in_progress) {
+		Serial.println("Test in progress");
         if (cancelling_test) {
+			Serial.println("Cancelling test");
             cancelling_test = false;
             cancel_test();
         }
         else if (finishing_test) {
+			Serial.println("Finishing test");
             finishing_test = false;
             finish_test();
         }
@@ -1948,21 +1968,25 @@ void test_loop() {
         start_test();
     }
     else if (test_startup_successful) {
+		Serial.println("Test startup successful");
         if (!cartridge_loaded) {
 			Serial.println("Cartridge not loaded. Waiting...");
 			turn_on_buzzer_for_duration(500, 700);
 			delay(2000);
         }
         else {
+			Serial.println("Cartridge loaded, running test");
 			test_startup_successful = false;
-        run_test();
-      }
+        	run_test();
+      	}
     }
 	else if (starting_test) {
+		Serial.println("Starting test");
         starting_test = false;
         start_test();
     }
 	else if (waiting_for_upload_confirmation) {
+		Serial.println("Waiting for upload confirmation");
         if (millis() > upload_timeout) {
             upload_tests();
         }

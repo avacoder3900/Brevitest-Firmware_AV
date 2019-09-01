@@ -73,7 +73,7 @@
 #define FAST_STEP_DELAY 100
 #define SLOW_STEP_DELAY 1000
 #define OPTICAL_SENSOR_READ_POSITION 8000
-#define MICRONS_TO_STARTING_POSITION 10000
+#define MICRONS_TO_STARTING_POSITION 2000
 
 // heater
 #define HEATER_MAX_POWER 255
@@ -201,7 +201,7 @@ struct HeatingElement {
         k_p_num = 100;
         k_p_den = 1;
         k_i_num = 1;
-        k_i_den = 10;
+        k_i_den = 1000;
         k_d_num = 1;
         k_d_den = 1;
     }
