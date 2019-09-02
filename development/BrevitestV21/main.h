@@ -73,7 +73,7 @@
 #define FAST_STEP_DELAY 100
 #define SLOW_STEP_DELAY 1000
 #define OPTICAL_SENSOR_READ_POSITION 8000
-#define MICRONS_TO_STARTING_POSITION 2000
+#define MICRONS_TO_STARTING_POSITION 1000
 
 // heater
 #define HEATER_MAX_POWER 255
@@ -128,6 +128,7 @@ int pinHeater = D8;
 
 // global variables
 int stage_position = 0;
+int microns_error = 0;
 unsigned long periodic_event;
 bool periodic_event_flag = false;
 unsigned long next_upload;

@@ -222,63 +222,74 @@ void dump_eeprom() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void move_stage(int microns, int step_delay){
+bool move_one_eighth_step(int dir, int step_delay) {
+	/*if (cancelling_test) {
+			break;
+	}*/
+
+	/*if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
+			Particle.process();
+	}*/
+
+	if (dir == HIGH) {
+		if (digitalRead(pinStageLimit) == LOW) {
+			Serial.println("Stage limit switch detected");
+			stage_position = 0;
+			microns_error = 0;
+			return false;
+		}
+		if (stage_position <= 0) {
+			Serial.println("Stage position at zero");
+			stage_position = 0;
+			microns_error = 0;
+			return false;
+		}
+	}
+	else if (stage_position >= STAGE_POSITION_LIMIT) {
+		Serial.println("Stage distal limit reached");
+		return false;
+	}
+
+	digitalWrite(pinMotorStep, HIGH);
+	delayMicroseconds(step_delay);
+
+	digitalWrite(pinMotorStep, LOW);
+	delayMicroseconds(step_delay);
+
+	return true;
+}
+
+void move_stage(int microns, int step_delay) {
         // move a specific number of microns - negative for reverse movement
 		// steps: positive => move proximally, negative => move distally
 		// controller: dir = LOW => move proximally, dir = HIGH => move distally
 
-		int full_steps, eighth_steps, microns_error, abs_microns, dir, i;
+		int eighth_steps, abs_microns, dir, i;
 
         dir = (microns < 0) ? HIGH : LOW;
 		digitalWrite(pinMotorDir, dir);
 		/*Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
 
-        abs_microns = abs(microns);
-        full_steps = abs_microns / MICRONS_PER_FULL_STEP;
-        microns_error = abs_microns % MICRONS_PER_FULL_STEP;
-        eighth_steps = microns_error / MICRONS_PER_EIGHTH_STEP;
-        microns_error %= MICRONS_PER_EIGHTH_STEP;
-		/*Serial.printlnf("move_stage: microns = %d, dir = %c, full_steps = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', full_steps, eighth_steps, microns_error);*/
+        abs_microns = abs(microns) + microns_error;
+        eighth_steps = abs_microns / MICRONS_PER_EIGHTH_STEP;
+        microns_error = abs_microns % MICRONS_PER_EIGHTH_STEP;
+		/*Serial.printlnf("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
 
-		digitalWrite(pinMotorMS1, HIGH);
-		digitalWrite(pinMotorMS2, HIGH);
-		analogWrite(pinMotorPFD, 128);
 		delay(10);
-        for(i = 0; i < 8 * full_steps + eighth_steps; i++) {
-                /*if (cancelling_test) {
-                        break;
-                }*/
-
-                /*if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
-                        Particle.process();
-                }*/
-
-                if ((dir == HIGH) && (digitalRead(pinStageLimit) == LOW)) {
-                    delay(20);  // debounce
-                    if (digitalRead(pinStageLimit) == LOW) {
-						Serial.println("Stage limit switch detected");
-                        stage_position = 0;
-                        break;
-                    }
-                }
-
-                if (dir == LOW) {
-                    if (stage_position >= STAGE_POSITION_LIMIT) {
-						Serial.println("Stage distal limit reached");
-                        break;
-                    }
-                }
-
-                digitalWrite(pinMotorStep, HIGH);
-                delayMicroseconds(step_delay);
-
-                digitalWrite(pinMotorStep, LOW);
-                delayMicroseconds(step_delay);
-
-                stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
+        for(i = 0; i < eighth_steps; i++) {
+			if (move_one_eighth_step(dir, step_delay)) {
+				stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
+				if (stage_position <= 0) {
+					stage_position = 0;
+					microns_error = 0;
+					i = eighth_steps;
+				}
+			}
+			else {
+				i = eighth_steps;
+			}
         }
 		/*Serial.printlnf("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);*/
-        //sleep_stepper();
 }
 
 void wake_move_sleep_stage(int microns, int step_delay) {
@@ -299,33 +310,43 @@ void wake_motor() {
 void reset_stage(bool sleep) {
     stage_position = STAGE_POSITION_LIMIT;
     wake_motor();
-		move_stage(-60000, FAST_STEP_DELAY);
-		delay(100);
-		move_stage(1000, FAST_STEP_DELAY);
-		delay(100);
-		move_stage(-2000, SLOW_STEP_DELAY);
-		stage_position = 0;
-    	move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
-		if (sleep) {
-			sleep_motor();
-		}
+	move_stage(-60000, FAST_STEP_DELAY);
+	delay(100);
+	move_stage(2000, FAST_STEP_DELAY);
+	delay(100);
+	move_stage(-3000, SLOW_STEP_DELAY);
+	move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
+	if (sleep) {
+		sleep_motor();
+	}
 }
 
 void move_stage_to_optical_read_position() {
-	int move_distance = stage_position - OPTICAL_SENSOR_READ_POSITION;
-	update_progress("Moving magnets to prepare for reading", (abs(move_distance) * FAST_STEP_DELAY) / 1000);
-	move_stage(move_distance, FAST_STEP_DELAY);	// move stage to optical read position
+	move_stage_to_position(OPTICAL_SENSOR_READ_POSITION, FAST_STEP_DELAY);
 }
 
-void oscillate_stage(int microns, int step_delay, int cycles) {
+void move_stage_to_start_position() {
+	move_stage_to_position(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
+}
+
+void move_stage_to_position(int position, int step_delay) {
+	int move_distance = position - stage_position;
+	update_progress("Moving magnets to position", (abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP) / 1000);
+	Serial.printlnf("Moving stage to position %d, distance = %d", position, move_distance);
+	move_stage(move_distance, step_delay);	// move stage to optical read position
+}
+
+void oscillate_stage(int amplitude, int step_delay, int cycles) {
 	int i;
 
-	wake_motor();
 	for (i = 0; i < cycles; i++) {
-		move_stage(microns, step_delay);
-		move_stage(-microns, step_delay);
+		move_stage(amplitude, step_delay);
+		move_stage(-amplitude, step_delay);
 	}
-	sleep_motor();
+}
+
+void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int cycles) {
+
 }
 
 
@@ -1359,11 +1380,11 @@ int process_one_BCODE_command(int cmd, int index) {
                 update_progress("Pausing", param1);
                 BCODE_delay(param1);
                 break;
-        case 2: // Move(microns to move, step delay)
-                index = get_BCODE_token(index, &param1);    // microns
+        case 2: // Move(full steps to move, step delay)
+                index = get_BCODE_token(index, &param1);    // full steps
                 index = get_BCODE_token(index, &param2);    // step_delay_us
                 update_progress("Moving magnets", (abs(param1) * param2 / MICRONS_PER_FULL_STEP) / 1000);
-                move_stage(param1, param2);
+                move_stage(param1 * MICRONS_PER_FULL_STEP, param2);
                 break;
         case 3: // solenoid - ignore
                 break;
@@ -1373,9 +1394,17 @@ int process_one_BCODE_command(int cmd, int index) {
 				update_progress("Buzzing", param1);
 				turn_on_buzzer_for_duration(param1, param2);
                 break;
-        case 5: // unused
+        case 5: // move microns
+				index = get_BCODE_token(index, &param1);    // microns
+                index = get_BCODE_token(index, &param2);    // step_delay_us
+                update_progress("Moving magnets", (abs(param1) * param2 / MICRONS_PER_EIGHTH_STEP) / 1000);
+                move_stage(param1, param2);
                 break;
-        case 6: // unused
+        case 6: // oscillate stage
+				index = get_BCODE_token(index, &param1);    // distance
+				index = get_BCODE_token(index, &param2);    // step_delay_us
+				index = get_BCODE_token(index, &param3);    // number of cycles
+				oscillate_stage(param1, param2, param3);
                 break;
         case 7: // take initial sensor reading using default param
 				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
@@ -1418,9 +1447,7 @@ int process_one_BCODE_command(int cmd, int index) {
         case 13: // Repeat end
                 return -index;
                 break;
-		case 14: // unused
-				break;
-		case 15: // set heater target temperature
+		case 14: // set heater target temperature
 				index = get_BCODE_token(index, &param1);
 				update_progress("Setting heater target temperature", 0);
 				if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
@@ -1428,7 +1455,15 @@ int process_one_BCODE_command(int cmd, int index) {
 					heater.read_time = 0;
 				}
 				break;
-        case 17: // Not used
+		case 15: // Move to starting location
+				move_stage_to_start_position();
+				break;
+		case 16: // Move to location (location, step_delay)
+				index = get_BCODE_token(index, &param1);    // step_delay_us
+				index = get_BCODE_token(index, &param2);    // gather_time_ms
+				move_stage_to_position(param1, param2);
+				break;
+        case 17: // raster well - ignore
                 break;
         case 18: // Segemented move
                 index = get_BCODE_token(index, &param1);    // step_delay_us
@@ -1441,9 +1476,10 @@ int process_one_BCODE_command(int cmd, int index) {
                         }
                         // read segment data
                         index = get_BCODE_token(index, &param4);    // number of iterations
-                        index = get_BCODE_token(index, &param5);    // microns per iteration
+                        index = get_BCODE_token(index, &param5);    // steps per iteration
                         index = get_BCODE_token(index, &param6);    // delay between steps, in milliseconds
-                        for (j = 0; j < param4; j++) {
+						param5 *= MICRONS_PER_FULL_STEP;
+						for (j = 0; j < param4; j++) {
 							update_progress("Moving magnets", param6 + (abs(param5) * param1) / 1000);
                             move_stage(param5, param1);
                             BCODE_delay(param6);
@@ -1452,8 +1488,13 @@ int process_one_BCODE_command(int cmd, int index) {
 				update_progress("Pausing to gather microspheres", param2);
                 BCODE_delay(param2);   // gather beads
                 break;
-        case 19: // no action
-                break;
+        case 19: // oscillating move
+				index = get_BCODE_token(index, &param1);    // microns to move
+				index = get_BCODE_token(index, &param2);    // step delay
+				index = get_BCODE_token(index, &param3);    // microns to oscillate
+				index = get_BCODE_token(index, &param4);    // number of cycles per eighth step
+				move_and_oscillate_stage(param1, param2, param3, param4);
+				break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
                 write_test_record_to_eeprom();
@@ -1527,9 +1568,9 @@ int particle_command(String arg) {
         case 2: // reset stage
             reset_stage(true);
             return stage_position;
-        case 3: // move steps
+        case 3: // move microns
             wake_move_sleep_stage(param1, param2);
-			Serial.printlnf("Move stepper %d steps, cumulative %d", param1, stage_position);
+			Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
             return stage_position;
         case 4: // read optical sensors (param)
             read_optical_sensors_command_param = param1;
@@ -1585,16 +1626,22 @@ int particle_command(String arg) {
         case 13: // turn on buzzer param1 frequency param2 duration
             turn_on_buzzer_for_duration(param1, param2);
             return 1;
-        case 14: // not used
-            return 0;
+        case 14: // move to specified location param1 at step delay param2
+			wake_motor();
+			move_stage_to_position(param1, param2);
+			sleep_motor();
+            return 1;
 		case 15: // set heater target temperature
+			wake_motor();
+			move_stage_to_start_position();
+			sleep_motor();
+            return 1;
+		case 16: // not used
 			if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
 				heater.target_C_10X = param1;
 				heater.read_time = 0;
 			}
-            return param1;
-		case 16: // not used
-            return 0;
+			return param1;
         case 17: // not used
 			return 0;
 		case 18: // turn on heater at power param1
@@ -1643,7 +1690,9 @@ int particle_command(String arg) {
 		case 32: // not used - formerly adjust solenoid power
 			return 0;
 		case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
+			wake_motor();
 			oscillate_stage(param1, param2, param3);
+			sleep_motor();
 			return 1;
 	}
 
@@ -1767,14 +1816,14 @@ void run_test() {
         delay(PARTICLE_CLOUD_DELAY);
     }
 
-		control_heater_temperature_timer.stop();
+	control_heater_temperature_timer.stop();
 
-		reset_stage(false);
+	reset_stage(false);
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
     }
 
-		control_heater_temperature_timer.start();
+	control_heater_temperature_timer.start();
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -1890,9 +1939,9 @@ void setup() {
 		init_digital_pin(pinMotorSleep, OUTPUT, LOW);
 		init_digital_pin(pinMotorStep, OUTPUT, LOW);
 		init_digital_pin(pinMotorDir, OUTPUT, LOW);
-		init_digital_pin(pinMotorMS1, OUTPUT, LOW);
-		init_digital_pin(pinMotorMS2, OUTPUT, LOW);
-		init_analog_pin(pinMotorPFD, OUTPUT, 0);
+		init_digital_pin(pinMotorMS1, OUTPUT, HIGH);
+		init_digital_pin(pinMotorMS2, OUTPUT, HIGH);
+		init_analog_pin(pinMotorPFD, OUTPUT, 128);
 
 		init_analog_pin(pinBuzzer, OUTPUT, 0);
 		init_analog_pin(pinHeater, OUTPUT, 0);
@@ -2073,18 +2122,5 @@ void loop() {
 		if (digitalRead(pinCartridgeLoaded) == LOW) {
 			Serial.println("Cartridge detected");
 		}
-	}*/
-
-	/*if (millis() > periodic_event) {
-		wake_move_sleep_stage(-20000, 1200);
-		wake_move_sleep_stage(20000, 1200);
-		wake_move_sleep_stage(-5000, 1200);
-		wake_move_sleep_stage(5000, 1200);
-		wake_move_sleep_stage(-10000, 1200);
-		wake_move_sleep_stage(10000, 1200);
-		wake_move_sleep_stage(-10000, 1200);
-		wake_move_sleep_stage(10000, 1200);
-		periodic_event_flag = !periodic_event_flag;
-		periodic_event = millis() + 5000;
 	}*/
 }
