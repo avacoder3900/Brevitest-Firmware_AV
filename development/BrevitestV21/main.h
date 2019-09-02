@@ -33,8 +33,13 @@
 #define OPTICAL_BASELINE_MAX_READINGS 50
 
 // LEDs
-#define LED_POWER 500
+#define LED_POWER 128
 #define LED_WARMUP_DELAY_MS 1000
+#define LED_DURATION 500
+
+// buzzer
+#define BUZZER_FREQUENCY 600
+#define BUZZER_DURATION 1000
 
 // assay
 #define ASSAY_BCODE_CAPACITY 2000
@@ -78,10 +83,12 @@
 
 // heater
 #define HEATER_MAX_POWER 255
+#define HEATER_DEFAULT_POWER 128
 #define HEATER_PWM_FREQUENCY 20000
-#define HEATER_MAX_TEMPERATURE 700
-#define HEATER_CONTROL_INTERVAL 200
-#define HEATER_PULSE_DURATION 100
+#define HEATER_MAX_TEMPERATURE 600
+#define HEATER_CONTROL_INTERVAL 1000
+#define HEATER_PULSE_DURATION 500
+#define HEATER_DEFAULT_TEMP_TARGET 400
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -199,7 +206,7 @@ struct HeatingElement {
         heater_on = false;
         previous_error = 0;
         integral = 0;
-        target_C_10X = 400;
+        target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
         k_p_num = 100;
         k_p_den = 1;
         k_i_num = 1;

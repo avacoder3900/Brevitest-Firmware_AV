@@ -344,7 +344,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles) {
 	}
 }
 
-void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int cycles) {
+void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int osc_step_delay, int cycles) {
 	int eighth_steps, abs_microns, dir, i;
 
 	dir = (microns < 0) ? HIGH : LOW;
@@ -357,7 +357,7 @@ void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int cy
 
 	delay(10);
 	for(i = 0; i < eighth_steps; i++) {
-		oscillate_stage(amplitude, OSCILLATION_STEP_DELAY, cycles);
+		oscillate_stage(amplitude, osc_step_delay, cycles);
 		digitalWrite(pinMotorDir, dir);
 		if (move_one_eighth_step(dir, step_delay)) {
 			stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
@@ -1516,8 +1516,9 @@ int process_one_BCODE_command(int cmd, int index) {
 				index = get_BCODE_token(index, &param1);    // microns to move
 				index = get_BCODE_token(index, &param2);    // step delay
 				index = get_BCODE_token(index, &param3);    // microns to oscillate
-				index = get_BCODE_token(index, &param4);    // number of cycles per eighth step
-				move_and_oscillate_stage(param1, param2, param3, param4);
+				index = get_BCODE_token(index, &param4);    // oscillation step delay
+				index = get_BCODE_token(index, &param5);    // number of cycles per eighth step
+				move_and_oscillate_stage(param1, param2, param3, param4, param5);
 				break;
         case 99: // Finish test
                 test_record.finish_time = Time.now();
@@ -1555,177 +1556,213 @@ int process_BCODE(int start_index) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+int get_next_command_param(String arg, int indx, int *param, int def) {
+	int next;
+
+	if (indx == -1) {
+		*param = def;
+		next = -1;
+	}
+	else {
+		next = arg.indexOf(COMMA_DELIM, indx);
+		if (next == -1) {
+			*param = arg.substring(indx).toInt();
+		}
+		else {
+			*param = arg.substring(indx, next).toInt();
+			next++;
+		}
+	}
+
+	return next;
+}
+
 int particle_command(String arg) {
-    int cmd, indx1, indx2, indx3, param1 = 0, param2 = 0, param3 = 0, steps_to_alignment;
+    int cmd, result;
+	int indx = 0;
+	int param1 = 0;
+	int param2 = 0;
+	int param3 = 0;
+	int param4 = 0;
+	int param5 = 0;
 
-    indx1 = arg.indexOf(COMMA_DELIM);
-    if (indx1 == -1) {
-        cmd = arg.toInt();
-    }
-    else {
-        cmd = arg.substring(0, indx1).toInt();
-        indx1++;
-        indx2 = arg.indexOf(COMMA_DELIM, indx1);
-        if (indx2 == -1) {
-            param1 = arg.substring(indx1).toInt();
-        }
-        else {
-            param1 = arg.substring(indx1, indx2).toInt();
-            indx2++;
-            indx3 = arg.indexOf(COMMA_DELIM, indx2);
-            if (indx3 == -1) {
-                param2 = arg.substring(indx2).toInt();
-            }
-            else {
-                param2 = arg.substring(indx2, indx3).toInt();
-                indx3++;
-                param3 = arg.substring(indx3).toInt();
-            }
-        }
-    }
-
-    Serial.printlnf("Command: %d, param1: %d, param2: %d, param3: %d", cmd, param1, param2, param3);
-
+	indx = get_next_command_param(arg, indx, &cmd, 0);
     switch (cmd) {
         case 1: // unused
-            return 0;
+            result = 0;
+			break;
         case 2: // reset stage
             reset_stage(true);
-            return stage_position;
+            result = stage_position;
+			break;
         case 3: // move microns
+			indx = get_next_command_param(arg, indx, &param1, 0);
+			indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
             wake_move_sleep_stage(param1, param2);
 			Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
-            return stage_position;
+            result = stage_position;
+			break;
         case 4: // read optical sensors (param)
+			indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_flag = true;
-            return param1;
+            result = param1;
+			break;
         case 5: // not used
-            return 0;
+            result = 0;
+			break;
         case 6: // not used
-            return 0;
+            result = 0;
+			break;
         case 7: // read heater temperature
-			param1 = get_heater_temperature();
-			Serial.printlnf("Heater: raw = %d, T = %d.%d˚C", param1, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
-			return param1;
+			indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
+			Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+			result = param1;
+			break;
         case 8: // reset params
             reset_eeprom();
-            return (int) eeprom.data_format_version;
+            result = (int) eeprom.data_format_version;
+			break;
         case 9: // turn on assay LED for param1 milliseconds at power param2
-			if (param1 > 10000 || param1 < 0) {
-				param1 = 2000;
-			}
-			if (param2 > 4096 || param2 < 0) {
-				param2 = LED_POWER;
-			}
+			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
 			turn_on_assay_LED_for_duration(param1, param2);
-		return param1;
+			result = param1;
+			break;
         case 10: // turn on control 1 LED for param1 milliseconds at power param2
-            if (param1 > 10000 || param1 < 0) {
-                param1 = 2000;
-            }
-			if (param2 > 4096 || param2 < 0) {
-                param2 = LED_POWER;
-            }
+			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
             turn_on_control_1_LED_for_duration(param1, param2);
-            return param1;
+            result = param2;
+			break;
         case 11: // turn on control 2 LED for param1 milliseconds at power param2
-            if (param1 > 10000 || param1 < 0) {
-                param1 = 2000;
-            }
-			if (param2 > 4096 || param2 < 0) {
-                param2 = LED_POWER;
-            }
+			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
             turn_on_control_2_LED_for_duration(param1, param2);
-            return param1;
+            result = param2;
+			break;
         case 12: // turn on all LEDs for param1 milliseconds at power param2
-            if (param1 > 10000 || param1 < 0) {
-                param1 = 2000;
-            }
-			if (param2 > 4096 || param2 < 0) {
-                param2 = LED_POWER;
-            }
+			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
             turn_on_all_LEDs_for_duration(param1, param2);
-            return param1;
+            result = param2;
+			break;
         case 13: // turn on buzzer param1 frequency param2 duration
+			indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
+			indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
             turn_on_buzzer_for_duration(param1, param2);
-            return 1;
+            result = param1;
+			break;
         case 14: // move to specified location param1 at step delay param2
+			indx = get_next_command_param(arg, indx, &param1, 0);
+			indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
 			wake_motor();
 			move_stage_to_position(param1, param2);
 			sleep_motor();
-            return 1;
+            result = stage_position;
+			break;
 		case 15: // set heater target temperature
 			wake_motor();
 			move_stage_to_start_position();
 			sleep_motor();
-            return 1;
+            result = stage_position;
+			break;
 		case 16: // not used
+			indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
 			if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
 				heater.target_C_10X = param1;
 				heater.read_time = 0;
 			}
-			return param1;
+			result = param1;
+			break;
         case 17: // not used
-			return 0;
+			result = 0;
+			break;
 		case 18: // turn on heater at power param1
+			indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
 			turn_on_heater(param1);
-            return param1;
+            result = param1;
+			break;
         case 19: // turn off heater
 			turn_off_heater();
-			return 1;
+			result = 1;
+			break;
 		case 20: // start temperature control
 			start_temperature_control();
-			return 1;
+			result = 1;
+			break;
 		case 21: // stop temperature control
 			stop_temperature_control();
-			return 1;
+			result = 1;
+			break;
 		case 22: // turn on serial messaging
 			serial_messaging_on = true;
-			return 1;
+			result = 1;
+			break;
 		case 23: // turn off serial messaging
 			serial_messaging_on = false;
-			return 0;
+			result = 0;
+			break;
 		case 24: // start reading sensors - ignore
-			return 0;
 		case 25: // stop reading sensors - ignore
-			return 0;
 		case 26: // scan controller_i2c_bus_scan - ignore
-			return 1;
+			result = 0;
+			break;
 		case 27: // scan i2c bus
 			i2c_bus_scan();
-			return 1;
+			result = 1;
+			break;
 		case 28: // start optical sensor reading test, param = param1
+			indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
 			serial_messaging_on = false;
 			read_optical_sensors_command_param = param1;
 			read_optical_sensors_command_flag = true;
 			test_optical_sensors_timer.start();
-			return 1;
+			result = 1;
+			break;
 		case 29: // stop optical sensor reading test
 			test_optical_sensors_timer.stop();
-			return 1;
+			result = 1;
+			break;
 		case 30: // scan barcode
-			scan_barcode();
-			return 1;
+			result = scan_barcode();
+			break;
 		case 31: // determine sensor baselines
+			indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
 			read_optical_sensor_baselines_command_param = param1;
 			read_optical_sensor_baselines_command_flag = true;
-			return 1;
+			result = param1;
+			break;
 		case 32: // not used - formerly adjust solenoid power
-			return 0;
+			result = 0;
+			break;
 		case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
+			indx = get_next_command_param(arg, indx, &param1, 25);
+			indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
+			indx = get_next_command_param(arg, indx, &param3, 10);
 			wake_motor();
 			oscillate_stage(param1, param2, param3);
 			sleep_motor();
-			return 1;
+			result = stage_position;
+			break;
 		case 34: // move and oscillate stage
+			indx = get_next_command_param(arg, indx, &param1, 0);
+			indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+			indx = get_next_command_param(arg, indx, &param3, 25);
+			indx = get_next_command_param(arg, indx, &param4, FAST_STEP_DELAY);
+			indx = get_next_command_param(arg, indx, &param5, 2);
 			wake_motor();
-			move_and_oscillate_stage(param1, param2, 100, 2);
+			move_and_oscillate_stage(param1, param2, param3, param4, param5);
 			sleep_motor();
+			result = stage_position;
+			break;
+		default:
+			result = 0;
 	}
 
-    return 0;
+	Serial.printlnf("Command: %d, p1: %d, p2: %d, p3: %d, p4: %d, p5: %d", cmd, param1, param2, param3, param4, param5);
 
+    return result;
 }
 
 /////////////////////////////////////////////////////////////
