@@ -261,8 +261,7 @@ bool move_one_eighth_step(int dir, int step_delay) {
 
 void move_stage(int microns, int step_delay) {
         // move a specific number of microns - negative for reverse movement
-		// steps: positive => move proximally, negative => move distally
-		// controller: dir = LOW => move proximally, dir = HIGH => move distally
+		// microns: negative => move proximally, positive => move distally
 
 		int eighth_steps, abs_microns, dir, i;
 
@@ -346,7 +345,32 @@ void oscillate_stage(int amplitude, int step_delay, int cycles) {
 }
 
 void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int cycles) {
+	int eighth_steps, abs_microns, dir, i;
 
+	dir = (microns < 0) ? HIGH : LOW;
+	/*Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
+
+	abs_microns = abs(microns) + microns_error;
+	eighth_steps = abs_microns / MICRONS_PER_EIGHTH_STEP;
+	microns_error = abs_microns % MICRONS_PER_EIGHTH_STEP;
+	/*Serial.printlnf("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
+
+	delay(10);
+	for(i = 0; i < eighth_steps; i++) {
+		oscillate_stage(amplitude, OSCILLATION_STEP_DELAY, cycles);
+		digitalWrite(pinMotorDir, dir);
+		if (move_one_eighth_step(dir, step_delay)) {
+			stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
+			if (stage_position <= 0) {
+				stage_position = 0;
+				microns_error = 0;
+				i = eighth_steps;
+			}
+		}
+		else {
+			i = eighth_steps;
+		}
+	}
 }
 
 
@@ -1694,6 +1718,10 @@ int particle_command(String arg) {
 			oscillate_stage(param1, param2, param3);
 			sleep_motor();
 			return 1;
+		case 34: // move and oscillate stage
+			wake_motor();
+			move_and_oscillate_stage(param1, param2, 100, 2);
+			sleep_motor();
 	}
 
     return 0;
