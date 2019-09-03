@@ -314,7 +314,7 @@ void reset_stage(bool sleep) {
 	move_stage(2000, FAST_STEP_DELAY);
 	delay(100);
 	move_stage(-3000, SLOW_STEP_DELAY);
-	move_stage(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
+	move_stage(MICRONS_TO_INITIAL_POSITION, SLOW_STEP_DELAY);
 	if (sleep) {
 		sleep_motor();
 	}
@@ -324,8 +324,8 @@ void move_stage_to_optical_read_position() {
 	move_stage_to_position(OPTICAL_SENSOR_READ_POSITION, FAST_STEP_DELAY);
 }
 
-void move_stage_to_start_position() {
-	move_stage_to_position(MICRONS_TO_STARTING_POSITION, FAST_STEP_DELAY);
+void move_stage_to_test_start_position() {
+	move_stage_to_position(MICRONS_TO_TEST_START_POSITION, FAST_STEP_DELAY);
 }
 
 void move_stage_to_position(int position, int step_delay) {
@@ -423,7 +423,7 @@ int scan_barcode() {
                 }
         } while (Serial1.available() && i < CARTRIDGE_UUID_LENGTH);
         Serial.println();
-        Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
+        /*Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);*/
 
         if (i < CARTRIDGE_UUID_LENGTH) {
             memcpy(barcode_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
@@ -1001,8 +1001,8 @@ void callback_validate(char *cartridgeId, char *assayString) {
     Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
     if (cartridge_validated) {    // cartridge found
         if (load_assay_record(cartridgeId, assayString)) {
-            /*starting_test = true;*/
-						Serial.printlnf("Cartridge validated. Assay string: %s", assayString);
+            starting_test = true;
+			Serial.printlnf("Cartridge validated. Assay string: %s", assayString);
         }
         else {
             Serial.println("Failed to load assay record");
@@ -1396,7 +1396,6 @@ int process_one_BCODE_command(int cmd, int index) {
         case 0: // Start test()
                 test_record.start_time = Time.now();
 				update_progress("Starting test", 6000);
-				turn_on_buzzer_for_duration(2000, 600);
 				BCODE_delay(1000);
                 break;
         case 1: // Delay(milliseconds)
@@ -1434,27 +1433,27 @@ int process_one_BCODE_command(int cmd, int index) {
 				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
 				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensor baselines", 6000);
-				read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM);
+				/*read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM);*/
 				break;
         case 8: // take initial sensor reading with param = param1
 				index = get_BCODE_token(index, &param1); // params
 				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
 				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensor baselines", 6000);
-				read_optical_sensor_baselines(param1);
+				/*read_optical_sensor_baselines(param1);*/
                 break;
         case 9: // Read optical sensors with default values
 				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
 				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensors", 6000);
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+                /*read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);*/
                 break;
         case 10: // Read optical sensors with parameters
                 index = get_BCODE_token(index, &param1); // params
 				update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
 				move_stage_to_optical_read_position();
 				update_progress("Reading optical sensors", 6000);
-                read_optical_sensors(param1, true);
+                /*read_optical_sensors(param1, true);*/
                 break;
         case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
         case 12: // Repeat begin(number of iterations)
@@ -1479,8 +1478,8 @@ int process_one_BCODE_command(int cmd, int index) {
 					heater.read_time = 0;
 				}
 				break;
-		case 15: // Move to starting location
-				move_stage_to_start_position();
+		case 15: // Move to test starting location
+				move_stage_to_test_start_position();
 				break;
 		case 16: // Move to location (location, step_delay)
 				index = get_BCODE_token(index, &param1);    // step_delay_us
@@ -1663,7 +1662,7 @@ int particle_command(String arg) {
 			break;
 		case 15: // set heater target temperature
 			wake_motor();
-			move_stage_to_start_position();
+			move_stage_to_test_start_position();
 			sleep_motor();
             result = stage_position;
 			break;
@@ -1884,6 +1883,8 @@ void run_test() {
 	control_heater_temperature_timer.stop();
 
 	reset_stage(false);
+	turn_on_buzzer_for_duration(600, 2000);
+	delay(2000);
     SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
     }
@@ -2057,7 +2058,7 @@ void setup() {
 
 void test_loop() {
 	if (test_in_progress) {
-		Serial.println("Test in progress");
+		/*Serial.println("Test in progress");*/
         if (cancelling_test) {
 			Serial.println("Cancelling test");
             cancelling_test = false;
@@ -2100,8 +2101,8 @@ void test_loop() {
         start_test();
     }
 	else if (waiting_for_upload_confirmation) {
-		Serial.println("Waiting for upload confirmation");
         if (millis() > upload_timeout) {
+			Serial.println("Upload timeout. Retrying...");
             upload_tests();
         }
     }
@@ -2133,7 +2134,7 @@ void cartridge_loop() {
 	    ready_to_scan_barcode = false;
 	    if (cartridge_loaded) {
 	        if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
-	            validate_cartridge();
+	            /*validate_cartridge();*/
 	        }
 	        else {
 	            cartridge_validated = false;
