@@ -518,10 +518,10 @@ void turn_on_LED(char channel, int power) {
 	if (channel == 'A') {
 		turn_on_assay_LED(power);
 	}
-	else if (channel == 'M'){
+	else if (channel == '1') {
 		turn_on_control_1_LED(power);
 	}
-	else if (channel == 'E'){
+	else if (channel == '2') {
 		turn_on_control_2_LED(power);
 	}
 }
@@ -530,10 +530,10 @@ void turn_off_LED(char channel) {
 	if (channel == 'A') {
 		turn_off_assay_LED();
 	}
-	else if (channel == 'M'){
+	else if (channel == '1') {
 		turn_off_control_1_LED();
 	}
-	else if (channel == 'E'){
+	else if (channel == '2') {
 		turn_off_control_2_LED();
 	}
 }
@@ -664,7 +664,7 @@ bool optical_sensor_ready(uint8_t addr) {
 	return ((status & 0x04) == 0 && osr == 3);
 }
 
-void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
+void get_data_from_one_optical_sensor(char channel, int param, int led_power, bool is_a_test) {
 	int bytes, ready, result;
 	uint8_t osr, status, addr, lsb, msb;
 	uint16_t tempC, tempF, x, y, z, l_value;
@@ -711,15 +711,12 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
 	ready = optical_sensor_ready(addr);
 	while (!ready && millis() < timeout) {
 		/*Serial.print('.');*/
-		turn_on_LED('A', LED_POWER);
-		turn_on_LED('C', LED_POWER);
+		turn_on_LED(channel, led_power);
 		delay(1);
-		turn_off_LED('A');
-		turn_off_LED('C');
+		turn_off_LED(channel);
 		delay(1);
 		ready = optical_sensor_ready(addr);
 	}
-
 	duration = millis() - duration;
 
 	if (!ready) {
@@ -778,7 +775,7 @@ void get_data_from_one_optical_sensor(char channel, int param, bool is_a_test) {
     reading->samples = 1;
 		l_value = integerSqrt((x * x) + (y * y) + (z * z));
 
-    Serial.printlnf("S: %c %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z, l_value);
+    Serial.printlnf("S: %c %d %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z, l_value);
 }
 
 bool enable_optical_sensors(bool force_read) {
@@ -798,13 +795,14 @@ void disable_optical_sensors() {
     Wire.end();
 }
 
-void read_optical_sensors(int param, bool is_a_test) {
+void read_optical_sensors(int param, int led_power, bool is_a_test) {
 	int l_value, d_x, d_y, d_z;
 	unsigned long elapsed = millis();
 
   if (enable_optical_sensors(true)) {
-    get_data_from_one_optical_sensor('A', param, is_a_test);
-    get_data_from_one_optical_sensor('C', param, is_a_test);
+    get_data_from_one_optical_sensor('A', param, led_power, is_a_test);
+		get_data_from_one_optical_sensor('1', param, led_power, is_a_test);
+		get_data_from_one_optical_sensor('2', param, led_power, is_a_test);
   }
   else {
   	Serial.println("Unable to start communication with optical sensors");
@@ -815,7 +813,7 @@ void read_optical_sensors(int param, bool is_a_test) {
   if (serial_messaging_on) Serial.printlnf("Elapsed time: %u", millis() - elapsed);
 }
 
-void read_optical_sensor_baselines(int param) {
+void read_optical_sensor_baselines(int param, int led_power) {
 	BrevitestOpticalSensorRecord *a, *c;
 	int prev_x_assay, prev_x_control, d_a, d_c;
 	int tries = OPTICAL_BASELINE_MAX_READINGS;
@@ -826,8 +824,9 @@ void read_optical_sensor_baselines(int param) {
 			prev_x_assay = prev_x_control = 0;
 	  	while (!converged && tries-- > 0) {
 				test_record.number_of_readings = 0;
-				get_data_from_one_optical_sensor('A', param, true);
-				get_data_from_one_optical_sensor('C', param, true);
+				get_data_from_one_optical_sensor('A', param, led_power, true);
+				get_data_from_one_optical_sensor('1', param, led_power, true);
+				get_data_from_one_optical_sensor('2', param, led_power, true);
 				a = &(test_record.reading[0]);
 				c = &(test_record.reading[1]);
 				d_a = abs(a->x - prev_x_assay);
@@ -1589,177 +1588,192 @@ int particle_command(String arg) {
     switch (cmd) {
         case 1: // unused
             result = 0;
-			break;
+						break;
         case 2: // reset stage
             reset_stage(true);
             result = stage_position;
-			break;
+						break;
         case 3: // move microns
-			indx = get_next_command_param(arg, indx, &param1, 0);
-			indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+						indx = get_next_command_param(arg, indx, &param1, 0);
+						indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
             wake_move_sleep_stage(param1, param2);
-			Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
+						Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
             result = stage_position;
-			break;
+						break;
         case 4: // read optical sensors (param)
-			indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-            read_optical_sensors_command_param = param1;
+						wake_motor();
+						move_stage_to_optical_read_position();
+						sleep_motor();
+						indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+						read_optical_sensors_command_param = param1;
+						read_optical_sensors_command_led_power = param2;
             read_optical_sensors_command_flag = true;
             result = param1;
-			break;
+						break;
         case 5: // not used
             result = 0;
-			break;
+						break;
         case 6: // not used
             result = 0;
-			break;
+						break;
         case 7: // read heater temperature
-			indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-			Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
-			result = param1;
-			break;
+						indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
+						Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+						result = param1;
+						break;
         case 8: // reset params
             reset_eeprom();
             result = (int) eeprom.data_format_version;
-			break;
+						break;
         case 9: // turn on assay LED for param1 milliseconds at power param2
-			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
-			turn_on_assay_LED_for_duration(param1, param2);
-			result = param1;
-			break;
+						indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+						turn_on_assay_LED_for_duration(param1, param2);
+						result = param1;
+						break;
         case 10: // turn on control 1 LED for param1 milliseconds at power param2
-			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
+						indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_control_1_LED_for_duration(param1, param2);
             result = param2;
-			break;
+						break;
         case 11: // turn on control 2 LED for param1 milliseconds at power param2
-			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
+						indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_control_2_LED_for_duration(param1, param2);
             result = param2;
-			break;
+						break;
         case 12: // turn on all LEDs for param1 milliseconds at power param2
-			indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-			indx = get_next_command_param(arg, indx, &param2, LED_POWER);
+						indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_all_LEDs_for_duration(param1, param2);
             result = param2;
-			break;
+						break;
         case 13: // turn on buzzer param1 frequency param2 duration
-			indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
-			indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
+						indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
+						indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
             turn_on_buzzer_for_duration(param1, param2);
             result = param1;
-			break;
+						break;
         case 14: // move to specified location param1 at step delay param2
-			indx = get_next_command_param(arg, indx, &param1, 0);
-			indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-			wake_motor();
-			move_stage_to_position(param1, param2);
-			sleep_motor();
+						indx = get_next_command_param(arg, indx, &param1, 0);
+						indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+						wake_motor();
+						move_stage_to_position(param1, param2);
+						sleep_motor();
             result = stage_position;
-			break;
-		case 15: // set heater target temperature
-			wake_motor();
-			move_stage_to_test_start_position();
-			sleep_motor();
+						break;
+				case 15: // move stage to test start position
+						wake_motor();
+						move_stage_to_test_start_position();
+						sleep_motor();
             result = stage_position;
-			break;
-		case 16: // not used
-			indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-			if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
-				heater.target_C_10X = param1;
-				heater.read_time = 0;
-			}
-			result = param1;
-			break;
-        case 17: // not used
-			result = 0;
-			break;
-		case 18: // turn on heater at power param1
-			indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
-			turn_on_heater(param1);
+						break;
+				case 16: // set heater target temperature
+						indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
+						if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE) {
+							heater.target_C_10X = param1;
+							heater.read_time = 0;
+						}
+						result = param1;
+						break;
+    		case 17: // not used
+						wake_motor();
+						move_stage_to_optical_read_position();
+						sleep_motor();
+			      result = stage_position;
+						break;
+				case 18: // turn on heater at power param1
+						indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
+						turn_on_heater(param1);
             result = param1;
-			break;
-        case 19: // turn off heater
-			turn_off_heater();
-			result = 1;
-			break;
-		case 20: // start temperature control
-			start_temperature_control();
-			result = 1;
-			break;
-		case 21: // stop temperature control
-			stop_temperature_control();
-			result = 1;
-			break;
-		case 22: // turn on serial messaging
-			serial_messaging_on = true;
-			result = 1;
-			break;
-		case 23: // turn off serial messaging
-			serial_messaging_on = false;
-			result = 0;
-			break;
-		case 24: // start reading sensors - ignore
-		case 25: // stop reading sensors - ignore
-		case 26: // scan controller_i2c_bus_scan - ignore
-			result = 0;
-			break;
-		case 27: // scan i2c bus
-			i2c_bus_scan();
-			result = 1;
-			break;
-		case 28: // start optical sensor reading test, param = param1
-			indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-			serial_messaging_on = false;
-			read_optical_sensors_command_param = param1;
-			read_optical_sensors_command_flag = true;
-			test_optical_sensors_timer.start();
-			result = 1;
-			break;
-		case 29: // stop optical sensor reading test
-			test_optical_sensors_timer.stop();
-			result = 1;
-			break;
-		case 30: // scan barcode
-			result = scan_barcode();
-			break;
-		case 31: // determine sensor baselines
-			indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-			read_optical_sensor_baselines_command_param = param1;
-			read_optical_sensor_baselines_command_flag = true;
-			result = param1;
-			break;
-		case 32: // not used - formerly adjust solenoid power
-			result = 0;
-			break;
-		case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
-			indx = get_next_command_param(arg, indx, &param1, 25);
-			indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
-			indx = get_next_command_param(arg, indx, &param3, 10);
-			wake_motor();
-			oscillate_stage(param1, param2, param3);
-			sleep_motor();
-			result = stage_position;
-			break;
-		case 34: // move and oscillate stage
-			indx = get_next_command_param(arg, indx, &param1, 0);
-			indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-			indx = get_next_command_param(arg, indx, &param3, 25);
-			indx = get_next_command_param(arg, indx, &param4, FAST_STEP_DELAY);
-			indx = get_next_command_param(arg, indx, &param5, 2);
-			wake_motor();
-			move_and_oscillate_stage(param1, param2, param3, param4, param5);
-			sleep_motor();
-			result = stage_position;
-			break;
-		default:
-			result = 0;
-	}
+						break;
+    		case 19: // turn off heater
+						turn_off_heater();
+						result = 1;
+						break;
+				case 20: // start temperature control
+						start_temperature_control();
+						result = 1;
+						break;
+				case 21: // stop temperature control
+						stop_temperature_control();
+						result = 1;
+						break;
+				case 22: // turn on serial messaging
+						serial_messaging_on = true;
+						result = 1;
+						break;
+				case 23: // turn off serial messaging
+						serial_messaging_on = false;
+						result = 0;
+						break;
+				case 24: // start reading sensors - ignore
+				case 25: // stop reading sensors - ignore
+				case 26: // scan controller_i2c_bus_scan - ignore
+						result = 0;
+						break;
+				case 27: // scan i2c bus
+						i2c_bus_scan();
+						result = 1;
+						break;
+				case 28: // start optical sensor reading test, param = param1
+						wake_motor();
+						move_stage_to_optical_read_position();
+						sleep_motor();
+						indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+						serial_messaging_on = false;
+						read_optical_sensors_command_param = param1;
+						read_optical_sensors_command_led_power = param2;
+						read_optical_sensors_command_flag = true;
+						test_optical_sensors_timer.start();
+						result = 1;
+						break;
+				case 29: // stop optical sensor reading test
+						test_optical_sensors_timer.stop();
+						result = 1;
+						break;
+				case 30: // scan barcode
+						result = scan_barcode();
+						break;
+				case 31: // determine sensor baselines
+						indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+						indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+						read_optical_sensor_baselines_command_param = param1;
+						read_optical_sensor_baselines_command_led_power = param2;
+						read_optical_sensor_baselines_command_flag = true;
+						result = param1;
+						break;
+				case 32: // not used - formerly adjust solenoid power
+						result = 0;
+						break;
+				case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
+						indx = get_next_command_param(arg, indx, &param1, 25);
+						indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
+						indx = get_next_command_param(arg, indx, &param3, 10);
+						wake_motor();
+						oscillate_stage(param1, param2, param3);
+						sleep_motor();
+						result = stage_position;
+						break;
+				case 34: // move and oscillate stage
+						indx = get_next_command_param(arg, indx, &param1, 0);
+						indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+						indx = get_next_command_param(arg, indx, &param3, 25);
+						indx = get_next_command_param(arg, indx, &param4, FAST_STEP_DELAY);
+						indx = get_next_command_param(arg, indx, &param5, 2);
+						wake_motor();
+						move_and_oscillate_stage(param1, param2, param3, param4, param5);
+						sleep_motor();
+						result = stage_position;
+						break;
+				default:
+						result = 0;
+		}
 
-	Serial.printlnf("Command: %d, p1: %d, p2: %d, p3: %d, p4: %d, p5: %d", cmd, param1, param2, param3, param4, param5);
+		Serial.printlnf("Command: %d, p1: %d, p2: %d, p3: %d, p4: %d, p5: %d", cmd, param1, param2, param3, param4, param5);
 
     return result;
 }
@@ -2025,11 +2039,11 @@ void setup() {
         reset_stage(true);
 
         Serial.println("Turning on LEDs");
-		turn_on_assay_LED_for_duration(5, LED_POWER);
-		delay(100);
-		turn_on_control_1_LED_for_duration(5, LED_POWER);
-		delay(100);
-		turn_on_control_2_LED_for_duration(5, LED_POWER);
+		turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+		delay(500);
+		turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
+		delay(500);
+		turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
 
 		Serial.println("Playing startup tune");
         play_startup_tune();
@@ -2170,12 +2184,12 @@ void loop() {
 
 	if (read_optical_sensors_command_flag) {
 		read_optical_sensors_command_flag = false;
-		read_optical_sensors(read_optical_sensors_command_param, false);
+		read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
 	}
 
 	if (read_optical_sensor_baselines_command_flag) {
 		read_optical_sensor_baselines_command_flag = false;
-		read_optical_sensor_baselines(read_optical_sensor_baselines_command_param);
+		read_optical_sensor_baselines(read_optical_sensor_baselines_command_param, read_optical_sensors_command_led_power);
 	}
 
 	if (control_heater_temperature_flag) {

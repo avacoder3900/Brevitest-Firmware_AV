@@ -33,7 +33,7 @@
 #define OPTICAL_BASELINE_MAX_READINGS 50
 
 // LEDs
-#define LED_POWER 128
+#define LED_DEFAULT_POWER 128
 #define LED_WARMUP_DELAY_MS 1000
 #define LED_DURATION 500
 
@@ -77,7 +77,7 @@
 #define STAGE_POSITION_LIMIT 53000
 #define FAST_STEP_DELAY 100
 #define SLOW_STEP_DELAY 1000
-#define OPTICAL_SENSOR_READ_POSITION 8000
+#define OPTICAL_SENSOR_READ_POSITION 53000
 #define MICRONS_TO_INITIAL_POSITION 500
 #define MICRONS_TO_TEST_START_POSITION 12300
 #define OSCILLATION_STEP_DELAY 250
@@ -226,8 +226,10 @@ unsigned long control_heater_temperature_flag = false;
 unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
+int read_optical_sensors_command_led_power;
 bool read_optical_sensor_baselines_command_flag = false;
 int read_optical_sensor_baselines_command_param;
+int read_optical_sensor_baselines_command_led_power;
 
 // progress
 int test_progress;
