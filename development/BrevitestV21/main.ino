@@ -664,11 +664,82 @@ bool optical_sensor_ready(uint8_t addr) {
 	return ((status & 0x04) == 0 && osr == 3);
 }
 
+bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y, uint16_t *z, uint16_t *tempC) {
+	uint8_t osr, status, lsb, msb;
+	int bytes, result;
+	bool ready;
+	unsigned long timeout;
+
+	Wire.beginTransmission(addr);
+	bytes = Wire.write(0x00);
+	bytes += Wire.write(0x83);
+	result = Wire.endTransmission(true);
+  	if (result != 0) {
+      	Serial.printlnf("Config optics: address %d, %d bytes, result: %d", addr, bytes, result);
+		return false;
+  	}
+
+	timeout = millis() + 5000;
+	ready = optical_sensor_ready(addr);
+	while (!ready && millis() < timeout) {
+		/*Serial.print('.');*/
+		delay(100);
+		ready = optical_sensor_ready(addr);
+	}
+
+	if (!ready) {
+		Serial.printlnf("Read failure: address = %d", addr);
+		return false;
+	}
+
+	if (serial_messaging_on) Serial.printlnf("Starting optical sensor data addr = %d read", addr);
+
+	Wire.beginTransmission(addr);
+	bytes = Wire.write(0x00);
+	result = Wire.endTransmission(false);
+	if (result != 0) {
+		Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
+	}
+	bytes = Wire.requestFrom(addr, 10);
+
+	// status
+	osr = Wire.read();
+	status = Wire.read();
+	if (serial_messaging_on) Serial.printlnf("Status = %d, OSR = %d", status, osr);
+
+    // temperature
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", msb);
+    *tempC = ((((msb << 8) + lsb) * 5) / 100) - 67;
+
+	// light
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", msb);
+    *x = (msb << 8) + lsb;
+
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", msb);
+    *y = (msb << 8) + lsb;
+
+    lsb = Wire.read();
+	if (serial_messaging_on) Serial.printf("%d ", lsb);
+    msb = Wire.read();
+	if (serial_messaging_on) Serial.printlnf("%d ", msb);
+    *z = (msb << 8) + lsb;
+
+	return true;
+}
+
 void get_data_from_one_optical_sensor(char channel, int param, int led_power, bool is_a_test) {
-	int bytes, ready, result;
-	uint8_t osr, status, addr, lsb, msb;
+	uint8_t addr;
+	int bytes, i, ready, result, sum_x, sum_y, sum_z, sum_t;
 	uint16_t tempC, tempF, x, y, z, l_value;
-	unsigned long timeout, duration;
 	BrevitestOpticalSensorRecord *reading;
 
 	if (channel == 'A') {
@@ -693,89 +764,37 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
 		test_record.number_of_readings++;
 	}
 
-	reading->x = reading->y = reading->z = reading->temperature = reading->time_ms = reading->samples = 0;
+	sum_x = sum_y = sum_z = sum_t = 0;
 
-	duration = millis();
+	turn_on_LED(channel, led_power);
+	delay(100);
 
 	config_optical_sensors(channel, param, addr);
 
-	Wire.beginTransmission(addr);
-	bytes = Wire.write(0x00);
-	bytes += Wire.write(0x83);
-	result = Wire.endTransmission(true);
-  	if (result != 0) {
-      	Serial.printlnf("Config optics %c, %d bytes, result: %d", channel, bytes, result);
-  	}
-
-	timeout = millis() + 5000;
-	ready = optical_sensor_ready(addr);
-	while (!ready && millis() < timeout) {
-		/*Serial.print('.');*/
-		turn_on_LED(channel, led_power);
-		delay(1);
-		turn_off_LED(channel);
-		delay(1);
-		ready = optical_sensor_ready(addr);
+	reading->channel = channel;
+	reading->time_ms = millis();
+	reading->samples = 10;
+	for (i = 0; i < reading->samples; i++) {
+		if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) {
+		    sum_x += x;
+		    sum_y += y;
+		    sum_z += z;
+		    sum_t += tempC;
+		}
+		else {
+			Serial.printlnf("Read optical sensor failed, channel %c", channel);
+		}
 	}
-	duration = millis() - duration;
+	reading->x = sum_x / reading->samples;
+	reading->y = sum_y / reading->samples;
+	reading->z = sum_z / reading->samples;
+	reading->temperature = sum_t / reading->samples;
 
-	if (!ready) {
-		Serial.printlnf("Read failure: %c", channel);
-		return;
-	}
+	tempF = ((reading->temperature * 9) / 5) + 32;
+	l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
+	Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
-	if (serial_messaging_on) Serial.printlnf("Starting optical sensor data %c read", channel);
-
-	Wire.beginTransmission(addr);
-	bytes = Wire.write(0x00);
-	result = Wire.endTransmission(false);
-	if (result != 0) {
-		Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
-	}
-	bytes = Wire.requestFrom(addr, 10);
-
-	// status
-	osr = Wire.read();
-	status = Wire.read();
-	if (serial_messaging_on) Serial.printlnf("Status = %d, OSR = %d", status, osr);
-
-    // temperature
-    lsb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", lsb);
-    msb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", msb);
-    tempC = ((((msb << 8) + lsb) * 5) / 100) - 67;
-    tempF = ((tempC * 9) / 5) + 32;
-
-	// light
-    lsb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", lsb);
-    msb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", msb);
-    x = (msb << 8) + lsb;
-
-    lsb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", lsb);
-    msb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", msb);
-    y = (msb << 8) + lsb;
-
-    lsb = Wire.read();
-	if (serial_messaging_on) Serial.printf("%d ", lsb);
-    msb = Wire.read();
-	if (serial_messaging_on) Serial.printlnf("%d ", msb);
-    z = (msb << 8) + lsb;
-
-    reading->channel = channel;
-    reading->x = x;
-    reading->y = y;
-    reading->z = z;
-    reading->temperature = tempC;
-    reading->time_ms = millis();
-    reading->samples = 1;
-		l_value = integerSqrt((x * x) + (y * y) + (z * z));
-
-    Serial.printlnf("S: %c %d %d %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, duration, osr, status, tempC, tempF, x, y, z, l_value);
+	turn_off_LED(channel);
 }
 
 bool enable_optical_sensors(bool force_read) {
