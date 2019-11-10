@@ -2084,16 +2084,16 @@ void test_loop() {
     }
     else if (test_startup_successful) {
 		Serial.println("Test startup successful");
-        if (!cartridge_loaded) {
+        /*if (!cartridge_loaded) {
 			Serial.println("Cartridge not loaded. Waiting...");
 			turn_on_buzzer_for_duration(500, 700);
 			delay(2000);
         }
         else {
-			Serial.println("Cartridge loaded, running test");
+			Serial.println("Cartridge loaded, running test");*/
 			test_startup_successful = false;
         	run_test();
-      	}
+      	/*}*/
     }
 	else if (starting_test) {
 		Serial.println("Starting test");
