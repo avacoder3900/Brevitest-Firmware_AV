@@ -9,10 +9,10 @@
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
 #define CARTRIDGE_UUID_LENGTH 24
-#define TAB_DELIM "\t"
-#define RETURN_DELIM "\n"
-#define COMMA_DELIM ","
-#define BCODE_END "99"
+#define TAB_DELIM String("\t")
+#define RETURN_DELIM String("\n")
+#define COMMA_DELIM String(",")
+#define BCODE_END String("99")
 #define MAX_ANALOG_READ 4095
 #define SERIAL_BUFFER_SIZE 40
 
@@ -251,7 +251,7 @@ bool callback_complete;
 char callback_event[30];
 char callback_status[40];
 char callback_target[40];
-char current_event[30];
+String current_event;
 char current_data[60];
 int current_event_tries = 0;
 

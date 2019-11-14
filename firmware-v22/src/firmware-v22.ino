@@ -97,17 +97,17 @@ int extract_int_from_string(char *str, int pos, int len)
     return atoi(buf);
 }
 
-int extract_int_from_delimited_string(char *str, int *posPtr, char *delim)
+int extract_int_from_delimited_string(char *str, int *posPtr, String delim)
 {
     char buf[14];
     char *mark;
     int len;
 
     mark = &str[*posPtr];
-    len = strstr(mark, delim) - mark;
+    len = strstr(mark, delim.c_str()) - mark;
     len = len > 14 ? 14 : len;
     strncpy(buf, mark, len);
-    *posPtr += len + strlen(delim);
+    *posPtr += len + strlen(delim.c_str());
     buf[len] = '\0';
     return atoi(buf);
 }
@@ -366,6 +366,7 @@ void move_stage_to_test_start_position()
     move_stage_to_position(MICRONS_TO_TEST_START_POSITION, FAST_STEP_DELAY);
 }
 
+void update_progress(String, int);
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
@@ -729,13 +730,13 @@ void config_optical_sensors(char channel, int param, int addr)
 
     reg = Wire.read();
     if (serial_messaging_on)
-        Serial.printlnf("param = %d, CREG1 = %d", param, reg);
+        Serial.printlnf("bytes = %d, param = %d, CREG1 = %d", bytes_received, param, reg);
 }
 
 bool optical_sensor_ready(uint8_t addr)
 {
-    int bytes, reg, result;
-    uint8_t osr, status, lsb, msb;
+    int bytes, result;
+    uint8_t osr, status;
 
     Wire.beginTransmission(addr);
     bytes = Wire.write(0x00);
@@ -845,7 +846,7 @@ bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y,
 void get_data_from_one_optical_sensor(char channel, int param, int led_power, bool is_a_test)
 {
     uint8_t addr;
-    int bytes, i, ready, result, sum_x, sum_y, sum_z, sum_t;
+    int i, sum_x, sum_y, sum_z, sum_t;
     uint16_t tempC, tempF, x, y, z, l_value;
     BrevitestOpticalSensorRecord *reading;
 
@@ -934,7 +935,6 @@ void disable_optical_sensors()
 
 void read_optical_sensors(int param, int led_power, bool is_a_test)
 {
-    int l_value, d_x, d_y, d_z;
     unsigned long elapsed = millis();
 
     if (enable_optical_sensors(true))
@@ -1147,7 +1147,7 @@ bool load_assay_record(char *cartridgeId, char *assayString)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void brevitest_publish(char *event_name, char *data, bool retry)
+void brevitest_publish(String event_name, char *data, bool retry)
 {
     if (!retry)
     {
@@ -1155,12 +1155,12 @@ void brevitest_publish(char *event_name, char *data, bool retry)
     }
     current_event_tries++;
 
-    strcpy(current_event, event_name);
+    current_event = String(event_name);
     strcpy(current_data, data);
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest"), String(event_name) + String("\n") + String(data), PRIVATE, NO_ACK);
+    Particle.publish(String("brevitest"), event_name + String("\n") + String(data), PRIVATE, NO_ACK);
     Serial.printlnf("Publish: %s, %s, try: %d", event_name, data, current_event_tries);
 }
 
@@ -1201,6 +1201,7 @@ void callback_test_start()
     }
 }
 
+void reset_globals();
 void callback_test_finish()
 {
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
@@ -1232,6 +1233,20 @@ void callback_test_cancel()
     else
     {
         Serial.println("Test cancel failed!");
+    }
+}
+
+void remove_test_from_cache(char *testId)
+{
+    int i;
+    for (i = 0; i < TEST_CACHE_SIZE; i += 1)
+    {
+        if (strncmp(testId, eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0)
+        {
+            memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
+            store_eeprom();
+            return;
+        }
     }
 }
 
@@ -1444,18 +1459,9 @@ void store_test(int index)
     EEPROM.write(offsetof(Particle_EEPROM, most_recent_test), eeprom.most_recent_test);
 }
 
-void write_test_record_to_eeprom()
-{
-    // increment test_index (check for overflow and if so reset circular buffer)
-    int test_index = (eeprom.most_recent_test == 255 ? 0 : eeprom.most_recent_test + 1); // 255 is the reset value
-    test_index %= TEST_CACHE_SIZE;
-    store_test(test_index);
-    process_test_record(test_index);
-}
-
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c\t%11d\t%5d\t%5d\t%5d\t%5d\n",
+    return sprintf(&(particle_register[start]), "%c\t%11lu\t%5d\t%5d\t%5d\t%5d\n",
                    reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature);
 }
 
@@ -1475,6 +1481,15 @@ int process_test_record(int index)
         }
     }
     return 1;
+}
+
+void write_test_record_to_eeprom()
+{
+    // increment test_index (check for overflow and if so reset circular buffer)
+    int test_index = (eeprom.most_recent_test == 255 ? 0 : eeprom.most_recent_test + 1); // 255 is the reset value
+    test_index %= TEST_CACHE_SIZE;
+    store_test(test_index);
+    process_test_record(test_index);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1505,22 +1520,6 @@ bool tests_to_upload()
     next_upload = millis() + UPLOAD_INTERVAL;
 
     return false;
-}
-
-void remove_test_from_cache(char *testId)
-{
-    int i;
-    BrevitestTestRecord *test;
-
-    for (i = 0; i < TEST_CACHE_SIZE; i += 1)
-    {
-        if (strncmp(testId, eeprom.test_cache[i].test_uuid, TEST_UUID_LENGTH) == 0)
-        {
-            memset(&eeprom.test_cache[i].start_time, '\0', sizeof(BrevitestTestRecord));
-            store_eeprom();
-            return;
-        }
-    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -1571,7 +1570,7 @@ int get_BCODE_token(int index, int *token)
     return i;
 }
 
-void update_progress(char *message, int duration)
+void update_progress(String message, int duration)
 {
     int new_percent_complete;
     int test_duration = assay.duration * 1000;
@@ -1602,7 +1601,7 @@ void update_progress(char *message, int duration)
 
 void BCODE_delay(int target_duration)
 {
-    int i, pulse_time, residual_duration;
+    int i, residual_duration;
     unsigned long total_duration, cycle_start;
     int cycles = 1;
 
@@ -1631,9 +1630,10 @@ void BCODE_delay(int target_duration)
     }
 }
 
+int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int i, j, mark, param1, param2, param3, param4, param5, param6, param7, param8, start_index, move_distance;
+    int i, j, param1, param2, param3, param4, param5, param6, start_index;
 
     if (cancelling_test)
     {
@@ -1843,6 +1843,27 @@ int get_next_command_param(String arg, int indx, int *param, int def)
     }
 
     return next;
+}
+
+void i2c_bus_scan()
+{
+    int addr, result;
+
+    if (enable_optical_sensors(true))
+    {
+        Serial.println("Starting optical I2C bus scan");
+        for (addr = 0; addr < 127; addr++)
+        {
+            Wire.beginTransmission(addr);
+            Wire.write(0x00);
+            result = Wire.endTransmission();
+            if (result == 0)
+            {
+                Serial.printlnf("I2C device found at address %X", addr);
+            }
+        }
+    }
+    disable_optical_sensors();
 }
 
 int particle_command(String arg)
@@ -2271,27 +2292,6 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
     {
         digitalWrite(pin, value);
     }
-}
-
-void i2c_bus_scan()
-{
-    int addr, bytes_sent, result;
-
-    if (enable_optical_sensors(true))
-    {
-        Serial.println("Starting optical I2C bus scan");
-        for (addr = 0; addr < 127; addr++)
-        {
-            Wire.beginTransmission(addr);
-            bytes_sent = Wire.write(0x00);
-            result = Wire.endTransmission();
-            if (result == 0)
-            {
-                Serial.printlnf("I2C device found at address %X", addr);
-            }
-        }
-    }
-    disable_optical_sensors();
 }
 
 void setup()
