@@ -183,7 +183,8 @@ void test_optical_sensors(void);
 Timer test_optical_sensors_timer(OPTICAL_SENSORS_TEST_INTERVAL, test_optical_sensors);
 
 // temperature control system
-struct HeatingElement {
+struct HeatingElement
+{
     int heater_pin;
     int thermistor_pin;
     bool heater_on;
@@ -200,7 +201,8 @@ struct HeatingElement {
     int k_i_den;
     int k_d_num;
     int k_d_den;
-    HeatingElement() {
+    HeatingElement()
+    {
         heater_pin = pinHeater;
         thermistor_pin = pinThermistor;
         power = 0;
@@ -257,7 +259,8 @@ int current_event_tries = 0;
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char particle_status[STATUS_LENGTH + 1];
 
-struct BrevitestOpticalSensorRecord {  // 14 bytes
+struct BrevitestOpticalSensorRecord
+{ // 14 bytes
     char channel;
     uint8_t samples;
     unsigned long time_ms;
@@ -267,16 +270,18 @@ struct BrevitestOpticalSensorRecord {  // 14 bytes
     uint16_t temperature;
 } reading_assay, reading_control_1, reading_control_2;
 
-struct BrevitestTestRecord { // 206 bytes
+struct BrevitestTestRecord
+{ // 206 bytes
     int start_time;
     int finish_time;
-    char test_uuid[TEST_UUID_LENGTH + 1];    // 27 bytes
+    char test_uuid[TEST_UUID_LENGTH + 1]; // 27 bytes
     uint8_t number_of_readings;
     uint16_t reserved;
-    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS];  // 168 bytes
+    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
 } test_record;
 
-struct BrevitestAssayRecord {
+struct BrevitestAssayRecord
+{
     char uuid[ASSAY_UUID_LENGTH + 1];
     int duration;
     int optical_sensor_integration_time;
@@ -288,15 +293,17 @@ struct BrevitestAssayRecord {
     char BCODE[ASSAY_BCODE_CAPACITY];
 } assay;
 
-struct Particle_EEPROM {
-  uint8_t firmware_version;     // 8 bytes
-  uint8_t data_format_version;
-  uint8_t most_recent_test;
-  char serial_number[SERIAL_NUMBER_LENGTH + 1]; // 20 bytes, includes trailing \0
-  BrevitestTestRecord test_cache[TEST_CACHE_SIZE];  // up to 10 test results cached
-  Particle_EEPROM() {
-      firmware_version = FIRMWARE_VERSION;
-      data_format_version = DATA_FORMAT_VERSION;
-      most_recent_test = 255;
-  }
+struct Particle_EEPROM
+{
+    uint8_t firmware_version; // 8 bytes
+    uint8_t data_format_version;
+    uint8_t most_recent_test;
+    char serial_number[SERIAL_NUMBER_LENGTH + 1];    // 20 bytes, includes trailing \0
+    BrevitestTestRecord test_cache[TEST_CACHE_SIZE]; // up to 10 test results cached
+    Particle_EEPROM()
+    {
+        firmware_version = FIRMWARE_VERSION;
+        data_format_version = DATA_FORMAT_VERSION;
+        most_recent_test = 255;
+    }
 } eeprom;
