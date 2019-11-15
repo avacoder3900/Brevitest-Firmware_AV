@@ -745,7 +745,7 @@ bool optical_sensor_ready(uint8_t addr)
     {
         Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
     }
-    bytes = Wire.requestFrom(addr, 4);
+    bytes = Wire.requestFrom(addr, (uint8_t) 4);
 
     // status
     osr = Wire.read();
@@ -798,7 +798,7 @@ bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y,
     {
         Serial.printlnf("Send error, %d bytes, result: %d", bytes, result);
     }
-    bytes = Wire.requestFrom(addr, 10);
+    bytes = Wire.requestFrom(addr, (uint8_t) 10);
 
     // status
     osr = Wire.read();
@@ -2127,7 +2127,7 @@ void reset_globals()
     test_record.test_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
     test_record.number_of_readings = 0;
     assay.uuid[0] = '\0';
-    assay.uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+    assay.uuid[ASSAY_UUID_LENGTH] = '\0';
 
     particle_register[0] = '\0';
     particle_status[0] = '\n';
@@ -2486,7 +2486,7 @@ void loop()
         if (Serial.available())
         {
             serial_buffer_index++;
-            serial_buffer_index %= SERIAL_BUFFER_SIZE;
+            serial_buffer_index %= SERIAL_COMMAND_BUFFER_SIZE;
         }
         else
         {

@@ -14,7 +14,7 @@
 #define COMMA_DELIM String(",")
 #define BCODE_END String("99")
 #define MAX_ANALOG_READ 4095
-#define SERIAL_BUFFER_SIZE 40
+#define SERIAL_COMMAND_BUFFER_SIZE 40
 
 // device open and cartridge validation
 #define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
@@ -147,7 +147,7 @@ unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
 int serial_buffer_index = 0;
-char serial_buffer[SERIAL_BUFFER_SIZE];
+char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
 
 // device LED
