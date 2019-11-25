@@ -74,12 +74,12 @@
 // motor
 #define MICRONS_PER_FULL_STEP 200
 #define MICRONS_PER_EIGHTH_STEP 25
-#define STAGE_POSITION_LIMIT 53000
+#define STAGE_POSITION_LIMIT 41000
 #define FAST_STEP_DELAY 150
 #define SLOW_STEP_DELAY 1000
-#define OPTICAL_SENSOR_READ_POSITION 53000
-#define MICRONS_TO_INITIAL_POSITION 12300
-#define MICRONS_TO_TEST_START_POSITION 12300
+#define OPTICAL_SENSOR_READ_POSITION 18300
+#define MICRONS_TO_INITIAL_POSITION 10800
+#define MICRONS_TO_TEST_START_POSITION 10800
 #define OSCILLATION_STEP_DELAY 250
 
 // heater
@@ -113,9 +113,9 @@ ApplicationWatchdog wd(60000, watchdog);
 
 // BORON PIN MAPPINGS
 
-int pinLEDAssay = A0;
+int pinLEDControl2 = A0;
 int pinLEDControl1 = A1;
-int pinLEDControl2 = A2;
+int pinLEDAssay = A2;
 int pinThermistor = A3;
 int pinStageLimit = A4;
 int pinBarcodeTrigger = A5;
