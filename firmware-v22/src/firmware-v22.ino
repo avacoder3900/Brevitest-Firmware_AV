@@ -11,8 +11,10 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 /////////////////////////////////////////////////////////////
 
 //  temperature is 10x to get one decimal place of accuracy
-static int table_temperature[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
-static int table_raw[] = {3606, 3540, 3464, 3377, 3279, 3168, 3043, 2903, 2748, 2578, 2394, 2199, 1994, 1784, 1573, 1365, 1166, 979, 809, 657, 525};
+static int heater_temp[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
+static int heater_raw[] = {3698, 3478, 3248, 3010, 2767, 2521, 2275, 2033, 1799, 1575, 1364, 1169, 990, 830, 688, 564, 457, 367, 291, 228, 177};
+static int ir_temp[] = {1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 0};
+static int ir_raw[] = {3670, 3222, 2744, 2257, 1786, 1356, 987, 687, 458, 292, 179};
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -59,16 +61,32 @@ static uint32_t crc32_tab[] = {
     0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
     0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
 
-int raw_table_lookup(int raw)
+int table_lookup(int table_number, int raw)
 {
-    int result, indx1, indx2;
+    int result, indx1, indx2, table_length;
+
+    switch (table_number)
+    {
+        case HEATER_TABLE_NUMBER: // heater
+            table_length = HEATER_TERMISTOR_TABLE_LENGTH;
+            table_raw = heater_raw;
+            table_temperature = heater_temp;
+            break;
+        case IR_TABLE_NUMBER: // IR
+            table_length = IR_TERMISTOR_TABLE_LENGTH;
+            table_raw = ir_raw;
+            table_temperature = ir_temp;
+            break;
+        default:
+            return 0;
+    }
 
     if (raw > table_raw[0])
     {
         return 1000;
     }
 
-    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
+    for (indx1 = 0, indx2 = 1; indx1 < (HEATER_TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
     {
         if (raw <= table_raw[indx1] && raw > table_raw[indx2])
         {
@@ -1014,7 +1032,7 @@ int get_heater_temperature()
     }
     else
     {
-        heater.temp_C_10X = raw_table_lookup(raw);
+        heater.temp_C_10X = table_lookup(HEATER_TABLE_NUMBER, raw);
         heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
         if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
         {
@@ -2312,17 +2330,17 @@ void setup()
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
 
-    init_analog_pin(pinLEDAssay, OUTPUT, 255);
-    init_analog_pin(pinLEDControl1, OUTPUT, 255);
-    init_analog_pin(pinLEDControl2, OUTPUT, 255);
+    init_analog_pin(pinLEDAssay, OUTPUT, 0);
+    init_analog_pin(pinLEDControl1, OUTPUT, 0);
+    init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
-    init_analog_pin(pinThermistor, INPUT, 0);
+    init_analog_pin(pinHeaterThermistor, INPUT, 0);
+    init_analog_pin(pinIRThermistor, INPUT, 0);
+    init_analog_pin(pinIRThermopile, INPUT, 0);
 
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
-    init_digital_pin(pinMotorMS1, OUTPUT, HIGH);
-    init_digital_pin(pinMotorMS2, OUTPUT, HIGH);
     init_analog_pin(pinMotorPFD, OUTPUT, 128);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
@@ -2336,7 +2354,7 @@ void setup()
         reset_eeprom();
     }
 
-    i2c_bus_scan();
+    // i2c_bus_scan();
 
     Serial.println("Resetting stage");
     reset_stage(true);
