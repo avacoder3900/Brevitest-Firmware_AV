@@ -556,7 +556,7 @@ int pulse_heater(int power)
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
     if (power > 0)
     {
-        delay(pulse_duration);
+        delay(heater.pulse_duration);
         analogWrite(heater.heater_pin, 0);
     }
     heater.power = power;

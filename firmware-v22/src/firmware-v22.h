@@ -88,7 +88,7 @@
 #define HEATER_PWM_FREQUENCY 20000
 #define HEATER_MAX_TEMPERATURE 600
 #define HEATER_CONTROL_INTERVAL 1000
-#define HEATER_PULSE_DURATION 500
+#define HEATER_PULSE_DURATION 800
 #define HEATER_DEFAULT_TEMP_TARGET 400
 
 // thermistors
@@ -189,6 +189,7 @@ struct HeatingElement
     int thermistor_pin;
     bool heater_on;
     int power;
+    int pulse_duration;
     int previous_error;
     int integral;
     unsigned long read_time;
@@ -207,6 +208,7 @@ struct HeatingElement
         thermistor_pin = pinThermistor;
         power = 0;
         heater_on = false;
+        pulse_duration = HEATER_PULSE_DURATION;
         previous_error = 0;
         integral = 0;
         target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
@@ -218,7 +220,6 @@ struct HeatingElement
         k_d_den = 1;
     }
 } heater;
-int pulse_duration = HEATER_PULSE_DURATION;
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
