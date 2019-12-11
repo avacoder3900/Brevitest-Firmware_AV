@@ -187,14 +187,14 @@ void erase_test_cache() {
                 ptr = &eeprom.test_cache[i].start_time;
                 memset(ptr, '\0', sizeof(BrevitestTestRecord));
         }
+				eeprom.most_recent_test = 255;
 }
 
 int reset_eeprom() {
         Particle_EEPROM e;
 
-        memcpy(&eeprom, &e, (int) sizeof(Particle_EEPROM));
+				reset_param();
         erase_test_cache();
-        store_eeprom();
 
         return 1;
 }
