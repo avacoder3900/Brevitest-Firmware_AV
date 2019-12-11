@@ -340,5 +340,6 @@ struct Particle_EEPROM {
   Particle_EEPROM() {
       firmware_version = FIRMWARE_VERSION;
       data_format_version = DATA_FORMAT_VERSION;
+      most_recent_test = 255;
   }
 } eeprom;
