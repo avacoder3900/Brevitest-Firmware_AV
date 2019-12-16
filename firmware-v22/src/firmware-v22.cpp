@@ -6,7 +6,7 @@
 #line 1 "/Users/leo3/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
 #include "firmware-v22.h"
 
-int raw_table_lookup(int raw);
+int table_lookup(int table_number, int raw);
 int extract_int_from_string(char *str, int pos, int len);
 int extract_int_from_delimited_string(char *str, int *posPtr, String delim);
 uint32_t checksum(char *buf, int size);
@@ -89,8 +89,10 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 /////////////////////////////////////////////////////////////
 
 //  temperature is 10x to get one decimal place of accuracy
-static int table_temperature[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
-static int table_raw[] = {3606, 3540, 3464, 3377, 3279, 3168, 3043, 2903, 2748, 2578, 2394, 2199, 1994, 1784, 1573, 1365, 1166, 979, 809, 657, 525};
+static int heater_temp[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
+static int heater_raw[] = {3698, 3478, 3248, 3010, 2767, 2521, 2275, 2033, 1799, 1575, 1364, 1169, 990, 830, 688, 564, 457, 367, 291, 228, 177};
+static int ir_temp[] = {1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 0};
+static int ir_raw[] = {3670, 3222, 2744, 2257, 1786, 1356, 987, 687, 458, 292, 179};
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -137,16 +139,33 @@ static uint32_t crc32_tab[] = {
     0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
     0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
 
-int raw_table_lookup(int raw)
+int table_lookup(int table_number, int raw)
 {
-    int result, indx1, indx2;
+    int result, indx1, indx2, table_length;
+    int *table_raw, *table_temperature;
+
+    switch (table_number)
+    {
+        case HEATER_TABLE_NUMBER: // heater
+            table_length = HEATER_TERMISTOR_TABLE_LENGTH;
+            table_raw = heater_raw;
+            table_temperature = heater_temp;
+            break;
+        case IR_TABLE_NUMBER: // IR
+            table_length = IR_TERMISTOR_TABLE_LENGTH;
+            table_raw = ir_raw;
+            table_temperature = ir_temp;
+            break;
+        default:
+            return 0;
+    }
 
     if (raw > table_raw[0])
     {
         return 1000;
     }
 
-    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
+    for (indx1 = 0, indx2 = 1; indx1 < (table_length - 1); indx1++, indx2++)
     {
         if (raw <= table_raw[indx1] && raw > table_raw[indx2])
         {
@@ -632,11 +651,11 @@ int pulse_heater(int power)
     unsigned long start = millis();
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    if (power > 0)
-    {
-        delay(pulse_duration);
-        analogWrite(heater.heater_pin, 0);
-    }
+    // if (power > 0)
+    // {
+    //     delay(pulse_duration);
+    //     analogWrite(heater.heater_pin, 0);
+    // }
     heater.power = power;
     heater.heater_on = power != 0;
     if (heater.heater_on)
@@ -1092,7 +1111,7 @@ int get_heater_temperature()
     }
     else
     {
-        heater.temp_C_10X = raw_table_lookup(raw);
+        heater.temp_C_10X = table_lookup(HEATER_TABLE_NUMBER, raw);
         heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
         if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
         {
@@ -2081,9 +2100,16 @@ int particle_command(String arg)
         serial_messaging_on = false;
         result = 0;
         break;
-    case 24: // start reading sensors - ignore
-    case 25: // stop reading sensors - ignore
-    case 26: // scan controller_i2c_bus_scan - ignore
+    case 24: // get IR thermistor reading
+        result = analogRead(pinIRThermistor);
+        ir_temp_C_10X = table_lookup(IR_TABLE_NUMBER, result);
+        ir_temp_F_10X = ((ir_temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("IR thermistor: raw = %d = %d.%d˚C = %d.%d˚F", result, ir_temp_C_10X / 10, ir_temp_C_10X % 10, ir_temp_F_10X / 10, ir_temp_F_10X % 10);
+       break;
+    case 25: // get IR thermopile reading
+        result = analogRead(pinIRThermopile);
+        break;
+   case 26: // unused
         result = 0;
         break;
     case 27: // scan i2c bus
@@ -2390,19 +2416,19 @@ void setup()
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
 
-    init_analog_pin(pinLEDAssay, OUTPUT, 255);
-    init_analog_pin(pinLEDControl1, OUTPUT, 255);
-    init_analog_pin(pinLEDControl2, OUTPUT, 255);
+    init_analog_pin(pinLEDAssay, OUTPUT, 0);
+    init_analog_pin(pinLEDControl1, OUTPUT, 0);
+    init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
-    init_analog_pin(pinThermistor, INPUT, 0);
+    init_analog_pin(pinHeaterThermistor, INPUT, 0);
+    init_analog_pin(pinIRThermistor, INPUT, 0);
+    init_analog_pin(pinIRThermopile, INPUT, 0);
 
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
-    init_digital_pin(pinMotorMS1, OUTPUT, HIGH);
-    init_digital_pin(pinMotorMS2, OUTPUT, HIGH);
-    init_analog_pin(pinMotorPFD, OUTPUT, 128);
-
+    init_digital_pin(pinMotorPFD, OUTPUT, 0);
+    
     init_analog_pin(pinBuzzer, OUTPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);
 
@@ -2414,7 +2440,7 @@ void setup()
         reset_eeprom();
     }
 
-    i2c_bus_scan();
+    delay(2000);
 
     Serial.println("Resetting stage");
     reset_stage(true);

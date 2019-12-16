@@ -64,6 +64,7 @@ static uint32_t crc32_tab[] = {
 int table_lookup(int table_number, int raw)
 {
     int result, indx1, indx2, table_length;
+    int *table_raw, *table_temperature;
 
     switch (table_number)
     {
@@ -86,7 +87,7 @@ int table_lookup(int table_number, int raw)
         return 1000;
     }
 
-    for (indx1 = 0, indx2 = 1; indx1 < (HEATER_TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
+    for (indx1 = 0, indx2 = 1; indx1 < (table_length - 1); indx1++, indx2++)
     {
         if (raw <= table_raw[indx1] && raw > table_raw[indx2])
         {
@@ -572,11 +573,11 @@ int pulse_heater(int power)
     unsigned long start = millis();
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    if (power > 0)
-    {
-        delay(pulse_duration);
-        analogWrite(heater.heater_pin, 0);
-    }
+    // if (power > 0)
+    // {
+    //     delay(pulse_duration);
+    //     analogWrite(heater.heater_pin, 0);
+    // }
     heater.power = power;
     heater.heater_on = power != 0;
     if (heater.heater_on)
@@ -2021,9 +2022,16 @@ int particle_command(String arg)
         serial_messaging_on = false;
         result = 0;
         break;
-    case 24: // start reading sensors - ignore
-    case 25: // stop reading sensors - ignore
-    case 26: // scan controller_i2c_bus_scan - ignore
+    case 24: // get IR thermistor reading
+        result = analogRead(pinIRThermistor);
+        ir_temp_C_10X = table_lookup(IR_TABLE_NUMBER, result);
+        ir_temp_F_10X = ((ir_temp_C_10X * 9) / 5) + 320;
+        Serial.printlnf("IR thermistor: raw = %d = %d.%d˚C = %d.%d˚F", result, ir_temp_C_10X / 10, ir_temp_C_10X % 10, ir_temp_F_10X / 10, ir_temp_F_10X % 10);
+       break;
+    case 25: // get IR thermopile reading
+        result = analogRead(pinIRThermopile);
+        break;
+   case 26: // unused
         result = 0;
         break;
     case 27: // scan i2c bus
@@ -2341,8 +2349,8 @@ void setup()
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
-    init_analog_pin(pinMotorPFD, OUTPUT, 128);
-
+    init_digital_pin(pinMotorPFD, OUTPUT, 0);
+    
     init_analog_pin(pinBuzzer, OUTPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);
 
@@ -2354,7 +2362,7 @@ void setup()
         reset_eeprom();
     }
 
-    // i2c_bus_scan();
+    delay(2000);
 
     Serial.println("Resetting stage");
     reset_stage(true);

@@ -207,7 +207,7 @@ struct HeatingElement
     HeatingElement()
     {
         heater_pin = pinHeater;
-        thermistor_pin = pinThermistor;
+        thermistor_pin = pinHeaterThermistor;
         power = 0;
         heater_on = false;
         previous_error = 0;
@@ -222,6 +222,8 @@ struct HeatingElement
     }
 } heater;
 int pulse_duration = HEATER_PULSE_DURATION;
+int ir_temp_C_10X;
+int ir_temp_F_10X;
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
