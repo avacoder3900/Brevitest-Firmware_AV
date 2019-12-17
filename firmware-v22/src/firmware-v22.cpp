@@ -89,8 +89,8 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 /////////////////////////////////////////////////////////////
 
 //  temperature is 10x to get one decimal place of accuracy
-static int table_temperature[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
-static int table_raw[] = {3606, 3540, 3464, 3377, 3279, 3168, 3043, 2903, 2748, 2578, 2394, 2199, 1994, 1784, 1573, 1365, 1166, 979, 809, 657, 525};
+static int table_temperature[] = {800, 750, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
+static int table_raw[] = {3279, 3168, 3043, 2902, 2747, 2577, 2393, 2198, 1993, 1783, 1571, 1364, 1164, 978, 807, 656, 523};
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -143,7 +143,7 @@ int raw_table_lookup(int raw)
 
     if (raw > table_raw[0])
     {
-        return 1000;
+        return 550;
     }
 
     for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
@@ -632,11 +632,11 @@ int pulse_heater(int power)
     unsigned long start = millis();
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    if (power > 0)
-    {
-        delay(pulse_duration);
-        analogWrite(heater.heater_pin, 0);
-    }
+    // if (power > 0)
+    // {
+    //     delay(pulse_duration);
+    //     analogWrite(heater.heater_pin, 0);
+    // }
     heater.power = power;
     heater.heater_on = power != 0;
     if (heater.heater_on)
@@ -1113,7 +1113,7 @@ void heater_temperature_read()
 int pid_controller()
 {
     int dt, error, derivative, raw;
-    int output = 0;
+    int output = heater.power;
     unsigned long current_read_time, prev_read_time;
 
     current_read_time = millis();
@@ -1679,29 +1679,29 @@ void update_progress(String message, int duration)
 
 void BCODE_delay(int target_duration)
 {
-    int i, residual_duration;
-    unsigned long total_duration, cycle_start;
-    int cycles = 1;
+    int residual_duration;
+    unsigned long total_duration;
+    // int cycles = 1;
 
     total_duration = millis();
-    if (target_duration >= HEATER_CONTROL_INTERVAL)
-    {
-        cycles = target_duration / HEATER_CONTROL_INTERVAL;
-        for (i = 0; i < cycles; i++)
-        {
-            cycle_start = millis();
+    // if (target_duration >= HEATER_CONTROL_INTERVAL)
+    // {
+    //     cycles = target_duration / HEATER_CONTROL_INTERVAL;
+    //     for (i = 0; i < cycles; i++)
+    //     {
+    //         cycle_start = millis();
             pulse_heater(pid_controller());
-            residual_duration = HEATER_CONTROL_INTERVAL - (int)(millis() - cycle_start);
-            if (residual_duration > 0)
-            {
-                delay(residual_duration);
-            }
-        }
-    }
+    //         residual_duration = HEATER_CONTROL_INTERVAL - (int)(millis() - cycle_start);
+    //         if (residual_duration > 0)
+    //         {
+    //             delay(residual_duration);
+    //         }
+    //     }
+    // }
     total_duration = millis() - total_duration;
     residual_duration = target_duration - (int)total_duration;
     if (serial_messaging_on)
-        Serial.printlnf("BCODE_delay: target_duration = %d, cycles = %d, total_duration = %d, residual_duration = %d", target_duration, cycles, total_duration, residual_duration);
+        Serial.printlnf("BCODE_delay: target_duration = %d, total_duration = %d, residual_duration = %d", target_duration, total_duration, residual_duration);
     if (residual_duration > 0)
     {
         delay(target_duration - (int)total_duration);

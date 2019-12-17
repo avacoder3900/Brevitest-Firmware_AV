@@ -554,11 +554,11 @@ int pulse_heater(int power)
     unsigned long start = millis();
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    if (power > 0)
-    {
-        delay(heater.pulse_duration);
-        analogWrite(heater.heater_pin, 0);
-    }
+    // if (power > 0)
+    // {
+    //     delay(pulse_duration);
+    //     analogWrite(heater.heater_pin, 0);
+    // }
     heater.power = power;
     heater.heater_on = power != 0;
     if (heater.heater_on)
@@ -1035,7 +1035,7 @@ void heater_temperature_read()
 int pid_controller()
 {
     int dt, error, derivative, raw;
-    int output = 0;
+    int output = heater.power;
     unsigned long current_read_time, prev_read_time;
 
     current_read_time = millis();
@@ -1601,29 +1601,29 @@ void update_progress(String message, int duration)
 
 void BCODE_delay(int target_duration)
 {
-    int i, residual_duration;
-    unsigned long total_duration, cycle_start;
-    int cycles = 1;
+    int residual_duration;
+    unsigned long total_duration;
+    // int cycles = 1;
 
     total_duration = millis();
-    if (target_duration >= HEATER_CONTROL_INTERVAL)
-    {
-        cycles = target_duration / HEATER_CONTROL_INTERVAL;
-        for (i = 0; i < cycles; i++)
-        {
-            cycle_start = millis();
+    // if (target_duration >= HEATER_CONTROL_INTERVAL)
+    // {
+    //     cycles = target_duration / HEATER_CONTROL_INTERVAL;
+    //     for (i = 0; i < cycles; i++)
+    //     {
+    //         cycle_start = millis();
             pulse_heater(pid_controller());
-            residual_duration = HEATER_CONTROL_INTERVAL - (int)(millis() - cycle_start);
-            if (residual_duration > 0)
-            {
-                delay(residual_duration);
-            }
-        }
-    }
+    //         residual_duration = HEATER_CONTROL_INTERVAL - (int)(millis() - cycle_start);
+    //         if (residual_duration > 0)
+    //         {
+    //             delay(residual_duration);
+    //         }
+    //     }
+    // }
     total_duration = millis() - total_duration;
     residual_duration = target_duration - (int)total_duration;
     if (serial_messaging_on)
-        Serial.printlnf("BCODE_delay: target_duration = %d, cycles = %d, total_duration = %d, residual_duration = %d", target_duration, cycles, total_duration, residual_duration);
+        Serial.printlnf("BCODE_delay: target_duration = %d, total_duration = %d, residual_duration = %d", target_duration, total_duration, residual_duration);
     if (residual_duration > 0)
     {
         delay(target_duration - (int)total_duration);

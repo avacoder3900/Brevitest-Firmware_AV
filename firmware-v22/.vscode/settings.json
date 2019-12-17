@@ -8,5 +8,5 @@
     "particle.targetPlatform": "boron",
     "particle.firmwareVersion": "1.4.2",
     "git.autofetch": true,
-    "particle.targetDevice": "Heisenberg"
+    "particle.targetDevice": "Joule"
 }
