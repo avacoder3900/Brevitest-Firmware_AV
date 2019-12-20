@@ -1007,7 +1007,10 @@ void read_optical_sensor_baselines(int param, int led_power)
 
 int get_heater_temperature()
 {
+    analogWrite(heater.heater_pin, 0);
     int raw = analogRead(heater.thermistor_pin);
+    analogWrite(heater.heater_pin, heater.power);
+    
     if (raw == 0)
     {
         stop_temperature_control();

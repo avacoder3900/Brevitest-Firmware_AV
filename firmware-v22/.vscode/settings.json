@@ -6,7 +6,7 @@
         "*.ino": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.firmwareVersion": "1.4.2",
+    "particle.firmwareVersion": "1.4.4",
     "git.autofetch": true,
-    "particle.targetDevice": "Joule"
+    "particle.targetDevice": "Kelvin"
 }
