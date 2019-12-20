@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "application.h"
-#line 1 "/Users/brevitest/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
 #include "firmware-v22.h"
 
 int raw_table_lookup(int raw);
@@ -77,7 +77,7 @@ char *extract_callback_params();
 void clean_callback_buffer();
 void cancel_or_retry_publish();
 void process_callback_buffer();
-#line 3 "/Users/brevitest/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
+#line 3 "/Users/leo3/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(4347);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -89,8 +89,8 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 /////////////////////////////////////////////////////////////
 
 //  temperature is 10x to get one decimal place of accuracy
-static int table_temperature[] = {800, 750, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
-static int table_raw[] = {3279, 3168, 3043, 2902, 2747, 2577, 2393, 2198, 1993, 1783, 1571, 1364, 1164, 978, 807, 656, 523};
+static int table_temperature[] = {580, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
+static int table_raw[] = {4062, 3905, 3627, 3330, 3020, 2701, 2381, 2066, 1764, 1481, 1223, 993, 793};
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -1083,10 +1083,8 @@ void read_optical_sensor_baselines(int param, int led_power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void init_analog_pin(uint16_t, PinMode, uint8_t);
 int get_heater_temperature()
 {
-    init_analog_pin(heater.thermistor_pin, INPUT, 0);
     int raw = analogRead(heater.thermistor_pin);
     if (raw == 0)
     {
