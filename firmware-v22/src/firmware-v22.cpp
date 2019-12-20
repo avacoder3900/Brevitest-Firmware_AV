@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "application.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
+#line 1 "/Users/brevitest/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
 #include "firmware-v22.h"
 
 int raw_table_lookup(int raw);
@@ -77,7 +77,7 @@ char *extract_callback_params();
 void clean_callback_buffer();
 void cancel_or_retry_publish();
 void process_callback_buffer();
-#line 3 "/Users/leo3/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
+#line 3 "/Users/brevitest/github/brevitest-device/firmware-v22/src/firmware-v22.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(4347);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -1083,8 +1083,10 @@ void read_optical_sensor_baselines(int param, int led_power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void init_analog_pin(uint16_t, PinMode, uint8_t);
 int get_heater_temperature()
 {
+    init_analog_pin(heater.thermistor_pin, INPUT, 0);
     int raw = analogRead(heater.thermistor_pin);
     if (raw == 0)
     {
