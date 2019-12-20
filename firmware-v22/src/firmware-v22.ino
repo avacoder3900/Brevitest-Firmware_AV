@@ -11,8 +11,8 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 /////////////////////////////////////////////////////////////
 
 //  temperature is 10x to get one decimal place of accuracy
-static int table_temperature[] = {580, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
-static int table_raw[] = {4062, 3905, 3627, 3330, 3020, 2701, 2381, 2066, 1764, 1481, 1223, 993, 793};
+static int table_temperature[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
+static int table_raw[] = {3606, 3540, 3464, 3378, 3279, 3168, 3043, 2902, 2747, 2577, 2393, 2198, 1993, 1783, 1571, 1364, 1164, 978, 807, 656, 523};
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -65,7 +65,7 @@ int raw_table_lookup(int raw)
 
     if (raw > table_raw[0])
     {
-        return 550;
+        return table_raw[0];
     }
 
     for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
