@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "/Users/leo3/github/brevitest-device/firmware-v22"
+		}
+	],
+	"settings": {
+		"cortex-debug.openocdPath": "${command:particle.getDebuggerOpenocdPath}"
+	}
+}
