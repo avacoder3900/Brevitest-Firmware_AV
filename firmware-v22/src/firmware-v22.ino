@@ -320,7 +320,7 @@ void move_stage(int microns, int step_delay)
     microns_error = abs_microns % MICRONS_PER_EIGHTH_STEP;
     /*Serial.printlnf("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
 
-    delay(10);
+    // delay(10);
     for (i = 0; i < eighth_steps; i++)
     {
         if (move_one_eighth_step(dir, step_delay))
