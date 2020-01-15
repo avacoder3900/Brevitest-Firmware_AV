@@ -398,7 +398,7 @@ void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int os
     microns_error = abs_microns % MICRONS_PER_EIGHTH_STEP;
     /*Serial.printlnf("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
 
-    delay(10);
+    // delay(10);
     for (i = 0; i < eighth_steps; i++)
     {
         oscillate_stage(amplitude, osc_step_delay, cycles);
@@ -1602,7 +1602,7 @@ void update_progress(String message, int duration)
     Serial.printlnf("%s, %d percent complete, temp = %d.%d", message, test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 }
 
-int BCODE_process()
+int BCODE_loop()
 {
     unsigned long total_duration = millis();
 
@@ -1614,7 +1614,7 @@ int BCODE_process()
 
 void BCODE_delay(int target_duration)
 {
-    int process_time = BCODE_process();
+    int process_time = BCODE_loop();
     if (target_duration > process_time) {
       delay(target_duration - process_time);
     }
@@ -1630,7 +1630,7 @@ int process_one_BCODE_command(int cmd, int index)
         return index;
     }
 
-    BCODE_process();
+    BCODE_loop();
 
     switch (cmd)
     {
@@ -1656,7 +1656,7 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // duration_ms
         index = get_BCODE_token(index, &param2); // frequency
         update_progress("Buzzing", param1);
-        turn_on_buzzer_for_duration(param1, param2);
+        turn_on_buzzer_for_duration(param2, param1);
         break;
     case 5:                                      // move microns
         index = get_BCODE_token(index, &param1); // microns
@@ -2193,10 +2193,10 @@ void run_test()
     reset_stage(false);
     turn_on_buzzer_for_duration(600, 2000);
     delay(2000);
-    // SINGLE_THREADED_BLOCK()
-    // {
-    process_BCODE(0);
-    // }
+    SINGLE_THREADED_BLOCK()
+    {
+      process_BCODE(0);
+    }
 
     // control_heater_temperature_timer.start();
 
