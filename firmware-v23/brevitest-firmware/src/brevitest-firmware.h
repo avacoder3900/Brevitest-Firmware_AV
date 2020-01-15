@@ -206,7 +206,7 @@ struct HeatingElement
     HeatingElement()
     {
         heater_pin = pinHeater;
-        thermistor_pin = pinThermistor;
+        thermistor_pin = pinHeaterThermistor;
         power = 0;
         heater_on = false;
         pulse_duration = HEATER_PULSE_DURATION;
