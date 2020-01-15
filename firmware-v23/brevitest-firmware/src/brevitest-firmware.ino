@@ -2306,13 +2306,13 @@ void setup()
     init_analog_pin(pinLEDControl1, OUTPUT, 255);
     init_analog_pin(pinLEDControl2, OUTPUT, 255);
 
-    init_analog_pin(pinThermistor, INPUT, 0);
+    init_analog_pin(pinHeaterThermistor, INPUT, 0);
+    init_analog_pin(pinIRThermistor, INPUT, 0);
+    init_analog_pin(pinIRThermopile, INPUT, 0);
 
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
-    init_digital_pin(pinMotorMS1, OUTPUT, HIGH);
-    init_digital_pin(pinMotorMS2, OUTPUT, HIGH);
     init_analog_pin(pinMotorPFD, OUTPUT, 128);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);

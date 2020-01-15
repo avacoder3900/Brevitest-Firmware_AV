@@ -78,7 +78,7 @@
 #define STAGE_POSITION_LIMIT 41000
 #define FAST_STEP_DELAY 150
 #define SLOW_STEP_DELAY 1000
-#define OPTICAL_SENSOR_READ_POSITION 18300
+#define OPTICAL_SENSOR_READ_POSITION 18800
 #define MICRONS_TO_INITIAL_POSITION 10800
 #define MICRONS_TO_TEST_START_POSITION 10800
 #define OSCILLATION_STEP_DELAY 250
@@ -117,10 +117,10 @@ ApplicationWatchdog wd(60000, watchdog);
 int pinLEDControl2 = A0;
 int pinLEDControl1 = A1;
 int pinLEDAssay = A2;
-int pinThermistor = A3;
-int pinStageLimit = A4;
-int pinBarcodeTrigger = A5;
-int pinBarcodeReady = SCK;
+int pinHeaterThermistor = A3;
+int pinIRThermistor = A4;
+int pinIRThermopile = A5;
+int pinStageLimit = SCK;
 int pinMotorSleep = MOSI;
 int pinCartridgeLoaded = MISO;
 int pinRX = RX;
@@ -128,9 +128,9 @@ int pinTX = TX;
 
 // int pinSDA = SDA;
 // int pinSCL = SCL;
-int pinMotorPFD = D2;
-int pinMotorMS2 = D3;
-int pinMotorMS1 = D4;
+int pinBarcodeTrigger = D2;
+int pinMotorPFD = D3;
+int pinBarcodeReady = D4;
 int pinMotorDir = D5;
 int pinMotorStep = D6;
 int pinBuzzer = D7;
