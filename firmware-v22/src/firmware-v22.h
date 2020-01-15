@@ -92,7 +92,10 @@
 
 // thermistors
 #define THERMISTOR_SCALE 10000
-#define TERMISTOR_TABLE_LENGTH 21
+#define HEATER_TABLE_NUMBER 0
+#define HEATER_TERMISTOR_TABLE_LENGTH 21
+#define IR_TABLE_NUMBER 1
+#define IR_TERMISTOR_TABLE_LENGTH 11
 
 // upload
 #define UPLOAD_INTERVAL 60000
@@ -114,11 +117,11 @@ ApplicationWatchdog wd(60000, watchdog);
 
 int pinLEDControl2 = A0;
 int pinLEDControl1 = A1;
-int pinLEDAssay = A2;
-int pinThermistor = A3;
-int pinStageLimit = A4;
-int pinBarcodeTrigger = A5;
-int pinBarcodeReady = SCK;
+int pinLEDControl2 = A2;
+int pinHeaterThermistor = A3;
+int pinIRThermistor = A4;
+int pinIRThermopile = A5;
+int pinStageLimit = SCK;
 int pinMotorSleep = MOSI;
 int pinCartridgeLoaded = MISO;
 int pinRX = RX;
@@ -126,9 +129,9 @@ int pinTX = TX;
 
 // int pinSDA = SDA;
 // int pinSCL = SCL;
-int pinMotorPFD = D2;
-int pinMotorMS2 = D3;
-int pinMotorMS1 = D4;
+int pinBarcodeTrigger = D2;
+int pinMotorPFD = D3;
+int pinBarcodeReady = D4;
 int pinMotorDir = D5;
 int pinMotorStep = D6;
 int pinBuzzer = D7;
@@ -204,7 +207,7 @@ struct HeatingElement
     HeatingElement()
     {
         heater_pin = pinHeater;
-        thermistor_pin = pinThermistor;
+        thermistor_pin = pinHeaterThermistor;
         power = 0;
         heater_on = false;
         pulse_duration = HEATER_PULSE_DURATION;
