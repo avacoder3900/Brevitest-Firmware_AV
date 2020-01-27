@@ -886,7 +886,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
 
     reading->channel = channel;
     reading->time_ms = millis();
-    reading->samples = 10;
+    reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
     for (i = 0; i < reading->samples; i++)
     {
         if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC))
