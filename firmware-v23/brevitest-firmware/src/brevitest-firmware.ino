@@ -2302,9 +2302,9 @@ void setup()
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
 
-    init_analog_pin(pinLEDAssay, OUTPUT, 255);
-    init_analog_pin(pinLEDControl1, OUTPUT, 255);
-    init_analog_pin(pinLEDControl2, OUTPUT, 255);
+    init_analog_pin(pinLEDAssay, OUTPUT, 0);
+    init_analog_pin(pinLEDControl1, OUTPUT, 0);
+    init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
     init_analog_pin(pinHeaterThermistor, INPUT, 0);
     init_analog_pin(pinIRThermistor, INPUT, 0);
