@@ -942,6 +942,7 @@ void read_optical_sensors(int param, int led_power, bool is_a_test)
         get_data_from_one_optical_sensor('A', param, led_power, is_a_test);
         get_data_from_one_optical_sensor('1', param, led_power, is_a_test);
         get_data_from_one_optical_sensor('2', param, led_power, is_a_test);
+        Serial.println();
     }
     else
     {
