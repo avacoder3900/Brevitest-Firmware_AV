@@ -878,17 +878,19 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
     }
 
     sum_x = sum_y = sum_z = sum_t = 0;
-
+    
+    reading_optical_sensors = true;
+    turn_off_heater();
     turn_on_LED(channel, led_power);
     delay(100);
+    
+    config_optical_sensors(channel, param, addr);
 
     reading->channel = channel;
     reading->time_ms = millis();
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
     for (i = 0; i < reading->samples; i++)
     {
-        config_optical_sensors(channel, param, addr);
-
         if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC))
         {
             sum_x += x;
@@ -910,6 +912,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
     Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
+    reading_optical_sensors = false;
     turn_off_LED(channel);
 }
 
@@ -1077,7 +1080,7 @@ int pid_controller()
 
 void control_heater_temperature()
 {
-    control_heater_temperature_flag = true;
+    control_heater_temperature_flag = !reading_optical_sensors;
 }
 
 void start_temperature_control()
