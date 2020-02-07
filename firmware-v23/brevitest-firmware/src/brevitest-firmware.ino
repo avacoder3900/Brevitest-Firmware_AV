@@ -882,13 +882,13 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
     turn_on_LED(channel, led_power);
     delay(100);
 
-    config_optical_sensors(channel, param, addr);
-
     reading->channel = channel;
     reading->time_ms = millis();
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
     for (i = 0; i < reading->samples; i++)
     {
+        config_optical_sensors(channel, param, addr);
+
         if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC))
         {
             sum_x += x;
