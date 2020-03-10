@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#include "application.h"
+#include "Particle.h"
 #line 1 "/Users/leo3/github/brevitest-device/firmware-v23/brevitest-firmware/src/brevitest-firmware.ino"
 #include "brevitest-firmware.h"
 
@@ -444,11 +444,9 @@ void move_stage_to_test_start_position()
     move_stage_to_position(MICRONS_TO_TEST_START_POSITION, FAST_STEP_DELAY);
 }
 
-void update_progress(String, int);
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
-    update_progress("Moving magnets to position", (abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP) / 1000);
     Serial.printlnf("Moving stage to position %d, distance = %d", position, move_distance);
     move_stage(move_distance, step_delay); // move stage to optical read position
 }
@@ -956,17 +954,19 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
     }
 
     sum_x = sum_y = sum_z = sum_t = 0;
-
+    
+    reading_optical_sensors = true;
+    turn_off_heater();
     turn_on_LED(channel, led_power);
     delay(100);
+    
+    config_optical_sensors(channel, param, addr);
 
     reading->channel = channel;
     reading->time_ms = millis();
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
     for (i = 0; i < reading->samples; i++)
     {
-        config_optical_sensors(channel, param, addr);
-
         if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC))
         {
             sum_x += x;
@@ -986,8 +986,9 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
 
     tempF = ((reading->temperature * 9) / 5) + 32;
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
+    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 10000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
+    reading_optical_sensors = false;
     turn_off_LED(channel);
 }
 
@@ -1155,7 +1156,7 @@ int pid_controller()
 
 void control_heater_temperature()
 {
-    control_heater_temperature_flag = true;
+    control_heater_temperature_flag = !reading_optical_sensors;
 }
 
 void start_temperature_control()
@@ -1543,22 +1544,24 @@ void store_test(int index)
 
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c\t%11lu\t%5d\t%5d\t%5d\t%5d\n",
-                   reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature);
+    return sprintf(&(particle_register[start]), "%c\t%11lu\t%5d\t%5d\t%5d\t%5d%c",
+                   reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature, '\n');
 }
 
 int process_test_record(int index)
 {
     BrevitestTestRecord *test;
-    int len, i;
+    int count, len, i;
 
     test = &eeprom.test_cache[index];
 
-    len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
+    len = sprintf(particle_register, "%11d\t%11d\t%.24s%c", test->start_time, test->finish_time, test->test_uuid, '\n');
+    // count = test->number_of_readings < TEST_MAXIMUM_NUMBER_OF_READINGS ? test->number_of_readings : TEST_MAXIMUM_NUMBER_OF_READINGS;
     for (i = 0; i < TEST_MAXIMUM_NUMBER_OF_READINGS; i++)
     {
-        if (test->reading[i].channel == 'A' || test->reading[i].channel == 'C')
+        if (test->reading[i].channel == 'A' || test->reading[i].channel == '1' || test->reading[i].channel == '2')
         {
+            // Serial.printlnf()
             len += append_test_reading(len, &(test->reading[i]));
         }
     }
@@ -1678,7 +1681,7 @@ void update_progress(String message, int duration)
             test_percent_complete = new_percent_complete;
         }
     }
-    Serial.printlnf("%s, %d percent complete, temp = %d.%d", message, test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+    Serial.printlnf("%s, %d percent complete, temp = %d.%d", message.c_str(), test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 }
 
 int BCODE_loop()
@@ -1749,27 +1752,29 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param3); // number of cycles
         oscillate_stage(param1, param2, param3);
         break;
-    case 7: // take initial sensor reading using default param and LED power
-        update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
-        move_stage_to_optical_read_position();
-        update_progress("Reading optical sensor baselines", 6000);
-        read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER);
-        break;
-    case 8:                                      // take initial sensor reading with param = param1 at LED power = param2
-        index = get_BCODE_token(index, &param1); // params
-        index = get_BCODE_token(index, &param2); // LED power
-        update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
-        move_stage_to_optical_read_position();
-        update_progress("Reading optical sensor baselines", 6000);
-        read_optical_sensor_baselines(param1, param2);
-        break;
+    // case 7: // take initial sensor reading using default param and LED power
+    //     update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+    //     move_stage_to_optical_read_position();
+    //     update_progress("Reading optical sensor baselines", 6000);
+    //     read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER);
+    //     break;
+    // case 8:                                      // take initial sensor reading with param = param1 at LED power = param2
+    //     index = get_BCODE_token(index, &param1); // params
+    //     index = get_BCODE_token(index, &param2); // LED power
+    //     update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+    //     move_stage_to_optical_read_position();
+    //     update_progress("Reading optical sensor baselines", 6000);
+    //     read_optical_sensor_baselines(param1, param2);
+    //     break;
+    case 7:
     case 9: // Read optical sensors with default param and LED power
         update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
         move_stage_to_optical_read_position();
         update_progress("Reading optical sensors", 6000);
         read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, true);
         break;
-    case 10:                                     // Read optical sensors with param = param1 at LED power = param2
+    case 8:
+    case 10: // Read optical sensors with param = param1 at LED power = param2
         index = get_BCODE_token(index, &param1); // params
         index = get_BCODE_token(index, &param2); // LED power
         update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);

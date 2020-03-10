@@ -1466,6 +1466,7 @@ void store_test(int index)
 
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
+    Serial.printlnf("%d\t%c\t%11lu\t%5d\t%5d\t%5d\t%5d", start, reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature);
     return sprintf(&(particle_register[start]), "%c\t%11lu\t%5d\t%5d\t%5d\t%5d\n",
                    reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature);
 }
@@ -1479,6 +1480,7 @@ int process_test_record(int index)
 
     len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
     count = test->number_of_readings < TEST_MAXIMUM_NUMBER_OF_READINGS ? test->number_of_readings : TEST_MAXIMUM_NUMBER_OF_READINGS;
+    Serial.printlnf("%11d\t%11d\t%.24s\t%d\t%d", test->start_time, test->finish_time, test->test_uuid, test->number_of_readings, count);
     for (i = 0; i < count; i++)
     {
         if (test->reading[i].channel == 'A' || test->reading[i].channel == '1' || test->reading[i].channel == '2')
@@ -1861,6 +1863,33 @@ void i2c_bus_scan()
     disable_optical_sensors();
 }
 
+void upload_one_test(int test_number, char *test_id)
+{
+    waiting_for_upload_confirmation = true;
+    upload_timeout = millis() + TIMEOUT_UPLOAD;
+
+    Serial.printlnf("Processing test %s for upload", test_id);
+    process_test_record(test_number);
+
+    Serial.println(particle_register);
+    brevitest_publish("test-upload", test_id, false);
+}
+
+void upload_tests()
+{
+    int i;
+
+    Serial.println("Uploading tests");
+    for (i = 0; i < TEST_CACHE_SIZE; i += 1)
+    {
+        if (eeprom.test_cache[i].test_uuid[0] != '\0')
+        {
+            upload_one_test(i, eeprom.test_cache[i].test_uuid);
+            return;
+        }
+    }
+}
+
 int particle_command(String arg)
 {
     int cmd, result;
@@ -1874,8 +1903,9 @@ int particle_command(String arg)
     indx = get_next_command_param(arg, indx, &cmd, 0);
     switch (cmd)
     {
-    case 1: // unused
-        result = 0;
+    case 1: // upload cached tests
+        upload_tests();
+        result = 1;
         break;
     case 2: // reset stage
         reset_stage(true);
@@ -1899,8 +1929,9 @@ int particle_command(String arg)
         read_optical_sensors_command_flag = true;
         result = param1;
         break;
-    case 5: // not used
-        result = 0;
+    case 5: // reset test cache
+        erase_test_cache();
+        result = 1;
         break;
     case 6: // not used
         result = 0;
@@ -2215,33 +2246,6 @@ void run_test()
     }
 
     finishing_test = !cancelling_test;
-}
-
-void upload_one_test(int test_number, char *test_id)
-{
-    waiting_for_upload_confirmation = true;
-    upload_timeout = millis() + TIMEOUT_UPLOAD;
-
-    Serial.printlnf("Processing test %s for upload", test_id);
-    process_test_record(test_number);
-
-    Serial.println(particle_register);
-    brevitest_publish("test-upload", test_id, false);
-}
-
-void upload_tests()
-{
-    int i;
-
-    Serial.println("Uploading tests");
-    for (i = 0; i < TEST_CACHE_SIZE; i += 1)
-    {
-        if (eeprom.test_cache[i].test_uuid[0] != '\0')
-        {
-            upload_one_test(i, eeprom.test_cache[i].test_uuid);
-            return;
-        }
-    }
 }
 
 int particle_run_test(String arg)
