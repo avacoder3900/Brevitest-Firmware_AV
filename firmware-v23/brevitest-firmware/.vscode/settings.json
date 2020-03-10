@@ -6,6 +6,6 @@
         "*.ino": "cpp"
     },
     "particle.targetDevice": "Ingold",
-    "particle.firmwareVersion": "1.5.0-rc.1",
+    "particle.firmwareVersion": "1.5.0-rc.2",
     "particle.targetPlatform": "boron"
 }
