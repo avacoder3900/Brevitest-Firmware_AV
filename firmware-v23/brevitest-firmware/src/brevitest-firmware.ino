@@ -1473,12 +1473,13 @@ int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 int process_test_record(int index)
 {
     BrevitestTestRecord *test;
-    int len, i;
+    int count, len, i;
 
     test = &eeprom.test_cache[index];
 
     len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
-    for (i = 0; i < TEST_MAXIMUM_NUMBER_OF_READINGS; i++)
+    count = test->number_of_readings < TEST_MAXIMUM_NUMBER_OF_READINGS ? test->number_of_readings : TEST_MAXIMUM_NUMBER_OF_READINGS;
+    for (i = 0; i < count; i++)
     {
         if (test->reading[i].channel == 'A' || test->reading[i].channel == '1' || test->reading[i].channel == '2')
         {
