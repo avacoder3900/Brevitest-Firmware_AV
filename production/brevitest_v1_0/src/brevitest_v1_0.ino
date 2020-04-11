@@ -1178,6 +1178,21 @@ void brevitest_publish(String event_name, char *data, bool retry)
     Serial.printlnf("Publish: %s, %s, try: %d", event_name, data, current_event_tries);
 }
 
+void startup(void);
+void callback_register()
+{
+    waiting_for_registration = false;
+    if ((strncmp(callback_status, SUCCESS, 7) == 0))
+    { // device registered
+        reset_eeprom();
+        startup();
+    }
+    else
+    {
+        Serial.printlnf("Device registration failed. Please reset device.");
+    }
+}
+
 void callback_validate(char *cartridgeId, char *assayString)
 {
     waiting_for_validation = false;
@@ -2272,10 +2287,10 @@ int particle_run_test(String arg)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void watchdog()
-{
-    Serial.println("Watchdog!");
-}
+// void watchdog()
+// {
+//     Serial.println("Watchdog!");
+// }
 
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
@@ -2295,7 +2310,7 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
     }
 }
 
-void setup()
+void configure()
 {
     Particle.variable("register", particle_register, STRING);
     Particle.function("command", particle_command);
@@ -2330,7 +2345,10 @@ void setup()
     init_analog_pin(pinHeater, OUTPUT, 0);
 
     Serial.begin(115200); // standard serial port
+}
 
+void startup()
+{
     load_eeprom();
     if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION)
     {
@@ -2362,6 +2380,28 @@ void setup()
 
     start_temperature_control();
     periodic_event = millis() + 5000;
+}
+
+bool device_is_registered()
+{
+    int addr = 0;
+    uint8_t value;
+
+    EEPROM.get(addr, value);
+    register_device = (value == 0xFF); // EEPROM is empty if first value is 255
+
+    return !register_device;
+}
+
+void setup()
+{
+    configure();
+
+    if (device_is_registered()) {
+        startup();
+    } else {
+        Serial.printlnf("New device detected, ID = %s", device_id);
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -2478,6 +2518,15 @@ void cartridge_loop()
     }
 }
 
+void registration_loop()
+{
+    if (!waiting_for_registration)
+    {
+        brevitest_publish("register-device", device_id, false);
+        waiting_for_registration = true;
+    }
+}
+
 void loop()
 {
     while (Serial.available())
@@ -2503,6 +2552,11 @@ void loop()
         Serial.println("Processing callback");
         process_callback_buffer();
         return;
+    }
+
+    if (register_device)
+    { 
+      registration_loop();
     }
 
     cartridge_loop();

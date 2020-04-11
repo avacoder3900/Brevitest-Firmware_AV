@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 6
+#define FIRMWARE_VERSION 10
 #define DATA_FORMAT_VERSION 12
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
@@ -107,12 +107,12 @@
 #define TIMEOUT_UPLOAD 20000
 
 // application watchdog
-void watchdog(void);
-ApplicationWatchdog wd(60000, watchdog);
+// void watchdog(void);
+// ApplicationWatchdog wd(60000, watchdog);
 
 // pin definitions
 
-// BORON PIN MAPPINGS
+// PIN MAPPINGS
 
 int pinLEDControl2 = A0;
 int pinLEDControl1 = A1;
@@ -137,6 +137,7 @@ int pinBuzzer = D7;
 int pinHeater = D8;
 
 // global variables
+bool new_device = true;
 int stage_position = 0;
 int microns_error = 0;
 unsigned long periodic_event;
@@ -156,9 +157,13 @@ LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
 LEDStatus ledCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_SLOW);
 
 // device state
+bool register_device = false;
+bool waiting_for_registration = false;
+
 volatile bool cartridge_state_changed = false;
 bool cartridge_state_debounce = false;
 bool cartridge_loaded = false;
+
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;
 
