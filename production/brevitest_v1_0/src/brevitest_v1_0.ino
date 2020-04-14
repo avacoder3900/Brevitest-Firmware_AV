@@ -2386,6 +2386,7 @@ bool device_is_registered()
     int addr = 0;
     uint8_t value;
 
+    Serial.println("Checking whether device is registered");
     EEPROM.get(addr, value);
     register_device = (value == 0xFF); // EEPROM is empty if first value is 255
 

@@ -2392,7 +2392,6 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 void configure()
 {
     Particle.variable("register", particle_register, STRING);
-    Particle.function("command", particle_command);
     Particle.function("run_test", particle_run_test);
 
     device_id_string = System.deviceID();
@@ -2466,6 +2465,7 @@ bool device_is_registered()
     int addr = 0;
     uint8_t value;
 
+    Serial.println("Checking whether device is registered");
     EEPROM.get(addr, value);
     register_device = (value == 0xFF); // EEPROM is empty if first value is 255
 
