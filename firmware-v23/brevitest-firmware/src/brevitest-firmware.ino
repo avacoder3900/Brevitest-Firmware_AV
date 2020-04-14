@@ -177,8 +177,9 @@ void load_eeprom()
 void store_eeprom()
 {
     uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
+    int s = (int)sizeof(Particle_EEPROM);
+    Serial.println("Storing %d bytes of EEPROM data")
+    for (int addr = 0; addr < s; addr++, e++)
     {
         EEPROM.write(addr, *e);
     }
