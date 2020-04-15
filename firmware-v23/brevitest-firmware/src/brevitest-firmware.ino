@@ -166,23 +166,12 @@ int integerSqrt(int n)
 
 void load_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        *e = EEPROM.read(addr);
-    }
+    EEPROM.get(0, eeprom);
 }
 
 void store_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-    int s = (int)sizeof(Particle_EEPROM);
-    Serial.println("Storing %d bytes of EEPROM data")
-    for (int addr = 0; addr < s; addr++, e++)
-    {
-        EEPROM.write(addr, *e);
-    }
+    EEPROM.put(0, eeprom);
 }
 
 void erase_test_cache()
@@ -207,14 +196,6 @@ int reset_eeprom()
     store_eeprom();
 
     return 1;
-}
-
-void erase_eeprom()
-{
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++)
-    {
-        EEPROM.write(addr, 0);
-    }
 }
 
 void dump_eeprom()

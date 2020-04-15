@@ -254,12 +254,7 @@ void load_eeprom()
 
 void store_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        EEPROM.write(addr, *e);
-    }
+    EEPROM.put(0, eeprom);
 }
 
 void erase_test_cache()
