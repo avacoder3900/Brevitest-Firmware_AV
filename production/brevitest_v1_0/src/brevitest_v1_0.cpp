@@ -21,8 +21,8 @@ int integerSqrt(int n);
 void load_eeprom();
 void store_eeprom();
 void erase_test_cache();
-int reset_eeprom();
 void erase_eeprom();
+int reset_eeprom();
 void dump_eeprom();
 bool move_one_eighth_step(int dir, int step_delay);
 void move_stage(int microns, int step_delay);
@@ -87,7 +87,7 @@ void cancel_or_retry_publish();
 void process_callback_buffer();
 #line 10 "/Users/leo3/github/brevitest-device/production/brevitest_v1_0/src/brevitest_v1_0.ino"
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(4347);
+PRODUCT_ID(11170);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -252,22 +252,12 @@ int integerSqrt(int n)
 
 void load_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        *e = EEPROM.read(addr);
-    }
+    EEPROM.get(0, eeprom);
 }
 
 void store_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        EEPROM.write(addr, *e);
-    }
+    EEPROM.put(0, eeprom);
 }
 
 void erase_test_cache()
@@ -283,23 +273,19 @@ void erase_test_cache()
     }
 }
 
+void erase_eeprom()
+{
+    EEPROM.clear();
+}
+
 int reset_eeprom()
 {
     Particle_EEPROM e;
 
+    erase_eeprom();
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
-    erase_test_cache();
-    store_eeprom();
 
     return 1;
-}
-
-void erase_eeprom()
-{
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++)
-    {
-        EEPROM.write(addr, 0);
-    }
 }
 
 void dump_eeprom()
