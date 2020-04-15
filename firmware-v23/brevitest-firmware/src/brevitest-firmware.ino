@@ -187,15 +187,13 @@ void erase_test_cache()
     }
 }
 
-int reset_eeprom()
+void reset_eeprom()
 {
     Particle_EEPROM e;
 
+    Serial.println("Resetting EEPROM");
+    EEPROM.clear();
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
-    erase_test_cache();
-    store_eeprom();
-
-    return 1;
 }
 
 void dump_eeprom()
@@ -1923,7 +1921,7 @@ int particle_command(String arg)
         Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
         result = param1;
         break;
-    case 8: // reset params
+    case 8: // reset EEPROM
         reset_eeprom();
         result = (int)eeprom.data_format_version;
         break;

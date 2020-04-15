@@ -14,8 +14,7 @@ int integerSqrt(int n);
 void load_eeprom();
 void store_eeprom();
 void erase_test_cache();
-int reset_eeprom();
-void erase_eeprom();
+void reset_eeprom();
 void dump_eeprom();
 bool move_one_eighth_step(int dir, int step_delay);
 void move_stage(int microns, int step_delay);
@@ -244,12 +243,7 @@ int integerSqrt(int n)
 
 void load_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        *e = EEPROM.read(addr);
-    }
+    EEPROM.get(0, eeprom);
 }
 
 void store_eeprom()
@@ -270,23 +264,13 @@ void erase_test_cache()
     }
 }
 
-int reset_eeprom()
+void reset_eeprom()
 {
     Particle_EEPROM e;
 
+    Serial.println("Resetting EEPROM");
+    EEPROM.clear();
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
-    erase_test_cache();
-    store_eeprom();
-
-    return 1;
-}
-
-void erase_eeprom()
-{
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++)
-    {
-        EEPROM.write(addr, 0);
-    }
 }
 
 void dump_eeprom()
@@ -2014,7 +1998,7 @@ int particle_command(String arg)
         Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
         result = param1;
         break;
-    case 8: // reset params
+    case 8: // reset EEPROM
         reset_eeprom();
         result = (int)eeprom.data_format_version;
         break;
