@@ -1160,13 +1160,14 @@ void brevitest_publish(String event_name, char *data, bool retry)
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest"), event_name + String("\n") + String(data), PRIVATE, NO_ACK);
-    Serial.printlnf("Publish: %s, %s, try: %d", event_name, data, current_event_tries);
+    Particle.publish(String("brevitest-production"), event_name + String("\n") + String(data), PRIVATE, NO_ACK);
+    Serial.printlnf("Publish: %s, %s, try: %d", event_name.c_str(), data, current_event_tries);
 }
 
 void startup(void);
 void callback_register()
 {
+    Serial.printlnf("Device registration callback");
     waiting_for_registration = false;
     if ((strncmp(callback_status, SUCCESS, 7) == 0))
     { // device registered
@@ -1907,17 +1908,20 @@ int particle_command(String arg)
         result = param1;
         break;
     case 5: // not used
-        result = 0;
+        dump_eeprom();
+        result = 1;
         break;
-    case 6: // not used
-        result = 0;
+    case 6: // erase EEPROM and restart
+        erase_eeprom();
+        System.reset();
+        result = 1;
         break;
     case 7: // read heater temperature
         indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
         Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
         result = param1;
         break;
-    case 8: // reset params
+    case 8: // reset EEPROM
         reset_eeprom();
         result = (int)eeprom.data_format_version;
         break;
@@ -2296,7 +2300,7 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
     }
 }
 
-void configure()
+void configure_analyzer()
 {
     Particle.variable("register", particle_register, STRING);
     Particle.function("run_test", particle_run_test);
@@ -2328,11 +2332,9 @@ void configure()
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);
-
-    Serial.begin(115200); // standard serial port
 }
 
-void startup()
+void startup_analyzer()
 {
     load_eeprom();
     if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION)
@@ -2367,12 +2369,12 @@ void startup()
     periodic_event = millis() + 5000;
 }
 
-bool device_is_registered()
+bool analyzer_is_registered()
 {
     int addr = 0;
     uint8_t value;
 
-    Serial.println("Checking whether device is registered");
+    Serial.println("Checking whether analyzer is registered");
     EEPROM.get(addr, value);
     register_device = (value == 0xFF); // EEPROM is empty if first value is 255
 
@@ -2381,12 +2383,18 @@ bool device_is_registered()
 
 void setup()
 {
-    configure();
+    configure_analyzer();
 
-    if (device_is_registered()) {
-        startup();
+    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+
+    Serial.begin(115200); // standard serial port
+    Serial.println("Configuration complete. Starting up...");
+    delay(3000);
+    if (analyzer_is_registered()) {
+        startup_analyzer();
     } else {
-        Serial.printlnf("New device detected, ID = %s", device_id);
+        ledProblem.setActive(true);
+        registration_timeout = 0;
     }
 }
 
@@ -2506,10 +2514,11 @@ void cartridge_loop()
 
 void registration_loop()
 {
-    if (!waiting_for_registration)
+    if (!waiting_for_registration || registration_timeout < millis())
     {
-        brevitest_publish("register-device", device_id, false);
         waiting_for_registration = true;
+        brevitest_publish("register-device", device_id, false);
+        registration_timeout = millis() + TIMEOUT_REGISTRATION;
     }
 }
 
@@ -2542,27 +2551,27 @@ void loop()
 
     if (register_device)
     { 
-      registration_loop();
-    }
+        registration_loop();
+    } else {
+        cartridge_loop();
+        test_loop();
 
-    cartridge_loop();
-    test_loop();
+        if (read_optical_sensors_command_flag)
+        {
+            read_optical_sensors_command_flag = false;
+            read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
+        }
 
-    if (read_optical_sensors_command_flag)
-    {
-        read_optical_sensors_command_flag = false;
-        read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
-    }
+        if (read_optical_sensor_baselines_command_flag)
+        {
+            read_optical_sensor_baselines_command_flag = false;
+            read_optical_sensor_baselines(read_optical_sensor_baselines_command_param, read_optical_sensors_command_led_power);
+        }
 
-    if (read_optical_sensor_baselines_command_flag)
-    {
-        read_optical_sensor_baselines_command_flag = false;
-        read_optical_sensor_baselines(read_optical_sensor_baselines_command_param, read_optical_sensors_command_led_power);
-    }
-
-    if (control_heater_temperature_flag)
-    {
-        control_heater_temperature_flag = false;
-        pulse_heater(pid_controller());
+        if (control_heater_temperature_flag)
+        {
+            control_heater_temperature_flag = false;
+            pulse_heater(pid_controller());
+        }
     }
 }

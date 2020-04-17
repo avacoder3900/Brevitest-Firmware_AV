@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 10
+#define FIRMWARE_VERSION 11
 #define DATA_FORMAT_VERSION 12
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
@@ -105,6 +105,7 @@
 #define TIMEOUT_CANCEL 10000
 #define TIMEOUT_FINISH 10000
 #define TIMEOUT_UPLOAD 20000
+#define TIMEOUT_REGISTRATION 20000
 
 // application watchdog
 // void watchdog(void);
@@ -148,6 +149,7 @@ unsigned long start_timeout;
 unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
+unsigned long registration_timeout;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
