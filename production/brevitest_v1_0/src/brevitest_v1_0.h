@@ -13,6 +13,8 @@
 #define TAB_DELIM String("\t")
 #define RETURN_DELIM String("\n")
 #define COMMA_DELIM String(",")
+#define COLON_DELIM String(":")
+#define RESPONSE_END String("|||")
 #define BCODE_END String("99")
 #define MAX_ANALOG_READ 4095
 #define SERIAL_COMMAND_BUFFER_SIZE 40
@@ -105,7 +107,7 @@
 #define TIMEOUT_CANCEL 10000
 #define TIMEOUT_FINISH 10000
 #define TIMEOUT_UPLOAD 20000
-#define TIMEOUT_REGISTRATION 20000
+#define TIMEOUT_REGISTRATION 30000
 
 // application watchdog
 // void watchdog(void);
