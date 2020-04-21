@@ -5,17 +5,14 @@
 
 // general constants
 #define FIRMWARE_VERSION 11
-#define DATA_FORMAT_VERSION 12
+#define DATA_FORMAT_VERSION 13
 #define ASSAY_UUID_LENGTH 8
-#define TEST_UUID_LENGTH 24
-#define DEVICE_ID_LENGTH 24
 #define CARTRIDGE_UUID_LENGTH 24
-#define TAB_DELIM String("\t")
-#define RETURN_DELIM String("\n")
-#define COMMA_DELIM String(",")
-#define ATTR_DELIM '|'
-#define ITEM_DELIM '#'
-#define BCODE_END String("99")
+#define ARG_DELIM ','
+#define ATTR_DELIM ':'
+#define ITEM_DELIM '|'
+#define END_DELIM '#'
+#define BCODE_END "99"
 #define MAX_ANALOG_READ 4095
 #define SERIAL_COMMAND_BUFFER_SIZE 40
 
@@ -25,15 +22,11 @@
 #define CARTRIDGE_ERROR_UUID "EEEEEEEEEEEEEEEEEEEEEEEE"
 #define SUCCESS "SUCCESS"
 
-// serial number
-#define SERIAL_NUMBER_LENGTH 19
-
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
 #define OPTICAL_SENSOR_DEFAULT_PARAM 0xB6
 #define OPTICAL_SENSORS_TEST_INTERVAL 5000
-#define OPTICAL_BASELINE_THRESHOLD 100
-#define OPTICAL_BASELINE_MAX_READINGS 50
+#define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 12
 
 // LEDs
 #define LED_DEFAULT_POWER 255
@@ -45,7 +38,7 @@
 #define BUZZER_DURATION 1000
 
 // assay
-#define ASSAY_BCODE_CAPACITY 2000
+#define BCODE_CAPACITY 2000
 
 // params
 #define PARAM_NUMBER_INDEX 2
@@ -53,14 +46,11 @@
 #define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
-#define TEST_CACHE_SIZE 4
-#define TEST_MAXIMUM_NUMBER_OF_READINGS 12
+#define CACHE_SIZE 4
 
 // particle
 #define PARTICLE_REGISTER_SIZE 622
-#define PARTICLE_ARG_SIZE 63
-#define PARTICLE_PUBLISH_INTERVAL 1000
-#define MOVE_STEPS_BETWEEN_PARTICLE_PROCESS 200
+#define PARTICLE_ARG_SIZE 63 
 #define PARTICLE_CLOUD_DELAY 2000
 
 // status
@@ -77,6 +67,7 @@
 // motor
 #define MICRONS_PER_FULL_STEP 200
 #define MICRONS_PER_EIGHTH_STEP 25
+#define MOVE_DURATION_UNIT 25000
 #define STAGE_POSITION_LIMIT 41000
 #define FAST_STEP_DELAY 150
 #define SLOW_STEP_DELAY 1000
@@ -97,6 +88,17 @@
 // thermistors
 #define THERMISTOR_SCALE 10000
 #define TERMISTOR_TABLE_LENGTH 21
+
+// pubsub
+#define PUBSUB_EVENT_MAX_LENGTH 32
+#define PUBSUB_STATUS_MAX_LENGTH 16
+#define PUBSUB_CALLBACK_BUFFER_SIZE 2500
+#define PUBSUB_REGISTER_DEVICE 1
+#define PUBSUB_VALIDATE_CARTRIDGE 2
+#define PUBSUB_TEST_START 3
+#define PUBSUB_TEST_FINISH 4
+#define PUBSUB_TEST_CANCEL 5
+#define PUBSUB_TEST_UPLOAD 6
 
 // upload
 #define UPLOAD_INTERVAL 60000
@@ -250,25 +252,20 @@ int test_percent_complete;
 unsigned long test_last_progress_update;
 
 // uuids
-char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1];
 char barcode_uuid[CARTRIDGE_UUID_LENGTH + 1];
-char device_id[DEVICE_ID_LENGTH + 1];
-String device_id_string;
+char assay_uuid[ASSAY_UUID_LENGTH + 1];
+String device_id;
 
 // publish and subscribe callback
-#define CALLBACK_BUFFER_SIZE 2500
-char callback_buffer[CALLBACK_BUFFER_SIZE];
+char callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE];
 bool callback_complete;
-char callback_event[30];
-char callback_status[40];
-char callback_target[40];
-String current_event;
-char current_data[60];
-int current_event_tries = 0;
+char callback_event[PUBSUB_EVENT_MAX_LENGTH + 1];
+char callback_status[PUBSUB_STATUS_MAX_LENGTH + 1];
+char *callback_data;
+char current_event[PUBSUB_EVENT_MAX_LENGTH + 1];
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
-char particle_status[STATUS_LENGTH + 1];
 
 struct BrevitestOpticalSensorRecord
 { // 14 bytes
@@ -283,25 +280,21 @@ struct BrevitestOpticalSensorRecord
 
 struct BrevitestTestRecord
 { // 206 bytes
+    char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     int start_time;
     int finish_time;
-    char test_uuid[TEST_UUID_LENGTH + 1]; // 27 bytes
     uint8_t number_of_readings;
     uint16_t reserved;
-    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
-} test_record;
+    BrevitestOpticalSensorRecord reading[OPTICAL_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
+} test;
 
-struct BrevitestAssayRecord
+struct BrevitestAssay
 {
     char uuid[ASSAY_UUID_LENGTH + 1];
-    int duration;
-    int optical_sensor_integration_time;
-    int optical_sensor_gain;
-    int reserved;
-    int delay_between_optical_sensor_readings_ms;
-    uint16_t BCODE_length;
     uint8_t BCODE_version;
-    char BCODE[ASSAY_BCODE_CAPACITY];
+    int duration;
+    uint16_t BCODE_length;
+    char BCODE[BCODE_CAPACITY];
 } assay;
 
 struct Particle_EEPROM
@@ -309,8 +302,7 @@ struct Particle_EEPROM
     uint8_t firmware_version; // 8 bytes
     uint8_t data_format_version;
     uint8_t most_recent_test;
-    char serial_number[SERIAL_NUMBER_LENGTH + 1];    // 20 bytes, includes trailing \0
-    BrevitestTestRecord test_cache[TEST_CACHE_SIZE]; // up to 10 test results cached
+    BrevitestTestRecord cache[CACHE_SIZE]; // up to 10 tests cached
     Particle_EEPROM()
     {
         firmware_version = FIRMWARE_VERSION;
