@@ -1170,6 +1170,7 @@ void callback_register()
     waiting_for_registration = false;
     if ((strncmp(callback_status, SUCCESS, 7) == 0))
     { // device registered
+        Serial.printlnf("Device registered.");
         reset_eeprom();
         startup();
     }
