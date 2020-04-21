@@ -13,6 +13,8 @@
 #define TAB_DELIM String("\t")
 #define RETURN_DELIM String("\n")
 #define COMMA_DELIM String(",")
+#define ATTR_DELIM '|'
+#define ITEM_DELIM '#'
 #define BCODE_END String("99")
 #define MAX_ANALOG_READ 4095
 #define SERIAL_COMMAND_BUFFER_SIZE 40
