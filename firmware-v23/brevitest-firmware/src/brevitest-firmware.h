@@ -5,7 +5,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 6
-#define DATA_FORMAT_VERSION 12
+#define DATA_FORMAT_VERSION 13
 #define ASSAY_UUID_LENGTH 8
 #define TEST_UUID_LENGTH 24
 #define DEVICE_ID_LENGTH 24
@@ -52,7 +52,7 @@
 
 // caches
 #define TEST_CACHE_SIZE 4
-#define TEST_MAXIMUM_NUMBER_OF_READINGS 12
+#define TEST_MAXIMUM_NUMBER_OF_READINGS 15
 
 // particle
 #define PARTICLE_REGISTER_SIZE 622
@@ -273,13 +273,13 @@ struct BrevitestOpticalSensorRecord
 } reading_assay, reading_control_1, reading_control_2;
 
 struct BrevitestTestRecord
-{ // 206 bytes
+{ // 550 bytes
     int start_time;
     int finish_time;
     char test_uuid[TEST_UUID_LENGTH + 1]; // 27 bytes
     uint8_t number_of_readings;
     uint16_t reserved;
-    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
+    BrevitestOpticalSensorRecord reading[TEST_MAXIMUM_NUMBER_OF_READINGS]; // 504 bytes
 } test_record;
 
 struct BrevitestAssayRecord
@@ -301,7 +301,7 @@ struct Particle_EEPROM
     uint8_t data_format_version;
     uint8_t most_recent_test;
     char serial_number[SERIAL_NUMBER_LENGTH + 1];    // 20 bytes, includes trailing \0
-    BrevitestTestRecord test_cache[TEST_CACHE_SIZE]; // up to 10 test results cached
+    BrevitestTestRecord test_cache[TEST_CACHE_SIZE]; // up to 4 test results cached
     Particle_EEPROM()
     {
         firmware_version = FIRMWARE_VERSION;

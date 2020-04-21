@@ -1160,19 +1160,20 @@ void brevitest_publish(String event_name, char *data, bool retry)
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest"), event_name + String("\n") + String(data), PRIVATE, NO_ACK);
-    Serial.printlnf("Publish: %s, %s, try: %d", event_name, data, current_event_tries);
+    Particle.publish(String("brevitest-production"), event_name + String(":") + String(data), PRIVATE, NO_ACK);
+    Serial.printlnf("Publish: %s, %s, try: %d", event_name.c_str(), data, current_event_tries);
 }
 
-void startup(void);
+void startup_analyzer(void);
 void callback_register()
 {
+    Serial.printlnf("Device registration callback");
     waiting_for_registration = false;
     if ((strncmp(callback_status, SUCCESS, 7) == 0))
     { // device registered
         Serial.printlnf("Device registered.");
         reset_eeprom();
-        startup();
+        startup_analyzer();
     }
     else
     {
@@ -1288,17 +1289,18 @@ char *extract_callback_params()
 
     mark = callback_buffer;
 
-    indx = strcspn(mark, RETURN_DELIM);
+    indx = strcspn(mark, COLON_DELIM);
+    indx = strcspn(mark, COLON_DELIM);
     strncpy(callback_event, mark, indx);
     callback_event[indx] = '\0';
     mark += indx + 1;
 
-    indx = strcspn(mark, RETURN_DELIM);
+    indx = strcspn(mark, COLON_DELIM);
     strncpy(callback_status, mark, indx);
     callback_status[indx] = '\0';
     mark += indx + 1;
 
-    indx = strcspn(mark, RETURN_DELIM);
+    indx = strcspn(mark, COLON_DELIM);
     strncpy(callback_target, mark, indx);
     callback_target[indx] = '\0';
     mark += indx + 1;
@@ -1306,80 +1308,87 @@ char *extract_callback_params()
     return mark;
 }
 
-void clean_callback_buffer()
-{
-    int i, len;
-    char *from = callback_buffer;
-    char *to = callback_buffer;
+// void clean_callback_buffer()
+// {
+//     int i, len;
+//     char *from = callback_buffer;
+//     char *to = callback_buffer;
 
-    len = strlen(callback_buffer);
-    from++;
-    for (i = 0; i < len - 2; i++)
-    {
-        if (*from == '\\')
-        {
-            from++;
-            i++;
-            if (*from == 't')
-            {
-                *to++ = '\t';
-            }
-            else if (*from == 'n')
-            {
-                *to++ = '\n';
-            }
-            else
-            {
-                *to++ = '\\';
-                *to++ = *from;
-            }
-            from++;
-        }
-        else
-        {
-            *to++ = *from++;
-        }
-    }
-    *to = '\0';
-}
+//     len = strlen(callback_buffer);
+//     from++;
+//     for (i = 0; i < len - 2; i++)
+//     {
+//         if (*from == '\\')
+//         {
+//             from++;
+//             i++;
+//             if (*from == 't')
+//             {
+//                 *to++ = '\t';
+//             }
+//             else if (*from == 'n')
+//             {
+//                 *to++ = '\n';
+//             }
+//             else
+//             {
+//                 *to++ = '\\';
+//                 *to++ = *from;
+//             }
+//             from++;
+//         }
+//         else
+//         {
+//             *to++ = *from++;
+//         }
+//     }
+//     *to = '\0';
+// }
 
 void cancel_or_retry_publish()
 {
     if (current_event_tries < 5)
     {
-        Serial.printlnf("ERROR: bad callback for event %s - retrying", current_event);
+        Serial.printlnf("ERROR: bad callback for event %s - retrying", current_event.c_str());
         brevitest_publish(current_event, current_data, true);
     }
     else
     {
-        Serial.printlnf("ERROR: bad callback for event %s - maximum number of retries exceeded", current_event);
+        Serial.printlnf("ERROR: bad callback for event %s - maximum number of retries exceeded", current_event.c_str());
     }
 }
 
 void process_callback_buffer()
 {
     char *data_mark;
+    int len;
 
     callback_complete = false;
-    if (callback_buffer[0] != '\"')
-    {
-        Serial.printlnf("Missing lead quote. Callback buffer: %s", callback_buffer);
-        cancel_or_retry_publish();
-        return;
-    }
+    // if (callback_buffer[0] != '\"')
+    // {
+    //     Serial.printlnf("Missing lead quote. Callback buffer: %s", callback_buffer);
+    //     cancel_or_retry_publish();
+    //     return;
+    // }
 
-    clean_callback_buffer();
+    // clean_callback_buffer();
+    len = strlen(callback_buffer);
+    callback_buffer[len - 3] = '\0';
     data_mark = extract_callback_params();
     Serial.printlnf("Event: %s, status: %s, target: %s, data: %s", callback_event, callback_status, callback_target, data_mark);
 
-    if (strcmp(callback_event, current_event) != 0)
+    if (strcmp(callback_event, current_event.c_str()) != 0)
     {
         Serial.printlnf("Wrong event. Callback buffer: %s", callback_buffer);
         cancel_or_retry_publish();
         return;
     }
 
-    if (strcmp(callback_event, "validate-cartridge") == 0)
+    if (strcmp(callback_event, "register-device") == 0)
+    {
+        callback_register();
+    }
+    else if (strcmp(callback_event, "validate-cartridge") == 0)
     {
         callback_validate(callback_target, data_mark);
     }
@@ -1404,16 +1413,16 @@ void process_callback_buffer()
 void brevitest_error(const char *event, const char *data)
 {
     strcat(callback_buffer, data);
-    int len = strlen(data);
-    callback_complete = (len < 512) || (data[len - 1] == '\"');
+    int last = strlen(data) - 1;
+    callback_complete = ((data[last] == '|') && (data[last - 1] == '|') && (data[last - 2] == '|'));
     Serial.printlnf("Callback error - event: %s, data: %s", event, data);
 }
 
 void brevitest_callback(const char *event, const char *data)
 {
     strcat(callback_buffer, data);
-    int len = strlen(data);
-    callback_complete = (len < 512) || (data[len - 1] == '\"');
+    int last = strlen(data) - 1;
+    callback_complete = ((data[last] == '|') && (data[last - 1] == '|') && (data[last - 2] == '|'));
     Serial.printlnf("callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');
 }
 
@@ -1908,17 +1917,20 @@ int particle_command(String arg)
         result = param1;
         break;
     case 5: // not used
-        result = 0;
+        dump_eeprom();
+        result = 1;
         break;
-    case 6: // not used
-        result = 0;
+    case 6: // erase EEPROM and restart
+        erase_eeprom();
+        System.reset();
+        result = 1;
         break;
     case 7: // read heater temperature
         indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
         Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
         result = param1;
         break;
-    case 8: // reset params
+    case 8: // reset EEPROM
         reset_eeprom();
         result = (int)eeprom.data_format_version;
         break;
@@ -2297,14 +2309,14 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
     }
 }
 
-void configure()
+void configure_analyzer()
 {
     Particle.variable("register", particle_register, STRING);
     Particle.function("run_test", particle_run_test);
 
     device_id_string = System.deviceID();
-    Particle.subscribe(String("hook-response/brevitest-" + device_id_string), brevitest_callback, MY_DEVICES);
-    Particle.subscribe(String("hook-error/brevitest-" + device_id_string), brevitest_error, MY_DEVICES);
+    Particle.subscribe(String(device_id_string + "/hook-response/brevitest-production/"), brevitest_callback, MY_DEVICES);
+    Particle.subscribe(String(device_id_string + "/hook-error/brevitest-production/"), brevitest_error, MY_DEVICES);
     device_id_string.toCharArray(device_id, DEVICE_ID_LENGTH + 1);
     device_id[DEVICE_ID_LENGTH] = '\0';
 
@@ -2329,11 +2341,9 @@ void configure()
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);
-
-    Serial.begin(115200); // standard serial port
 }
 
-void startup()
+void startup_analyzer()
 {
     load_eeprom();
     if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION)
@@ -2368,12 +2378,12 @@ void startup()
     periodic_event = millis() + 5000;
 }
 
-bool device_is_registered()
+bool analyzer_is_registered()
 {
     int addr = 0;
     uint8_t value;
 
-    Serial.println("Checking whether device is registered");
+    Serial.println("Checking whether analyzer is registered");
     EEPROM.get(addr, value);
     register_device = (value == 0xFF); // EEPROM is empty if first value is 255
 
@@ -2382,12 +2392,18 @@ bool device_is_registered()
 
 void setup()
 {
-    configure();
+    configure_analyzer();
 
-    if (device_is_registered()) {
-        startup();
+    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+
+    Serial.begin(115200); // standard serial port
+    Serial.println("Configuration complete. Starting up...");
+    delay(3000);
+    if (analyzer_is_registered()) {
+        startup_analyzer();
     } else {
-        Serial.printlnf("New device detected, ID = %s", device_id);
+        ledProblem.setActive(true);
+        registration_timeout = 0;
     }
 }
 
@@ -2507,11 +2523,14 @@ void cartridge_loop()
 
 void registration_loop()
 {
-    if (!waiting_for_registration)
-    {
-        brevitest_publish("register-device", device_id, false);
+    if (!waiting_for_registration || registration_timeout < millis()) {
         waiting_for_registration = true;
-    }
+        registration_timeout = millis() + TIMEOUT_REGISTRATION;
+        while (!Particle.connected()) {
+            delay(1000);
+        }
+        brevitest_publish("register-device", device_id, false);
+    } 
 }
 
 void loop()
@@ -2543,27 +2562,27 @@ void loop()
 
     if (register_device)
     { 
-      registration_loop();
-    }
+        registration_loop();
+    } else {
+        cartridge_loop();
+        test_loop();
 
-    cartridge_loop();
-    test_loop();
+        if (read_optical_sensors_command_flag)
+        {
+            read_optical_sensors_command_flag = false;
+            read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
+        }
 
-    if (read_optical_sensors_command_flag)
-    {
-        read_optical_sensors_command_flag = false;
-        read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
-    }
+        if (read_optical_sensor_baselines_command_flag)
+        {
+            read_optical_sensor_baselines_command_flag = false;
+            read_optical_sensor_baselines(read_optical_sensor_baselines_command_param, read_optical_sensors_command_led_power);
+        }
 
-    if (read_optical_sensor_baselines_command_flag)
-    {
-        read_optical_sensor_baselines_command_flag = false;
-        read_optical_sensor_baselines(read_optical_sensor_baselines_command_param, read_optical_sensors_command_led_power);
-    }
-
-    if (control_heater_temperature_flag)
-    {
-        control_heater_temperature_flag = false;
-        pulse_heater(pid_controller());
+        if (control_heater_temperature_flag)
+        {
+            control_heater_temperature_flag = false;
+            pulse_heater(pid_controller());
+        }
     }
 }

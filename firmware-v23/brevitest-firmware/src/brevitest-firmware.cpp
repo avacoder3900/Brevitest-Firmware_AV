@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#include "application.h"
+#include "Particle.h"
 #line 1 "/Users/leo3/github/brevitest-device/firmware-v23/brevitest-firmware/src/brevitest-firmware.ino"
 #include "brevitest-firmware.h"
 
@@ -14,8 +14,7 @@ int integerSqrt(int n);
 void load_eeprom();
 void store_eeprom();
 void erase_test_cache();
-int reset_eeprom();
-void erase_eeprom();
+void reset_eeprom();
 void dump_eeprom();
 bool move_one_eighth_step(int dir, int step_delay);
 void move_stage(int microns, int step_delay);
@@ -244,22 +243,12 @@ int integerSqrt(int n)
 
 void load_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        *e = EEPROM.read(addr);
-    }
+    EEPROM.get(0, eeprom);
 }
 
 void store_eeprom()
 {
-    uint8_t *e = (uint8_t *)&eeprom;
-
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++, e++)
-    {
-        EEPROM.write(addr, *e);
-    }
+    EEPROM.put(0, eeprom);
 }
 
 void erase_test_cache()
@@ -275,23 +264,13 @@ void erase_test_cache()
     }
 }
 
-int reset_eeprom()
+void reset_eeprom()
 {
     Particle_EEPROM e;
 
+    Serial.println("Resetting EEPROM");
+    EEPROM.clear();
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
-    erase_test_cache();
-    store_eeprom();
-
-    return 1;
-}
-
-void erase_eeprom()
-{
-    for (int addr = 0; addr < (int)sizeof(Particle_EEPROM); addr++)
-    {
-        EEPROM.write(addr, 0);
-    }
 }
 
 void dump_eeprom()
@@ -444,11 +423,9 @@ void move_stage_to_test_start_position()
     move_stage_to_position(MICRONS_TO_TEST_START_POSITION, FAST_STEP_DELAY);
 }
 
-void update_progress(String, int);
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
-    update_progress("Moving magnets to position", (abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP) / 1000);
     Serial.printlnf("Moving stage to position %d, distance = %d", position, move_distance);
     move_stage(move_distance, step_delay); // move stage to optical read position
 }
@@ -956,17 +933,19 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
     }
 
     sum_x = sum_y = sum_z = sum_t = 0;
-
+    
+    reading_optical_sensors = true;
+    turn_off_heater();
     turn_on_LED(channel, led_power);
     delay(100);
+    
+    config_optical_sensors(channel, param, addr);
 
     reading->channel = channel;
     reading->time_ms = millis();
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
     for (i = 0; i < reading->samples; i++)
     {
-        config_optical_sensors(channel, param, addr);
-
         if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC))
         {
             sum_x += x;
@@ -986,8 +965,9 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power, bo
 
     tempF = ((reading->temperature * 9) / 5) + 32;
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
+    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 10000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
+    reading_optical_sensors = false;
     turn_off_LED(channel);
 }
 
@@ -1155,7 +1135,7 @@ int pid_controller()
 
 void control_heater_temperature()
 {
-    control_heater_temperature_flag = true;
+    control_heater_temperature_flag = !reading_optical_sensors;
 }
 
 void start_temperature_control()
@@ -1543,6 +1523,7 @@ void store_test(int index)
 
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
+    Serial.printlnf("%d\t%c\t%11lu\t%5d\t%5d\t%5d\t%5d", start, reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature);
     return sprintf(&(particle_register[start]), "%c\t%11lu\t%5d\t%5d\t%5d\t%5d\n",
                    reading->channel, reading->time_ms, reading->x, reading->y, reading->z, reading->temperature);
 }
@@ -1550,14 +1531,16 @@ int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 int process_test_record(int index)
 {
     BrevitestTestRecord *test;
-    int len, i;
+    int count, len, i;
 
     test = &eeprom.test_cache[index];
 
     len = sprintf(particle_register, "%11d\t%11d\t%.24s\n", test->start_time, test->finish_time, test->test_uuid);
-    for (i = 0; i < TEST_MAXIMUM_NUMBER_OF_READINGS; i++)
+    count = test->number_of_readings < TEST_MAXIMUM_NUMBER_OF_READINGS ? test->number_of_readings : TEST_MAXIMUM_NUMBER_OF_READINGS;
+    Serial.printlnf("%11d\t%11d\t%.24s\t%d\t%d", test->start_time, test->finish_time, test->test_uuid, test->number_of_readings, count);
+    for (i = 0; i < count; i++)
     {
-        if (test->reading[i].channel == 'A' || test->reading[i].channel == 'C')
+        if (test->reading[i].channel == 'A' || test->reading[i].channel == '1' || test->reading[i].channel == '2')
         {
             len += append_test_reading(len, &(test->reading[i]));
         }
@@ -1678,7 +1661,7 @@ void update_progress(String message, int duration)
             test_percent_complete = new_percent_complete;
         }
     }
-    Serial.printlnf("%s, %d percent complete, temp = %d.%d", message, test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+    Serial.printlnf("%s, %d percent complete, temp = %d.%d", message.c_str(), test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 }
 
 int BCODE_loop()
@@ -1749,27 +1732,29 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param3); // number of cycles
         oscillate_stage(param1, param2, param3);
         break;
-    case 7: // take initial sensor reading using default param and LED power
-        update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
-        move_stage_to_optical_read_position();
-        update_progress("Reading optical sensor baselines", 6000);
-        read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER);
-        break;
-    case 8:                                      // take initial sensor reading with param = param1 at LED power = param2
-        index = get_BCODE_token(index, &param1); // params
-        index = get_BCODE_token(index, &param2); // LED power
-        update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
-        move_stage_to_optical_read_position();
-        update_progress("Reading optical sensor baselines", 6000);
-        read_optical_sensor_baselines(param1, param2);
-        break;
+    // case 7: // take initial sensor reading using default param and LED power
+    //     update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+    //     move_stage_to_optical_read_position();
+    //     update_progress("Reading optical sensor baselines", 6000);
+    //     read_optical_sensor_baselines(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER);
+    //     break;
+    // case 8:                                      // take initial sensor reading with param = param1 at LED power = param2
+    //     index = get_BCODE_token(index, &param1); // params
+    //     index = get_BCODE_token(index, &param2); // LED power
+    //     update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+    //     move_stage_to_optical_read_position();
+    //     update_progress("Reading optical sensor baselines", 6000);
+    //     read_optical_sensor_baselines(param1, param2);
+    //     break;
+    case 7:
     case 9: // Read optical sensors with default param and LED power
         update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
         move_stage_to_optical_read_position();
         update_progress("Reading optical sensors", 6000);
         read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, true);
         break;
-    case 10:                                     // Read optical sensors with param = param1 at LED power = param2
+    case 8:
+    case 10: // Read optical sensors with param = param1 at LED power = param2
         index = get_BCODE_token(index, &param1); // params
         index = get_BCODE_token(index, &param2); // LED power
         update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
@@ -1935,6 +1920,33 @@ void i2c_bus_scan()
     disable_optical_sensors();
 }
 
+void upload_one_test(int test_number, char *test_id)
+{
+    waiting_for_upload_confirmation = true;
+    upload_timeout = millis() + TIMEOUT_UPLOAD;
+
+    Serial.printlnf("Processing test %s for upload", test_id);
+    process_test_record(test_number);
+
+    Serial.println(particle_register);
+    brevitest_publish("test-upload", test_id, false);
+}
+
+void upload_tests()
+{
+    int i;
+
+    Serial.println("Uploading tests");
+    for (i = 0; i < TEST_CACHE_SIZE; i += 1)
+    {
+        if (eeprom.test_cache[i].test_uuid[0] != '\0')
+        {
+            upload_one_test(i, eeprom.test_cache[i].test_uuid);
+            return;
+        }
+    }
+}
+
 int particle_command(String arg)
 {
     int cmd, result;
@@ -1948,8 +1960,9 @@ int particle_command(String arg)
     indx = get_next_command_param(arg, indx, &cmd, 0);
     switch (cmd)
     {
-    case 1: // unused
-        result = 0;
+    case 1: // upload cached tests
+        upload_tests();
+        result = 1;
         break;
     case 2: // reset stage
         reset_stage(true);
@@ -1973,8 +1986,9 @@ int particle_command(String arg)
         read_optical_sensors_command_flag = true;
         result = param1;
         break;
-    case 5: // not used
-        result = 0;
+    case 5: // reset test cache
+        erase_test_cache();
+        result = 1;
         break;
     case 6: // not used
         result = 0;
@@ -1984,7 +1998,7 @@ int particle_command(String arg)
         Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
         result = param1;
         break;
-    case 8: // reset params
+    case 8: // reset EEPROM
         reset_eeprom();
         result = (int)eeprom.data_format_version;
         break;
@@ -2289,33 +2303,6 @@ void run_test()
     }
 
     finishing_test = !cancelling_test;
-}
-
-void upload_one_test(int test_number, char *test_id)
-{
-    waiting_for_upload_confirmation = true;
-    upload_timeout = millis() + TIMEOUT_UPLOAD;
-
-    Serial.printlnf("Processing test %s for upload", test_id);
-    process_test_record(test_number);
-
-    Serial.println(particle_register);
-    brevitest_publish("test-upload", test_id, false);
-}
-
-void upload_tests()
-{
-    int i;
-
-    Serial.println("Uploading tests");
-    for (i = 0; i < TEST_CACHE_SIZE; i += 1)
-    {
-        if (eeprom.test_cache[i].test_uuid[0] != '\0')
-        {
-            upload_one_test(i, eeprom.test_cache[i].test_uuid);
-            return;
-        }
-    }
 }
 
 int particle_run_test(String arg)

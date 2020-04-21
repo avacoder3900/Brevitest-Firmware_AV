@@ -1,4 +1,4 @@
-/Users/leo3/github/brevitest-device/firmware-v23/brevitest-firmware/target/1.5.0-rc.1/boron//obj/./src/user_export.o: \
+/Users/leo3/github/brevitest-device/firmware-v23/brevitest-firmware/target/1.5.0/argon//obj/./src/user_export.o: \
  src/user_export.c \
  ../../../modules/shared/nRF52840/inc/user_part_export.c \
  ../../../modules/shared/nRF52840/inc/module_user_init.h \
@@ -36,10 +36,10 @@
  ../../../third_party/nrf5_sdk/nrf5_sdk/components/toolchain/cmsis/include/core_cmSimd.h \
  ../../../third_party/nrf5_sdk/nrf5_sdk/modules/nrfx/mdk/system_nrf52840.h \
  ../../../hal/inc/pinmap_hal.h ../../../hal/inc/hal_platform.h \
- ../../../hal/src/boron/hal_platform_config.h \
+ ../../../hal/src/argon/hal_platform_config.h \
  ../../../hal/src/nRF52840/hal_platform_nrf52840_config.h \
  ../../../hal/src/nRF52840/pinmap_impl.h \
- ../../../hal/src/boron/pinmap_defines.h ../../../hal/inc/hal_irq_flag.h \
+ ../../../hal/src/argon/pinmap_defines.h ../../../hal/inc/hal_irq_flag.h \
  ../../../modules/shared/nRF52840/inc/user_dynalib.h
 
 ../../../modules/shared/nRF52840/inc/user_part_export.c:
@@ -122,13 +122,13 @@
 
 ../../../hal/inc/hal_platform.h:
 
-../../../hal/src/boron/hal_platform_config.h:
+../../../hal/src/argon/hal_platform_config.h:
 
 ../../../hal/src/nRF52840/hal_platform_nrf52840_config.h:
 
 ../../../hal/src/nRF52840/pinmap_impl.h:
 
-../../../hal/src/boron/pinmap_defines.h:
+../../../hal/src/argon/pinmap_defines.h:
 
 ../../../hal/inc/hal_irq_flag.h:
 
