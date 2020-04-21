@@ -1286,21 +1286,21 @@ char *extract_callback_params()
 {
     int indx;
     char *mark;
+    const char delim = ATTR_DELIM;
 
     mark = callback_buffer;
 
-    indx = strcspn(mark, COLON_DELIM);
-    indx = strcspn(mark, COLON_DELIM);
+    indx = strcspn(mark, &delim);
     strncpy(callback_event, mark, indx);
     callback_event[indx] = '\0';
     mark += indx + 1;
 
-    indx = strcspn(mark, COLON_DELIM);
+    indx = strcspn(mark, &delim);
     strncpy(callback_status, mark, indx);
     callback_status[indx] = '\0';
     mark += indx + 1;
 
-    indx = strcspn(mark, COLON_DELIM);
+    indx = strcspn(mark, &delim);
     strncpy(callback_target, mark, indx);
     callback_target[indx] = '\0';
     mark += indx + 1;
