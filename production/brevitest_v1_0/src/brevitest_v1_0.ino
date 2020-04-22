@@ -109,9 +109,11 @@ int extract_int_from_delimited_string(char *str, int *indx, char delim)
     char buf[14];
     bool stop = false;
 
-    for (int i = 0; stop || i < 14 ; i++, (*indx)++) {
+    for (int i = 0; i < 14 ; i++) {
         stop = str[*indx] == delim;
         buf[i] = stop ? '\0' : str[*indx];
+        (*indx)++;
+        if (stop) break;
     }
     return atoi(buf);
 }
@@ -1039,21 +1041,38 @@ void validate_cartridge()
 
 bool load_assay_record(char *responseString)
 {
-    int indx = 0;
-    int crc_loaded, crc_calculated;
-
     memcpy(test.cartridge_uuid, responseString, CARTRIDGE_UUID_LENGTH);
+    test.cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+    Serial.printlnf("cartridge_uuid: %s", test.cartridge_uuid);
+
     memcpy(assay.uuid, responseString, ASSAY_UUID_LENGTH);
+    assay.uuid[ASSAY_UUID_LENGTH] = '\0';
+    Serial.printlnf("assay.uuid: %s", assay.uuid);
+
     test.number_of_readings = 0;
 
+    int indx = 25;
+    int crc_loaded, crc_calculated;
+
     assay.BCODE_version = extract_int_from_delimited_string(responseString, &indx, ITEM_DELIM);
+    Serial.printlnf("assay.BCODE_version: %d", assay.BCODE_version);
+
     crc_loaded = extract_int_from_delimited_string(responseString, &indx, ITEM_DELIM);
+    Serial.printlnf("crc_loaded: %u", crc_loaded);
+    
     assay.duration = extract_int_from_delimited_string(responseString, &indx, ITEM_DELIM);
+    Serial.printlnf("assay.duration: %d", assay.duration);
+
     assay.BCODE_length = extract_int_from_delimited_string(responseString, &indx, ITEM_DELIM);
+    Serial.printlnf("assay.BCODE_length: %d", assay.BCODE_length);
+
     strncpy(assay.BCODE, &responseString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
+    Serial.printlnf("assay.BCODE: %d", assay.BCODE);
+
     crc_calculated = abs(checksum(assay.BCODE, assay.BCODE_length));
     Serial.printlnf("BCODE checksums: %u, %u", crc_loaded, crc_calculated);
+
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
 }
 
@@ -1069,7 +1088,7 @@ void brevitest_publish(String event_name, char *uuid)
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest-production"), event_name + String(ITEM_DELIM) + String(uuid) + String(END_DELIM), PRIVATE, NO_ACK);
+    Particle.publish(String("brevitest-production"), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
     Serial.printlnf("Publish: event = %s, uuid = %s", event_name.c_str(), uuid);
 }
 
@@ -1201,7 +1220,7 @@ void process_callback_buffer()
         }
     }
 
-    Serial.printlnf("Callback length: %d, event: %s, status: %s, uuid: %s", strlen(callback_buffer), callback_event, callback_status, callback_data);
+    Serial.printlnf("Callback length: %d, event: %s, status: %s, data: %s", strlen(callback_buffer), callback_event, callback_status, callback_data);
 
     if (strcmp(callback_event, current_event) != 0) {
         Serial.printlnf("Wrong event. Pub event: %s, sub event: %s", current_event, callback_event);
