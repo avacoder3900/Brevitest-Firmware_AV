@@ -74,7 +74,6 @@ bool load_assay_record(char *responseString);
 void brevitest_publish(String event_name, char *uuid);
 void callback_register();
 void callback_validate();
-void callback_test_start();
 void callback_test_finish();
 void callback_test_cancel();
 void remove_test_from_cache(char *testToRemove);
@@ -101,11 +100,10 @@ void i2c_bus_scan();
 int particle_command(String arg);
 void cartridge_loaded_interrupt();
 void check_device_state();
-void start_test();
 void cancel_test();
 void finish_test();
 void run_test();
-void upload_one_test(int test_number, char *cartridgeUUID);
+void upload_one_test(int test_number, char *cartridge_uuid);
 void upload_tests();
 int particle_run_test(String arg);
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value);
@@ -525,8 +523,7 @@ int scan_barcode()
     timeout = millis() + BARCODE_READ_TIMEOUT;
 
     Serial.println("Wait for success");
-    do
-    {
+    do {
         read_success = digitalRead(pinBarcodeReady) == HIGH;
         Serial.print('.');
         Particle.process();
@@ -537,28 +534,23 @@ int scan_barcode()
     digitalWrite(pinBarcodeTrigger, HIGH);
 
     Serial.println("Wait for barcode data");
-    while (!Serial1.available() && millis() < timeout)
-    {
+    while (!Serial1.available() && millis() < timeout) {
         Particle.process();
     };
 
     delay(100); // allow barcode buffer to fill before reading
 
     Serial.println("Reading barcode from Serial1");
-    do
-    {
+    do {
         Serial.print('.');
         buf = Serial1.read();
-        if (buf != -1)
-        {
+        if (buf != -1) {
             barcode_uuid[i++] = (char)buf;
         }
     } while (Serial1.available() && i < CARTRIDGE_UUID_LENGTH);
     Serial.println();
-    /*Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);*/
 
-    if (i < CARTRIDGE_UUID_LENGTH)
-    {
+    if (i < CARTRIDGE_UUID_LENGTH) {
         memcpy(barcode_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
     }
     barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
@@ -1083,19 +1075,14 @@ int pid_controller()
 
     current_read_time = millis();
     prev_read_time = heater.read_time;
-    if ((current_read_time - prev_read_time) >= HEATER_CONTROL_INTERVAL)
-    {
+    if ((current_read_time - prev_read_time) >= HEATER_CONTROL_INTERVAL)  {
         raw = get_heater_temperature();
         heater.read_time = current_read_time;
-        if (raw != 0)
-        {
-            if (prev_read_time == 0)
-            {
+        if (raw != 0) {
+            if (prev_read_time == 0) {
                 heater.previous_error = 0;
                 heater.integral = 0;
-            }
-            else
-            {
+            } else {
                 dt = heater.read_time - prev_read_time;
                 error = heater.target_C_10X - heater.temp_C_10X;
                 heater.integral += (error * dt) / 1000;
@@ -1104,8 +1091,11 @@ int pid_controller()
                 output += (heater.k_i_num * heater.integral) / heater.k_i_den;
                 output += (heater.k_d_num * derivative) / heater.k_d_den;
 
-                if (serial_messaging_on)
-                    Serial.printlnf("raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d", raw, heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.target_C_10X / 10, heater.target_C_10X % 10, dt, error, heater.integral, derivative, output);
+                if (serial_messaging_on) {
+                    Serial.printlnf("raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d",
+                        raw, heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.target_C_10X / 10, heater.target_C_10X % 10,
+                        dt, error, heater.integral, derivative, output);
+                }
                 heater.previous_error = error;
             }
         }
@@ -1149,9 +1139,7 @@ void validate_cartridge()
         validation_timeout = millis() + TIMEOUT_VALIDATION;
         cartridge_validated = false;
         brevitest_publish("validate-cartridge", barcode_uuid);
-    }
-    else
-    {
+    } else {
         Serial.println("Validation failed - not connected to the cloud");
         waiting_for_validation = false;
         cartridge_validated = false;
@@ -1218,27 +1206,13 @@ void callback_validate()
     { // cartridge found
         if (load_assay_record(callback_data)) {
             starting_test = true;
-            Serial.printlnf("Cartridge validated. Assay information loaded: %s", callback_data);
+            Serial.printlnf("Test starting. Assay information loaded: %s", callback_data);
         } else {
             Serial.println("Failed to load assay record");
             cartridge_validated = false;
         }
     } else {
         Serial.printlnf("Invalid cartridge: %s", callback_data);
-    }
-}
-
-void callback_test_start()
-{
-    test_startup_successful = (strncmp(callback_status, SUCCESS, 7) == 0);
-    if (test_startup_successful)
-    {
-        Serial.println("Test started");
-        waiting_for_start_confirmation = false;
-    }
-    else
-    {
-        Serial.println("Test start failed!");
     }
 }
 
@@ -1344,8 +1318,6 @@ void process_callback_buffer()
         callback_register();
     } else if (strcmp(callback_event, "validate-cartridge") == 0) {
         callback_validate();
-    } else if (strcmp(callback_event, "test-start") == 0) {
-        callback_test_start();
     } else if (strcmp(callback_event, "test-finish") == 0) {
         callback_test_finish();
     } else if (strcmp(callback_event, "test-cancel") == 0) {
@@ -1380,35 +1352,28 @@ void brevitest_callback(const char *event, const char *data)
 void initialize_test_cache()
 {
     bool changed = false;
-    int *ptr;
-    int i;
+    char *ptr;
 
-    for (i = 0; i < CACHE_SIZE; i += 1)
-    {
-        ptr = &eeprom.cache[i].start_time;
-        if (*ptr == -1)
-        {
+    for (int i = 0; i < CACHE_SIZE; i += 1) {
+        ptr = eeprom.cache[i].cartridge_uuid;
+        if (*ptr != '\0') {
             memset(ptr, '\0', sizeof(BrevitestTestRecord));
             changed = true;
         }
     }
 
-    if (changed)
-    {
+    if (changed) {
         store_eeprom();
     }
 }
 
 int find_test_index_by_uuid(char *uuid)
 {
-    if (uuid[0] == '\0')
-    {
+    if (uuid[0] == '\0') {
         return -1;
     }
-    for (int i = 0; i < CACHE_SIZE; i += 1)
-    {
-        if (strncmp(uuid, eeprom.cache[i].cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0)
-        {
+    for (int i = 0; i < CACHE_SIZE; i += 1) {
+        if (strncmp(uuid, eeprom.cache[i].cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
             return i;
         }
     }
@@ -1442,9 +1407,9 @@ int process_test_record(int index)
     t = &eeprom.cache[index];
 
     len = sprintf(particle_register, "%.24s%c%8X%c%8X%c",
-                    t->cartridge_uuid, ATTR_DELIM,
-                    (unsigned int) t->start_time, ATTR_DELIM,
-                    (unsigned int) t->finish_time, ATTR_DELIM);
+                    t->cartridge_uuid, ITEM_DELIM,
+                    (unsigned int) t->start_time, ITEM_DELIM,
+                    (unsigned int) t->finish_time, ITEM_DELIM);
 
     for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
     {
@@ -1500,37 +1465,26 @@ int get_BCODE_token(int index, int *token)
     int i;
     char *bcode = assay.BCODE;
 
-    if (cancelling_test)
-    {
-        return index;
-    }
+    if (cancelling_test) return index;
 
-    if (bcode[index] == '\0' || bcode[index] == '\n')
-    {                 // end of string
-        return index; // return end of string location
-    }
+    // end of string so return end of string location
+    if (bcode[index] == ITEM_DELIM) return index;
 
-    if (bcode[index] == '\t')
-    {                     // command has no parameter
-        return index + 1; // skip past parameter
-    }
+     // command has no arguments so skip delim
+    if (bcode[index] == ATTR_DELIM) return index + 1;
 
-    // there is a parameter to extract
+    // there is are arguments to extract
     i = index;
-    while (i < BCODE_CAPACITY)
-    {
-        if (bcode[i] == '\0' || bcode[i] == '\n')
-        {
+    while (i < BCODE_CAPACITY) {
+        if (bcode[i] == ATTR_DELIM) {
             *token = extract_int_from_string(bcode, index, (i - index));
             return i; // return end of string location
         }
-        if ((bcode[i] == '\t') || (bcode[i] == ','))
-        {
+        if (bcode[i] == ARG_DELIM) {
             *token = extract_int_from_string(bcode, index, (i - index));
             i++; // skip past parameter
             return i;
         }
-
         i++;
     }
 
@@ -1542,24 +1496,18 @@ void update_progress(String message, int duration)
     int new_percent_complete;
     int test_duration = assay.duration * 1000;
 
-    if (duration == 0)
-    {
+    if (duration == 0) {
         test_progress = 0;
         test_percent_complete = 0;
     }
-    else if (duration < 0)
-    {
+    else if (duration < 0) {
         test_progress = test_duration;
         test_percent_complete = -1;
-        test_last_progress_update = 0;
-    }
-    else
-    {
+    } else {
         test_progress += duration;
         new_percent_complete = 100 * test_progress / test_duration;
         new_percent_complete = new_percent_complete > 100 ? 100 : new_percent_complete;
-        if (new_percent_complete != test_percent_complete)
-        {
+        if (new_percent_complete != test_percent_complete) {
             test_percent_complete = new_percent_complete;
         }
     }
@@ -1587,19 +1535,16 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int i, j, param1, param2, param3, param4, param5, param6, start_index;
+    int param1, param2, param3, start_index;
 
-    if (cancelling_test)
-    {
-        return index;
-    }
+    if (cancelling_test) return index;
 
     BCODE_loop();
 
     switch (cmd) {
         case 0: // Start test()
             test.start_time = Time.now();
-            update_progress("Starting test", 6000);
+            update_progress("Starting", 6000);
             BCODE_delay(1000);
             break;
         case 1: // Delay(milliseconds)
@@ -1607,124 +1552,55 @@ int process_one_BCODE_command(int cmd, int index)
             update_progress("Pausing", param1);
             BCODE_delay(param1);
             break;
-        case 2:                                      // Move(full steps to move, step delay)
-            index = get_BCODE_token(index, &param1); // full steps
+        case 2: // Move Microns(microns, microseconds)
+            index = get_BCODE_token(index, &param1); // microns to move
             index = get_BCODE_token(index, &param2); // step_delay_us
-            update_progress("Moving magnets", (abs(param1) * param2 / MICRONS_PER_FULL_STEP) / 1000);
-            move_stage(param1 * MICRONS_PER_FULL_STEP, param2);
+            update_progress("Moving", abs(param1) * param2 / MOVE_DURATION_UNIT);
+            move_stage(param1, param2);
             break;
-        case 3: // solenoid - ignore
+        case 3: // Oscillate Stage(microns, microseconds, cycles)
+            index = get_BCODE_token(index, &param1); // microns to move
+            index = get_BCODE_token(index, &param2); // step_delay_us
+            index = get_BCODE_token(index, &param3); // number of cycles
+            update_progress("Oscillating", abs(param1) * param2 * param3 / MOVE_DURATION_UNIT);
+            oscillate_stage(param1, param2, param3);
             break;
-        case 4:                                      // Buzzer on(milliseconds, frequency)
+        case 4: // Buzz(milliseconds, frequency)
             index = get_BCODE_token(index, &param1); // duration_ms
             index = get_BCODE_token(index, &param2); // frequency
             update_progress("Buzzing", param1);
             turn_on_buzzer_for_duration(param2, param1);
             break;
-        case 5:                                      // move microns
-            index = get_BCODE_token(index, &param1); // microns
-            index = get_BCODE_token(index, &param2); // step_delay_us
-            update_progress("Moving magnets", (abs(param1) * param2 / MICRONS_PER_EIGHTH_STEP) / 1000);
-            move_stage(param1, param2);
-            break;
-        case 6:                                      // oscillate stage
-            index = get_BCODE_token(index, &param1); // distance
-            index = get_BCODE_token(index, &param2); // step_delay_us
-            index = get_BCODE_token(index, &param3); // number of cycles
-            oscillate_stage(param1, param2, param3);
-            break;
-        case 7: // not used
-            break;
-        case 8:                                      // take initial sensor reading with param = param1 at LED power = param2
-            break;
-        case 9: // Read optical sensors with default param and LED power
-            update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+        case 10: // Read optical sensors with default param and LED power
+            update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
             move_stage_to_optical_read_position();
-            update_progress("Reading optical sensors", 6000);
+            update_progress("Reading", 6000);
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, true);
             break;
-        case 10:                                     // Read optical sensors with param = param1 at LED power = param2
+        case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
-            update_progress("Moving magnets to prepare for reading", (abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MICRONS_PER_FULL_STEP) / 1000);
+            update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
             move_stage_to_optical_read_position();
-            update_progress("Reading optical sensors", 6000);
+            update_progress("Reading", 6000);
             read_optical_sensors(param1, param2, true);
             break;
-        case 11: // Repeat in SINGLE_THREADED_BLOCK begin(number of iterations) - now the same as regular Repeat
-        case 12: // Repeat begin(number of iterations)
+        case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
 
             start_index = index;
-            for (i = 0; i < param1; i += 1)
-            {
-                if (cancelling_test)
-                {
-                    break;
-                }
+            for (int i = 0; i < param1; i += 1) {
+                if (cancelling_test) break;
                 index = process_BCODE(start_index);
             }
             break;
-        case 13: // Repeat end
+        case 21: // Repeat end
             return -index;
-            break;
-        case 14: // set heater target temperature
-            index = get_BCODE_token(index, &param1);
-            update_progress("Setting heater target temperature", 0);
-            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE)
-            {
-                heater.target_C_10X = param1;
-                heater.read_time = 0;
-            }
-            break;
-        case 15: // Move to test starting location
-            move_stage_to_test_start_position();
-            break;
-        case 16:                                     // Move to location (location, step_delay)
-            index = get_BCODE_token(index, &param1); // step_delay_us
-            index = get_BCODE_token(index, &param2); // gather_time_ms
-            move_stage_to_position(param1, param2);
-            break;
-        case 17: // raster well - ignore
-            break;
-        case 18:                                     // Segemented move
-            index = get_BCODE_token(index, &param1); // step_delay_us
-            index = get_BCODE_token(index, &param2); // gather_time_ms
-            index = get_BCODE_token(index, &param3); // number of segments
-            if (serial_messaging_on)
-                Serial.printlnf("Well transit - segments: %d", param3);
-            for (i = 0; i < param3; i++)
-            {
-                if (cancelling_test)
-                {
-                    break;
-                }
-                // read segment data
-                index = get_BCODE_token(index, &param4); // number of iterations
-                index = get_BCODE_token(index, &param5); // steps per iteration
-                index = get_BCODE_token(index, &param6); // delay between steps, in milliseconds
-                param5 *= MICRONS_PER_FULL_STEP;
-                for (j = 0; j < param4; j++)
-                {
-                    update_progress("Moving magnets", param6 + (abs(param5) * param1) / 1000);
-                    move_stage(param5, param1);
-                    BCODE_delay(param6);
-                }
-            }
-            update_progress("Pausing to gather microspheres", param2);
-            BCODE_delay(param2); // gather beads
-            break;
-        case 19:                                     // oscillating move
-            index = get_BCODE_token(index, &param1); // microns to move
-            index = get_BCODE_token(index, &param2); // step delay
-            index = get_BCODE_token(index, &param3); // microns to oscillate
-            index = get_BCODE_token(index, &param4); // oscillation step delay
-            index = get_BCODE_token(index, &param5); // number of cycles per eighth step
-            move_and_oscillate_stage(param1, param2, param3, param4, param5);
             break;
         case 99: // Finish test
             test.finish_time = Time.now();
             write_test_record_to_eeprom();
+            update_progress("Finishing up test", 6000);
             break;
     }
 
@@ -1736,19 +1612,15 @@ int process_BCODE(int start_index)
     int cmd, index;
 
     index = get_BCODE_token(start_index, &cmd);
-    if ((start_index == 0) && (cmd != 0))
-    { // first command
+    if ((start_index == 0) && (cmd != 0)) { // first command
         cancelling_test = true;
         Serial.println("First command not found");
         return -1;
-    }
-    else
-    {
+    } else {
         index = process_one_BCODE_command(cmd, index);
     }
 
-    while ((cmd != 99) && (index > 0) && !cancelling_test)
-    {
+    while ((cmd != 99) && (index > 0) && !cancelling_test) {
         index = get_BCODE_token(index, &cmd);
         index = process_one_BCODE_command(cmd, index);
     };
@@ -1766,20 +1638,14 @@ int get_next_command_param(String arg, int indx, int *param, int def)
 {
     int next;
 
-    if (indx == -1)
-    {
+    if (indx == -1) {
         *param = def;
         next = -1;
-    }
-    else
-    {
+    } else {
         next = arg.indexOf(ARG_DELIM, indx);
-        if (next == -1)
-        {
+        if (next == -1) {
             *param = arg.substring(indx).toInt();
-        }
-        else
-        {
+        } else {
             *param = arg.substring(indx, next).toInt();
             next++;
         }
@@ -1792,16 +1658,13 @@ void i2c_bus_scan()
 {
     int addr, result;
 
-    if (enable_optical_sensors(true))
-    {
+    if (enable_optical_sensors(true)) {
         Serial.println("Starting optical I2C bus scan");
-        for (addr = 0; addr < 127; addr++)
-        {
+        for (addr = 0; addr < 127; addr++) {
             Wire.beginTransmission(addr);
             Wire.write(0x00);
             result = Wire.endTransmission();
-            if (result == 0)
-            {
+            if (result == 0) {
                 Serial.printlnf("I2C device found at address %X", addr);
             }
         }
@@ -1820,191 +1683,190 @@ int particle_command(String arg)
     int param5 = 0;
 
     indx = get_next_command_param(arg, indx, &cmd, 0);
-    switch (cmd)
-    {
-    case 1: // unused
-        result = 0;
-        break;
-    case 2: // reset stage
-        reset_stage(true);
-        result = stage_position;
-        break;
-    case 3: // move microns
-        indx = get_next_command_param(arg, indx, &param1, 0);
-        indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-        wake_move_sleep_stage(param1, param2);
-        Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
-        result = stage_position;
-        break;
-    case 4: // read optical sensors (param)
-        wake_motor();
-        move_stage_to_optical_read_position();
-        sleep_motor();
-        indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-        read_optical_sensors_command_param = param1;
-        read_optical_sensors_command_led_power = param2;
-        read_optical_sensors_command_flag = true;
-        result = param1;
-        break;
-    case 5: // not used
-        result = 0;
-        break;
-    case 6: // erase EEPROM and restart
-        erase_eeprom();
-        System.reset();
-        result = 1;
-        break;
-    case 7: // read heater temperature
-        indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-        Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
-        result = param1;
-        break;
-    case 8: // reset EEPROM
-        reset_eeprom();
-        result = (int)eeprom.data_format_version;
-        break;
-    case 9: // turn on assay LED for param1 milliseconds at power param2
-        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-        turn_on_assay_LED_for_duration(param1, param2);
-        result = param1;
-        break;
-    case 10: // turn on control 1 LED for param1 milliseconds at power param2
-        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-        turn_on_control_1_LED_for_duration(param1, param2);
-        result = param2;
-        break;
-    case 11: // turn on control 2 LED for param1 milliseconds at power param2
-        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-        turn_on_control_2_LED_for_duration(param1, param2);
-        result = param2;
-        break;
-    case 12: // turn on all LEDs for param1 milliseconds at power param2
-        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-        turn_on_all_LEDs_for_duration(param1, param2);
-        result = param2;
-        break;
-    case 13: // turn on buzzer param1 frequency param2 duration
-        indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
-        indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
-        turn_on_buzzer_for_duration(param1, param2);
-        result = param1;
-        break;
-    case 14: // move to specified location param1 at step delay param2
-        indx = get_next_command_param(arg, indx, &param1, 0);
-        indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-        wake_motor();
-        move_stage_to_position(param1, param2);
-        sleep_motor();
-        result = stage_position;
-        break;
-    case 15: // move stage to test start position
-        wake_motor();
-        move_stage_to_test_start_position();
-        sleep_motor();
-        result = stage_position;
-        break;
-    case 16: // set heater target temperature
-        indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-        if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE)
-        {
-            heater.target_C_10X = param1;
-            heater.read_time = 0;
-        }
-        result = param1;
-        break;
-    case 17: // not used
-        wake_motor();
-        move_stage_to_optical_read_position();
-        sleep_motor();
-        result = stage_position;
-        break;
-    case 18: // turn on heater at power param1
-        indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
-        turn_on_heater(param1);
-        result = param1;
-        break;
-    case 19: // turn off heater
-        turn_off_heater();
-        result = 1;
-        break;
-    case 20: // start temperature control
-        start_temperature_control();
-        result = 1;
-        break;
-    case 21: // stop temperature control
-        stop_temperature_control();
-        result = 1;
-        break;
-    case 22: // turn on serial messaging
-        serial_messaging_on = true;
-        result = 1;
-        break;
-    case 23: // turn off serial messaging
-        serial_messaging_on = false;
-        result = 0;
-        break;
-    case 24: // start reading sensors - ignore
-    case 25: // stop reading sensors - ignore
-    case 26: // scan controller_i2c_bus_scan - ignore
-        result = 0;
-        break;
-    case 27: // scan i2c bus
-        i2c_bus_scan();
-        result = 1;
-        break;
-    case 28: // start optical sensor reading test, param = param1
-        wake_motor();
-        move_stage_to_optical_read_position();
-        sleep_motor();
-        indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-        serial_messaging_on = false;
-        read_optical_sensors_command_param = param1;
-        read_optical_sensors_command_led_power = param2;
-        read_optical_sensors_command_flag = true;
-        test_optical_sensors_timer.start();
-        result = 1;
-        break;
-    case 29: // stop optical sensor reading test
-        test_optical_sensors_timer.stop();
-        result = 1;
-        break;
-    case 30: // scan barcode
-        result = scan_barcode();
-        break;
-    case 31: // not used
-        result = 0;
-        break;
-    case 32: // not used
-        result = 0;
-        break;
-    case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
-        indx = get_next_command_param(arg, indx, &param1, 25);
-        indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
-        indx = get_next_command_param(arg, indx, &param3, 10);
-        wake_motor();
-        oscillate_stage(param1, param2, param3);
-        sleep_motor();
-        result = stage_position;
-        break;
-    case 34: // move and oscillate stage
-        indx = get_next_command_param(arg, indx, &param1, 0);
-        indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-        indx = get_next_command_param(arg, indx, &param3, 25);
-        indx = get_next_command_param(arg, indx, &param4, FAST_STEP_DELAY);
-        indx = get_next_command_param(arg, indx, &param5, 2);
-        wake_motor();
-        move_and_oscillate_stage(param1, param2, param3, param4, param5);
-        sleep_motor();
-        result = stage_position;
-        break;
-    default:
-        result = 0;
+    switch (cmd) {
+        case 1: // unused
+            result = 0;
+            break;
+        case 2: // reset stage
+            reset_stage(true);
+            result = stage_position;
+            break;
+        case 3: // move microns
+            indx = get_next_command_param(arg, indx, &param1, 0);
+            indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+            wake_move_sleep_stage(param1, param2);
+            Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
+            result = stage_position;
+            break;
+        case 4: // read optical sensors (param)
+            wake_motor();
+            move_stage_to_optical_read_position();
+            sleep_motor();
+            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            read_optical_sensors_command_param = param1;
+            read_optical_sensors_command_led_power = param2;
+            read_optical_sensors_command_flag = true;
+            result = param1;
+            break;
+        case 5: // not used
+            result = 0;
+            break;
+        case 6: // erase EEPROM and restart
+            erase_eeprom();
+            System.reset();
+            result = 1;
+            break;
+        case 7: // read heater temperature
+            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
+            Serial.printlnf("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+            result = param1;
+            break;
+        case 8: // reset EEPROM
+            reset_eeprom();
+            result = (int)eeprom.data_format_version;
+            break;
+        case 9: // turn on assay LED for param1 milliseconds at power param2
+            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            turn_on_assay_LED_for_duration(param1, param2);
+            result = param1;
+            break;
+        case 10: // turn on control 1 LED for param1 milliseconds at power param2
+            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            turn_on_control_1_LED_for_duration(param1, param2);
+            result = param2;
+            break;
+        case 11: // turn on control 2 LED for param1 milliseconds at power param2
+            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            turn_on_control_2_LED_for_duration(param1, param2);
+            result = param2;
+            break;
+        case 12: // turn on all LEDs for param1 milliseconds at power param2
+            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            turn_on_all_LEDs_for_duration(param1, param2);
+            result = param2;
+            break;
+        case 13: // turn on buzzer param1 frequency param2 duration
+            indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
+            indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
+            turn_on_buzzer_for_duration(param1, param2);
+            result = param1;
+            break;
+        case 14: // move to specified location param1 at step delay param2
+            indx = get_next_command_param(arg, indx, &param1, 0);
+            indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+            wake_motor();
+            move_stage_to_position(param1, param2);
+            sleep_motor();
+            result = stage_position;
+            break;
+        case 15: // move stage to test start position
+            wake_motor();
+            move_stage_to_test_start_position();
+            sleep_motor();
+            result = stage_position;
+            break;
+        case 16: // set heater target temperature
+            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
+            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE)
+            {
+                heater.target_C_10X = param1;
+                heater.read_time = 0;
+            }
+            result = param1;
+            break;
+        case 17: // not used
+            wake_motor();
+            move_stage_to_optical_read_position();
+            sleep_motor();
+            result = stage_position;
+            break;
+        case 18: // turn on heater at power param1
+            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
+            turn_on_heater(param1);
+            result = param1;
+            break;
+        case 19: // turn off heater
+            turn_off_heater();
+            result = 1;
+            break;
+        case 20: // start temperature control
+            start_temperature_control();
+            result = 1;
+            break;
+        case 21: // stop temperature control
+            stop_temperature_control();
+            result = 1;
+            break;
+        case 22: // turn on serial messaging
+            serial_messaging_on = true;
+            result = 1;
+            break;
+        case 23: // turn off serial messaging
+            serial_messaging_on = false;
+            result = 0;
+            break;
+        case 24: // start reading sensors - ignore
+        case 25: // stop reading sensors - ignore
+        case 26: // scan controller_i2c_bus_scan - ignore
+            result = 0;
+            break;
+        case 27: // scan i2c bus
+            i2c_bus_scan();
+            result = 1;
+            break;
+        case 28: // start optical sensor reading test, param = param1
+            wake_motor();
+            move_stage_to_optical_read_position();
+            sleep_motor();
+            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            serial_messaging_on = false;
+            read_optical_sensors_command_param = param1;
+            read_optical_sensors_command_led_power = param2;
+            read_optical_sensors_command_flag = true;
+            test_optical_sensors_timer.start();
+            result = 1;
+            break;
+        case 29: // stop optical sensor reading test
+            test_optical_sensors_timer.stop();
+            result = 1;
+            break;
+        case 30: // scan barcode
+            result = scan_barcode();
+            break;
+        case 31: // not used
+            result = 0;
+            break;
+        case 32: // not used
+            result = 0;
+            break;
+        case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
+            indx = get_next_command_param(arg, indx, &param1, 25);
+            indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param3, 10);
+            wake_motor();
+            oscillate_stage(param1, param2, param3);
+            sleep_motor();
+            result = stage_position;
+            break;
+        case 34: // move and oscillate stage
+            indx = get_next_command_param(arg, indx, &param1, 0);
+            indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param3, 25);
+            indx = get_next_command_param(arg, indx, &param4, FAST_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param5, 2);
+            wake_motor();
+            move_and_oscillate_stage(param1, param2, param3, param4, param5);
+            sleep_motor();
+            result = stage_position;
+            break;
+        default:
+            result = 0;
     }
 
     Serial.printlnf("Completed command: %d, result: %d, p1: %d, p2: %d, p3: %d, p4: %d, p5: %d", cmd, result, param1, param2, param3, param4, param5);
@@ -2027,15 +1889,16 @@ void check_device_state()
 {
     cartridge_loaded = digitalRead(pinCartridgeLoaded) == LOW;
 
-    if (cartridge_loaded)
-    {
-        ledCartridgeLoaded.setActive(true);
+    if (cartridge_loaded) {
+        // ledCartridgeLoaded.setActive(true);
         turn_on_buzzer_for_duration(600, 350);
-        /*ready_to_scan_barcode = true;*/
-    }
-    else
-    {
-        ledCartridgeLoaded.setActive(false);
+        ready_to_scan_barcode = true;
+    } else {
+        // ledCartridgeLoaded.setActive(false);
+        turn_on_buzzer_for_duration(300, 200);
+        delay(200);
+        turn_on_buzzer_for_duration(300, 200);
+        delay(200);
         turn_on_buzzer_for_duration(300, 200);
     }
 
@@ -2071,18 +1934,6 @@ void reset_globals()
     particle_register[PARTICLE_REGISTER_SIZE] = '\0';
 
     next_upload = millis() + UPLOAD_INTERVAL;
-}
-
-void start_test()
-{
-    Serial.println("Test starting");
-
-    waiting_for_start_confirmation = true;
-    start_timeout = millis() + TIMEOUT_START;
-    wake_motor();
-
-    /*start_blinking_device_LED(0, 500, 0, 255, 0);*/
-    brevitest_publish("test-start", test.cartridge_uuid);
 }
 
 void cancel_test()
@@ -2123,7 +1974,6 @@ void run_test()
     /*start_blinking_device_LED(0, 500, 0, 255, 0);*/
     Serial.println("Running test");
 
-    test_last_progress_update = 0;
     update_progress("Running test", 0);
 
     Particle.disconnect();
@@ -2139,7 +1989,7 @@ void run_test()
 
     reset_stage(false);
     turn_on_buzzer_for_duration(600, 2000);
-    delay(2000);
+    delay(2500);
     SINGLE_THREADED_BLOCK()
     {
       process_BCODE(0);
@@ -2149,8 +1999,7 @@ void run_test()
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
-    while (!Particle.connected())
-    {
+    while (!Particle.connected()) {
         Serial.println("+");
         Particle.process();
         delay(PARTICLE_CLOUD_DELAY);
@@ -2159,25 +2008,23 @@ void run_test()
     finishing_test = !cancelling_test;
 }
 
-void upload_one_test(int test_number, char *cartridgeUUID)
+void upload_one_test(int test_number, char *cartridge_uuid)
 {
     waiting_for_upload_confirmation = true;
     upload_timeout = millis() + TIMEOUT_UPLOAD;
 
-    Serial.printlnf("Processing test %s for upload", cartridgeUUID);
+    Serial.printlnf("Processing test %s for upload", cartridge_uuid);
     process_test_record(test_number);
 
     Serial.println(particle_register);
-    brevitest_publish("test-upload", cartridgeUUID);
+    brevitest_publish("test-upload", cartridge_uuid);
 }
 
 void upload_tests()
 {
     Serial.println("Looking for tests to upload...");
-    for (int i = 0; i < CACHE_SIZE; i += 1)
-    {
-        if (eeprom.cache[i].cartridge_uuid[0] != '\0')
-        {
+    for (int i = 0; i < CACHE_SIZE; i += 1) {
+        if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
             upload_one_test(i, eeprom.cache[i].cartridge_uuid);
             return;
         }
@@ -2186,16 +2033,13 @@ void upload_tests()
 
 int particle_run_test(String arg)
 {
-    if (arg.length() == CARTRIDGE_UUID_LENGTH)
-    {
+    if (arg.length() == CARTRIDGE_UUID_LENGTH) {
         arg.toCharArray(barcode_uuid, CARTRIDGE_UUID_LENGTH + 1);
         barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
         Serial.printlnf("Running test for cartridge %s", barcode_uuid);
         validate_cartridge();
         return 1;
-    }
-    else
-    {
+    } else {
         return -1;
     }
 }
@@ -2214,8 +2058,7 @@ int particle_run_test(String arg)
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
     pinMode(pin, mode);
-    if (mode == OUTPUT)
-    {
+    if (mode == OUTPUT) {
         analogWrite(pin, value);
     }
 }
@@ -2223,8 +2066,7 @@ void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
 void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
     pinMode(pin, mode);
-    if (mode == OUTPUT)
-    {
+    if (mode == OUTPUT) {
         digitalWrite(pin, value);
     }
 }
@@ -2321,32 +2163,11 @@ void test_loop()
             Serial.println("Finishing test");
             finishing_test = false;
             finish_test();
-        } else if (waiting_for_cancel_confirmation && millis() > cancel_timeout) {
-            Serial.println("Timeout waiting for cancel confirmation. Cancelling test again");
-            cancel_test();
-        } else if (waiting_for_finish_confirmation && millis() > finish_timeout) {
-            Serial.println("Timeout waiting for finish confirmation. Finishing test again");
-            finish_test();
         }
-    } else if (waiting_for_start_confirmation && millis() > start_timeout) {
-        Serial.println("Timeout waiting for start confirmation. Starting test again");
-        start_test();
-    } else if (test_startup_successful) {
-        Serial.println("Test startup successful");
-        /*if (!cartridge_loaded) {
-			Serial.println("Cartridge not loaded. Waiting...");
-			turn_on_buzzer_for_duration(500, 700);
-			delay(2000);
-        }
-        else {
-			Serial.println("Cartridge loaded, running test");*/
-        test_startup_successful = false;
-        run_test();
-        /*}*/
     } else if (starting_test) {
         Serial.println("Starting test");
         starting_test = false;
-        start_test();
+        run_test();
     } else if (waiting_for_upload_confirmation) {
         if (millis() > upload_timeout) {
             Serial.println("Upload timeout. Retrying...");
@@ -2381,7 +2202,7 @@ void cartridge_loop()
         ready_to_scan_barcode = false;
         if (cartridge_loaded) {
             if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
-                /*validate_cartridge();*/
+                validate_cartridge();
             } else {
                 cartridge_validated = false;
             }

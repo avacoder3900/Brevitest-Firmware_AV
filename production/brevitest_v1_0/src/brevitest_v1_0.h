@@ -149,7 +149,6 @@ unsigned long periodic_event;
 bool periodic_event_flag = false;
 unsigned long next_upload;
 unsigned long validation_timeout;
-unsigned long start_timeout;
 unsigned long cancel_timeout;
 unsigned long finish_timeout;
 unsigned long upload_timeout;
@@ -177,10 +176,9 @@ bool test_startup_successful = false;
 bool test_in_progress = false;
 bool reading_optical_sensors = false;
 
-bool cartridge_validated = false;
 bool waiting_for_validation = false;
+bool cartridge_validated = false;
 bool starting_test = false;
-bool waiting_for_start_confirmation = false;
 bool cancelling_test = false;
 bool waiting_for_cancel_confirmation = false;
 bool finishing_test = false;
@@ -249,7 +247,6 @@ int read_optical_sensor_baselines_command_led_power;
 // progress
 int test_progress;
 int test_percent_complete;
-unsigned long test_last_progress_update;
 
 // uuids
 char barcode_uuid[CARTRIDGE_UUID_LENGTH + 1];
