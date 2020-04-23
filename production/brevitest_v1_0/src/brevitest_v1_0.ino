@@ -463,30 +463,30 @@ int scan_barcode()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_buzzer_for_duration(int frequency, int duration)
+void turn_on_buzzer_for_duration(int duration, int frequency)
 {
     if (serial_messaging_on)
-        Serial.printlnf("Turning on buzzer at frequency %d for duration %d", frequency, duration);
+        Serial.printlnf("Turning on buzzer for duration %d at frequency %d", duration, frequency);
     tone(pinBuzzer, frequency, duration);
 }
 
 void play_startup_tune()
 {
-    turn_on_buzzer_for_duration(262, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(294, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(330, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(349, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(392, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(440, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(494, 250);
-    delay(50);
-    turn_on_buzzer_for_duration(523, 250);
+    turn_on_buzzer_for_duration(250, 262);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 294);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 330);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 349);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 392);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 440);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 494);
+    delay(100);
+    turn_on_buzzer_for_duration(250, 523);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1068,7 +1068,7 @@ bool load_assay_record(char *responseString)
 
     strncpy(assay.BCODE, &responseString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
-    Serial.printlnf("assay.BCODE: %d", assay.BCODE);
+    Serial.printlnf("assay.BCODE: %s", assay.BCODE);
 
     crc_calculated = abs(checksum(assay.BCODE, assay.BCODE_length));
     Serial.printlnf("BCODE checksums: %u, %u", crc_loaded, crc_calculated);
@@ -1383,7 +1383,7 @@ int get_BCODE_token(int index, int *token)
      // command has no arguments so skip delim
     if (bcode[index] == ATTR_DELIM) return index + 1;
 
-    // there is are arguments to extract
+    // there are arguments to extract
     i = index;
     while (i < BCODE_CAPACITY) {
         if (bcode[i] == ATTR_DELIM) {
@@ -1421,7 +1421,7 @@ void update_progress(String message, int duration)
             test_percent_complete = new_percent_complete;
         }
     }
-    Serial.printlnf("%s, %d percent complete, temp = %d.%d", message, test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+    Serial.printlnf("%s, %d percent complete, temp = %d.%d", message.c_str(), test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 }
 
 int BCODE_loop()
@@ -1429,7 +1429,7 @@ int BCODE_loop()
     unsigned long total_duration = millis();
 
     pulse_heater(pid_controller());
-    Particle.process();
+    // Particle.process();
 
     return (int) (millis() - total_duration);
 }
@@ -1479,10 +1479,11 @@ int process_one_BCODE_command(int cmd, int index)
             index = get_BCODE_token(index, &param1); // duration_ms
             index = get_BCODE_token(index, &param2); // frequency
             update_progress("Buzzing", param1);
-            turn_on_buzzer_for_duration(param2, param1);
+            turn_on_buzzer_for_duration(param1, param2);
             break;
         case 10: // Read optical sensors with default param and LED power
-            update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
+            // update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
+            Serial.printlnf("Moving stage to prepare for reading");
             move_stage_to_optical_read_position();
             update_progress("Reading", 6000);
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, true);
@@ -1498,6 +1499,7 @@ int process_one_BCODE_command(int cmd, int index)
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
 
+            Serial.printlnf("Begin repeating %d times", param1);
             start_index = index;
             for (int i = 0; i < param1; i += 1) {
                 if (cancelling_test) break;
@@ -1505,16 +1507,18 @@ int process_one_BCODE_command(int cmd, int index)
             }
             break;
         case 21: // Repeat end
+            Serial.println("End repeating");
             return -index;
             break;
         case 99: // Finish test
+            Serial.println("Finish test");
             test.finish_time = Time.now();
             write_test_record_to_eeprom();
-            update_progress("Finishing up test", 6000);
+            // update_progress("Finishing up test", 6000);
             break;
     }
 
-    return index;
+    return index + 1;
 }
 
 int process_BCODE(int start_index)
@@ -1529,6 +1533,7 @@ int process_BCODE(int start_index)
     } else {
         index = process_one_BCODE_command(cmd, index);
     }
+    Serial.printlnf("start_index: %d, index: %d, cmd: %d", start_index, index, cmd);
 
     while ((cmd != 99) && (index > 0) && !cancelling_test) {
         index = get_BCODE_token(index, &cmd);
@@ -1660,7 +1665,7 @@ int particle_command(String arg)
             turn_on_all_LEDs_for_duration(param1, param2);
             result = param2;
             break;
-        case 13: // turn on buzzer param1 frequency param2 duration
+        case 13: // turn on buzzer param1 duration param2 frequency
             indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
             indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
             turn_on_buzzer_for_duration(param1, param2);
@@ -1805,11 +1810,11 @@ void check_device_state()
         ready_to_scan_barcode = true;
     } else {
         // ledCartridgeLoaded.setActive(false);
-        turn_on_buzzer_for_duration(300, 200);
+        turn_on_buzzer_for_duration(200, 350);
         delay(200);
-        turn_on_buzzer_for_duration(300, 200);
+        turn_on_buzzer_for_duration(200, 350);
         delay(200);
-        turn_on_buzzer_for_duration(300, 200);
+        turn_on_buzzer_for_duration(200, 350);
     }
 
     Serial.printlnf("Cartridge loaded? %c", cartridge_loaded ? 'Y' : 'N');
@@ -1898,7 +1903,7 @@ void run_test()
     // control_heater_temperature_timer.stop();
 
     reset_stage(false);
-    turn_on_buzzer_for_duration(600, 2000);
+    turn_on_buzzer_for_duration(1000, 600);
     delay(2500);
     SINGLE_THREADED_BLOCK()
     {
@@ -2075,7 +2080,6 @@ void test_loop()
             finish_test();
         }
     } else if (starting_test) {
-        Serial.println("Starting test");
         starting_test = false;
         run_test();
     } else if (waiting_for_upload_confirmation) {
