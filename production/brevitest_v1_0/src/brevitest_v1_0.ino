@@ -408,7 +408,7 @@ int scan_barcode()
     Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
 
     Serial1.end();
-    Serial.println("Finish reading barcode");
+    Serial.printlnf("Finish reading barcode %d");
 
     barcode_being_scanned = false;
 
@@ -2087,7 +2087,6 @@ void loop()
     }
 
     if (callback_complete) {
-        Serial.println("Processing callback");
         process_callback_buffer();
         return;
     }
