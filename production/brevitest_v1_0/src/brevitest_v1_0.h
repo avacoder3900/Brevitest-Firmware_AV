@@ -37,8 +37,9 @@
 #define BUZZER_FREQUENCY 600
 #define BUZZER_DURATION 1000
 
-// assay
+// BCODE
 #define BCODE_CAPACITY 2000
+#define BCODE_MAX_DELAY 500
 
 // params
 #define PARAM_NUMBER_INDEX 2

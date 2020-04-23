@@ -32,15 +32,14 @@ void reset_stage(bool sleep);
 void move_stage_to_optical_read_position();
 void move_stage_to_test_start_position();
 void move_stage_to_position(int position, int step_delay);
-void oscillate_stage(int amplitude, int step_delay, int cycles);
-void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int osc_step_delay, int cycles);
+void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE);
 int scan_barcode();
 void turn_on_buzzer_for_duration(int duration, int frequency);
 void play_startup_tune();
 void turn_on_heater(int power);
 void turn_off_heater();
 int limit(int value, int max, int min);
-int pulse_heater(int power);
+int set_heater_power(int power);
 void turn_on_LED(char channel, int power);
 void turn_off_LED(char channel);
 void turn_on_all_LEDs(int power);
@@ -327,14 +326,6 @@ void setup_eeprom()
 
 bool move_one_eighth_step(int dir, int step_delay)
 {
-    /*if (cancelling_test) {
-			break;
-	}*/
-
-    /*if (Particle.connected() && (i % MOVE_STEPS_BETWEEN_PARTICLE_PROCESS) == 0) {
-			Particle.process();
-	}*/
-
     if (dir == HIGH)
     {
         if (digitalRead(pinStageLimit) == LOW)
@@ -386,18 +377,14 @@ void move_stage(int microns, int step_delay)
     // delay(10);
     for (i = 0; i < eighth_steps; i++)
     {
-        if (move_one_eighth_step(dir, step_delay))
-        {
+        if (move_one_eighth_step(dir, step_delay)) {
             stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
-            if (stage_position <= 0)
-            {
+            if (stage_position <= 0) {
                 stage_position = 0;
                 microns_error = 0;
                 i = eighth_steps;
             }
-        }
-        else
-        {
+        } else {
             i = eighth_steps;
         }
     }
@@ -454,51 +441,21 @@ void move_stage_to_position(int position, int step_delay)
     int move_distance = position - stage_position;
     update_progress("Moving magnets to position", (abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP) / 1000);
     Serial.printlnf("Moving stage to position %d, distance = %d", position, move_distance);
-    move_stage(move_distance, step_delay); // move stage to optical read position
+    move_stage(move_distance, step_delay);
 }
 
-void oscillate_stage(int amplitude, int step_delay, int cycles)
+int BCODE_loop(void);
+void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 {
     int i;
 
     for (i = 0; i < cycles; i++)
     {
         move_stage(amplitude, step_delay);
+        if (inBCODE) BCODE_loop();
         move_stage(-amplitude, step_delay);
-    }
-}
-
-void move_and_oscillate_stage(int microns, int step_delay, int amplitude, int osc_step_delay, int cycles)
-{
-    int eighth_steps, abs_microns, dir, i;
-
-    dir = (microns < 0) ? HIGH : LOW;
-    /*Serial.printlnf("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
-
-    abs_microns = abs(microns) + microns_error;
-    eighth_steps = abs_microns / MICRONS_PER_EIGHTH_STEP;
-    microns_error = abs_microns % MICRONS_PER_EIGHTH_STEP;
-    /*Serial.printlnf("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
-
-    // delay(10);
-    for (i = 0; i < eighth_steps; i++)
-    {
-        oscillate_stage(amplitude, osc_step_delay, cycles);
-        digitalWrite(pinMotorDir, dir);
-        if (move_one_eighth_step(dir, step_delay))
-        {
-            stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
-            if (stage_position <= 0)
-            {
-                stage_position = 0;
-                microns_error = 0;
-                i = eighth_steps;
-            }
-        }
-        else
-        {
-            i = eighth_steps;
-        }
+        if (inBCODE) BCODE_loop();
+        if (cancelling_test) break;
     }
 }
 
@@ -625,16 +582,11 @@ int limit(int value, int max, int min)
     return value > max ? max : (value < min ? min : value);
 }
 
-int pulse_heater(int power)
+int set_heater_power(int power)
 {
     unsigned long start = millis();
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    // if (power > 0)
-    // {
-    //     delay(pulse_duration);
-    //     analogWrite(heater.heater_pin, 0);
-    // }
     heater.power = power;
     heater.heater_on = power != 0;
     if (heater.heater_on)
@@ -1122,7 +1074,7 @@ void start_temperature_control()
 void stop_temperature_control()
 {
     control_heater_temperature_timer.stop();
-    pulse_heater(0);
+    set_heater_power(0);
     Serial.println("Temperature control system stopped");
 }
 
@@ -1536,17 +1488,25 @@ int BCODE_loop()
 {
     unsigned long total_duration = millis();
 
-    pulse_heater(pid_controller());
-    // Particle.process();
+    set_heater_power(pid_controller());
+    cancelling_test = digitalRead(pinCartridgeLoaded) == HIGH;
 
     return (int) (millis() - total_duration);
 }
 
 void BCODE_delay(int target_duration)
 {
-    int process_time = BCODE_loop();
-    if (target_duration > process_time) {
-      delay(target_duration - process_time);
+    int cycles = target_duration / BCODE_MAX_DELAY;
+    int residual = target_duration % BCODE_MAX_DELAY;
+    int loop_time = 0;
+
+    for (int i = 0; i < cycles; i++) {
+        loop_time = BCODE_loop();
+        delay(BCODE_MAX_DELAY - loop_time);
+    }
+    loop_time = BCODE_loop();
+    if (residual > loop_time) {
+      delay(residual - loop_time);
     }
 }
 
@@ -1556,8 +1516,6 @@ int process_one_BCODE_command(int cmd, int index)
     int param1, param2, param3, start_index;
 
     if (cancelling_test) return index;
-
-    BCODE_loop();
 
     switch (cmd) {
         case 0: // Start test()
@@ -1581,7 +1539,7 @@ int process_one_BCODE_command(int cmd, int index)
             index = get_BCODE_token(index, &param2); // step_delay_us
             index = get_BCODE_token(index, &param3); // number of cycles
             update_progress("Oscillating", abs(param1) * param2 * param3 / MOVE_DURATION_UNIT);
-            oscillate_stage(param1, param2, param3);
+            oscillate_stage(param1, param2, param3, true);
             break;
         case 4: // Buzz(milliseconds, frequency)
             index = get_BCODE_token(index, &param1); // duration_ms
@@ -1624,6 +1582,8 @@ int process_one_BCODE_command(int cmd, int index)
             write_test_record_to_eeprom();
             // update_progress("Finishing up test", 6000);
             break;
+        default:
+            BCODE_loop();
     }
 
     return index + 1;
@@ -1803,7 +1763,7 @@ int particle_command(String arg)
             }
             result = param1;
             break;
-        case 17: // not used
+        case 17: // move stage to optical read position
             wake_motor();
             move_stage_to_optical_read_position();
             sleep_motor();
@@ -1874,18 +1834,7 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param3, 10);
             wake_motor();
-            oscillate_stage(param1, param2, param3);
-            sleep_motor();
-            result = stage_position;
-            break;
-        case 34: // move and oscillate stage
-            indx = get_next_command_param(arg, indx, &param1, 0);
-            indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-            indx = get_next_command_param(arg, indx, &param3, 25);
-            indx = get_next_command_param(arg, indx, &param4, FAST_STEP_DELAY);
-            indx = get_next_command_param(arg, indx, &param5, 2);
-            wake_motor();
-            move_and_oscillate_stage(param1, param2, param3, param4, param5);
+            oscillate_stage(param1, param2, param3, false);
             sleep_motor();
             result = stage_position;
             break;
@@ -2009,7 +1958,7 @@ void run_test()
         delay(PARTICLE_CLOUD_DELAY);
     }
 
-    // control_heater_temperature_timer.stop();
+    stop_temperature_control();
 
     reset_stage(false);
     turn_on_buzzer_for_duration(1000, 600);
@@ -2019,7 +1968,7 @@ void run_test()
       process_BCODE(0);
     }
 
-    // control_heater_temperature_timer.start();
+    start_temperature_control();
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -2279,10 +2228,10 @@ void loop()
             read_optical_sensors_command_flag = false;
             read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
         }
-
-        if (control_heater_temperature_flag) {
-            control_heater_temperature_flag = false;
-            pulse_heater(pid_controller());
-        }
+    }
+    
+    if (control_heater_temperature_flag) {
+        control_heater_temperature_flag = false;
+        set_heater_power(pid_controller());
     }
 }
