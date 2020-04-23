@@ -1259,22 +1259,21 @@ void brevitest_callback(const char *event, const char *data)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void erase_test_from_cache(int index)
+{
+    memset(eeprom.cache[index].cartridge_uuid, '\0', sizeof(BrevitestTestRecord));
+}
+
 void initialize_test_cache()
 {
-    bool changed = false;
-    char *ptr;
+    waiting_for_upload_confirmation = false;
 
     for (int i = 0; i < CACHE_SIZE; i += 1) {
-        ptr = eeprom.cache[i].cartridge_uuid;
-        if (*ptr != '\0') {
-            memset(ptr, '\0', sizeof(BrevitestTestRecord));
-            changed = true;
-        }
+        erase_test_from_cache(i);
     }
 
-    if (changed) {
-        store_eeprom();
-    }
+    eeprom.most_recent_test = 255;
+    store_eeprom();
 }
 
 int find_test_index_by_uuid(char *uuid)
@@ -1299,7 +1298,7 @@ void store_test(int index)
 
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%8X%c%4X%c%4X%c%4X%c%4X%c",
+    return sprintf(&(particle_register[start]), "%c%c%X%c%X%c%X%c%X%c%X%c",
                    reading->channel, ARG_DELIM,
                    (unsigned int) reading->time_ms, ARG_DELIM,
                    reading->x, ARG_DELIM,
@@ -1316,7 +1315,7 @@ int process_test_record(int index)
 
     t = &eeprom.cache[index];
 
-    len = sprintf(particle_register, "%.24s%c%8X%c%8X%c",
+    len = sprintf(particle_register, "%.24s%c%X%c%X%c",
                     t->cartridge_uuid, ITEM_DELIM,
                     (unsigned int) t->start_time, ITEM_DELIM,
                     (unsigned int) t->finish_time, ITEM_DELIM);
@@ -1328,6 +1327,7 @@ int process_test_record(int index)
             len += append_test_reading(len, &(t->reading[i]));
         }
     }
+    particle_register[len - 1] = '\0';
     return 1;
 }
 
@@ -1349,10 +1349,8 @@ bool tests_to_upload()
 {
     if (millis() < next_upload) return false;
 
-    for (int i = 0; i < CACHE_SIZE; i += 1)
-    {
-        if (eeprom.cache[i].cartridge_uuid[0] != '\0')
-        {
+    for (int i = 0; i < CACHE_SIZE; i += 1) {
+        if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
             if (serial_messaging_on) {
                 Serial.printlnf("Test found for cartridge %s", eeprom.cache[i].cartridge_uuid);
             }
@@ -1500,7 +1498,7 @@ int process_one_BCODE_command(int cmd, int index)
             index = get_BCODE_token(index, &param1);
 
             Serial.printlnf("Begin repeating %d times", param1);
-            start_index = index;
+            start_index = index + 1;
             for (int i = 0; i < param1; i += 1) {
                 if (cancelling_test) break;
                 index = process_BCODE(start_index);
@@ -1600,6 +1598,7 @@ int particle_command(String arg)
     indx = get_next_command_param(arg, indx, &cmd, 0);
     switch (cmd) {
         case 1: // unused
+            initialize_test_cache();
             result = 0;
             break;
         case 2: // reset stage
