@@ -274,7 +274,7 @@ struct BrevitestOpticalSensorRecord
     uint16_t y;
     uint16_t z;
     uint16_t temperature;
-} reading_assay, reading_control_1, reading_control_2;
+};
 
 struct BrevitestTestRecord
 { // 206 bytes
