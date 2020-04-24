@@ -1899,12 +1899,14 @@ void run_test()
     test_in_progress = true;
     update_progress("Running test", 0);
 
+    test.start_time = Time.now();
+
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
     while (!Particle.disconnected())
     {
         Serial.println("-");
-        Particle.process();
+        Particle.disconnect();
         delay(PARTICLE_CLOUD_DELAY);
     }
 
@@ -1914,14 +1916,11 @@ void run_test()
 
     stop_temperature_control();
 
-    test.start_time = Time.now();
-
     SINGLE_THREADED_BLOCK()
     {
       process_BCODE(0);
     }
 
-    test.finish_time = Time.now();
     write_test_record_to_eeprom();
 
     start_temperature_control();
@@ -1930,7 +1929,7 @@ void run_test()
     delay(PARTICLE_CLOUD_DELAY);
     while (!Particle.connected()) {
         Serial.println("+");
-        Particle.process();
+        Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
     }
 
