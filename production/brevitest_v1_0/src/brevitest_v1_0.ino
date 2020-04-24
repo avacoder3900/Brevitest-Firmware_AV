@@ -346,7 +346,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
         if (inBCODE) BCODE_loop();
         move_stage(-amplitude, step_delay);
         if (inBCODE) BCODE_loop();
-        if (cancelling_test) break;
+        if (cancelling_test) return;
     }
 }
 
@@ -403,6 +403,7 @@ int scan_barcode()
 
     if (i < CARTRIDGE_UUID_LENGTH) {
         memcpy(barcode_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
+        cartridge_engaged = false;
     }
     barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
     Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
@@ -426,25 +427,6 @@ void turn_on_buzzer_for_duration(int duration, int frequency)
     if (serial_messaging_on)
         Serial.printlnf("Turning on buzzer for duration %d at frequency %d", duration, frequency);
     tone(pinBuzzer, frequency, duration);
-}
-
-void play_startup_tune()
-{
-    turn_on_buzzer_for_duration(250, 262);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 294);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 330);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 349);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 392);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 440);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 494);
-    delay(100);
-    turn_on_buzzer_for_duration(250, 523);
 }
 
 /////////////////////////////////////////////////////////////
@@ -879,16 +861,12 @@ int get_heater_temperature()
     int raw = analogRead(heater.thermistor_pin);
     analogWrite(heater.heater_pin, heater.power);
     
-    if (raw == 0)
-    {
+    if (raw == 0) {
         stop_temperature_control();
-    }
-    else
-    {
+    } else {
         heater.temp_C_10X = raw_table_lookup(raw);
         heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
-        if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
-        {
+        if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE) {
             stop_temperature_control();
             raw = 0;
         }
@@ -979,6 +957,7 @@ void validate_cartridge()
         Serial.println("Validation failed - not connected to the cloud");
         waiting_for_validation = false;
         cartridge_validated = false;
+        cartridge_engaged = false;
     }
 }
 
@@ -1052,9 +1031,11 @@ void callback_validate()
         } else {
             Serial.println("Failed to load assay record");
             cartridge_validated = false;
+            cartridge_engaged = false;
         }
     } else {
         Serial.printlnf("Invalid cartridge: %s", callback_data);
+        cartridge_engaged = false;
     }
 }
 
@@ -1373,6 +1354,7 @@ void BCODE_delay(int target_duration)
     for (int i = 0; i < cycles; i++) {
         loop_time = BCODE_loop();
         delay(BCODE_MAX_DELAY - loop_time);
+        if (cancelling_test) return;
     }
     loop_time = BCODE_loop();
     if (residual > loop_time) {
@@ -1728,29 +1710,24 @@ int particle_command(String arg)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void cartridge_loaded_interrupt()
+void cartridge_engaged_interrupt()
 {
     cartridge_state_changed = true;
 }
 
 void check_device_state()
 {
-    cartridge_loaded = digitalRead(pinCartridgeLoaded) == LOW;
+    cartridge_engaged = digitalRead(pinCartridgeLoaded) == LOW;
 
-    if (cartridge_loaded) {
-        // ledCartridgeLoaded.setActive(true);
-        turn_on_buzzer_for_duration(600, 350);
+    if (cartridge_engaged) {
+        ledBusy.setActive(true);
+        turn_on_buzzer_for_duration(400, 400);
         ready_to_scan_barcode = true;
     } else {
-        // ledCartridgeLoaded.setActive(false);
-        turn_on_buzzer_for_duration(200, 350);
-        delay(200);
-        turn_on_buzzer_for_duration(200, 350);
-        delay(200);
-        turn_on_buzzer_for_duration(200, 350);
+        turn_on_buzzer_for_duration(400, 300);
     }
 
-    Serial.printlnf("Cartridge loaded? %c", cartridge_loaded ? 'Y' : 'N');
+    Serial.printlnf("Cartridge engaged? %c", cartridge_engaged ? 'Y' : 'N');
 }
 
 /////////////////////////////////////////////////////////////
@@ -1795,9 +1772,7 @@ void cancel_test()
     brevitest_publish("test-cancel", test.cartridge_uuid);
 
     sleep_motor();
-    /*stop_blinking_device_LED();
-    set_device_LED_color(255, 0, 0);
-    turn_on_device_LED();*/
+    cartridge_engaged = false;
 }
 
 void finish_test()
@@ -1811,15 +1786,12 @@ void finish_test()
     brevitest_publish("test-finish", test.cartridge_uuid);
 
     sleep_motor();
-    /*stop_blinking_device_LED();
-    set_device_LED_color(0, 255, 0);
-    turn_on_device_LED();*/
+    cartridge_engaged = false;
 }
 
 void run_test()
 {
     test_in_progress = true;
-    /*start_blinking_device_LED(0, 500, 0, 255, 0);*/
     update_progress("Running test", 0);
 
     Particle.disconnect();
@@ -1832,8 +1804,8 @@ void run_test()
     }
 
     reset_stage(false);
-    turn_on_buzzer_for_duration(2000, 600);
-    delay(2500);
+    turn_on_buzzer_for_duration(1000, 600);
+    delay(1500);
 
     stop_temperature_control();
 
@@ -1853,6 +1825,7 @@ void run_test()
     }
 
     finishing_test = !cancelling_test;
+    ledAvailable.setActive(true);
 }
 
 void upload_one_test(int test_number, char *cartridge_uuid)
@@ -1920,6 +1893,8 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 
 void configure_analyzer()
 {
+    ledBusy.setActive(true);
+
     Particle.variable("register", particle_register, STRING);
     Particle.function("run_test", particle_run_test);
 
@@ -1967,13 +1942,13 @@ void startup_analyzer()
     delay(500);
     turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
 
-    Serial.println("Playing startup tune");
-    play_startup_tune();
+    Serial.println("Buzzing");
+    turn_on_buzzer_for_duration(250, 330);
 
     reset_globals();
 
     check_device_state();
-    attachInterrupt(pinCartridgeLoaded, cartridge_loaded_interrupt, CHANGE);
+    attachInterrupt(pinCartridgeLoaded, cartridge_engaged_interrupt, CHANGE);
 
     Serial.printlnf("device id: %s", device_id.c_str());
     Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
@@ -2046,7 +2021,7 @@ void cartridge_loop()
         }
     } else if (ready_to_scan_barcode) {
         ready_to_scan_barcode = false;
-        if (cartridge_loaded) {
+        if (cartridge_engaged) {
             if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
                 validate_cartridge();
             } else {
@@ -2106,5 +2081,13 @@ void loop()
     if (control_heater_temperature_flag) {
         control_heater_temperature_flag = false;
         set_heater_power(pid_controller());
+    }
+
+    if (cartridge_engaged) {
+        ledBusy.setActive(true);
+    } else if (heater.temp_C_10X < HEATER_READY_TEMP) {
+        heater_ready_debounce_timeout = millis() + HEATER_READY_DEBOUNCE_DELAY;
+    } else if (millis() > heater_ready_debounce_timeout) {
+        ledAvailable.setActive(true);
     }
 }

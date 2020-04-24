@@ -85,6 +85,8 @@
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
 #define HEATER_DEFAULT_TEMP_TARGET 370
+#define HEATER_READY_TEMP 350
+#define HEATER_READY_DEBOUNCE_DELAY 5000
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -159,8 +161,8 @@ char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
 
 // device LED
-LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST);
-LEDStatus ledCartridgeLoaded(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_SLOW);
+LEDStatus ledBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus ledAvailable(RGB_COLOR_GREEN, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // device state
 bool register_device = false;
@@ -168,7 +170,7 @@ bool waiting_for_registration = false;
 
 volatile bool cartridge_state_changed = false;
 bool cartridge_state_debounce = false;
-bool cartridge_loaded = false;
+bool cartridge_engaged = false;
 
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;
@@ -235,6 +237,7 @@ struct HeatingElement
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
 unsigned long control_heater_temperature_flag = false;
+unsigned long heater_ready_debounce_timeout = 0;
 
 // optical sensors
 unsigned long last_optical_sensor_reading_time = 0;
