@@ -1479,7 +1479,6 @@ int process_one_BCODE_command(int cmd, int index)
 
     switch (cmd) {
         case 0: // Start test()
-            test.start_time = Time.now();
             update_progress("Starting", 6000);
             BCODE_delay(1000);
             break;
@@ -1541,8 +1540,6 @@ int process_one_BCODE_command(int cmd, int index)
             break;
         case 99: // Finish test
             Serial.println("Finish test");
-            test.finish_time = Time.now();
-            write_test_record_to_eeprom();
             // update_progress("Finishing up test", 6000);
             break;
         default:
@@ -1917,10 +1914,15 @@ void run_test()
 
     stop_temperature_control();
 
+    test.start_time = Time.now();
+
     SINGLE_THREADED_BLOCK()
     {
       process_BCODE(0);
     }
+
+    test.finish_time = Time.now();
+    write_test_record_to_eeprom();
 
     start_temperature_control();
 

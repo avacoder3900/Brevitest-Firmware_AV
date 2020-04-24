@@ -19,23 +19,23 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, ALLOC, LOAD, DATA
   7 .module_info_crc 00000004  000da9bc  000da9bc  0002a9bc  2**0
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
-  8 .debug_info   000fee5e  00000000  00000000  0002a9c0  2**0
+  8 .debug_info   000fee56  00000000  00000000  0002a9c0  2**0
                   CONTENTS, READONLY, DEBUGGING
-  9 .debug_abbrev 000136b1  00000000  00000000  0012981e  2**0
+  9 .debug_abbrev 000136b1  00000000  00000000  00129816  2**0
                   CONTENTS, READONLY, DEBUGGING
- 10 .debug_loc    00024a85  00000000  00000000  0013cecf  2**0
+ 10 .debug_loc    00024a91  00000000  00000000  0013cec7  2**0
                   CONTENTS, READONLY, DEBUGGING
- 11 .debug_aranges 00002e60  00000000  00000000  00161954  2**0
+ 11 .debug_aranges 00002e60  00000000  00000000  00161958  2**0
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_ranges 00005508  00000000  00000000  001647b4  2**0
+ 12 .debug_ranges 00005538  00000000  00000000  001647b8  2**0
                   CONTENTS, READONLY, DEBUGGING
- 13 .debug_macro  00038017  00000000  00000000  00169cbc  2**0
+ 13 .debug_macro  00038017  00000000  00000000  00169cf0  2**0
                   CONTENTS, READONLY, DEBUGGING
- 14 .debug_line   0002e552  00000000  00000000  001a1cd3  2**0
+ 14 .debug_line   0002e55b  00000000  00000000  001a1d07  2**0
                   CONTENTS, READONLY, DEBUGGING
- 15 .debug_str    0010a705  00000000  00000000  001d0225  2**0
+ 15 .debug_str    0010a705  00000000  00000000  001d0262  2**0
                   CONTENTS, READONLY, DEBUGGING
- 16 .debug_frame  0000e9e8  00000000  00000000  002da92c  2**2
+ 16 .debug_frame  0000e9ec  00000000  00000000  002da968  2**2
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -7050,7 +7050,7 @@ int process_one_BCODE_command(int cmd, int index)
     int param1, param2, param3, start_index;
 
     if (cancelling_test) return index;
-   d639a:	4b97      	ldr	r3, [pc, #604]	; (d65f8 <_Z25process_one_BCODE_commandii+0x260>)
+   d639a:	4b92      	ldr	r3, [pc, #584]	; (d65e4 <_Z25process_one_BCODE_commandii+0x24c>)
    d639c:	781d      	ldrb	r5, [r3, #0]
     }
 }
@@ -7065,673 +7065,669 @@ int process_one_BCODE_command(int cmd, int index)
 
     if (cancelling_test) return index;
    d63a4:	2d00      	cmp	r5, #0
-   d63a6:	f040 8124 	bne.w	d65f2 <_Z25process_one_BCODE_commandii+0x25a>
+   d63a6:	f040 811a 	bne.w	d65de <_Z25process_one_BCODE_commandii+0x246>
 
     switch (cmd) {
    d63aa:	2804      	cmp	r0, #4
-   d63ac:	f000 80cd 	beq.w	d654a <_Z25process_one_BCODE_commandii+0x1b2>
-   d63b0:	dc47      	bgt.n	d6442 <_Z25process_one_BCODE_commandii+0xaa>
+   d63ac:	f000 80c3 	beq.w	d6536 <_Z25process_one_BCODE_commandii+0x19e>
+   d63b0:	dc43      	bgt.n	d643a <_Z25process_one_BCODE_commandii+0xa2>
    d63b2:	2801      	cmp	r0, #1
-   d63b4:	f000 8093 	beq.w	d64de <_Z25process_one_BCODE_commandii+0x146>
-   d63b8:	dc15      	bgt.n	d63e6 <_Z25process_one_BCODE_commandii+0x4e>
+   d63b4:	f000 8089 	beq.w	d64ca <_Z25process_one_BCODE_commandii+0x132>
+   d63b8:	dc11      	bgt.n	d63de <_Z25process_one_BCODE_commandii+0x46>
    d63ba:	2800      	cmp	r0, #0
-   d63bc:	f040 8115 	bne.w	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d63bc:	f040 810b 	bne.w	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
         case 0: // Start test()
-            test.start_time = Time.now();
-   d63c0:	f002 fa10 	bl	d87e4 <_ZN9TimeClass3nowEv>
-   d63c4:	4b8d      	ldr	r3, [pc, #564]	; (d65fc <_Z25process_one_BCODE_commandii+0x264>)
             update_progress("Starting", 6000);
-   d63c6:	498e      	ldr	r1, [pc, #568]	; (d6600 <_Z25process_one_BCODE_commandii+0x268>)
-
-    if (cancelling_test) return index;
-
-    switch (cmd) {
-        case 0: // Start test()
-            test.start_time = Time.now();
-   d63c8:	61d8      	str	r0, [r3, #28]
-            update_progress("Starting", 6000);
-   d63ca:	a804      	add	r0, sp, #16
-   d63cc:	f002 f8ae 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d63d0:	f241 7170 	movw	r1, #6000	; 0x1770
-   d63d4:	a804      	add	r0, sp, #16
-   d63d6:	f7fe fd19 	bl	d4e0c <_Z15update_progress6Stringi>
-   d63da:	a804      	add	r0, sp, #16
-   d63dc:	f002 f85f 	bl	d849e <_ZN6StringD1Ev>
+   d63c0:	4989      	ldr	r1, [pc, #548]	; (d65e8 <_Z25process_one_BCODE_commandii+0x250>)
+   d63c2:	a804      	add	r0, sp, #16
+   d63c4:	f002 f8b2 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d63c8:	f241 7170 	movw	r1, #6000	; 0x1770
+   d63cc:	a804      	add	r0, sp, #16
+   d63ce:	f7fe fd1d 	bl	d4e0c <_Z15update_progress6Stringi>
+   d63d2:	a804      	add	r0, sp, #16
+   d63d4:	f002 f863 	bl	d849e <_ZN6StringD1Ev>
             BCODE_delay(1000);
-   d63e0:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
-   d63e4:	e08c      	b.n	d6500 <_Z25process_one_BCODE_commandii+0x168>
+   d63d8:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
+   d63dc:	e086      	b.n	d64ec <_Z25process_one_BCODE_commandii+0x154>
 {
     int param1, param2, param3, start_index;
 
     if (cancelling_test) return index;
 
     switch (cmd) {
-   d63e6:	2802      	cmp	r0, #2
-   d63e8:	f000 808d 	beq.w	d6506 <_Z25process_one_BCODE_commandii+0x16e>
-   d63ec:	2803      	cmp	r0, #3
-   d63ee:	f040 80fc 	bne.w	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d63de:	2802      	cmp	r0, #2
+   d63e0:	f000 8087 	beq.w	d64f2 <_Z25process_one_BCODE_commandii+0x15a>
+   d63e4:	2803      	cmp	r0, #3
+   d63e6:	f040 80f6 	bne.w	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
             update_progress("Moving", abs(param1) * param2 / MOVE_DURATION_UNIT);
             move_stage(param1, param2);
             BCODE_loop();
             break;
         case 3: // Oscillate Stage(microns, microseconds, cycles)
             index = get_BCODE_token(index, &param1); // microns to move
-   d63f2:	a901      	add	r1, sp, #4
-   d63f4:	4620      	mov	r0, r4
-   d63f6:	f7fe fcd5 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d63ea:	a901      	add	r1, sp, #4
+   d63ec:	4620      	mov	r0, r4
+   d63ee:	f7fe fcd9 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             index = get_BCODE_token(index, &param2); // step_delay_us
-   d63fa:	a902      	add	r1, sp, #8
-   d63fc:	f7fe fcd2 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d63f2:	a902      	add	r1, sp, #8
+   d63f4:	f7fe fcd6 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             index = get_BCODE_token(index, &param3); // number of cycles
-   d6400:	a903      	add	r1, sp, #12
-   d6402:	f7fe fccf 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d63f8:	a903      	add	r1, sp, #12
+   d63fa:	f7fe fcd3 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             update_progress("Oscillating", abs(param1) * param2 * param3 / MOVE_DURATION_UNIT);
-   d6406:	497f      	ldr	r1, [pc, #508]	; (d6604 <_Z25process_one_BCODE_commandii+0x26c>)
+   d63fe:	497b      	ldr	r1, [pc, #492]	; (d65ec <_Z25process_one_BCODE_commandii+0x254>)
             BCODE_loop();
             break;
         case 3: // Oscillate Stage(microns, microseconds, cycles)
             index = get_BCODE_token(index, &param1); // microns to move
             index = get_BCODE_token(index, &param2); // step_delay_us
             index = get_BCODE_token(index, &param3); // number of cycles
-   d6408:	4604      	mov	r4, r0
+   d6400:	4604      	mov	r4, r0
             update_progress("Oscillating", abs(param1) * param2 * param3 / MOVE_DURATION_UNIT);
-   d640a:	a804      	add	r0, sp, #16
-   d640c:	f002 f88e 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d6410:	9b01      	ldr	r3, [sp, #4]
-   d6412:	ea83 71e3 	eor.w	r1, r3, r3, asr #31
-   d6416:	eba1 71e3 	sub.w	r1, r1, r3, asr #31
-   d641a:	9b02      	ldr	r3, [sp, #8]
-   d641c:	4359      	muls	r1, r3
-   d641e:	9b03      	ldr	r3, [sp, #12]
-   d6420:	a804      	add	r0, sp, #16
-   d6422:	434b      	muls	r3, r1
-   d6424:	f246 11a8 	movw	r1, #25000	; 0x61a8
-   d6428:	fb93 f1f1 	sdiv	r1, r3, r1
-   d642c:	f7fe fcee 	bl	d4e0c <_Z15update_progress6Stringi>
-   d6430:	a804      	add	r0, sp, #16
-   d6432:	f002 f834 	bl	d849e <_ZN6StringD1Ev>
+   d6402:	a804      	add	r0, sp, #16
+   d6404:	f002 f892 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d6408:	9b01      	ldr	r3, [sp, #4]
+   d640a:	ea83 71e3 	eor.w	r1, r3, r3, asr #31
+   d640e:	eba1 71e3 	sub.w	r1, r1, r3, asr #31
+   d6412:	9b02      	ldr	r3, [sp, #8]
+   d6414:	4359      	muls	r1, r3
+   d6416:	9b03      	ldr	r3, [sp, #12]
+   d6418:	a804      	add	r0, sp, #16
+   d641a:	434b      	muls	r3, r1
+   d641c:	f246 11a8 	movw	r1, #25000	; 0x61a8
+   d6420:	fb93 f1f1 	sdiv	r1, r3, r1
+   d6424:	f7fe fcf2 	bl	d4e0c <_Z15update_progress6Stringi>
+   d6428:	a804      	add	r0, sp, #16
+   d642a:	f002 f838 	bl	d849e <_ZN6StringD1Ev>
             oscillate_stage(param1, param2, param3, true);
-   d6436:	a801      	add	r0, sp, #4
-   d6438:	2301      	movs	r3, #1
-   d643a:	c807      	ldmia	r0, {r0, r1, r2}
-   d643c:	f7fe fd46 	bl	d4ecc <_Z15oscillate_stageiiib>
-   d6440:	e0d3      	b.n	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d642e:	a801      	add	r0, sp, #4
+   d6430:	2301      	movs	r3, #1
+   d6432:	c807      	ldmia	r0, {r0, r1, r2}
+   d6434:	f7fe fd4a 	bl	d4ecc <_Z15oscillate_stageiiib>
+   d6438:	e0cd      	b.n	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
 {
     int param1, param2, param3, start_index;
 
     if (cancelling_test) return index;
 
     switch (cmd) {
-   d6442:	2814      	cmp	r0, #20
-   d6444:	f000 80b2 	beq.w	d65ac <_Z25process_one_BCODE_commandii+0x214>
-   d6448:	dc37      	bgt.n	d64ba <_Z25process_one_BCODE_commandii+0x122>
-   d644a:	280a      	cmp	r0, #10
-   d644c:	f000 8095 	beq.w	d657a <_Z25process_one_BCODE_commandii+0x1e2>
-   d6450:	280b      	cmp	r0, #11
-   d6452:	f040 80ca 	bne.w	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d643a:	2814      	cmp	r0, #20
+   d643c:	f000 80ac 	beq.w	d6598 <_Z25process_one_BCODE_commandii+0x200>
+   d6440:	dc37      	bgt.n	d64b2 <_Z25process_one_BCODE_commandii+0x11a>
+   d6442:	280a      	cmp	r0, #10
+   d6444:	f000 808f 	beq.w	d6566 <_Z25process_one_BCODE_commandii+0x1ce>
+   d6448:	280b      	cmp	r0, #11
+   d644a:	f040 80c4 	bne.w	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
             move_stage_to_optical_read_position();
             update_progress("Reading", 6000);
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
             break;
         case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
-   d6456:	a901      	add	r1, sp, #4
-   d6458:	4620      	mov	r0, r4
-   d645a:	f7fe fca3 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d644e:	a901      	add	r1, sp, #4
+   d6450:	4620      	mov	r0, r4
+   d6452:	f7fe fca7 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             index = get_BCODE_token(index, &param2); // LED power
-   d645e:	a902      	add	r1, sp, #8
-   d6460:	f7fe fca0 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d6456:	a902      	add	r1, sp, #8
+   d6458:	f7fe fca4 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
-   d6464:	4968      	ldr	r1, [pc, #416]	; (d6608 <_Z25process_one_BCODE_commandii+0x270>)
+   d645c:	4964      	ldr	r1, [pc, #400]	; (d65f0 <_Z25process_one_BCODE_commandii+0x258>)
             update_progress("Reading", 6000);
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
             break;
         case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
-   d6466:	4604      	mov	r4, r0
+   d645e:	4604      	mov	r4, r0
             update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
-   d6468:	a804      	add	r0, sp, #16
-   d646a:	f002 f85f 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d646e:	4b67      	ldr	r3, [pc, #412]	; (d660c <_Z25process_one_BCODE_commandii+0x274>)
-   d6470:	6819      	ldr	r1, [r3, #0]
-   d6472:	f5a1 418c 	sub.w	r1, r1, #17920	; 0x4600
-   d6476:	3950      	subs	r1, #80	; 0x50
-   d6478:	2900      	cmp	r1, #0
-   d647a:	bfb8      	it	lt
-   d647c:	4249      	neglt	r1, r1
-   d647e:	2396      	movs	r3, #150	; 0x96
-   d6480:	4359      	muls	r1, r3
-   d6482:	a804      	add	r0, sp, #16
-   d6484:	f246 13a8 	movw	r3, #25000	; 0x61a8
-   d6488:	fb91 f1f3 	sdiv	r1, r1, r3
-   d648c:	f7fe fcbe 	bl	d4e0c <_Z15update_progress6Stringi>
-   d6490:	a804      	add	r0, sp, #16
-   d6492:	f002 f804 	bl	d849e <_ZN6StringD1Ev>
+   d6460:	a804      	add	r0, sp, #16
+   d6462:	f002 f863 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d6466:	4b63      	ldr	r3, [pc, #396]	; (d65f4 <_Z25process_one_BCODE_commandii+0x25c>)
+   d6468:	6819      	ldr	r1, [r3, #0]
+   d646a:	f5a1 418c 	sub.w	r1, r1, #17920	; 0x4600
+   d646e:	3950      	subs	r1, #80	; 0x50
+   d6470:	2900      	cmp	r1, #0
+   d6472:	bfb8      	it	lt
+   d6474:	4249      	neglt	r1, r1
+   d6476:	2396      	movs	r3, #150	; 0x96
+   d6478:	4359      	muls	r1, r3
+   d647a:	a804      	add	r0, sp, #16
+   d647c:	f246 13a8 	movw	r3, #25000	; 0x61a8
+   d6480:	fb91 f1f3 	sdiv	r1, r1, r3
+   d6484:	f7fe fcc2 	bl	d4e0c <_Z15update_progress6Stringi>
+   d6488:	a804      	add	r0, sp, #16
+   d648a:	f002 f808 	bl	d849e <_ZN6StringD1Ev>
             move_stage_to_optical_read_position();
-   d6496:	f7ff f8b5 	bl	d5604 <_Z35move_stage_to_optical_read_positionv>
+   d648e:	f7ff f8b9 	bl	d5604 <_Z35move_stage_to_optical_read_positionv>
             update_progress("Reading", 6000);
-   d649a:	495d      	ldr	r1, [pc, #372]	; (d6610 <_Z25process_one_BCODE_commandii+0x278>)
-   d649c:	a804      	add	r0, sp, #16
-   d649e:	f002 f845 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d64a2:	f241 7170 	movw	r1, #6000	; 0x1770
-   d64a6:	a804      	add	r0, sp, #16
-   d64a8:	f7fe fcb0 	bl	d4e0c <_Z15update_progress6Stringi>
-   d64ac:	a804      	add	r0, sp, #16
-   d64ae:	f001 fff6 	bl	d849e <_ZN6StringD1Ev>
+   d6492:	4959      	ldr	r1, [pc, #356]	; (d65f8 <_Z25process_one_BCODE_commandii+0x260>)
+   d6494:	a804      	add	r0, sp, #16
+   d6496:	f002 f849 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d649a:	f241 7170 	movw	r1, #6000	; 0x1770
+   d649e:	a804      	add	r0, sp, #16
+   d64a0:	f7fe fcb4 	bl	d4e0c <_Z15update_progress6Stringi>
+   d64a4:	a804      	add	r0, sp, #16
+   d64a6:	f001 fffa 	bl	d849e <_ZN6StringD1Ev>
             read_optical_sensors(param1, param2, false);
-   d64b2:	462a      	mov	r2, r5
-   d64b4:	9902      	ldr	r1, [sp, #8]
-   d64b6:	9801      	ldr	r0, [sp, #4]
-   d64b8:	e075      	b.n	d65a6 <_Z25process_one_BCODE_commandii+0x20e>
+   d64aa:	462a      	mov	r2, r5
+   d64ac:	9902      	ldr	r1, [sp, #8]
+   d64ae:	9801      	ldr	r0, [sp, #4]
+   d64b0:	e06f      	b.n	d6592 <_Z25process_one_BCODE_commandii+0x1fa>
 {
     int param1, param2, param3, start_index;
 
     if (cancelling_test) return index;
 
     switch (cmd) {
-   d64ba:	2815      	cmp	r0, #21
-   d64bc:	f000 808e 	beq.w	d65dc <_Z25process_one_BCODE_commandii+0x244>
-   d64c0:	2863      	cmp	r0, #99	; 0x63
-   d64c2:	f040 8092 	bne.w	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d64b2:	2815      	cmp	r0, #21
+   d64b4:	f000 8088 	beq.w	d65c8 <_Z25process_one_BCODE_commandii+0x230>
+   d64b8:	2863      	cmp	r0, #99	; 0x63
+   d64ba:	f040 808c 	bne.w	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
         case 21: // Repeat end
             Serial.println("End repeating");
             return -index;
             break;
         case 99: // Finish test
             Serial.println("Finish test");
-   d64c6:	f002 faa3 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d64ca:	4952      	ldr	r1, [pc, #328]	; (d6614 <_Z25process_one_BCODE_commandii+0x27c>)
-   d64cc:	f001 ff55 	bl	d837a <_ZN5Print7printlnEPKc>
-            test.finish_time = Time.now();
-   d64d0:	f002 f988 	bl	d87e4 <_ZN9TimeClass3nowEv>
-   d64d4:	4b49      	ldr	r3, [pc, #292]	; (d65fc <_Z25process_one_BCODE_commandii+0x264>)
-   d64d6:	6218      	str	r0, [r3, #32]
-            write_test_record_to_eeprom();
-   d64d8:	f7fe fc50 	bl	d4d7c <_Z27write_test_record_to_eepromv>
-   d64dc:	e087      	b.n	d65ee <_Z25process_one_BCODE_commandii+0x256>
-            test.start_time = Time.now();
+   d64be:	f002 faa7 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d64c2:	494e      	ldr	r1, [pc, #312]	; (d65fc <_Z25process_one_BCODE_commandii+0x264>)
+   d64c4:	f001 ff59 	bl	d837a <_ZN5Print7printlnEPKc>
+   d64c8:	e087      	b.n	d65da <_Z25process_one_BCODE_commandii+0x242>
+        case 0: // Start test()
             update_progress("Starting", 6000);
             BCODE_delay(1000);
             break;
         case 1: // Delay(milliseconds)
             index = get_BCODE_token(index, &param1);
-   d64de:	a901      	add	r1, sp, #4
-   d64e0:	4620      	mov	r0, r4
-   d64e2:	f7fe fc5f 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d64ca:	a901      	add	r1, sp, #4
+   d64cc:	4620      	mov	r0, r4
+   d64ce:	f7fe fc69 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             update_progress("Pausing", param1);
-   d64e6:	494c      	ldr	r1, [pc, #304]	; (d6618 <_Z25process_one_BCODE_commandii+0x280>)
-            test.start_time = Time.now();
+   d64d2:	494b      	ldr	r1, [pc, #300]	; (d6600 <_Z25process_one_BCODE_commandii+0x268>)
+        case 0: // Start test()
             update_progress("Starting", 6000);
             BCODE_delay(1000);
             break;
         case 1: // Delay(milliseconds)
             index = get_BCODE_token(index, &param1);
-   d64e8:	4604      	mov	r4, r0
+   d64d4:	4604      	mov	r4, r0
             update_progress("Pausing", param1);
-   d64ea:	a804      	add	r0, sp, #16
-   d64ec:	f002 f81e 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d64f0:	9901      	ldr	r1, [sp, #4]
-   d64f2:	a804      	add	r0, sp, #16
-   d64f4:	f7fe fc8a 	bl	d4e0c <_Z15update_progress6Stringi>
-   d64f8:	a804      	add	r0, sp, #16
-   d64fa:	f001 ffd0 	bl	d849e <_ZN6StringD1Ev>
+   d64d6:	a804      	add	r0, sp, #16
+   d64d8:	f002 f828 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d64dc:	9901      	ldr	r1, [sp, #4]
+   d64de:	a804      	add	r0, sp, #16
+   d64e0:	f7fe fc94 	bl	d4e0c <_Z15update_progress6Stringi>
+   d64e4:	a804      	add	r0, sp, #16
+   d64e6:	f001 ffda 	bl	d849e <_ZN6StringD1Ev>
             BCODE_delay(param1);
-   d64fe:	9801      	ldr	r0, [sp, #4]
-   d6500:	f7fe fd08 	bl	d4f14 <_Z11BCODE_delayi>
-   d6504:	e073      	b.n	d65ee <_Z25process_one_BCODE_commandii+0x256>
+   d64ea:	9801      	ldr	r0, [sp, #4]
+   d64ec:	f7fe fd12 	bl	d4f14 <_Z11BCODE_delayi>
+   d64f0:	e073      	b.n	d65da <_Z25process_one_BCODE_commandii+0x242>
             break;
         case 2: // Move Microns(microns, microseconds)
             index = get_BCODE_token(index, &param1); // microns to move
-   d6506:	a901      	add	r1, sp, #4
-   d6508:	4620      	mov	r0, r4
-   d650a:	f7fe fc4b 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d64f2:	a901      	add	r1, sp, #4
+   d64f4:	4620      	mov	r0, r4
+   d64f6:	f7fe fc55 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             index = get_BCODE_token(index, &param2); // step_delay_us
-   d650e:	a902      	add	r1, sp, #8
-   d6510:	f7fe fc48 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d64fa:	a902      	add	r1, sp, #8
+   d64fc:	f7fe fc52 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             update_progress("Moving", abs(param1) * param2 / MOVE_DURATION_UNIT);
-   d6514:	4941      	ldr	r1, [pc, #260]	; (d661c <_Z25process_one_BCODE_commandii+0x284>)
+   d6500:	4940      	ldr	r1, [pc, #256]	; (d6604 <_Z25process_one_BCODE_commandii+0x26c>)
             update_progress("Pausing", param1);
             BCODE_delay(param1);
             break;
         case 2: // Move Microns(microns, microseconds)
             index = get_BCODE_token(index, &param1); // microns to move
             index = get_BCODE_token(index, &param2); // step_delay_us
-   d6516:	4604      	mov	r4, r0
+   d6502:	4604      	mov	r4, r0
             update_progress("Moving", abs(param1) * param2 / MOVE_DURATION_UNIT);
-   d6518:	a804      	add	r0, sp, #16
-   d651a:	f002 f807 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d651e:	9b01      	ldr	r3, [sp, #4]
-   d6520:	ea83 71e3 	eor.w	r1, r3, r3, asr #31
-   d6524:	eba1 71e3 	sub.w	r1, r1, r3, asr #31
-   d6528:	9b02      	ldr	r3, [sp, #8]
-   d652a:	a804      	add	r0, sp, #16
-   d652c:	434b      	muls	r3, r1
-   d652e:	f246 11a8 	movw	r1, #25000	; 0x61a8
-   d6532:	fb93 f1f1 	sdiv	r1, r3, r1
-   d6536:	f7fe fc69 	bl	d4e0c <_Z15update_progress6Stringi>
-   d653a:	a804      	add	r0, sp, #16
-   d653c:	f001 ffaf 	bl	d849e <_ZN6StringD1Ev>
+   d6504:	a804      	add	r0, sp, #16
+   d6506:	f002 f811 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d650a:	9b01      	ldr	r3, [sp, #4]
+   d650c:	ea83 71e3 	eor.w	r1, r3, r3, asr #31
+   d6510:	eba1 71e3 	sub.w	r1, r1, r3, asr #31
+   d6514:	9b02      	ldr	r3, [sp, #8]
+   d6516:	a804      	add	r0, sp, #16
+   d6518:	434b      	muls	r3, r1
+   d651a:	f246 11a8 	movw	r1, #25000	; 0x61a8
+   d651e:	fb93 f1f1 	sdiv	r1, r3, r1
+   d6522:	f7fe fc73 	bl	d4e0c <_Z15update_progress6Stringi>
+   d6526:	a804      	add	r0, sp, #16
+   d6528:	f001 ffb9 	bl	d849e <_ZN6StringD1Ev>
             move_stage(param1, param2);
-   d6540:	9902      	ldr	r1, [sp, #8]
-   d6542:	9801      	ldr	r0, [sp, #4]
-   d6544:	f7fe f81e 	bl	d4584 <_Z10move_stageii>
-   d6548:	e04f      	b.n	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d652c:	9902      	ldr	r1, [sp, #8]
+   d652e:	9801      	ldr	r0, [sp, #4]
+   d6530:	f7fe f828 	bl	d4584 <_Z10move_stageii>
+   d6534:	e04f      	b.n	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
             update_progress("Oscillating", abs(param1) * param2 * param3 / MOVE_DURATION_UNIT);
             oscillate_stage(param1, param2, param3, true);
             BCODE_loop();
             break;
         case 4: // Buzz(milliseconds, frequency)
             index = get_BCODE_token(index, &param1); // duration_ms
-   d654a:	a901      	add	r1, sp, #4
-   d654c:	4620      	mov	r0, r4
-   d654e:	f7fe fc29 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d6536:	a901      	add	r1, sp, #4
+   d6538:	4620      	mov	r0, r4
+   d653a:	f7fe fc33 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             index = get_BCODE_token(index, &param2); // frequency
-   d6552:	a902      	add	r1, sp, #8
-   d6554:	f7fe fc26 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d653e:	a902      	add	r1, sp, #8
+   d6540:	f7fe fc30 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
             update_progress("Buzzing", param1);
-   d6558:	4931      	ldr	r1, [pc, #196]	; (d6620 <_Z25process_one_BCODE_commandii+0x288>)
+   d6544:	4930      	ldr	r1, [pc, #192]	; (d6608 <_Z25process_one_BCODE_commandii+0x270>)
             oscillate_stage(param1, param2, param3, true);
             BCODE_loop();
             break;
         case 4: // Buzz(milliseconds, frequency)
             index = get_BCODE_token(index, &param1); // duration_ms
             index = get_BCODE_token(index, &param2); // frequency
-   d655a:	4604      	mov	r4, r0
+   d6546:	4604      	mov	r4, r0
             update_progress("Buzzing", param1);
-   d655c:	a804      	add	r0, sp, #16
-   d655e:	f001 ffe5 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d6562:	9901      	ldr	r1, [sp, #4]
-   d6564:	a804      	add	r0, sp, #16
-   d6566:	f7fe fc51 	bl	d4e0c <_Z15update_progress6Stringi>
-   d656a:	a804      	add	r0, sp, #16
-   d656c:	f001 ff97 	bl	d849e <_ZN6StringD1Ev>
+   d6548:	a804      	add	r0, sp, #16
+   d654a:	f001 ffef 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d654e:	9901      	ldr	r1, [sp, #4]
+   d6550:	a804      	add	r0, sp, #16
+   d6552:	f7fe fc5b 	bl	d4e0c <_Z15update_progress6Stringi>
+   d6556:	a804      	add	r0, sp, #16
+   d6558:	f001 ffa1 	bl	d849e <_ZN6StringD1Ev>
             turn_on_buzzer_for_duration(param1, param2);
-   d6570:	9902      	ldr	r1, [sp, #8]
-   d6572:	9801      	ldr	r0, [sp, #4]
-   d6574:	f7fe ffb4 	bl	d54e0 <_Z27turn_on_buzzer_for_durationii>
-   d6578:	e037      	b.n	d65ea <_Z25process_one_BCODE_commandii+0x252>
+   d655c:	9902      	ldr	r1, [sp, #8]
+   d655e:	9801      	ldr	r0, [sp, #4]
+   d6560:	f7fe ffbe 	bl	d54e0 <_Z27turn_on_buzzer_for_durationii>
+   d6564:	e037      	b.n	d65d6 <_Z25process_one_BCODE_commandii+0x23e>
             BCODE_loop();
             break;
         case 10: // Read optical sensors with default param and LED power
             // update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
             Serial.printlnf("Moving stage to prepare for reading");
-   d657a:	f002 fa49 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d657e:	4929      	ldr	r1, [pc, #164]	; (d6624 <_Z25process_one_BCODE_commandii+0x28c>)
-   d6580:	f7ff f84a 	bl	d5618 <_ZN5Print8printlnfIIEEEjPKcDpT_>
+   d6566:	f002 fa53 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d656a:	4928      	ldr	r1, [pc, #160]	; (d660c <_Z25process_one_BCODE_commandii+0x274>)
+   d656c:	f7ff f854 	bl	d5618 <_ZN5Print8printlnfIIEEEjPKcDpT_>
             move_stage_to_optical_read_position();
-   d6584:	f7ff f83e 	bl	d5604 <_Z35move_stage_to_optical_read_positionv>
+   d6570:	f7ff f848 	bl	d5604 <_Z35move_stage_to_optical_read_positionv>
             update_progress("Reading", 6000);
-   d6588:	4921      	ldr	r1, [pc, #132]	; (d6610 <_Z25process_one_BCODE_commandii+0x278>)
-   d658a:	a804      	add	r0, sp, #16
-   d658c:	f001 ffce 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d6590:	f241 7170 	movw	r1, #6000	; 0x1770
-   d6594:	a804      	add	r0, sp, #16
-   d6596:	f7fe fc39 	bl	d4e0c <_Z15update_progress6Stringi>
-   d659a:	a804      	add	r0, sp, #16
-   d659c:	f001 ff7f 	bl	d849e <_ZN6StringD1Ev>
+   d6574:	4920      	ldr	r1, [pc, #128]	; (d65f8 <_Z25process_one_BCODE_commandii+0x260>)
+   d6576:	a804      	add	r0, sp, #16
+   d6578:	f001 ffd8 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d657c:	f241 7170 	movw	r1, #6000	; 0x1770
+   d6580:	a804      	add	r0, sp, #16
+   d6582:	f7fe fc43 	bl	d4e0c <_Z15update_progress6Stringi>
+   d6586:	a804      	add	r0, sp, #16
+   d6588:	f001 ff89 	bl	d849e <_ZN6StringD1Ev>
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
-   d65a0:	462a      	mov	r2, r5
-   d65a2:	21ff      	movs	r1, #255	; 0xff
-   d65a4:	20b6      	movs	r0, #182	; 0xb6
+   d658c:	462a      	mov	r2, r5
+   d658e:	21ff      	movs	r1, #255	; 0xff
+   d6590:	20b6      	movs	r0, #182	; 0xb6
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
             update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
             move_stage_to_optical_read_position();
             update_progress("Reading", 6000);
             read_optical_sensors(param1, param2, false);
-   d65a6:	f7ff feaf 	bl	d6308 <_Z20read_optical_sensorsiib>
-   d65aa:	e020      	b.n	d65ee <_Z25process_one_BCODE_commandii+0x256>
+   d6592:	f7ff feb9 	bl	d6308 <_Z20read_optical_sensorsiib>
+   d6596:	e020      	b.n	d65da <_Z25process_one_BCODE_commandii+0x242>
             break;
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
-   d65ac:	a901      	add	r1, sp, #4
-   d65ae:	4620      	mov	r0, r4
-   d65b0:	f7fe fbf8 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
-   d65b4:	4604      	mov	r4, r0
+   d6598:	a901      	add	r1, sp, #4
+   d659a:	4620      	mov	r0, r4
+   d659c:	f7fe fc02 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d65a0:	4604      	mov	r4, r0
 
             Serial.printlnf("Begin repeating %d times", param1);
-   d65b6:	f002 fa2b 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d65ba:	9b01      	ldr	r3, [sp, #4]
-   d65bc:	4a1a      	ldr	r2, [pc, #104]	; (d6628 <_Z25process_one_BCODE_commandii+0x290>)
-   d65be:	2101      	movs	r1, #1
-   d65c0:	f001 ff05 	bl	d83ce <_ZN5Print11printf_implEbPKcz>
+   d65a2:	f002 fa35 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d65a6:	9b01      	ldr	r3, [sp, #4]
+   d65a8:	4a19      	ldr	r2, [pc, #100]	; (d6610 <_Z25process_one_BCODE_commandii+0x278>)
+   d65aa:	2101      	movs	r1, #1
+   d65ac:	f001 ff0f 	bl	d83ce <_ZN5Print11printf_implEbPKcz>
             start_index = index + 1;
-   d65c4:	1c67      	adds	r7, r4, #1
+   d65b0:	1c67      	adds	r7, r4, #1
             for (int i = 0; i < param1; i += 1) {
-   d65c6:	9b01      	ldr	r3, [sp, #4]
-   d65c8:	42ab      	cmp	r3, r5
-   d65ca:	dd10      	ble.n	d65ee <_Z25process_one_BCODE_commandii+0x256>
+   d65b2:	9b01      	ldr	r3, [sp, #4]
+   d65b4:	42ab      	cmp	r3, r5
+   d65b6:	dd10      	ble.n	d65da <_Z25process_one_BCODE_commandii+0x242>
                 if (cancelling_test) break;
-   d65cc:	7833      	ldrb	r3, [r6, #0]
-   d65ce:	b973      	cbnz	r3, d65ee <_Z25process_one_BCODE_commandii+0x256>
+   d65b8:	7833      	ldrb	r3, [r6, #0]
+   d65ba:	b973      	cbnz	r3, d65da <_Z25process_one_BCODE_commandii+0x242>
                 index = process_BCODE(start_index);
-   d65d0:	4638      	mov	r0, r7
-   d65d2:	f000 f82d 	bl	d6630 <_Z13process_BCODEi>
+   d65bc:	4638      	mov	r0, r7
+   d65be:	f000 f82b 	bl	d6618 <_Z13process_BCODEi>
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
 
             Serial.printlnf("Begin repeating %d times", param1);
             start_index = index + 1;
             for (int i = 0; i < param1; i += 1) {
-   d65d6:	3501      	adds	r5, #1
+   d65c2:	3501      	adds	r5, #1
                 if (cancelling_test) break;
                 index = process_BCODE(start_index);
-   d65d8:	4604      	mov	r4, r0
-   d65da:	e7f4      	b.n	d65c6 <_Z25process_one_BCODE_commandii+0x22e>
+   d65c4:	4604      	mov	r4, r0
+   d65c6:	e7f4      	b.n	d65b2 <_Z25process_one_BCODE_commandii+0x21a>
             }
             break;
         case 21: // Repeat end
             Serial.println("End repeating");
-   d65dc:	f002 fa18 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d65e0:	4912      	ldr	r1, [pc, #72]	; (d662c <_Z25process_one_BCODE_commandii+0x294>)
-   d65e2:	f001 feca 	bl	d837a <_ZN5Print7printlnEPKc>
+   d65c8:	f002 fa22 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d65cc:	4911      	ldr	r1, [pc, #68]	; (d6614 <_Z25process_one_BCODE_commandii+0x27c>)
+   d65ce:	f001 fed4 	bl	d837a <_ZN5Print7printlnEPKc>
             return -index;
-   d65e6:	4260      	negs	r0, r4
-   d65e8:	e004      	b.n	d65f4 <_Z25process_one_BCODE_commandii+0x25c>
-            test.finish_time = Time.now();
-            write_test_record_to_eeprom();
+   d65d2:	4260      	negs	r0, r4
+   d65d4:	e004      	b.n	d65e0 <_Z25process_one_BCODE_commandii+0x248>
+        case 99: // Finish test
+            Serial.println("Finish test");
             // update_progress("Finishing up test", 6000);
             break;
         default:
             BCODE_loop();
-   d65ea:	f7fe fc51 	bl	d4e90 <_Z10BCODE_loopv>
+   d65d6:	f7fe fc5b 	bl	d4e90 <_Z10BCODE_loopv>
     }
 
     return index + 1;
-   d65ee:	1c60      	adds	r0, r4, #1
-   d65f0:	e000      	b.n	d65f4 <_Z25process_one_BCODE_commandii+0x25c>
+   d65da:	1c60      	adds	r0, r4, #1
+   d65dc:	e000      	b.n	d65e0 <_Z25process_one_BCODE_commandii+0x248>
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
     int param1, param2, param3, start_index;
 
     if (cancelling_test) return index;
-   d65f2:	4608      	mov	r0, r1
+   d65de:	4608      	mov	r0, r1
         default:
             BCODE_loop();
     }
 
     return index + 1;
 }
-   d65f4:	b009      	add	sp, #36	; 0x24
-   d65f6:	bdf0      	pop	{r4, r5, r6, r7, pc}
-   d65f8:	2003d9d1 	.word	0x2003d9d1
-   d65fc:	2003d270 	.word	0x2003d270
-   d6600:	000da01d 	.word	0x000da01d
-   d6604:	000da035 	.word	0x000da035
-   d6608:	000da075 	.word	0x000da075
-   d660c:	2003d9d4 	.word	0x2003d9d4
-   d6610:	000da06d 	.word	0x000da06d
-   d6614:	000da0a6 	.word	0x000da0a6
-   d6618:	000da026 	.word	0x000da026
-   d661c:	000da02e 	.word	0x000da02e
-   d6620:	000da041 	.word	0x000da041
-   d6624:	000da049 	.word	0x000da049
-   d6628:	000da07f 	.word	0x000da07f
-   d662c:	000da098 	.word	0x000da098
+   d65e0:	b009      	add	sp, #36	; 0x24
+   d65e2:	bdf0      	pop	{r4, r5, r6, r7, pc}
+   d65e4:	2003d9d1 	.word	0x2003d9d1
+   d65e8:	000da01d 	.word	0x000da01d
+   d65ec:	000da035 	.word	0x000da035
+   d65f0:	000da075 	.word	0x000da075
+   d65f4:	2003d9d4 	.word	0x2003d9d4
+   d65f8:	000da06d 	.word	0x000da06d
+   d65fc:	000da0a6 	.word	0x000da0a6
+   d6600:	000da026 	.word	0x000da026
+   d6604:	000da02e 	.word	0x000da02e
+   d6608:	000da041 	.word	0x000da041
+   d660c:	000da049 	.word	0x000da049
+   d6610:	000da07f 	.word	0x000da07f
+   d6614:	000da098 	.word	0x000da098
 
-000d6630 <_Z13process_BCODEi>:
+000d6618 <_Z13process_BCODEi>:
 
 int process_BCODE(int start_index)
 {
-   d6630:	b530      	push	{r4, r5, lr}
-   d6632:	b085      	sub	sp, #20
+   d6618:	b530      	push	{r4, r5, lr}
+   d661a:	b085      	sub	sp, #20
     int cmd, index;
 
     index = get_BCODE_token(start_index, &cmd);
-   d6634:	a903      	add	r1, sp, #12
+   d661c:	a903      	add	r1, sp, #12
 
     return index + 1;
 }
 
 int process_BCODE(int start_index)
 {
-   d6636:	4605      	mov	r5, r0
+   d661e:	4605      	mov	r5, r0
     int cmd, index;
 
     index = get_BCODE_token(start_index, &cmd);
-   d6638:	f7fe fbb4 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
-   d663c:	4601      	mov	r1, r0
+   d6620:	f7fe fbc0 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d6624:	4601      	mov	r1, r0
     if ((start_index == 0) && (cmd != 0)) { // first command
-   d663e:	b965      	cbnz	r5, d665a <_Z13process_BCODEi+0x2a>
-   d6640:	9b03      	ldr	r3, [sp, #12]
-   d6642:	b153      	cbz	r3, d665a <_Z13process_BCODEi+0x2a>
+   d6626:	b965      	cbnz	r5, d6642 <_Z13process_BCODEi+0x2a>
+   d6628:	9b03      	ldr	r3, [sp, #12]
+   d662a:	b153      	cbz	r3, d6642 <_Z13process_BCODEi+0x2a>
         cancelling_test = true;
-   d6644:	4b18      	ldr	r3, [pc, #96]	; (d66a8 <_Z13process_BCODEi+0x78>)
-   d6646:	2201      	movs	r2, #1
-   d6648:	701a      	strb	r2, [r3, #0]
+   d662c:	4b18      	ldr	r3, [pc, #96]	; (d6690 <_Z13process_BCODEi+0x78>)
+   d662e:	2201      	movs	r2, #1
+   d6630:	701a      	strb	r2, [r3, #0]
         Serial.println("First command not found");
-   d664a:	f002 f9e1 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d664e:	4917      	ldr	r1, [pc, #92]	; (d66ac <_Z13process_BCODEi+0x7c>)
-   d6650:	f001 fe93 	bl	d837a <_ZN5Print7printlnEPKc>
+   d6632:	f002 f9ed 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d6636:	4917      	ldr	r1, [pc, #92]	; (d6694 <_Z13process_BCODEi+0x7c>)
+   d6638:	f001 fe9f 	bl	d837a <_ZN5Print7printlnEPKc>
         return -1;
-   d6654:	f04f 30ff 	mov.w	r0, #4294967295	; 0xffffffff
-   d6658:	e023      	b.n	d66a2 <_Z13process_BCODEi+0x72>
+   d663c:	f04f 30ff 	mov.w	r0, #4294967295	; 0xffffffff
+   d6640:	e023      	b.n	d668a <_Z13process_BCODEi+0x72>
     } else {
         index = process_one_BCODE_command(cmd, index);
-   d665a:	9803      	ldr	r0, [sp, #12]
-   d665c:	f7ff fe9c 	bl	d6398 <_Z25process_one_BCODE_commandii>
-   d6660:	4604      	mov	r4, r0
+   d6642:	9803      	ldr	r0, [sp, #12]
+   d6644:	f7ff fea8 	bl	d6398 <_Z25process_one_BCODE_commandii>
+   d6648:	4604      	mov	r4, r0
     }
     Serial.printlnf("start_index: %d, index: %d, cmd: %d", start_index, index, cmd);
-   d6662:	f002 f9d5 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d6666:	9b03      	ldr	r3, [sp, #12]
-   d6668:	9301      	str	r3, [sp, #4]
-   d666a:	9400      	str	r4, [sp, #0]
-   d666c:	462b      	mov	r3, r5
-   d666e:	4a10      	ldr	r2, [pc, #64]	; (d66b0 <_Z13process_BCODEi+0x80>)
+   d664a:	f002 f9e1 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d664e:	9b03      	ldr	r3, [sp, #12]
+   d6650:	9301      	str	r3, [sp, #4]
+   d6652:	9400      	str	r4, [sp, #0]
+   d6654:	462b      	mov	r3, r5
+   d6656:	4a10      	ldr	r2, [pc, #64]	; (d6698 <_Z13process_BCODEi+0x80>)
 
     while ((cmd != 99) && (index > 0) && !cancelling_test) {
-   d6670:	4d0d      	ldr	r5, [pc, #52]	; (d66a8 <_Z13process_BCODEi+0x78>)
-   d6672:	2101      	movs	r1, #1
-   d6674:	f001 feab 	bl	d83ce <_ZN5Print11printf_implEbPKcz>
-   d6678:	9b03      	ldr	r3, [sp, #12]
-   d667a:	2b63      	cmp	r3, #99	; 0x63
-   d667c:	d00d      	beq.n	d669a <_Z13process_BCODEi+0x6a>
-   d667e:	2c00      	cmp	r4, #0
-   d6680:	dd0b      	ble.n	d669a <_Z13process_BCODEi+0x6a>
-   d6682:	782b      	ldrb	r3, [r5, #0]
-   d6684:	b94b      	cbnz	r3, d669a <_Z13process_BCODEi+0x6a>
+   d6658:	4d0d      	ldr	r5, [pc, #52]	; (d6690 <_Z13process_BCODEi+0x78>)
+   d665a:	2101      	movs	r1, #1
+   d665c:	f001 feb7 	bl	d83ce <_ZN5Print11printf_implEbPKcz>
+   d6660:	9b03      	ldr	r3, [sp, #12]
+   d6662:	2b63      	cmp	r3, #99	; 0x63
+   d6664:	d00d      	beq.n	d6682 <_Z13process_BCODEi+0x6a>
+   d6666:	2c00      	cmp	r4, #0
+   d6668:	dd0b      	ble.n	d6682 <_Z13process_BCODEi+0x6a>
+   d666a:	782b      	ldrb	r3, [r5, #0]
+   d666c:	b94b      	cbnz	r3, d6682 <_Z13process_BCODEi+0x6a>
         index = get_BCODE_token(index, &cmd);
-   d6686:	a903      	add	r1, sp, #12
-   d6688:	4620      	mov	r0, r4
-   d668a:	f7fe fb8b 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
+   d666e:	a903      	add	r1, sp, #12
+   d6670:	4620      	mov	r0, r4
+   d6672:	f7fe fb97 	bl	d4da4 <_Z15get_BCODE_tokeniPi>
         index = process_one_BCODE_command(cmd, index);
-   d668e:	4601      	mov	r1, r0
-   d6690:	9803      	ldr	r0, [sp, #12]
-   d6692:	f7ff fe81 	bl	d6398 <_Z25process_one_BCODE_commandii>
-   d6696:	4604      	mov	r4, r0
+   d6676:	4601      	mov	r1, r0
+   d6678:	9803      	ldr	r0, [sp, #12]
+   d667a:	f7ff fe8d 	bl	d6398 <_Z25process_one_BCODE_commandii>
+   d667e:	4604      	mov	r4, r0
     } else {
         index = process_one_BCODE_command(cmd, index);
     }
     Serial.printlnf("start_index: %d, index: %d, cmd: %d", start_index, index, cmd);
 
     while ((cmd != 99) && (index > 0) && !cancelling_test) {
-   d6698:	e7ee      	b.n	d6678 <_Z13process_BCODEi+0x48>
+   d6680:	e7ee      	b.n	d6660 <_Z13process_BCODEi+0x48>
         index = get_BCODE_token(index, &cmd);
         index = process_one_BCODE_command(cmd, index);
     };
 
     return (index > 0 ? index : -index);
-   d669a:	ea84 70e4 	eor.w	r0, r4, r4, asr #31
-   d669e:	eba0 70e4 	sub.w	r0, r0, r4, asr #31
+   d6682:	ea84 70e4 	eor.w	r0, r4, r4, asr #31
+   d6686:	eba0 70e4 	sub.w	r0, r0, r4, asr #31
 }
-   d66a2:	b005      	add	sp, #20
-   d66a4:	bd30      	pop	{r4, r5, pc}
-   d66a6:	bf00      	nop
-   d66a8:	2003d9d1 	.word	0x2003d9d1
-   d66ac:	000da0b2 	.word	0x000da0b2
-   d66b0:	000da0ca 	.word	0x000da0ca
+   d668a:	b005      	add	sp, #20
+   d668c:	bd30      	pop	{r4, r5, pc}
+   d668e:	bf00      	nop
+   d6690:	2003d9d1 	.word	0x2003d9d1
+   d6694:	000da0b2 	.word	0x000da0b2
+   d6698:	000da0ca 	.word	0x000da0ca
 
-000d66b4 <_Z8run_testv>:
+000d669c <_Z8run_testv>:
     sleep_motor();
     cartridge_engaged = false;
 }
 
 void run_test()
 {
-   d66b4:	b51f      	push	{r0, r1, r2, r3, r4, lr}
+   d669c:	b530      	push	{r4, r5, lr}
     test_in_progress = true;
-   d66b6:	4b2e      	ldr	r3, [pc, #184]	; (d6770 <_Z8run_testv+0xbc>)
+   d669e:	4b33      	ldr	r3, [pc, #204]	; (d676c <_Z8run_testv+0xd0>)
     update_progress("Running test", 0);
-   d66b8:	492e      	ldr	r1, [pc, #184]	; (d6774 <_Z8run_testv+0xc0>)
+   d66a0:	4933      	ldr	r1, [pc, #204]	; (d6770 <_Z8run_testv+0xd4>)
+    sleep_motor();
+    cartridge_engaged = false;
+}
+
+void run_test()
+{
+   d66a2:	b085      	sub	sp, #20
+    test_in_progress = true;
+   d66a4:	2201      	movs	r2, #1
+    update_progress("Running test", 0);
+   d66a6:	4668      	mov	r0, sp
     cartridge_engaged = false;
 }
 
 void run_test()
 {
     test_in_progress = true;
-   d66ba:	2201      	movs	r2, #1
+   d66a8:	701a      	strb	r2, [r3, #0]
     update_progress("Running test", 0);
-   d66bc:	4668      	mov	r0, sp
-    cartridge_engaged = false;
-}
-
-void run_test()
-{
-    test_in_progress = true;
-   d66be:	701a      	strb	r2, [r3, #0]
-    update_progress("Running test", 0);
-   d66c0:	f001 ff34 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
-   d66c4:	2100      	movs	r1, #0
-   d66c6:	4668      	mov	r0, sp
-   d66c8:	f7fe fba0 	bl	d4e0c <_Z15update_progress6Stringi>
-   d66cc:	4668      	mov	r0, sp
-   d66ce:	f001 fee6 	bl	d849e <_ZN6StringD1Ev>
+   d66aa:	f001 ff3f 	bl	d852c <_ZN6StringC1EPK19__FlashStringHelper>
+   d66ae:	2100      	movs	r1, #0
+   d66b0:	4668      	mov	r0, sp
+   d66b2:	f7fe fbab 	bl	d4e0c <_Z15update_progress6Stringi>
+   d66b6:	4668      	mov	r0, sp
+   d66b8:	f001 fef1 	bl	d849e <_ZN6StringD1Ev>
     static bool connected(void) { return spark_cloud_flag_connected(); }
     static bool disconnected(void) { return !connected(); }
     static void connect(void) {
         spark_cloud_flag_connect();
     }
     static void disconnect(void) { spark_cloud_flag_disconnect(); }
-   d66d2:	f000 ff0d 	bl	d74f0 <spark_cloud_flag_disconnect>
+   d66bc:	f000 ff18 	bl	d74f0 <spark_cloud_flag_disconnect>
 
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
-   d66d6:	f44f 60fa 	mov.w	r0, #2000	; 0x7d0
-   d66da:	f000 ffc9 	bl	d7670 <delay>
+   d66c0:	f44f 60fa 	mov.w	r0, #2000	; 0x7d0
+   d66c4:	f000 ffd4 	bl	d7670 <delay>
     static void sleep(Spark_Sleep_TypeDef sleepMode, long seconds=0) __attribute__ ((deprecated("Please use System.sleep() instead.")))
     { SystemClass::sleep(sleepMode, seconds); }
     static void sleep(uint16_t wakeUpPin, InterruptMode edgeTriggerMode, long seconds=0) __attribute__ ((deprecated("Please use System.sleep() instead.")))
     { SystemClass::sleep(wakeUpPin, edgeTriggerMode, seconds); }
 
     static bool connected(void) { return spark_cloud_flag_connected(); }
-   d66de:	f000 ff0f 	bl	d7500 <spark_cloud_flag_connected>
+   d66c8:	f000 ff1a 	bl	d7500 <spark_cloud_flag_connected>
     while (!Particle.disconnected())
-   d66e2:	4604      	mov	r4, r0
-   d66e4:	b148      	cbz	r0, d66fa <_Z8run_testv+0x46>
+   d66cc:	4604      	mov	r4, r0
+   d66ce:	b148      	cbz	r0, d66e4 <_Z8run_testv+0x48>
     {
         Serial.println("-");
-   d66e6:	f002 f993 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d66ea:	4923      	ldr	r1, [pc, #140]	; (d6778 <_Z8run_testv+0xc4>)
-   d66ec:	f001 fe45 	bl	d837a <_ZN5Print7printlnEPKc>
-   d66f0:	f7fd fd98 	bl	d4224 <_ZN19ApplicationWatchdog7checkinEv>
+   d66d0:	f002 f99e 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d66d4:	4927      	ldr	r1, [pc, #156]	; (d6774 <_Z8run_testv+0xd8>)
+   d66d6:	f001 fe50 	bl	d837a <_ZN5Print7printlnEPKc>
+   d66da:	f7fd fda3 	bl	d4224 <_ZN19ApplicationWatchdog7checkinEv>
         spark_cloud_flag_connect();
     }
     static void disconnect(void) { spark_cloud_flag_disconnect(); }
     static void process(void) {
     		application_checkin();
     		spark_process();
-   d66f4:	f000 feec 	bl	d74d0 <spark_process>
-   d66f8:	e7ed      	b.n	d66d6 <_Z8run_testv+0x22>
+   d66de:	f000 fef7 	bl	d74d0 <spark_process>
+   d66e2:	e7ed      	b.n	d66c0 <_Z8run_testv+0x24>
         Particle.process();
         delay(PARTICLE_CLOUD_DELAY);
     }
 
     reset_stage(false);
-   d66fa:	f7fd ffa9 	bl	d4650 <_Z11reset_stageb>
+   d66e4:	f7fd ffb4 	bl	d4650 <_Z11reset_stageb>
     turn_on_buzzer_for_duration(1000, 600);
-   d66fe:	f44f 7116 	mov.w	r1, #600	; 0x258
-   d6702:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
-   d6706:	f7fe feeb 	bl	d54e0 <_Z27turn_on_buzzer_for_durationii>
+   d66e8:	f44f 7116 	mov.w	r1, #600	; 0x258
+   d66ec:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
+   d66f0:	f7fe fef6 	bl	d54e0 <_Z27turn_on_buzzer_for_durationii>
     delay(1500);
-   d670a:	f240 50dc 	movw	r0, #1500	; 0x5dc
-   d670e:	f000 ffaf 	bl	d7670 <delay>
+   d66f4:	f240 50dc 	movw	r0, #1500	; 0x5dc
+   d66f8:	f000 ffba 	bl	d7670 <delay>
 
     stop_temperature_control();
-   d6712:	f7fe f8d3 	bl	d48bc <_Z24stop_temperature_controlv>
+   d66fc:	f7fe f8de 	bl	d48bc <_Z24stop_temperature_controlv>
+
+    test.start_time = Time.now();
+   d6700:	f002 f870 	bl	d87e4 <_ZN9TimeClass3nowEv>
+   d6704:	4d1c      	ldr	r5, [pc, #112]	; (d6778 <_Z8run_testv+0xdc>)
 typedef std::function<os_thread_return_t(void)> wiring_thread_fn_t;
 
 class SingleThreadedSection {
 public:
     SingleThreadedSection() {
         os_thread_scheduling(false, NULL);
-   d6716:	4621      	mov	r1, r4
-   d6718:	4620      	mov	r0, r4
-   d671a:	f000 fc5b 	bl	d6fd4 <os_thread_scheduling>
+   d6706:	4621      	mov	r1, r4
+   d6708:	61e8      	str	r0, [r5, #28]
+   d670a:	4620      	mov	r0, r4
+   d670c:	f000 fc62 	bl	d6fd4 <os_thread_scheduling>
 
     SINGLE_THREADED_BLOCK()
     {
       process_BCODE(0);
-   d671e:	4620      	mov	r0, r4
-   d6720:	f7ff ff86 	bl	d6630 <_Z13process_BCODEi>
+   d6710:	4620      	mov	r0, r4
+   d6712:	f7ff ff81 	bl	d6618 <_Z13process_BCODEi>
     }
 
     ~SingleThreadedSection() {
         os_thread_scheduling(true, NULL);
-   d6724:	4621      	mov	r1, r4
-   d6726:	2001      	movs	r0, #1
-   d6728:	f000 fc54 	bl	d6fd4 <os_thread_scheduling>
+   d6716:	4621      	mov	r1, r4
+   d6718:	2001      	movs	r0, #1
+   d671a:	f000 fc5b 	bl	d6fd4 <os_thread_scheduling>
     }
 
+    test.finish_time = Time.now();
+   d671e:	f002 f861 	bl	d87e4 <_ZN9TimeClass3nowEv>
+   d6722:	6228      	str	r0, [r5, #32]
+    write_test_record_to_eeprom();
+   d6724:	f7fe fb2a 	bl	d4d7c <_Z27write_test_record_to_eepromv>
+
     start_temperature_control();
-   d672c:	f7fe f8b0 	bl	d4890 <_Z25start_temperature_controlv>
+   d6728:	f7fe f8b2 	bl	d4890 <_Z25start_temperature_controlv>
     { SystemClass::sleep(wakeUpPin, edgeTriggerMode, seconds); }
 
     static bool connected(void) { return spark_cloud_flag_connected(); }
     static bool disconnected(void) { return !connected(); }
     static void connect(void) {
         spark_cloud_flag_connect();
-   d6730:	f000 fed6 	bl	d74e0 <spark_cloud_flag_connect>
+   d672c:	f000 fed8 	bl	d74e0 <spark_cloud_flag_connect>
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
-   d6734:	f44f 60fa 	mov.w	r0, #2000	; 0x7d0
-   d6738:	f000 ff9a 	bl	d7670 <delay>
+   d6730:	f44f 60fa 	mov.w	r0, #2000	; 0x7d0
+   d6734:	f000 ff9c 	bl	d7670 <delay>
     static void sleep(Spark_Sleep_TypeDef sleepMode, long seconds=0) __attribute__ ((deprecated("Please use System.sleep() instead.")))
     { SystemClass::sleep(sleepMode, seconds); }
     static void sleep(uint16_t wakeUpPin, InterruptMode edgeTriggerMode, long seconds=0) __attribute__ ((deprecated("Please use System.sleep() instead.")))
     { SystemClass::sleep(wakeUpPin, edgeTriggerMode, seconds); }
 
     static bool connected(void) { return spark_cloud_flag_connected(); }
-   d673c:	f000 fee0 	bl	d7500 <spark_cloud_flag_connected>
+   d6738:	f000 fee2 	bl	d7500 <spark_cloud_flag_connected>
     while (!Particle.connected()) {
-   d6740:	b948      	cbnz	r0, d6756 <_Z8run_testv+0xa2>
+   d673c:	b948      	cbnz	r0, d6752 <_Z8run_testv+0xb6>
         Serial.println("+");
-   d6742:	f002 f965 	bl	d8a10 <_Z16_fetch_usbserialv>
-   d6746:	490d      	ldr	r1, [pc, #52]	; (d677c <_Z8run_testv+0xc8>)
-   d6748:	f001 fe17 	bl	d837a <_ZN5Print7printlnEPKc>
-   d674c:	f7fd fd6a 	bl	d4224 <_ZN19ApplicationWatchdog7checkinEv>
+   d673e:	f002 f967 	bl	d8a10 <_Z16_fetch_usbserialv>
+   d6742:	490e      	ldr	r1, [pc, #56]	; (d677c <_Z8run_testv+0xe0>)
+   d6744:	f001 fe19 	bl	d837a <_ZN5Print7printlnEPKc>
+   d6748:	f7fd fd6c 	bl	d4224 <_ZN19ApplicationWatchdog7checkinEv>
         spark_cloud_flag_connect();
     }
     static void disconnect(void) { spark_cloud_flag_disconnect(); }
     static void process(void) {
     		application_checkin();
     		spark_process();
-   d6750:	f000 febe 	bl	d74d0 <spark_process>
-   d6754:	e7ee      	b.n	d6734 <_Z8run_testv+0x80>
+   d674c:	f000 fec0 	bl	d74d0 <spark_process>
+   d6750:	e7ee      	b.n	d6730 <_Z8run_testv+0x94>
         Particle.process();
         delay(PARTICLE_CLOUD_DELAY);
     }
 
     finishing_test = !cancelling_test;
-   d6756:	4b0a      	ldr	r3, [pc, #40]	; (d6780 <_Z8run_testv+0xcc>)
-   d6758:	4a0a      	ldr	r2, [pc, #40]	; (d6784 <_Z8run_testv+0xd0>)
-   d675a:	781b      	ldrb	r3, [r3, #0]
-   d675c:	480a      	ldr	r0, [pc, #40]	; (d6788 <_Z8run_testv+0xd4>)
-   d675e:	f083 0301 	eor.w	r3, r3, #1
-   d6762:	7013      	strb	r3, [r2, #0]
-   d6764:	2101      	movs	r1, #1
-   d6766:	2200      	movs	r2, #0
-   d6768:	f000 fe44 	bl	d73f4 <led_set_status_active>
+   d6752:	4b0b      	ldr	r3, [pc, #44]	; (d6780 <_Z8run_testv+0xe4>)
+   d6754:	4a0b      	ldr	r2, [pc, #44]	; (d6784 <_Z8run_testv+0xe8>)
+   d6756:	781b      	ldrb	r3, [r3, #0]
+   d6758:	480b      	ldr	r0, [pc, #44]	; (d6788 <_Z8run_testv+0xec>)
+   d675a:	f083 0301 	eor.w	r3, r3, #1
+   d675e:	7013      	strb	r3, [r2, #0]
+   d6760:	2101      	movs	r1, #1
+   d6762:	2200      	movs	r2, #0
+   d6764:	f000 fe46 	bl	d73f4 <led_set_status_active>
     ledAvailable.setActive(true);
 }
-   d676c:	b004      	add	sp, #16
-   d676e:	bd10      	pop	{r4, pc}
-   d6770:	2003c9b3 	.word	0x2003c9b3
-   d6774:	000da0ee 	.word	0x000da0ee
-   d6778:	000da0fb 	.word	0x000da0fb
+   d6768:	b005      	add	sp, #20
+   d676a:	bd30      	pop	{r4, r5, pc}
+   d676c:	2003c9b3 	.word	0x2003c9b3
+   d6770:	000da0ee 	.word	0x000da0ee
+   d6774:	000da0fb 	.word	0x000da0fb
+   d6778:	2003d270 	.word	0x2003d270
    d677c:	000da0fd 	.word	0x000da0fd
    d6780:	2003d9d1 	.word	0x2003d9d1
    d6784:	2003c9da 	.word	0x2003c9da
@@ -8260,7 +8256,7 @@ void test_loop()
     } else if (starting_test) {
         starting_test = false;
         run_test();
-   d6a6a:	f7ff be23 	b.w	d66b4 <_Z8run_testv>
+   d6a6a:	f7ff be17 	b.w	d669c <_Z8run_testv>
     } else if (waiting_for_upload_confirmation) {
    d6a6e:	4b11      	ldr	r3, [pc, #68]	; (d6ab4 <_Z9test_loopv+0x94>)
    d6a70:	781b      	ldrb	r3, [r3, #0]
