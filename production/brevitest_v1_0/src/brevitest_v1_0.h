@@ -4,15 +4,14 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 11
-#define DATA_FORMAT_VERSION 13
+#define FIRMWARE_VERSION 12
+#define DATA_FORMAT_VERSION 14
 #define ASSAY_UUID_LENGTH 8
 #define CARTRIDGE_UUID_LENGTH 24
 #define ARG_DELIM ','
 #define ATTR_DELIM ':'
 #define ITEM_DELIM '|'
 #define END_DELIM '#'
-#define BCODE_END "99"
 #define MAX_ANALOG_READ 4095
 #define SERIAL_COMMAND_BUFFER_SIZE 40
 
@@ -26,7 +25,7 @@
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
 #define OPTICAL_SENSOR_DEFAULT_PARAM 0xB6
 #define OPTICAL_SENSORS_TEST_INTERVAL 5000
-#define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 12
+#define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 21
 
 // LEDs
 #define LED_DEFAULT_POWER 255
@@ -107,12 +106,12 @@
 #define UPLOAD_INTERVAL 60000
 
 // timeouts
+#define TIMEOUT_REGISTRATION 30000
 #define TIMEOUT_VALIDATION 10000
 #define TIMEOUT_START 20000
 #define TIMEOUT_CANCEL 10000
 #define TIMEOUT_FINISH 10000
 #define TIMEOUT_UPLOAD 20000
-#define TIMEOUT_REGISTRATION 30000
 
 // application watchdog
 // void watchdog(void);
@@ -161,6 +160,7 @@ char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
 
 // device LED
+LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_PATTERN_BLINK, LED_PRIORITY_CRITICAL);
 LEDStatus ledBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus ledAvailable(RGB_COLOR_GREEN, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
@@ -272,7 +272,6 @@ struct BrevitestOpticalSensorRecord
 { // 14 bytes
     char channel;
     uint8_t samples;
-    unsigned long time_ms;
     uint16_t x;
     uint16_t y;
     uint16_t z;
@@ -282,10 +281,7 @@ struct BrevitestOpticalSensorRecord
 struct BrevitestTestRecord
 { // 206 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    int start_time;
-    int finish_time;
     uint8_t number_of_readings;
-    uint16_t reserved;
     BrevitestOpticalSensorRecord reading[OPTICAL_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
 } test;
 
