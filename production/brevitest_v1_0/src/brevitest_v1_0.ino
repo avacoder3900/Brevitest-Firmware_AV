@@ -1530,7 +1530,6 @@ int particle_command(String arg)
             result = stage_position;
             break;
         case 4: // read optical sensors (param) after moving to read position
-            stop_temperature_control();
             wake_motor();
             move_stage_to_optical_read_position();
             sleep_motor();
@@ -1541,7 +1540,6 @@ int particle_command(String arg)
             read_optical_sensors_command_led_power = param2;
             read_optical_sensors_command_flag = true;
             result = param1;
-            start_temperature_control();
             break;
         case 5: // read optical sensors (param) without moving to read position
             stop_temperature_control();
@@ -2078,7 +2076,9 @@ void loop()
 
         if (read_optical_sensors_command_flag) {
             read_optical_sensors_command_flag = false;
+            stop_temperature_control();
             read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
+            start_temperature_control();
         }
     }
     
