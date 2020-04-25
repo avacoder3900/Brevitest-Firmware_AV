@@ -1226,7 +1226,7 @@ int process_test_record(int index)
 
     t = &eeprom.cache[index];
 
-    len = sprintf(particle_register, "%.24s%c",t->cartridge_uuid, ITEM_DELIM);
+    len = sprintf(particle_register, "%.24s%c%c%c",t->cartridge_uuid, ITEM_DELIM, TEST_FORMAT_CODE, ITEM_DELIM);
 
     for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
     {
