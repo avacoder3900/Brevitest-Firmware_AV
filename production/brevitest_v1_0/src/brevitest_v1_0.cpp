@@ -1637,7 +1637,8 @@ int particle_command(String arg)
             Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
             result = stage_position;
             break;
-        case 4: // read optical sensors (param)
+        case 4: // read optical sensors (param) after moving to read position
+            stop_temperature_control();
             wake_motor();
             move_stage_to_optical_read_position();
             sleep_motor();
@@ -1648,9 +1649,18 @@ int particle_command(String arg)
             read_optical_sensors_command_led_power = param2;
             read_optical_sensors_command_flag = true;
             result = param1;
+            start_temperature_control();
             break;
-        case 5: // not used
-            result = 0;
+        case 5: // read optical sensors (param) without moving to read position
+            stop_temperature_control();
+            test.number_of_readings = 0;
+            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            read_optical_sensors_command_param = param1;
+            read_optical_sensors_command_led_power = param2;
+            read_optical_sensors_command_flag = true;
+            result = param1;
+            start_temperature_control();
             break;
         case 6: // erase EEPROM and restart
             erase_eeprom();
