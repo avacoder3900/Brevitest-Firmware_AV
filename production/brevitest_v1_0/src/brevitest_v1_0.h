@@ -6,7 +6,7 @@
 // general constants
 #define FIRMWARE_VERSION 12
 #define DATA_FORMAT_VERSION 14
-#define TEST_FORMAT_CODE 'A'
+#define TEST_DATA_FORMAT_CODE 'A'
 #define ASSAY_UUID_LENGTH 8
 #define CARTRIDGE_UUID_LENGTH 24
 #define ARG_DELIM ','
