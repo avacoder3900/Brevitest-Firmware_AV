@@ -883,7 +883,6 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
     config_optical_sensors(channel, param, addr);
 
     reading->channel = channel;
-    reading->time_ms = millis();
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
     for (i = 0; i < reading->samples; i++)
     {
@@ -906,7 +905,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 
     tempF = ((reading->temperature * 9) / 5) + 32;
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-    Serial.printlnf("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, millis() % 1000000, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
+    Serial.printlnf("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
     reading_optical_sensors = false;
     turn_off_LED(channel);
@@ -1319,9 +1318,8 @@ void store_test(int index)
 
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%X%c%X%c%X%c%X%c%X%c",
+    return sprintf(&(particle_register[start]), "%c%c%X%c%X%c%X%c%X%c",
                    reading->channel, ARG_DELIM,
-                   (unsigned int) reading->time_ms, ARG_DELIM,
                    reading->x, ARG_DELIM,
                    reading->y, ARG_DELIM,
                    reading->z, ARG_DELIM,
@@ -1336,10 +1334,7 @@ int process_test_record(int index)
 
     t = &eeprom.cache[index];
 
-    len = sprintf(particle_register, "%.24s%c%X%c%X%c",
-                    t->cartridge_uuid, ITEM_DELIM,
-                    (unsigned int) t->start_time, ITEM_DELIM,
-                    (unsigned int) t->finish_time, ITEM_DELIM);
+    len = sprintf(particle_register, "%.24s%c",t->cartridge_uuid, ITEM_DELIM);
 
     for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
     {
@@ -1898,8 +1893,6 @@ void run_test()
 {
     test_in_progress = true;
     update_progress("Running test", 0);
-
-    test.start_time = Time.now();
 
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
