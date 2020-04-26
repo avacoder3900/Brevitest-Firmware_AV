@@ -72,7 +72,7 @@
 #define STAGE_POSITION_LIMIT 41000
 #define FAST_STEP_DELAY 150
 #define SLOW_STEP_DELAY 1000
-#define OPTICAL_SENSOR_READ_POSITION 18000
+#define OPTICAL_SENSOR_READ_POSITION 18475
 #define MICRONS_TO_INITIAL_POSITION 10800
 #define MICRONS_TO_TEST_START_POSITION 10800
 #define OSCILLATION_STEP_DELAY 250
@@ -245,9 +245,8 @@ unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
 int read_optical_sensors_command_led_power;
-bool read_optical_sensor_baselines_command_flag = false;
-int read_optical_sensor_baselines_command_param;
-int read_optical_sensor_baselines_command_led_power;
+int read_optical_sensors_command_count;
+int read_optical_sensor_command_microns_to_move;
 
 // progress
 int test_progress;

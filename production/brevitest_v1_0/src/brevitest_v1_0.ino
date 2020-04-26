@@ -292,6 +292,7 @@ void wake_move_sleep_stage(int microns, int step_delay)
 void sleep_motor()
 {
     digitalWrite(pinMotorSleep, LOW);
+    delay(20);
 }
 
 void wake_motor()
@@ -1539,6 +1540,8 @@ int particle_command(String arg)
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_led_power = param2;
             read_optical_sensors_command_flag = true;
+            read_optical_sensors_command_count = 1;
+            read_optical_sensor_command_microns_to_move = 0;
             result = param1;
             break;
         case 5: // read optical sensors (param) without moving to read position
@@ -1549,6 +1552,8 @@ int particle_command(String arg)
             read_optical_sensors_command_param = param1;
             read_optical_sensors_command_led_power = param2;
             read_optical_sensors_command_flag = true;
+            read_optical_sensors_command_count = 1;
+            read_optical_sensor_command_microns_to_move = 0;
             result = param1;
             start_temperature_control();
             break;
@@ -1650,26 +1655,28 @@ int particle_command(String arg)
             serial_messaging_on = false;
             result = 0;
             break;
-        case 24: // start reading sensors - ignore
-        case 25: // stop reading sensors - ignore
-        case 26: // scan controller_i2c_bus_scan - ignore
+        case 24: // not used
+        case 25: // not used
+        case 26: // not used
             result = 0;
             break;
         case 27: // scan i2c bus
             i2c_bus_scan();
             result = 1;
             break;
-        case 28: // start optical sensor reading test, param = param1
+        case 28: // start optical sensor sweep test, param1 = distance, param2 = steps
             wake_motor();
             move_stage_to_optical_read_position();
             sleep_motor();
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param1, 2000);
+            indx = get_next_command_param(arg, indx, &param2, 5);
             serial_messaging_on = false;
             test.number_of_readings = 0;
-            read_optical_sensors_command_param = param1;
-            read_optical_sensors_command_led_power = param2;
+            read_optical_sensors_command_param = OPTICAL_SENSOR_DEFAULT_PARAM;
+            read_optical_sensors_command_led_power = LED_DEFAULT_POWER;
             read_optical_sensors_command_flag = true;
+            read_optical_sensors_command_count = param2 + 1; // include baseline reading
+            read_optical_sensor_command_microns_to_move = param2 ? (param1 / param2) : 0;
             test_optical_sensors_timer.start();
             result = 1;
             break;
@@ -2084,7 +2091,17 @@ void loop()
         if (read_optical_sensors_command_flag) {
             read_optical_sensors_command_flag = false;
             stop_temperature_control();
-            read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
+            wake_motor();
+            while (read_optical_sensors_command_count > 0) {
+                Serial.printlnf("Stage location: %d", stage_position);
+                read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
+                if (read_optical_sensor_command_microns_to_move) {
+                    move_stage(read_optical_sensor_command_microns_to_move, SLOW_STEP_DELAY);
+                }
+                read_optical_sensors_command_count--;
+            }
+            sleep_motor();
+            test_optical_sensors_timer.stop();
             start_temperature_control();
         }
     }
