@@ -1531,9 +1531,8 @@ int particle_command(String arg)
             result = stage_position;
             break;
         case 4: // read optical sensors (param) after moving to read position
-            wake_motor();
+            reset_stage(false);
             move_stage_to_optical_read_position();
-            sleep_motor();
             test.number_of_readings = 0;
             indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
@@ -1544,8 +1543,7 @@ int particle_command(String arg)
             read_optical_sensor_command_microns_to_move = 0;
             result = param1;
             break;
-        case 5: // read optical sensors (param) without moving to read position
-            stop_temperature_control();
+        case 5: // read optical sensors (param) without waking motor
             test.number_of_readings = 0;
             indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
@@ -1555,7 +1553,6 @@ int particle_command(String arg)
             read_optical_sensors_command_count = 1;
             read_optical_sensor_command_microns_to_move = 0;
             result = param1;
-            start_temperature_control();
             break;
         case 6: // erase EEPROM and restart
             erase_eeprom();
@@ -1604,13 +1601,13 @@ int particle_command(String arg)
         case 14: // move to specified location param1 at step delay param2
             indx = get_next_command_param(arg, indx, &param1, 0);
             indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
-            wake_motor();
+            reset_stage(false);
             move_stage_to_position(param1, param2);
             sleep_motor();
             result = stage_position;
             break;
         case 15: // move stage to test start position
-            wake_motor();
+            reset_stage(false);
             move_stage_to_test_start_position();
             sleep_motor();
             result = stage_position;
@@ -1625,7 +1622,7 @@ int particle_command(String arg)
             result = param1;
             break;
         case 17: // move stage to optical read position
-            wake_motor();
+            reset_stage(false);
             move_stage_to_optical_read_position();
             sleep_motor();
             result = stage_position;
@@ -1665,9 +1662,8 @@ int particle_command(String arg)
             result = 1;
             break;
         case 28: // start optical sensor sweep test, param1 = distance, param2 = steps
-            wake_motor();
+            reset_stage(false);
             move_stage_to_optical_read_position();
-            sleep_motor();
             indx = get_next_command_param(arg, indx, &param1, 2000);
             indx = get_next_command_param(arg, indx, &param2, 5);
             serial_messaging_on = false;
@@ -2091,7 +2087,6 @@ void loop()
         if (read_optical_sensors_command_flag) {
             read_optical_sensors_command_flag = false;
             stop_temperature_control();
-            wake_motor();
             while (read_optical_sensors_command_count > 0) {
                 Serial.printlnf("Stage location: %d", stage_position);
                 read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
