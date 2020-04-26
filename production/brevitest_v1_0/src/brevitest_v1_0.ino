@@ -1530,27 +1530,25 @@ int particle_command(String arg)
             Serial.printlnf("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
             result = stage_position;
             break;
-        case 4: // read optical sensors (param) after moving to read position
+        case 4: // read optical sensors param1 times after moving to read position
             reset_stage(false);
             move_stage_to_optical_read_position();
             test.number_of_readings = 0;
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            read_optical_sensors_command_param = param1;
-            read_optical_sensors_command_led_power = param2;
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            read_optical_sensors_command_param = OPTICAL_SENSOR_DEFAULT_PARAM;
+            read_optical_sensors_command_led_power = LED_DEFAULT_POWER;
             read_optical_sensors_command_flag = true;
-            read_optical_sensors_command_count = 1;
+            read_optical_sensors_command_count = param1;
             read_optical_sensor_command_microns_to_move = 0;
             result = param1;
             break;
-        case 5: // read optical sensors (param) without waking motor
+        case 5: // read optical sensors param1 times without waking motor
             test.number_of_readings = 0;
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            read_optical_sensors_command_param = param1;
-            read_optical_sensors_command_led_power = param2;
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            read_optical_sensors_command_param = OPTICAL_SENSOR_DEFAULT_PARAM;
+            read_optical_sensors_command_led_power = LED_DEFAULT_POWER;
             read_optical_sensors_command_flag = true;
-            read_optical_sensors_command_count = 1;
+            read_optical_sensors_command_count = param1;
             read_optical_sensor_command_microns_to_move = 0;
             result = param1;
             break;
