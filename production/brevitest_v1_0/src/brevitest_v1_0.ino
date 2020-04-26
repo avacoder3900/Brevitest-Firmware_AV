@@ -1721,8 +1721,15 @@ void check_device_state()
 
     if (cartridge_engaged) {
         ledBusy.setActive(true);
-        turn_on_buzzer_for_duration(400, 400);
-        ready_to_scan_barcode = true;
+        if (heater.temp_C_10X > HEATER_READY_TEMP) {
+            turn_on_buzzer_for_duration(400, 400);
+            ready_to_scan_barcode = true;
+        } else {
+            for (int i = 0 ; i < 5; i++) {
+                turn_on_buzzer_for_duration(200, 400);
+                delay(400);
+            }
+        }
     } else {
         turn_on_buzzer_for_duration(400, 300);
     }
