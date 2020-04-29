@@ -427,12 +427,12 @@ void reset_stage(bool sleep)
 
 void move_stage_to_optical_read_position()
 {
-    move_stage_to_position(OPTICAL_SENSOR_READ_POSITION, FAST_STEP_DELAY);
+    move_stage_to_position(OPTICAL_SENSOR_READ_POSITION, SLOW_STEP_DELAY);
 }
 
 void move_stage_to_test_start_position()
 {
-    move_stage_to_position(MICRONS_TO_TEST_START_POSITION, FAST_STEP_DELAY);
+    move_stage_to_position(MICRONS_TO_TEST_START_POSITION, SLOW_STEP_DELAY);
 }
 
 void update_progress(String, int);
@@ -1515,7 +1515,7 @@ int process_one_BCODE_command(int cmd, int index)
         case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
-            update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
+            update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * SLOW_STEP_DELAY / MOVE_DURATION_UNIT);
             move_stage_to_optical_read_position();
             update_progress("Reading", 6000);
             read_optical_sensors(param1, param2, false);
