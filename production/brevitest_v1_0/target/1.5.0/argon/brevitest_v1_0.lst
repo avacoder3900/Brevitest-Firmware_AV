@@ -1255,7 +1255,7 @@ void reset_eeprom()
    d4486:	f7ff fff5 	bl	d4474 <_Z12erase_eepromv>
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
    d448a:	4b04      	ldr	r3, [pc, #16]	; (d449c <_Z12reset_eepromv+0x18>)
-   d448c:	220c      	movs	r2, #12
+   d448c:	220d      	movs	r2, #13
    d448e:	701a      	strb	r2, [r3, #0]
    d4490:	220e      	movs	r2, #14
    d4492:	705a      	strb	r2, [r3, #1]
@@ -1299,7 +1299,7 @@ void setup_eeprom()
         if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
    d44c4:	4b04      	ldr	r3, [pc, #16]	; (d44d8 <_Z12setup_eepromv+0x38>)
    d44c6:	881a      	ldrh	r2, [r3, #0]
-   d44c8:	f640 630c 	movw	r3, #3596	; 0xe0c
+   d44c8:	f640 630d 	movw	r3, #3597	; 0xe0d
    d44cc:	429a      	cmp	r2, r3
    d44ce:	d1f4      	bne.n	d44ba <_Z12setup_eepromv+0x1a>
             reset_eeprom();
@@ -9284,7 +9284,7 @@ SYSTEM_THREAD(ENABLED);
     Particle_EEPROM()
     {
         firmware_version = FIRMWARE_VERSION;
-   d6f48:	260c      	movs	r6, #12
+   d6f48:	260d      	movs	r6, #13
    d6f4a:	4620      	mov	r0, r4
    d6f4c:	701e      	strb	r6, [r3, #0]
         data_format_version = DATA_FORMAT_VERSION;
