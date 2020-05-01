@@ -53,6 +53,7 @@ void turn_on_assay_LED_for_duration(int duration, int power);
 void turn_on_control_1_LED_for_duration(int duration, int power);
 void turn_on_control_2_LED_for_duration(int duration, int power);
 void turn_on_all_LEDs_for_duration(int duration, int power);
+void test_magnetometer();
 void test_optical_sensors();
 void config_optical_sensors(char channel, int param, int addr);
 bool optical_sensor_ready(uint8_t addr);
@@ -112,6 +113,7 @@ void startup_analyzer();
 void setup();
 void test_loop();
 void cartridge_loop();
+void command_loop();
 void registration_loop();
 void loop();
 #line 10 "/Users/leo3/github/brevitest-device/production/brevitest_v1_0/src/brevitest_v1_0.ino"
@@ -696,6 +698,17 @@ void turn_on_all_LEDs_for_duration(int duration, int power)
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                     MAGNETOMETER                        //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void test_magnetometer()
+{
+    test_magnetometer_command_flag = true;
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                    OPTICAL SENSORS                      //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -856,7 +869,7 @@ bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y,
 void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 {
     uint8_t addr;
-    int i, sum_x, sum_y, sum_z, sum_t;
+    int read_attempt, sum_x, sum_y, sum_z, sum_t;
     uint16_t tempC, tempF, x, y, z, l_value;
     BrevitestOpticalSensorRecord *reading;
 
@@ -885,18 +898,19 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 
     reading->channel = channel;
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
-    for (i = 0; i < reading->samples; i++)
-    {
-        if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC))
-        {
-            sum_x += x;
-            sum_y += y;
-            sum_z += z;
-            sum_t += tempC;
-        }
-        else
-        {
-            Serial.printlnf("Read optical sensor failed, channel %c", channel);
+    for (int i = 0; i < reading->samples; i++) {
+        read_attempt = 1;
+        while (read_attempt <= 3) {
+            if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) {
+                sum_x += x;
+                sum_y += y;
+                sum_z += z;
+                sum_t += tempC;
+                read_attempt = 4;
+            } else {
+                Serial.printlnf("Read optical sensor failed, channel %c, try %d", channel, read_attempt);
+                read_attempt++;
+            }
         }
     }
     reading->x = sum_x / reading->samples;
@@ -971,6 +985,8 @@ int get_heater_temperature()
     
     if (raw == 0) {
         stop_temperature_control();
+        heater.temp_C_10X = 0;
+        heater.temp_F_10X = 0;
     } else {
         heater.temp_C_10X = raw_table_lookup(raw);
         heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
@@ -1759,9 +1775,18 @@ int particle_command(String arg)
             result = 0;
             break;
         case 24: // not used
-        case 25: // not used
-        case 26: // not used
             result = 0;
+            break;
+        case 25: // return stage position
+            result = stage_position;
+            break;
+        case 26: // magnetometer test param1 = step distance
+            reset_stage(false);
+            indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE);
+            test_magnetometer_command_flag = true;
+            test_magnetometer_command_microns_to_move = param1;
+            test_magnetometer_timer.start();
+            result = 1;
             break;
         case 27: // scan i2c bus
             i2c_bus_scan();
@@ -2149,6 +2174,32 @@ void cartridge_loop()
     }
 }
 
+void command_loop() {
+    if (read_optical_sensors_command_flag) {
+        read_optical_sensors_command_flag = false;
+        stop_temperature_control();
+        while (read_optical_sensors_command_count > 0) {
+            Serial.printlnf("Stage location: %d", stage_position);
+            read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
+            if (read_optical_sensor_command_microns_to_move) {
+                move_stage(read_optical_sensor_command_microns_to_move, SLOW_STEP_DELAY);
+            }
+            read_optical_sensors_command_count--;
+        }
+        sleep_motor();
+        test_optical_sensors_timer.stop();
+        start_temperature_control();
+    } else if (test_magnetometer_command_flag) {
+        test_magnetometer_command_flag = false;
+        Serial.printlnf("Magnetometer test, time = %u, position = %d", millis(), stage_position);
+        move_stage(test_magnetometer_command_microns_to_move, SLOW_STEP_DELAY);
+        if (stage_position + test_magnetometer_command_microns_to_move > STAGE_POSITION_LIMIT) {
+            test_magnetometer_timer.stop();
+            sleep_motor();
+        }
+    }
+}
+
 void registration_loop()
 {
     if (!waiting_for_registration || registration_timeout < millis()) {
@@ -2189,22 +2240,7 @@ void loop()
     } else {
         cartridge_loop();
         test_loop();
-
-        if (read_optical_sensors_command_flag) {
-            read_optical_sensors_command_flag = false;
-            stop_temperature_control();
-            while (read_optical_sensors_command_count > 0) {
-                Serial.printlnf("Stage location: %d", stage_position);
-                read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
-                if (read_optical_sensor_command_microns_to_move) {
-                    move_stage(read_optical_sensor_command_microns_to_move, SLOW_STEP_DELAY);
-                }
-                read_optical_sensors_command_count--;
-            }
-            sleep_motor();
-            test_optical_sensors_timer.stop();
-            start_temperature_control();
-        }
+        command_loop();
     }
     
     if (control_heater_temperature_flag) {

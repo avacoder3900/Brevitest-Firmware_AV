@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 13
+#define FIRMWARE_VERSION 14
 #define DATA_FORMAT_VERSION 14
 #define TEST_DATA_FORMAT_CODE 'A'
 #define ASSAY_UUID_LENGTH 8
@@ -69,7 +69,7 @@
 #define MICRONS_PER_FULL_STEP 200
 #define MICRONS_PER_EIGHTH_STEP 25
 #define MOVE_DURATION_UNIT 25000
-#define STAGE_POSITION_LIMIT 41000
+#define STAGE_POSITION_LIMIT 37800
 #define FAST_STEP_DELAY 150
 #define SLOW_STEP_DELAY 1000
 #define OPTICAL_SENSOR_READ_POSITION 18775
@@ -91,6 +91,10 @@
 // thermistors
 #define THERMISTOR_SCALE 10000
 #define TERMISTOR_TABLE_LENGTH 21
+
+// magnetometer test
+#define MAGNETOMETER_TEST_INTERVAL 500
+#define MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE 500
 
 // pubsub
 #define PUBSUB_EVENT_MAX_LENGTH 32
@@ -192,10 +196,6 @@ bool waiting_for_upload_confirmation = false;
 
 unsigned long next_optical_sensor_reading_time = 0;
 
-// optical sensors read timer
-void test_optical_sensors(void);
-Timer test_optical_sensors_timer(OPTICAL_SENSORS_TEST_INTERVAL, test_optical_sensors);
-
 // temperature control system
 struct HeatingElement
 {
@@ -241,12 +241,23 @@ unsigned long control_heater_temperature_flag = false;
 unsigned long heater_ready_debounce_timeout = 0;
 
 // optical sensors
+void test_optical_sensors(void);
+Timer test_optical_sensors_timer(OPTICAL_SENSORS_TEST_INTERVAL, test_optical_sensors);
+
 unsigned long last_optical_sensor_reading_time = 0;
 bool read_optical_sensors_command_flag = false;
 int read_optical_sensors_command_param;
 int read_optical_sensors_command_led_power;
 int read_optical_sensors_command_count;
 int read_optical_sensor_command_microns_to_move;
+
+// magnetometer
+void test_magnetometer(void);
+Timer test_magnetometer_timer(MAGNETOMETER_TEST_INTERVAL, test_magnetometer);
+
+unsigned long last_magnetometer_reading_time = 0;
+bool test_magnetometer_command_flag = false;
+int test_magnetometer_command_microns_to_move;
 
 // progress
 int test_progress;
