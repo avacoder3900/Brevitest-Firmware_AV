@@ -1,3 +1,9 @@
+/******************************************************/
+//       THIS IS A GENERATED FILE - DO NOT EDIT       //
+/******************************************************/
+
+#include "Particle.h"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity Analyzer, part of the Brevitest Diagnostic Platform
@@ -7,6 +13,110 @@
 
 #include "brevitest-firmware.h"
 
+int raw_table_lookup(int raw);
+int extract_int_from_string(char *str, int pos, int len);
+int extract_int_from_delimited_string(char *str, int *indx, char delim);
+uint32_t checksum(char *buf, int size);
+int integerSqrt(int n);
+void load_eeprom();
+void store_eeprom();
+void erase_eeprom();
+void reset_eeprom();
+void setup_eeprom();
+bool move_one_eighth_step(int dir, int step_delay);
+void move_stage(int microns, int step_delay);
+void wake_move_sleep_stage(int microns, int step_delay);
+void sleep_motor();
+void wake_motor();
+void reset_stage(bool sleep);
+void move_stage_to_optical_read_position();
+void move_stage_to_test_start_position();
+void move_stage_to_position(int position, int step_delay);
+void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE);
+int scan_barcode();
+void turn_on_buzzer_for_duration(int duration, int frequency);
+void turn_on_heater(int power);
+void turn_off_heater();
+int limit(int value, int max, int min);
+int set_heater_power(int power);
+void turn_on_LED(char channel, int power);
+void turn_off_LED(char channel);
+void turn_on_all_LEDs(int power);
+void turn_on_assay_LED(int power);
+void turn_on_control_1_LED(int power);
+void turn_on_control_2_LED(int power);
+void turn_off_assay_LED();
+void turn_off_control_1_LED();
+void turn_off_control_2_LED();
+void turn_off_all_LEDs();
+void turn_on_assay_LED_for_duration(int duration, int power);
+void turn_on_control_1_LED_for_duration(int duration, int power);
+void turn_on_control_2_LED_for_duration(int duration, int power);
+void turn_on_all_LEDs_for_duration(int duration, int power);
+void test_magnetometer();
+void test_optical_sensors();
+void config_optical_sensors(char channel, int param, int addr);
+bool optical_sensor_ready(uint8_t addr);
+bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y, uint16_t *z, uint16_t *tempC);
+void get_data_from_one_optical_sensor(char channel, int param, int led_power);
+bool enable_optical_sensors(bool force_read);
+void disable_optical_sensors();
+void read_optical_sensors(int param, int led_power, bool inBCODE);
+int get_heater_temperature();
+void heater_temperature_read();
+int pid_controller();
+void control_heater_temperature();
+void start_temperature_control();
+void stop_temperature_control();
+void validate_cartridge();
+bool load_assay_record(char *responseString);
+void brevitest_publish(String event_name, char *uuid);
+void callback_register();
+void callback_validate();
+void callback_test_finish();
+void callback_test_cancel();
+void remove_test_from_cache(char *testToRemove);
+void callback_test_upload();
+int extract_callback_params(char *param, int paramLen, int indx, char delim);
+void process_callback_buffer();
+void brevitest_error(const char *event, const char *data);
+void brevitest_callback(const char *event, const char *data);
+void erase_test_from_cache(int index);
+void initialize_test_cache();
+int find_test_index_by_uuid(char *uuid);
+void store_test(int index);
+int append_test_reading(int start, BrevitestOpticalSensorRecord *reading);
+int process_test_record(int index);
+void write_test_record_to_eeprom();
+bool tests_to_upload();
+int get_BCODE_token(int index, int *token);
+void update_progress(String message, int duration);
+int BCODE_loop();
+void BCODE_delay(int target_duration);
+int process_one_BCODE_command(int cmd, int index);
+int process_BCODE(int start_index);
+int get_next_command_param(String arg, int indx, int *param, int def);
+void i2c_bus_scan();
+int particle_command(String arg);
+void cartridge_engaged_interrupt();
+void check_device_state();
+void cancel_test();
+void finish_test();
+void run_test();
+void upload_one_test(int test_number, char *cartridge_uuid);
+void upload_tests();
+int particle_run_test(String arg);
+void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value);
+void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value);
+void configure_analyzer();
+void startup_analyzer();
+void setup();
+void test_loop();
+void cartridge_loop();
+void command_loop();
+void registration_loop();
+void loop();
+#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(11170);
 PRODUCT_VERSION(FIRMWARE_VERSION);
