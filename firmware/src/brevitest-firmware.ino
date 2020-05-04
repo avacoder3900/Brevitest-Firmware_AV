@@ -1670,12 +1670,14 @@ int particle_command(String arg)
         case 25: // return stage position
             result = stage_position;
             break;
-        case 26: // magnetometer test param1 = step distance
+        case 26: // magnetometer test param1 = step distance, param2 = test interval
             reset_stage(false);
+            move_stage(-MICRONS_TO_INITIAL_POSITION, SLOW_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE);
+            indx = get_next_command_param(arg, indx, &param2, MAGNETOMETER_TEST_INTERVAL);
             test_magnetometer_command_flag = true;
             test_magnetometer_command_microns_to_move = param1;
-            test_magnetometer_timer.start();
+            test_magnetometer_timer.changePeriod(param2);
             result = 1;
             break;
         case 27: // scan i2c bus
