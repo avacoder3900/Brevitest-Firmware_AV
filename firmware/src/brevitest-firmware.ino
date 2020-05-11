@@ -1555,7 +1555,7 @@ int particle_command(String arg)
             reset_stage(true);
             result = stage_position;
             break;
-        case 3: // move microns
+        case 3: // move microns, param1 microns with param2 step
             indx = get_next_command_param(arg, indx, &param1, 0);
             indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
             wake_move_sleep_stage(param1, param2);
