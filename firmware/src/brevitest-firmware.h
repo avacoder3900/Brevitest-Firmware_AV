@@ -9,6 +9,8 @@
 #define TEST_DATA_FORMAT_CODE 'A'
 #define ASSAY_UUID_LENGTH 8
 #define CARTRIDGE_UUID_LENGTH 24
+#define DEVICE_UUID_LENGTH 24
+
 #define ARG_DELIM ','
 #define ATTR_DELIM ':'
 #define ITEM_DELIM '|'
@@ -93,10 +95,9 @@
 #define TERMISTOR_TABLE_LENGTH 21
 
 // magnetometer test
-#define MAGNETOMETER_TEST_INTERVAL 1000
-#define MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE 500
-#define MAGNETOMETER_A_ID "3e003f000d47343432313031"
-#define MAGNETOMETER_B_ID "2d003f001647353236343033"
+#define MAGNETOMETER_TEST_INTERVAL 2000
+#define MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE 200
+#define MAGNETOMETER_TEST_CONFIRM_TIMEOUT 20000
 
 // pubsub
 #define PUBSUB_EVENT_MAX_LENGTH 32
@@ -257,9 +258,11 @@ int read_optical_sensor_command_microns_to_move;
 void test_magnetometer(void);
 Timer test_magnetometer_timer(MAGNETOMETER_TEST_INTERVAL, test_magnetometer);
 
-unsigned long last_magnetometer_reading_time = 0;
+unsigned long test_magnetometer_command_confirmation_timeout = 0;
 bool test_magnetometer_command_flag = false;
 int test_magnetometer_command_microns_to_move;
+bool test_magnetometer_awaiting_confirmation = false;
+
 
 // progress
 int test_progress;

@@ -54,6 +54,8 @@ void turn_on_control_1_LED_for_duration(int duration, int power);
 void turn_on_control_2_LED_for_duration(int duration, int power);
 void turn_on_all_LEDs_for_duration(int duration, int power);
 void test_magnetometer();
+void magnetometer_read_confirm(const char *event, const char *data);
+void read_magnetometer();
 void test_optical_sensors();
 void config_optical_sensors(char channel, int param, int addr);
 bool optical_sensor_ready(uint8_t addr);
@@ -707,6 +709,24 @@ void test_magnetometer()
     test_magnetometer_command_flag = true;
 }
 
+void magnetometer_read_confirm(const char *event, const char *data) {
+    Serial.printlnf("Read confirm: event = %s, data = %s", event, data);
+    test_magnetometer_awaiting_confirmation = false;
+}
+
+void read_magnetometer() {
+    Serial.printlnf("Magnetometer test, time = %u, position = %d", millis(), stage_position);
+    Particle.publish("magnetometer-read", String(stage_position), PRIVATE);
+    if (stage_position + test_magnetometer_command_microns_to_move > STAGE_POSITION_LIMIT) {
+        test_magnetometer_timer.stop();
+        sleep_motor();
+    } else {
+        test_magnetometer_awaiting_confirmation = true;
+        test_magnetometer_command_confirmation_timeout = millis() + MAGNETOMETER_TEST_CONFIRM_TIMEOUT;
+    }
+}
+
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                    OPTICAL SENSORS                      //
@@ -1123,7 +1143,7 @@ void brevitest_publish(String event_name, char *uuid)
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest-development"), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
+    Particle.publish(String("brevitest-production"), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
     Serial.printlnf("Publish: event = %s, uuid = %s", event_name.c_str(), uuid);
 }
 
@@ -1780,14 +1800,14 @@ int particle_command(String arg)
         case 25: // return stage position
             result = stage_position;
             break;
-        case 26: // magnetometer test param1 = step distance, param2 = test interval
+        case 26: // magnetometer test param1 = step distance
             reset_stage(false);
             move_stage(-MICRONS_TO_INITIAL_POSITION, SLOW_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE);
-            indx = get_next_command_param(arg, indx, &param2, MAGNETOMETER_TEST_INTERVAL);
             test_magnetometer_command_flag = true;
             test_magnetometer_command_microns_to_move = param1;
-            test_magnetometer_timer.changePeriod(param2);
+            Particle.subscribe("magnetometer-confirm", magnetometer_read_confirm, MY_DEVICES);
+            read_magnetometer();
             result = 1;
             break;
         case 27: // scan i2c bus
@@ -2044,8 +2064,8 @@ void configure_analyzer()
     Particle.function("run_test", particle_run_test);
 
     device_id = System.deviceID();
-    Particle.subscribe(String(device_id + "/hook-response/brevitest-development/"), brevitest_callback, MY_DEVICES);
-    Particle.subscribe(String(device_id + "/hook-error/brevitest-development/"), brevitest_error, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-response/brevitest-production/"), brevitest_callback, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-error/brevitest-production/"), brevitest_error, MY_DEVICES);
 
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
@@ -2192,12 +2212,14 @@ void command_loop() {
         test_optical_sensors_timer.stop();
         start_temperature_control();
     } else if (test_magnetometer_command_flag) {
-        test_magnetometer_command_flag = false;
-        Serial.printlnf("Magnetometer test, time = %u, position = %d", millis(), stage_position);
-        move_stage(test_magnetometer_command_microns_to_move, SLOW_STEP_DELAY);
-        if (stage_position + test_magnetometer_command_microns_to_move > STAGE_POSITION_LIMIT) {
+        if (test_magnetometer_command_confirmation_timeout < millis()) {
+            test_magnetometer_command_flag = false;
             test_magnetometer_timer.stop();
             sleep_motor();
+        } else if (!test_magnetometer_awaiting_confirmation) {
+            test_magnetometer_command_flag = false;
+            move_stage(test_magnetometer_command_microns_to_move, SLOW_STEP_DELAY);
+            read_magnetometer();
         }
     }
 }
