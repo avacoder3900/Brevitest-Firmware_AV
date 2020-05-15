@@ -53,7 +53,6 @@ void turn_on_assay_LED_for_duration(int duration, int power);
 void turn_on_control_1_LED_for_duration(int duration, int power);
 void turn_on_control_2_LED_for_duration(int duration, int power);
 void turn_on_all_LEDs_for_duration(int duration, int power);
-void test_magnetometer();
 void magnetometer_read_confirm(const char *event, const char *data);
 void read_magnetometer();
 void test_optical_sensors();
@@ -72,6 +71,7 @@ void start_temperature_control();
 void stop_temperature_control();
 void validate_cartridge();
 bool load_assay_record(char *responseString);
+void do_stress_test_step(int step);
 void brevitest_publish(String event_name, char *uuid);
 void callback_register();
 void callback_validate();
@@ -456,9 +456,9 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
     for (i = 0; i < cycles; i++)
     {
         move_stage(amplitude, step_delay);
-        if (inBCODE) BCODE_loop();
+        if (inBCODE) BCODE_loop(); else Particle.process();
         move_stage(-amplitude, step_delay);
-        if (inBCODE) BCODE_loop();
+        if (inBCODE) BCODE_loop(); else Particle.process();
         if (cancelling_test) return;
     }
 }
@@ -704,22 +704,18 @@ void turn_on_all_LEDs_for_duration(int duration, int power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void test_magnetometer()
-{
-    test_magnetometer_command_flag = true;
-}
-
 void magnetometer_read_confirm(const char *event, const char *data) {
     Serial.printlnf("Read confirm: event = %s, data = %s", event, data);
     test_magnetometer_awaiting_confirmation = false;
+    test_magnetometer_command_flag = true;
 }
 
 void read_magnetometer() {
     Serial.printlnf("Magnetometer test, time = %u, position = %d", millis(), stage_position);
     Particle.publish("magnetometer-read", String(stage_position), PRIVATE);
     if (stage_position + test_magnetometer_command_microns_to_move > STAGE_POSITION_LIMIT) {
-        test_magnetometer_timer.stop();
-        sleep_motor();
+        delay(5000);
+        System.reset();
     } else {
         test_magnetometer_awaiting_confirmation = true;
         test_magnetometer_command_confirmation_timeout = millis() + MAGNETOMETER_TEST_CONFIRM_TIMEOUT;
@@ -973,11 +969,11 @@ void read_optical_sensors(int param, int led_power, bool inBCODE)
     if (enable_optical_sensors(true))
     {
         get_data_from_one_optical_sensor('A', param, led_power);
-        if (inBCODE) BCODE_loop();
+        if (inBCODE) BCODE_loop(); else Particle.process();
         get_data_from_one_optical_sensor('1', param, led_power);
-        if (inBCODE) BCODE_loop();
+        if (inBCODE) BCODE_loop(); else Particle.process();
         get_data_from_one_optical_sensor('2', param, led_power);
-        if (inBCODE) BCODE_loop();
+        if (inBCODE) BCODE_loop(); else Particle.process();
         Serial.println();
     }
     else
@@ -1133,6 +1129,77 @@ bool load_assay_record(char *responseString)
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                      STRESS TEST                        //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void do_stress_test_step(int step) {
+    Serial.print('.');
+    switch(step % 16) {
+        case 0: // restart stress test
+            reset_stage(false);
+            break;
+        case 1: // move to start of well 2
+            move_stage(-2000, SLOW_STEP_DELAY);
+            break;
+        case 2: // oscillate in well 2
+            oscillate_stage(3000, OSCILLATION_STEP_DELAY, 500, false);
+            break;
+        case 3: // move to well 1
+            move_stage(-8600, SLOW_STEP_DELAY);
+            break;
+        case 4: // oscillate in well 1
+            oscillate_stage(4500, OSCILLATION_STEP_DELAY, 600, false);
+            break;
+        case 5: // move to well 2
+            move_stage(12300, SLOW_STEP_DELAY);
+            break;
+        case 6: // oscillate in well 2
+            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 400, false);
+            break;
+        case 7: // move to well 3
+            move_stage(8000, SLOW_STEP_DELAY);
+            break;
+        case 8: // oscillate in well 3
+            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 300, false);
+            break;
+        case 9: // read baseline sensors
+            move_stage_to_optical_read_position();
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            break;
+        case 10: // move to well 4
+            move_stage(9425, SLOW_STEP_DELAY);
+            break;
+        case 11: // oscillate in well 4
+            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 400, false);
+            break;
+        case 12: // move to well 5
+            move_stage(8400, SLOW_STEP_DELAY);
+            break;
+        case 13: // oscillate in well 5
+            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 600, false);
+            break;
+        case 14: // read sensors
+            move_stage_to_optical_read_position();
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            break;
+        case 15: // save cycle number
+            eeprom.stress_test_cycles++;
+            Serial.printlnf("Stress test cycle %d complete, record is %d", eeprom.stress_test_cycles, eeprom.maximum_stress_test_cycles);
+            if (eeprom.stress_test_cycles > eeprom.maximum_stress_test_cycles) {
+                eeprom.maximum_stress_test_cycles = eeprom.stress_test_cycles;
+            }
+            store_eeprom();
+            break;
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                 PUBLISH AND CALLBACKS                   //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1143,7 +1210,7 @@ void brevitest_publish(String event_name, char *uuid)
 
     callback_complete = false;
     callback_buffer[0] = '\0';
-    Particle.publish(String("brevitest-production"), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
+    Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
     Serial.printlnf("Publish: event = %s, uuid = %s", event_name.c_str(), uuid);
 }
 
@@ -1667,7 +1734,7 @@ int particle_command(String arg)
             reset_stage(true);
             result = stage_position;
             break;
-        case 3: // move microns
+        case 3: // move microns, param1 microns with param2 step
             indx = get_next_command_param(arg, indx, &param1, 0);
             indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
             wake_move_sleep_stage(param1, param2);
@@ -1836,20 +1903,31 @@ int particle_command(String arg)
         case 30: // scan barcode
             result = scan_barcode();
             break;
-        case 31: // not used
-            result = 0;
+        case 31: // stop reading magnetometer
+            System.reset();
             break;
         case 32: // not used
             result = 0;
             break;
         case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
             indx = get_next_command_param(arg, indx, &param1, 25);
-            indx = get_next_command_param(arg, indx, &param2, FAST_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param2, OSCILLATION_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param3, 10);
             wake_motor();
             oscillate_stage(param1, param2, param3, false);
             sleep_motor();
             result = stage_position;
+            break;
+        case 34: // start stress test
+            eeprom.stress_test_cycles = 0;
+            store_eeprom();
+            stress_test_step = 0;
+            stress_test_running = true;
+            result = 1;
+            break;
+        case 35: // stop stress test
+            stress_test_running = false;
+            result = eeprom.stress_test_cycles;
             break;
         default:
             result = 0;
@@ -1954,17 +2032,24 @@ void finish_test()
 
 void run_test()
 {
-    test_in_progress = true;
-    update_progress("Running test", 0);
+    int tries_remaining;
 
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
-    while (!Particle.disconnected())
+    tries_remaining = 10;
+    while (Particle.connected())
     {
+        if (--tries_remaining == 0) {
+           return;
+        }
         Serial.println("-");
         Particle.disconnect();
         delay(PARTICLE_CLOUD_DELAY);
     }
+
+    starting_test = false;
+    test_in_progress = true;
+    update_progress("Running test", 0);
 
     reset_stage(false);
     turn_on_buzzer_for_duration(1000, 600);
@@ -1974,19 +2059,22 @@ void run_test()
 
     SINGLE_THREADED_BLOCK()
     {
-      process_BCODE(0);
+        process_BCODE(0);
+        write_test_record_to_eeprom();
     }
-
-    write_test_record_to_eeprom();
 
     start_temperature_control();
 
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
+    tries_remaining = 10;
     while (!Particle.connected()) {
         Serial.println("+");
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
+        if (--tries_remaining == 0) {
+            System.reset();
+        }
     }
 
     finishing_test = !cancelling_test;
@@ -2064,8 +2152,8 @@ void configure_analyzer()
     Particle.function("run_test", particle_run_test);
 
     device_id = System.deviceID();
-    Particle.subscribe(String(device_id + "/hook-response/brevitest-production/"), brevitest_callback, MY_DEVICES);
-    Particle.subscribe(String(device_id + "/hook-error/brevitest-production/"), brevitest_error, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
 
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
@@ -2116,7 +2204,10 @@ void startup_analyzer()
     attachInterrupt(pinCartridgeLoaded, cartridge_engaged_interrupt, CHANGE);
 
     Serial.printlnf("device id: %s", device_id.c_str());
-    Serial.printlnf("eeprom.firmware_version: %d, eeprom.data_format_version: %d, eeprom.most_recent_test: %d", eeprom.firmware_version, eeprom.data_format_version, eeprom.most_recent_test);
+    Serial.printlnf("eeprom.firmware_version: %d", eeprom.firmware_version);
+    Serial.printlnf("eeprom.data_format_version: %d", eeprom.data_format_version);
+    Serial.printlnf("eeprom.most_recent_test: %d", eeprom.most_recent_test);
+    Serial.printlnf("eeprom.maximum_stress_test_cycles: %d", eeprom.maximum_stress_test_cycles);
 
     start_temperature_control();
     periodic_event = millis() + 5000;
@@ -2152,7 +2243,6 @@ void test_loop()
             finish_test();
         }
     } else if (starting_test) {
-        starting_test = false;
         run_test();
     } else if (waiting_for_upload_confirmation) {
         if (millis() > upload_timeout) {
@@ -2197,7 +2287,10 @@ void cartridge_loop()
 }
 
 void command_loop() {
-    if (read_optical_sensors_command_flag) {
+    if (stress_test_running) {
+        do_stress_test_step(stress_test_step);
+        stress_test_step++;
+    } else if (read_optical_sensors_command_flag) {
         read_optical_sensors_command_flag = false;
         stop_temperature_control();
         while (read_optical_sensors_command_count > 0) {
@@ -2213,9 +2306,7 @@ void command_loop() {
         start_temperature_control();
     } else if (test_magnetometer_command_flag) {
         if (test_magnetometer_command_confirmation_timeout < millis()) {
-            test_magnetometer_command_flag = false;
-            test_magnetometer_timer.stop();
-            sleep_motor();
+            System.reset();
         } else if (!test_magnetometer_awaiting_confirmation) {
             test_magnetometer_command_flag = false;
             move_stage(test_magnetometer_command_microns_to_move, SLOW_STEP_DELAY);

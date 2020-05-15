@@ -4,8 +4,8 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 15
-#define DATA_FORMAT_VERSION 14
+#define FIRMWARE_VERSION 16
+#define DATA_FORMAT_VERSION 16
 #define TEST_DATA_FORMAT_CODE 'A'
 #define ASSAY_UUID_LENGTH 8
 #define CARTRIDGE_UUID_LENGTH 24
@@ -95,11 +95,11 @@
 #define TERMISTOR_TABLE_LENGTH 21
 
 // magnetometer test
-#define MAGNETOMETER_TEST_INTERVAL 2000
 #define MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE 200
 #define MAGNETOMETER_TEST_CONFIRM_TIMEOUT 20000
 
 // pubsub
+#define PUBSUB_EVENT_NAME "brevitest-development"
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 2500
@@ -166,6 +166,9 @@ unsigned long registration_timeout;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
+bool stress_test_running = false;
+int stress_test_count = 0;
+int stress_test_step = 0;
 
 // device LED
 LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_PATTERN_BLINK, LED_PRIORITY_CRITICAL);
@@ -255,9 +258,6 @@ int read_optical_sensors_command_count;
 int read_optical_sensor_command_microns_to_move;
 
 // magnetometer
-void test_magnetometer(void);
-Timer test_magnetometer_timer(MAGNETOMETER_TEST_INTERVAL, test_magnetometer);
-
 unsigned long test_magnetometer_command_confirmation_timeout = 0;
 bool test_magnetometer_command_flag = false;
 int test_magnetometer_command_microns_to_move;
@@ -314,12 +314,16 @@ struct Particle_EEPROM
 {
     uint8_t firmware_version; // 8 bytes
     uint8_t data_format_version;
+    int stress_test_cycles;
+    int maximum_stress_test_cycles;
     uint8_t most_recent_test;
     BrevitestTestRecord cache[CACHE_SIZE]; // up to 10 tests cached
     Particle_EEPROM()
     {
         firmware_version = FIRMWARE_VERSION;
         data_format_version = DATA_FORMAT_VERSION;
+        stress_test_cycles = 0;
+        maximum_stress_test_cycles = 0;
         most_recent_test = 255;
     }
 } eeprom;
