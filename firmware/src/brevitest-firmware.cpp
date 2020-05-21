@@ -101,7 +101,7 @@ int get_next_command_param(String arg, int indx, int *param, int def);
 void i2c_bus_scan();
 int particle_command(String arg);
 void cartridge_engaged_interrupt();
-void check_device_state();
+void check_device_state(bool startup);
 void cancel_test();
 void finish_test();
 void run_test();
@@ -1949,9 +1949,11 @@ void cartridge_engaged_interrupt()
     cartridge_state_changed = true;
 }
 
-void check_device_state()
+void check_device_state(bool startup)
 {
-    cartridge_engaged = digitalRead(pinCartridgeLoaded) == LOW;
+    if (!startup) {
+        cartridge_engaged = digitalRead(pinCartridgeLoaded) == LOW;
+    }
 
     if (cartridge_engaged) {
         ledBusy.setActive(true);
@@ -2200,7 +2202,7 @@ void startup_analyzer()
 
     reset_globals();
 
-    check_device_state();
+    check_device_state(true);
     attachInterrupt(pinCartridgeLoaded, cartridge_engaged_interrupt, CHANGE);
 
     Serial.printlnf("device id: %s", device_id.c_str());
@@ -2261,7 +2263,7 @@ void cartridge_loop()
             cartridge_state_debounce = false;
             cartridge_state_changed = false;
             Serial.println("Cartridge state changed");
-            check_device_state();
+            check_device_state(false);
         } else {
             delay(50);
             cartridge_state_debounce = true;
