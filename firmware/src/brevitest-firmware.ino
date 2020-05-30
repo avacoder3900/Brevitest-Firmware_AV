@@ -347,7 +347,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
         if (inBCODE) BCODE_loop(); else Particle.process();
         move_stage(-amplitude, step_delay);
         if (inBCODE) BCODE_loop(); else Particle.process();
-        if (cancelling_test) return;
+        if (test_cancelled) return;
     }
 }
 
@@ -357,7 +357,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int scan_barcode()
+bool scan_barcode()
 {
     unsigned long timeout;
     int i = 0;
@@ -366,7 +366,7 @@ int scan_barcode()
 
     barcode_being_scanned = true;
 
-    Serial.println("Start scan_barcode");
+    Serial.println("Start scanning barcode");
     Serial1.begin(9600); // barcode scanner interface through RX/TX pins
 
     Serial.println("Trigger barcode reader");
@@ -402,19 +402,17 @@ int scan_barcode()
     } while (Serial1.available() && i < CARTRIDGE_UUID_LENGTH);
     Serial.println();
 
-    if (i < CARTRIDGE_UUID_LENGTH) {
-        memcpy(barcode_uuid, CARTRIDGE_ERROR_UUID, CARTRIDGE_UUID_LENGTH);
-        cartridge_engaged = false;
-    }
-    barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-    Serial.printlnf("Barcode: %s, length: %d", barcode_uuid, i);
-
     Serial1.end();
-    Serial.printlnf("Finish reading barcode %d");
-
+    barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
     barcode_being_scanned = false;
 
-    return i;
+    if (i < CARTRIDGE_UUID_LENGTH) {
+        memcpy(barcode_uuid, CARTRIDGE_ERROR_MESSAGE, CARTRIDGE_UUID_LENGTH);
+        return false;
+    } else {
+        Serial.printlnf("Barcode read: %s, length: %d", barcode_uuid, i);
+        return true;
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -973,19 +971,14 @@ void stop_temperature_control()
 
 void validate_cartridge()
 {
-    Serial.println("Validating cartridge");
-
-    if (Particle.connected())
-    {
-        waiting_for_validation = true;
+    cartridge_validated = false;
+    if (Particle.connected()) {
+        Serial.println("Validating cartridge");
         validation_timeout = millis() + TIMEOUT_VALIDATION;
-        cartridge_validated = false;
         brevitest_publish("validate-cartridge", barcode_uuid);
     } else {
         Serial.println("Validation failed - not connected to the cloud");
-        waiting_for_validation = false;
-        cartridge_validated = false;
-        cartridge_engaged = false;
+        cartridge_present = false;
     }
 }
 
@@ -1092,94 +1085,80 @@ void do_stress_test_step(int step) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void set_current_event(String event_name) {
+    strcpy(current_event, event_name.c_str());
+    if (strcmp(current_event, "register-device") == 0) {
+        current_event_code = PUBSUB_REGISTER_DEVICE;
+    } else if (strcmp(current_event, "validate-cartridge") == 0) {
+        current_event_code = PUBSUB_VALIDATE_CARTRIDGE;
+    } else if (strcmp(current_event, "test-upload") == 0) {
+        current_event_code = PUBSUB_TEST_UPLOAD;
+    } else {
+        current_event_code = 0;
+    }
+}
+
+void clear_current_event() {
+    current_event[0] = '\0';
+    current_event_code = 0;
+}
+
+bool waiting_for_event_callback() {
+    return (bool) current_event_code;
+}
+
 void brevitest_publish(String event_name, char *uuid)
 {
-    strcpy(current_event, event_name.c_str());
-
-    callback_complete = false;
-    callback_buffer[0] = '\0';
-    Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
-    Serial.printlnf("Publish: event = %s, uuid = %s", event_name.c_str(), uuid);
+    if (!waiting_for_event_callback()) {
+        set_current_event(event_name);
+        callback_complete = false;
+        callback_buffer[0] = '\0';
+        Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
+        Serial.printlnf("Publish: event = %s, uuid = %s", event_name.c_str(), uuid);
+    } else {
+        Serial.printlnf("Cannot publish event %s while event %s still outstanding - will retry later", event_name.c_str(), current_event);
+    }
 }
 
 void startup_analyzer(void);
-void callback_register()
-{
+void callback_register() {
     Serial.printlnf("Device registration callback");
-    waiting_for_registration = false;
     if ((strncmp(callback_status, SUCCESS, 7) == 0))
     { // device registered
         Serial.printlnf("Device registered - starting up analyzer");
-        register_device = false;
+        device_registered = true;
+        clear_current_event();
         startup_analyzer();
     } else {
-        Serial.printlnf("Device registration failed. Please reset device.");
+        Serial.printlnf("Device registration failed. Resetting device in 60 seconds.");
+        ledProblem.setActive(true);
+        delay(60000);
+        System.reset();
     }
 }
 
-void callback_validate()
-{
-    waiting_for_validation = false;
+void callback_validate() {
     cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
     Serial.printlnf("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
-    if (cartridge_validated)
-    { // cartridge found
+    if (cartridge_validated) { // valid cartridge found
         if (load_assay_record(callback_data)) {
-            starting_test = true;
+            ready_to_start_test = true;
             Serial.printlnf("Test starting. Assay information loaded: %s", callback_data);
         } else {
-            Serial.println("Failed to load assay record");
+            Serial.println("Failed to load assay record. Will retry later.");
             cartridge_validated = false;
-            cartridge_engaged = false;
         }
     } else {
         Serial.printlnf("Invalid cartridge: %s", callback_data);
-        cartridge_engaged = false;
+        cartridge_present = false;
     }
-}
-
-void reset_globals();
-void callback_test_finish()
-{
-    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
-    if (success)
-    {
-        Serial.println("Test finished");
-        waiting_for_finish_confirmation = false;
-        reset_stage(true);
-        reset_globals();
-        next_upload = 0;
-    }
-    else
-    {
-        Serial.println("Test finish failed!");
-    }
-}
-
-void callback_test_cancel()
-{
-    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
-    if (success)
-    {
-        Serial.println("Test cancelled");
-        waiting_for_cancel_confirmation = false;
-        reset_stage(true);
-        reset_globals();
-        next_upload = 0;
-    }
-    else
-    {
-        Serial.println("Test cancel failed!");
-    }
+    clear_current_event();
 }
 
 void remove_test_from_cache(char *testToRemove)
 {
-    int i;
-    for (i = 0; i < CACHE_SIZE; i += 1)
-    {
-        if (strncmp(testToRemove, eeprom.cache[i].cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0)
-        {
+    for (int i = 0; i < CACHE_SIZE; i += 1) {
+        if (strncmp(testToRemove, eeprom.cache[i].cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
             memset(eeprom.cache[i].cartridge_uuid, '\0', sizeof(BrevitestTestRecord));
             store_eeprom();
             return;
@@ -1187,18 +1166,15 @@ void remove_test_from_cache(char *testToRemove)
     }
 }
 
-void callback_test_upload()
-{
+void callback_test_upload() {
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
-    if (success)
-    {
+    if (success) {
         Serial.printlnf("Test successfully uploaded; removing test %s from cache", callback_data);
-        waiting_for_upload_confirmation = false;
+        upload_test_pending = false;
         remove_test_from_cache(callback_data);
-    }
-    else
-    {
-        Serial.println("Test upload failed!");
+        clear_current_event();
+    } else {
+        Serial.println("Test upload failed. Will retry later.");
     }
 }
 
@@ -1233,19 +1209,23 @@ void process_callback_buffer()
     }
 
     Serial.printlnf("Callback length: %d, event: %s, status: %s, data: %s", strlen(callback_buffer), callback_event, callback_status, callback_data);
-
     if (strcmp(callback_event, current_event) != 0) {
-        Serial.printlnf("Wrong event. Pub event: %s, sub event: %s", current_event, callback_event);
-    } else if (strcmp(callback_event, "register-device") == 0) {
-        callback_register();
-    } else if (strcmp(callback_event, "validate-cartridge") == 0) {
-        callback_validate();
-    } else if (strcmp(callback_event, "test-finish") == 0) {
-        callback_test_finish();
-    } else if (strcmp(callback_event, "test-cancel") == 0) {
-        callback_test_cancel();
-    } else if (strcmp(callback_event, "test-upload") == 0) {
-        callback_test_upload();
+        Serial.printlnf("Wrong event callback: expecting event %s, received event %s", current_event, callback_event);
+    } else {
+        switch (current_event_code) {
+            case PUBSUB_REGISTER_DEVICE:
+                callback_register();
+                break;
+            case PUBSUB_VALIDATE_CARTRIDGE:
+                callback_validate();
+                break;
+            case PUBSUB_TEST_UPLOAD:
+                callback_test_upload();
+                break;
+            default:
+                Serial.printlnf("Unknown event code %d", current_event_code);
+                clear_current_event();
+        }
     }
 }
 
@@ -1277,10 +1257,7 @@ void erase_test_from_cache(int index)
 }
 
 void initialize_test_cache()
-{
-    waiting_for_upload_confirmation = false;
-
-    for (int i = 0; i < CACHE_SIZE; i += 1) {
+{    for (int i = 0; i < CACHE_SIZE; i += 1) {
         erase_test_from_cache(i);
     }
 
@@ -1342,6 +1319,9 @@ int process_test_record(int index)
 void write_test_record_to_eeprom()
 {
     // increment test_index (check for overflow and if so reset circular buffer)
+    if (test_cancelled) {
+        test.number_of_readings = 0;
+    }
     int test_index = (eeprom.most_recent_test == 255 ? 0 : eeprom.most_recent_test + 1) % CACHE_SIZE; // 255 is the reset value
     store_test(test_index);
     process_test_record(test_index);
@@ -1355,7 +1335,7 @@ void write_test_record_to_eeprom()
 
 bool tests_to_upload()
 {
-    if (millis() < next_upload) return false;
+    if (next_upload > millis()) return false;
 
     for (int i = 0; i < CACHE_SIZE; i += 1) {
         if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
@@ -1381,7 +1361,7 @@ int get_BCODE_token(int index, int *token)
     int i;
     char *bcode = assay.BCODE;
 
-    if (cancelling_test) return index;
+    if (test_cancelled) return index;
 
     // end of string so return end of string location
     if (bcode[index] == ITEM_DELIM) return index;
@@ -1435,7 +1415,7 @@ int BCODE_loop()
     unsigned long total_duration = millis();
 
     if (!reading_optical_sensors) set_heater_power(pid_controller());
-    cancelling_test = digitalRead(pinCartridgeLoaded) == HIGH;
+    test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
 
     return (int) (millis() - total_duration);
 }
@@ -1449,7 +1429,7 @@ void BCODE_delay(int target_duration)
     for (int i = 0; i < cycles; i++) {
         loop_time = BCODE_loop();
         delay(BCODE_MAX_DELAY - loop_time);
-        if (cancelling_test) return;
+        if (test_cancelled) return;
     }
     loop_time = BCODE_loop();
     if (residual > loop_time) {
@@ -1462,7 +1442,7 @@ int process_one_BCODE_command(int cmd, int index)
 {
     int param1, param2, param3, start_index;
 
-    if (cancelling_test) return index;
+    if (test_cancelled) return index;
 
     switch (cmd) {
         case 0: // Start test()
@@ -1517,7 +1497,7 @@ int process_one_BCODE_command(int cmd, int index)
             Serial.printlnf("Begin repeating %d times", param1);
             start_index = index + 1;
             for (int i = 0; i < param1; i += 1) {
-                if (cancelling_test) break;
+                if (test_cancelled) break;
                 index = process_BCODE(start_index);
             }
             break;
@@ -1527,7 +1507,7 @@ int process_one_BCODE_command(int cmd, int index)
             break;
         case 99: // Finish test
             Serial.println("Finish test");
-            // update_progress("Finishing up test", 6000);
+            update_progress("Finishing test", 6000);
             break;
         default:
             BCODE_loop();
@@ -1542,7 +1522,7 @@ int process_BCODE(int start_index)
 
     index = get_BCODE_token(start_index, &cmd);
     if ((start_index == 0) && (cmd != 0)) { // first command
-        cancelling_test = true;
+        test_cancelled = true;
         Serial.println("First command not found");
         return -1;
     } else {
@@ -1550,7 +1530,7 @@ int process_BCODE(int start_index)
     }
     Serial.printlnf("start_index: %d, index: %d, cmd: %d", start_index, index, cmd);
 
-    while ((cmd != 99) && (index > 0) && !cancelling_test) {
+    while ((cmd != 99) && (index > 0) && !test_cancelled) {
         index = get_BCODE_token(index, &cmd);
         index = process_one_BCODE_command(cmd, index);
     };
@@ -1789,7 +1769,7 @@ int particle_command(String arg)
             result = 1;
             break;
         case 30: // scan barcode
-            result = scan_barcode();
+            result = scan_barcode() ? 1 : 0;
             break;
         case 31: // stop reading magnetometer
             System.reset();
@@ -1832,7 +1812,7 @@ int particle_command(String arg)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void cartridge_engaged_interrupt()
+void cartridge_state_changed_interrupt()
 {
     cartridge_state_changed = true;
 }
@@ -1840,10 +1820,10 @@ void cartridge_engaged_interrupt()
 void check_device_state(bool startup)
 {
     if (!startup) {
-        cartridge_engaged = digitalRead(pinCartridgeLoaded) == LOW;
+        cartridge_present = digitalRead(pinCartridgeLoaded) == LOW;
     }
 
-    if (cartridge_engaged) {
+    if (cartridge_present) {
         ledBusy.setActive(true);
         if (heater.temp_C_10X > HEATER_READY_TEMP) {
             turn_on_buzzer_for_duration(400, 400);
@@ -1858,7 +1838,7 @@ void check_device_state(bool startup)
         turn_on_buzzer_for_duration(400, 300);
     }
 
-    Serial.printlnf("Cartridge engaged? %c", cartridge_engaged ? 'Y' : 'N');
+    Serial.printlnf("Cartridge present? %c", cartridge_present ? 'Y' : 'N');
 }
 
 /////////////////////////////////////////////////////////////
@@ -1870,7 +1850,6 @@ void check_device_state(bool startup)
 void reset_globals()
 {
     test_in_progress = false;
-    test_startup_successful = false;
     cartridge_validated = false;
     callback_complete = false;
     reading_optical_sensors = false;
@@ -1889,46 +1868,21 @@ void reset_globals()
     particle_register[0] = '\0';
     particle_register[PARTICLE_REGISTER_SIZE] = '\0';
 
-    next_upload = millis() + UPLOAD_INTERVAL;
-}
-
-void cancel_test()
-{
-    Serial.println("Test cancelled");
-
-    waiting_for_cancel_confirmation = true;
-    cancel_timeout = millis() + TIMEOUT_CANCEL;
-
-    update_progress("Test cancelled", -1);
-    brevitest_publish("test-cancel", test.cartridge_uuid);
-
-    sleep_motor();
-    cartridge_engaged = false;
-}
-
-void finish_test()
-{
-    Serial.println("Test completed");
-
-    waiting_for_finish_confirmation = true;
-    finish_timeout = millis() + TIMEOUT_FINISH;
-
-    update_progress("Test complete", -1);
-    brevitest_publish("test-finish", test.cartridge_uuid);
-
-    sleep_motor();
-    cartridge_engaged = false;
+    next_upload = 0;
 }
 
 void run_test()
 {
     int tries_remaining;
 
+    reset_stage(false);
+    turn_on_buzzer_for_duration(1000, 600);
+    delay(2000);
+
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
     tries_remaining = 10;
-    while (Particle.connected())
-    {
+    while (Particle.connected()) {
         if (--tries_remaining == 0) {
            return;
         }
@@ -1937,13 +1891,9 @@ void run_test()
         delay(PARTICLE_CLOUD_DELAY);
     }
 
-    starting_test = false;
+    ready_to_start_test = false;
     test_in_progress = true;
     update_progress("Running test", 0);
-
-    reset_stage(false);
-    turn_on_buzzer_for_duration(1000, 600);
-    delay(1500);
 
     stop_temperature_control();
 
@@ -1967,35 +1917,35 @@ void run_test()
         }
     }
 
-    finishing_test = !cancelling_test;
+    reset_stage(true);
+    reset_globals();
+    cartridge_present = false;
     ledAvailable.setActive(true);
 }
 
 void upload_one_test(int test_number, char *cartridge_uuid)
 {
-    waiting_for_upload_confirmation = true;
-    upload_timeout = millis() + TIMEOUT_UPLOAD;
-
     Serial.printlnf("Processing test %s for upload", cartridge_uuid);
     process_test_record(test_number);
 
     Serial.println(particle_register);
+    upload_timeout = millis() + TIMEOUT_UPLOAD;
     brevitest_publish("test-upload", cartridge_uuid);
 }
 
-void upload_tests()
-{
-    Serial.println("Looking for tests to upload...");
-    for (int i = 0; i < CACHE_SIZE; i += 1) {
-        if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
-            upload_one_test(i, eeprom.cache[i].cartridge_uuid);
-            return;
+void upload_tests() {
+    if (current_event[0] == '\0') {
+        Serial.println("Looking for tests to upload...");
+        for (int i = 0; i < CACHE_SIZE; i += 1) {
+            if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
+                upload_one_test(i, eeprom.cache[i].cartridge_uuid);
+                return;
+            }
         }
     }
 }
 
-int particle_run_test(String arg)
-{
+int particle_run_test(String arg) {
     if (arg.length() == CARTRIDGE_UUID_LENGTH) {
         arg.toCharArray(barcode_uuid, CARTRIDGE_UUID_LENGTH + 1);
         barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
@@ -2034,8 +1984,41 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
     }
 }
 
-void configure_analyzer()
+void startup_analyzer()
 {
+    Serial.println("Registration complete. Starting up...");
+    i2c_bus_scan();
+
+    Serial.println("Resetting stage");
+    reset_stage(true);
+
+    Serial.println("Turning on LEDs");
+    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+    delay(500);
+    turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
+    delay(500);
+    turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
+
+    Serial.println("Buzzing");
+    turn_on_buzzer_for_duration(250, 330);
+
+    reset_globals();
+    clear_current_event();
+
+    check_device_state(true);
+    attachInterrupt(pinCartridgeLoaded, cartridge_state_changed_interrupt, CHANGE);
+
+    Serial.printlnf("device id: %s", device_id.c_str());
+    Serial.printlnf("eeprom.firmware_version: %d", eeprom.firmware_version);
+    Serial.printlnf("eeprom.data_format_version: %d", eeprom.data_format_version);
+    Serial.printlnf("eeprom.most_recent_test: %d", eeprom.most_recent_test);
+    Serial.printlnf("eeprom.maximum_stress_test_cycles: %d", eeprom.maximum_stress_test_cycles);
+
+    start_temperature_control();
+    periodic_event = millis() + 5000;
+}
+
+void setup() {
     ledBusy.setActive(true);
 
     Particle.variable("register", particle_register, STRING);
@@ -2068,49 +2051,8 @@ void configure_analyzer()
     init_analog_pin(pinHeater, OUTPUT, 0);
 
     setup_eeprom();
-}
-
-void startup_analyzer()
-{
-    Serial.println("Registration complete. Starting up...");
-    i2c_bus_scan();
-
-    Serial.println("Resetting stage");
-    reset_stage(true);
-
-    Serial.println("Turning on LEDs");
-    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
-    delay(500);
-    turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
-    delay(500);
-    turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
-
-    Serial.println("Buzzing");
-    turn_on_buzzer_for_duration(250, 330);
-
-    reset_globals();
-
-    check_device_state(true);
-    attachInterrupt(pinCartridgeLoaded, cartridge_engaged_interrupt, CHANGE);
-
-    Serial.printlnf("device id: %s", device_id.c_str());
-    Serial.printlnf("eeprom.firmware_version: %d", eeprom.firmware_version);
-    Serial.printlnf("eeprom.data_format_version: %d", eeprom.data_format_version);
-    Serial.printlnf("eeprom.most_recent_test: %d", eeprom.most_recent_test);
-    Serial.printlnf("eeprom.maximum_stress_test_cycles: %d", eeprom.maximum_stress_test_cycles);
-
-    start_temperature_control();
-    periodic_event = millis() + 5000;
-}
-
-void setup()
-{
-    configure_analyzer();
 
     Serial.begin(115200); // standard serial port
-
-    register_device = true;
-    registration_timeout = 0;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2119,64 +2061,44 @@ void setup()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void test_loop()
+void registration_loop()
 {
-    if (test_in_progress)  {
+    if (!device_registered && registration_timeout < millis()) {
+        if (Particle.connected()) {
+            registration_timeout = millis() + TIMEOUT_REGISTRATION;
+            brevitest_publish("register-device", (char *)device_id.c_str());
+        } else {
+            Particle.connect();
+            delay(PARTICLE_CLOUD_DELAY);
+        }
+    } 
+}
 
-        if (cancelling_test) {
-            Serial.println("Cancelling test");
-            cancelling_test = false;
-            cancel_test();
-        } else if (finishing_test) {
-            Serial.println("Finishing test");
-            finishing_test = false;
-            finish_test();
+void validate_cartridge_loop() {
+    if (cartridge_present) {
+        if (ready_to_scan_barcode) {
+            ready_to_scan_barcode = false;
+            if (scan_barcode()) {
+                validate_cartridge();
+            } else {
+                cartridge_validated = false;
+                cartridge_present = false;
+            }
+        } else if (!cartridge_validated && validation_timeout < millis()) {
+            Serial.println("Cartridge validation timed out. Retrying.");
+            validate_cartridge();
         }
-    } else if (starting_test) {
-        run_test();
-    } else if (waiting_for_upload_confirmation) {
-        if (millis() > upload_timeout) {
-            Serial.println("Upload timeout. Retrying...");
-            upload_tests();
-        }
-    } else if (tests_to_upload()) {
+    }
+}
+
+void test_upload_loop() {
+    if (tests_to_upload() && upload_timeout < millis()) {
+        upload_timeout = millis() + TIMEOUT_UPLOAD;
         upload_tests();
     }
 }
 
-void cartridge_loop()
-{
-    if (cartridge_state_changed) {
-        if (cartridge_state_debounce) {
-            cartridge_state_debounce = false;
-            cartridge_state_changed = false;
-            Serial.println("Cartridge state changed");
-            check_device_state(false);
-        } else {
-            delay(50);
-            cartridge_state_debounce = true;
-        }
-    }
-
-    if (waiting_for_validation)
-    {
-        if (millis() > validation_timeout) {
-            Serial.println("Timeout waiting for cartridge validation. Validating cartridge again");
-            validate_cartridge();
-        }
-    } else if (ready_to_scan_barcode) {
-        ready_to_scan_barcode = false;
-        if (cartridge_engaged) {
-            if (scan_barcode() == CARTRIDGE_UUID_LENGTH) {
-                validate_cartridge();
-            } else {
-                cartridge_validated = false;
-            }
-        }
-    }
-}
-
-void command_loop() {
+void long_duration_command_loop() {
     if (stress_test_running) {
         do_stress_test_step(stress_test_step);
         stress_test_step++;
@@ -2205,16 +2127,31 @@ void command_loop() {
     }
 }
 
-void registration_loop()
-{
-    if (!waiting_for_registration || registration_timeout < millis()) {
-        registration_timeout = millis() + TIMEOUT_REGISTRATION;
-        delay(5000);
-        if (Particle.connected()) {
-            waiting_for_registration = true;
-            brevitest_publish("register-device", (char *)device_id.c_str());
+void state_loop() {
+    if (cartridge_state_changed) {
+        if (cartridge_state_debounce) {
+            cartridge_state_debounce = false;
+            cartridge_state_changed = false;
+            Serial.println("Cartridge state changed");
+            check_device_state(false);
+        } else {
+            delay(50);
+            cartridge_state_debounce = true;
         }
-    } 
+    }
+
+    if (control_heater_temperature_flag) {
+        control_heater_temperature_flag = false;
+        set_heater_power(pid_controller());
+    }
+
+    if (cartridge_present) {
+        ledBusy.setActive(true);
+    } else if (heater.temp_C_10X < HEATER_READY_TEMP) {
+        heater_ready_debounce_timeout = millis() + HEATER_READY_DEBOUNCE_DELAY;
+    } else if (heater_ready_debounce_timeout < millis()) {
+        ledAvailable.setActive(true);
+    }
 }
 
 void loop()
@@ -2235,29 +2172,18 @@ void loop()
         }
     }
 
+    state_loop();
+    long_duration_command_loop();
+
     if (callback_complete) {
         process_callback_buffer();
-        return;
-    }
-
-    if (register_device) { 
-        registration_loop();
-    } else {
-        cartridge_loop();
-        test_loop();
-        command_loop();
-    }
-    
-    if (control_heater_temperature_flag) {
-        control_heater_temperature_flag = false;
-        set_heater_power(pid_controller());
-    }
-
-    if (cartridge_engaged) {
-        ledBusy.setActive(true);
-    } else if (heater.temp_C_10X < HEATER_READY_TEMP) {
-        heater_ready_debounce_timeout = millis() + HEATER_READY_DEBOUNCE_DELAY;
-    } else if (millis() > heater_ready_debounce_timeout) {
-        ledAvailable.setActive(true);
+    } else if (!waiting_for_event_callback()) {
+        if (ready_to_start_test && !test_in_progress) {
+            run_test();
+        } else {
+            registration_loop();
+            validate_cartridge_loop();
+            test_upload_loop();
+        }
     }
 }

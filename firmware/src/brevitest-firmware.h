@@ -19,9 +19,7 @@
 #define SERIAL_COMMAND_BUFFER_SIZE 40
 
 // device open and cartridge validation
-#define DEVICE_OPEN_UUID "FFFFFFFFFFFFFFFFFFFFFFFF"
-#define NO_CARTRIDGE_UUID "DDDDDDDDDDDDDDDDDDDDDDDD"
-#define CARTRIDGE_ERROR_UUID "EEEEEEEEEEEEEEEEEEEEEEEE"
+#define CARTRIDGE_ERROR_MESSAGE "--CARTRIDGE READ ERROR--"
 #define SUCCESS "SUCCESS"
 
 // optical sensors
@@ -54,7 +52,7 @@
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63 
-#define PARTICLE_CLOUD_DELAY 2000
+#define PARTICLE_CLOUD_DELAY 10000
 
 // status
 #define STATUS_LENGTH 622
@@ -102,13 +100,10 @@
 #define PUBSUB_EVENT_NAME "brevitest-production"
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
-#define PUBSUB_CALLBACK_BUFFER_SIZE 2500
+#define PUBSUB_CALLBACK_BUFFER_SIZE 5000
 #define PUBSUB_REGISTER_DEVICE 1
 #define PUBSUB_VALIDATE_CARTRIDGE 2
-#define PUBSUB_TEST_START 3
-#define PUBSUB_TEST_FINISH 4
-#define PUBSUB_TEST_CANCEL 5
-#define PUBSUB_TEST_UPLOAD 6
+#define PUBSUB_TEST_UPLOAD 5
 
 // upload
 #define UPLOAD_INTERVAL 60000
@@ -116,9 +111,6 @@
 // timeouts
 #define TIMEOUT_REGISTRATION 30000
 #define TIMEOUT_VALIDATION 10000
-#define TIMEOUT_START 20000
-#define TIMEOUT_CANCEL 10000
-#define TIMEOUT_FINISH 10000
 #define TIMEOUT_UPLOAD 20000
 
 // application watchdog
@@ -157,12 +149,6 @@ int stage_position = 0;
 int microns_error = 0;
 unsigned long periodic_event;
 bool periodic_event_flag = false;
-unsigned long next_upload;
-unsigned long validation_timeout;
-unsigned long cancel_timeout;
-unsigned long finish_timeout;
-unsigned long upload_timeout;
-unsigned long registration_timeout;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
@@ -171,35 +157,31 @@ int stress_test_count = 0;
 int stress_test_step = 0;
 
 // device LED
-LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_PATTERN_BLINK, LED_PRIORITY_CRITICAL);
+LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_FAST, LED_PRIORITY_CRITICAL);
 LEDStatus ledBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus ledAvailable(RGB_COLOR_GREEN, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // device state
-bool register_device = false;
-bool waiting_for_registration = false;
+bool device_registered = false;
+bool cartridge_validated = false;
+bool ready_to_start_test = false;
+bool test_in_progress = false;
+bool test_cancelled = false;
+bool upload_test_pending = false;
+
+unsigned long next_upload = 0;
+unsigned long registration_timeout = 0;
+unsigned long validation_timeout = 0;
+unsigned long upload_timeout = 0;
 
 volatile bool cartridge_state_changed = false;
 bool cartridge_state_debounce = false;
-bool cartridge_engaged = false;
+bool cartridge_present = false;
 
 bool ready_to_scan_barcode = false;
 bool barcode_being_scanned = false;
 
-bool test_startup_successful = false;
-bool test_in_progress = false;
 bool reading_optical_sensors = false;
-
-bool waiting_for_validation = false;
-bool cartridge_validated = false;
-bool starting_test = false;
-bool cancelling_test = false;
-bool waiting_for_cancel_confirmation = false;
-bool finishing_test = false;
-bool waiting_for_finish_confirmation = false;
-bool uploading_test = false;
-bool waiting_for_upload_confirmation = false;
-
 unsigned long next_optical_sensor_reading_time = 0;
 
 // temperature control system
@@ -280,6 +262,7 @@ char callback_event[PUBSUB_EVENT_MAX_LENGTH + 1];
 char callback_status[PUBSUB_STATUS_MAX_LENGTH + 1];
 char *callback_data;
 char current_event[PUBSUB_EVENT_MAX_LENGTH + 1];
+int current_event_code = 0;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
