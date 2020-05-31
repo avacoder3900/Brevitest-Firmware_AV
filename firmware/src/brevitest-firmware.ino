@@ -1161,7 +1161,7 @@ void callback_validate() {
     if (cartridge_validated) { // valid cartridge found
         if (load_assay_record(callback_data)) {
             ready_to_start_test = true;
-            Serial.printlnf("Assay information loaded. Test starting. %s", assay.BCODE);
+            Serial.printlnf("Assay information loaded. Test starting.");
         } else {
             Serial.println("Failed to load assay record. Will retry later.");
             cartridge_validated = false;
