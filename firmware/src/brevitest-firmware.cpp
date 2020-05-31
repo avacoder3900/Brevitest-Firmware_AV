@@ -2052,7 +2052,7 @@ void run_test()
 
     Serial.print("Reconnecting to cloud...");
     Particle.connect();
-    delay(1000);
+    delay(PARTICLE_CLOUD_DELAY);
     tries_remaining = 10;
     while (!Particle.connected()) {
         Serial.print(".");
