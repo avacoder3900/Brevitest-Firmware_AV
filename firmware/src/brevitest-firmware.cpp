@@ -1635,7 +1635,6 @@ int process_one_BCODE_command(int cmd, int index)
         case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
-            update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * SLOW_STEP_DELAY / MOVE_DURATION_UNIT);
             move_stage_to_optical_read_position();
             update_progress("Reading", 6000);
             read_optical_sensors(param1, param2, false);
