@@ -428,6 +428,18 @@ void turn_on_buzzer_for_duration(int duration, int frequency)
     tone(pinBuzzer, frequency, duration);
 }
 
+void alert_buzzer() {
+    run_alert_buzzer = true;
+}
+
+void turn_on_alert_buzzer() {
+    alert_buzzer_timer.start();
+}
+
+void turn_off_alert_buzzer() {
+    alert_buzzer_timer.stop();
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                       HEATER                            //
@@ -944,8 +956,7 @@ int pid_controller()
     return output;
 }
 
-void control_heater_temperature()
-{
+void control_heater_temperature() {
     control_heater_temperature_flag = !reading_optical_sensors;
 }
 
@@ -974,11 +985,9 @@ void validate_cartridge()
     cartridge_validated = false;
     if (Particle.connected()) {
         Serial.println("Validating cartridge");
-        validation_timeout = millis() + TIMEOUT_VALIDATION;
         brevitest_publish("validate-cartridge", barcode_uuid);
     } else {
-        Serial.println("Validation failed - not connected to the cloud");
-        cartridge_present = false;
+        Serial.println("Not connected to the cloud. Wait and retry.");
     }
 }
 
@@ -1103,18 +1112,27 @@ void clear_current_event() {
     current_event_code = 0;
 }
 
-bool waiting_for_event_callback() {
-    return (bool) current_event_code;
+bool callback_pending() {
+    if (callback_timeout < millis()) {
+        clear_current_event();
+    }
+    return current_event_code;
+}
+
+void set_publish_params(String event_name) {
+    set_current_event(event_name);
+    callback_complete = false;
+    callback_buffer[0] = '\0';
+    callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE] = '\0';
+    callback_timeout = millis() + PUBSUB_CALLBACK_TIMEOUT;
 }
 
 void brevitest_publish(String event_name, char *uuid)
 {
-    if (!waiting_for_event_callback()) {
-        set_current_event(event_name);
-        callback_complete = false;
-        callback_buffer[0] = '\0';
+    if (!callback_pending()) {
+        set_publish_params(event_name);
         Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
-        Serial.printlnf("Publish: event = %s, uuid = %s", event_name.c_str(), uuid);
+        Serial.printlnf("PUBLISH: event = %s, uuid = %s", event_name.c_str(), uuid);
     } else {
         Serial.printlnf("Cannot publish event %s while event %s still outstanding - will retry later", event_name.c_str(), current_event);
     }
@@ -1143,7 +1161,7 @@ void callback_validate() {
     if (cartridge_validated) { // valid cartridge found
         if (load_assay_record(callback_data)) {
             ready_to_start_test = true;
-            Serial.printlnf("Test starting. Assay information loaded: %s", callback_data);
+            Serial.printlnf("Assay information loaded. Test starting.");
         } else {
             Serial.println("Failed to load assay record. Will retry later.");
             cartridge_validated = false;
@@ -1151,6 +1169,7 @@ void callback_validate() {
     } else {
         Serial.printlnf("Invalid cartridge: %s", callback_data);
         cartridge_present = false;
+        turn_on_alert_buzzer();
     }
     clear_current_event();
 }
@@ -1208,7 +1227,7 @@ void process_callback_buffer()
         }
     }
 
-    Serial.printlnf("Callback length: %d, event: %s, status: %s, data: %s", strlen(callback_buffer), callback_event, callback_status, callback_data);
+    // Serial.printlnf("Callback length: %d, event: %s, status: %s, data: %s", strlen(callback_buffer), callback_event, callback_status, callback_data);
     if (strcmp(callback_event, current_event) != 0) {
         Serial.printlnf("Wrong event callback: expecting event %s, received event %s", current_event, callback_event);
     } else {
@@ -1242,12 +1261,14 @@ void brevitest_callback(const char *event, const char *data)
     strcat(callback_buffer, data);
     int last = strlen(data) - 1;
     callback_complete = (data[last] == END_DELIM);
-    Serial.printlnf("RESPONSE | callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');
+    if (callback_complete) {
+        Serial.printlnf("RESPONSE | callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');
+    }
 }
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                   EEPROM TEST CACHE                     //
+//               TEST CACHE AND UPLOADING                  //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
@@ -1295,7 +1316,7 @@ int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
                    reading->temperature, ATTR_DELIM);
 }
 
-int process_test_record(int index)
+void process_test_record(int index)
 {
     BrevitestTestRecord *t;
     int len;
@@ -1313,7 +1334,6 @@ int process_test_record(int index)
         }
     }
     particle_register[len - 1] = '\0';
-    return 1;
 }
 
 void write_test_record_to_eeprom()
@@ -1327,16 +1347,8 @@ void write_test_record_to_eeprom()
     process_test_record(test_index);
 }
 
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                 TEST RESULTS UPLOADING                  //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
 bool tests_to_upload()
 {
-    if (next_upload > millis()) return false;
-
     for (int i = 0; i < CACHE_SIZE; i += 1) {
         if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
             if (serial_messaging_on) {
@@ -1345,9 +1357,24 @@ bool tests_to_upload()
             return true;
         }
     }
-    next_upload = millis() + UPLOAD_INTERVAL;
-
     return false;
+}
+
+void upload_one_test(int test_number, char *cartridge_uuid)
+{
+    process_test_record(test_number);
+    Serial.printlnf("Payload length: %d, payload: %s", strlen(particle_register), particle_register);
+    brevitest_publish("test-upload", particle_register);
+}
+
+void upload_tests() {
+    Serial.println("Looking for tests to upload...");
+    for (int i = 0; i < CACHE_SIZE; i += 1) {
+        if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
+            upload_one_test(i, eeprom.cache[i].cartridge_uuid);
+            return;
+        }
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -1826,15 +1853,15 @@ void check_device_state(bool startup)
     if (cartridge_present) {
         ledBusy.setActive(true);
         if (heater.temp_C_10X > HEATER_READY_TEMP) {
+            turn_off_alert_buzzer();
             turn_on_buzzer_for_duration(400, 400);
             ready_to_scan_barcode = true;
         } else {
-            for (int i = 0 ; i < 5; i++) {
-                turn_on_buzzer_for_duration(200, 400);
-                delay(400);
-            }
+            cartridge_present = false;
+            turn_on_alert_buzzer();
         }
     } else {
+        turn_off_alert_buzzer();
         turn_on_buzzer_for_duration(400, 300);
     }
 
@@ -1921,28 +1948,7 @@ void run_test()
     reset_globals();
     cartridge_present = false;
     ledAvailable.setActive(true);
-}
-
-void upload_one_test(int test_number, char *cartridge_uuid)
-{
-    Serial.printlnf("Processing test %s for upload", cartridge_uuid);
-    process_test_record(test_number);
-
-    Serial.println(particle_register);
-    upload_timeout = millis() + TIMEOUT_UPLOAD;
-    brevitest_publish("test-upload", cartridge_uuid);
-}
-
-void upload_tests() {
-    if (current_event[0] == '\0') {
-        Serial.println("Looking for tests to upload...");
-        for (int i = 0; i < CACHE_SIZE; i += 1) {
-            if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
-                upload_one_test(i, eeprom.cache[i].cartridge_uuid);
-                return;
-            }
-        }
-    }
+    turn_on_alert_buzzer();
 }
 
 int particle_run_test(String arg) {
@@ -2021,7 +2027,7 @@ void startup_analyzer()
 void setup() {
     ledBusy.setActive(true);
 
-    Particle.variable("register", particle_register, STRING);
+    // Particle.variable("register", particle_register, STRING);
     Particle.function("run_test", particle_run_test);
 
     device_id = System.deviceID();
@@ -2063,10 +2069,10 @@ void setup() {
 
 void registration_loop()
 {
-    if (!device_registered && registration_timeout < millis()) {
+    if (!device_registered && next_registration < millis()) {
         if (Particle.connected()) {
-            registration_timeout = millis() + TIMEOUT_REGISTRATION;
             brevitest_publish("register-device", (char *)device_id.c_str());
+            next_registration = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_REGISTRATION;
         } else {
             Particle.connect();
             delay(PARTICLE_CLOUD_DELAY);
@@ -2080,21 +2086,23 @@ void validate_cartridge_loop() {
             ready_to_scan_barcode = false;
             if (scan_barcode()) {
                 validate_cartridge();
+                next_validation = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_VALIDATION;
             } else {
                 cartridge_validated = false;
                 cartridge_present = false;
+                turn_on_alert_buzzer();
             }
-        } else if (!cartridge_validated && validation_timeout < millis()) {
+        } else if (!cartridge_validated && next_validation < millis()) {
             Serial.println("Cartridge validation timed out. Retrying.");
-            validate_cartridge();
+            ready_to_scan_barcode = true;
         }
     }
 }
 
 void test_upload_loop() {
-    if (tests_to_upload() && upload_timeout < millis()) {
-        upload_timeout = millis() + TIMEOUT_UPLOAD;
+    if (tests_to_upload() && next_upload < millis()) {
         upload_tests();
+        next_upload = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_UPLOAD;
     }
 }
 
@@ -2152,6 +2160,11 @@ void state_loop() {
     } else if (heater_ready_debounce_timeout < millis()) {
         ledAvailable.setActive(true);
     }
+
+    if (run_alert_buzzer) {
+        run_alert_buzzer = false;
+        turn_on_buzzer_for_duration(BUZZER_ALERT_DURATION, BUZZER_ALERT_FREQUENCY);
+    }
 }
 
 void loop()
@@ -2177,7 +2190,7 @@ void loop()
 
     if (callback_complete) {
         process_callback_buffer();
-    } else if (!waiting_for_event_callback()) {
+    } else if (!callback_pending()) {
         if (ready_to_start_test && !test_in_progress) {
             run_test();
         } else {

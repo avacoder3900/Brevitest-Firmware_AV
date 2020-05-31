@@ -4,9 +4,9 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 17
+#define FIRMWARE_VERSION 18
 #define DATA_FORMAT_VERSION 16
-#define TEST_DATA_FORMAT_CODE 'A'
+#define TEST_DATA_FORMAT_CODE 'B'
 #define ASSAY_UUID_LENGTH 8
 #define CARTRIDGE_UUID_LENGTH 24
 #define DEVICE_UUID_LENGTH 24
@@ -36,15 +36,13 @@
 // buzzer
 #define BUZZER_FREQUENCY 600
 #define BUZZER_DURATION 1000
+#define BUZZER_ALERT_FREQUENCY 850
+#define BUZZER_ALERT_DURATION 500
+#define BUZZER_ALERT_PERIOD 4000
 
 // BCODE
 #define BCODE_CAPACITY 2000
 #define BCODE_MAX_DELAY 500
-
-// params
-#define PARAM_NUMBER_INDEX 2
-#define PARAM_VALUE_INDEX 6
-#define PARAM_NUMBER_OF_PARAMS 7
 
 // caches
 #define CACHE_SIZE 4
@@ -53,11 +51,6 @@
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63 
 #define PARTICLE_CLOUD_DELAY 10000
-
-// status
-#define STATUS_LENGTH 622
-#define STATUS(...) snprintf(particle_status, STATUS_LENGTH, __VA_ARGS__)
-#define TEST_DURATION_LENGTH 6
 
 // barcode scanner
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
@@ -80,7 +73,7 @@
 // heater
 #define HEATER_MAX_POWER 255
 #define HEATER_DEFAULT_POWER 128
-#define HEATER_PWM_FREQUENCY 20000
+#define HEATER_PWM_FREQUENCY 10000
 #define HEATER_MAX_TEMPERATURE 600
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
@@ -101,17 +94,15 @@
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 5000
+#define PUBSUB_CALLBACK_TIMEOUT 10000
 #define PUBSUB_REGISTER_DEVICE 1
 #define PUBSUB_VALIDATE_CARTRIDGE 2
-#define PUBSUB_TEST_UPLOAD 5
+#define PUBSUB_TEST_UPLOAD 3
 
-// upload
-#define UPLOAD_INTERVAL 60000
-
-// timeouts
-#define TIMEOUT_REGISTRATION 30000
-#define TIMEOUT_VALIDATION 10000
-#define TIMEOUT_UPLOAD 20000
+// retry intervals - added to PUBSUB_CALLBACK_TIMEOUT
+#define RETRY_REGISTRATION 10000
+#define RETRY_VALIDATION 5000
+#define RETRY_UPLOAD 30000
 
 // application watchdog
 // void watchdog(void);
@@ -169,10 +160,10 @@ bool test_in_progress = false;
 bool test_cancelled = false;
 bool upload_test_pending = false;
 
+unsigned long callback_timeout = 0;
+unsigned long next_registration = 0;
 unsigned long next_upload = 0;
-unsigned long registration_timeout = 0;
-unsigned long validation_timeout = 0;
-unsigned long upload_timeout = 0;
+unsigned long next_validation = 0;
 
 volatile bool cartridge_state_changed = false;
 bool cartridge_state_debounce = false;
@@ -239,6 +230,11 @@ int read_optical_sensors_command_led_power;
 int read_optical_sensors_command_count;
 int read_optical_sensor_command_microns_to_move;
 
+// buzzer
+void alert_buzzer(void);
+Timer alert_buzzer_timer(BUZZER_ALERT_PERIOD, alert_buzzer);
+bool run_alert_buzzer = false;
+
 // magnetometer
 unsigned long test_magnetometer_command_confirmation_timeout = 0;
 bool test_magnetometer_command_flag = false;
@@ -256,7 +252,7 @@ char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 
 // publish and subscribe callback
-char callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE];
+char callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE + 1];
 bool callback_complete;
 char callback_event[PUBSUB_EVENT_MAX_LENGTH + 1];
 char callback_status[PUBSUB_STATUS_MAX_LENGTH + 1];
