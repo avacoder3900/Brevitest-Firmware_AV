@@ -8,6 +8,7 @@
 #define DATA_FORMAT_VERSION 16
 #define TEST_DATA_FORMAT_CODE 'B'
 #define ASSAY_UUID_LENGTH 8
+#define BARCODE_UUID_LENGTH 24
 #define CARTRIDGE_UUID_LENGTH 24
 #define DEVICE_UUID_LENGTH 24
 
@@ -19,7 +20,7 @@
 #define SERIAL_COMMAND_BUFFER_SIZE 40
 
 // device open and cartridge validation
-#define CARTRIDGE_ERROR_MESSAGE "--CARTRIDGE READ ERROR--"
+#define BARCODE_ERROR_MESSAGE "--CARTRIDGE READ ERROR--"
 #define SUCCESS "SUCCESS"
 
 // optical sensors
@@ -170,7 +171,6 @@ bool cartridge_state_debounce = false;
 bool cartridge_present = false;
 
 bool ready_to_scan_barcode = false;
-bool barcode_being_scanned = false;
 
 bool reading_optical_sensors = false;
 unsigned long next_optical_sensor_reading_time = 0;
@@ -247,7 +247,7 @@ int test_progress;
 int test_percent_complete;
 
 // uuids
-char barcode_uuid[CARTRIDGE_UUID_LENGTH + 1];
+char barcode_uuid[BARCODE_UUID_LENGTH + 1];
 char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 

@@ -364,8 +364,6 @@ bool scan_barcode()
     bool read_success = false;
     int buf;
 
-    barcode_being_scanned = true;
-
     Serial.println("Start scanning barcode");
     Serial1.begin(9600); // barcode scanner interface through RX/TX pins
 
@@ -399,15 +397,14 @@ bool scan_barcode()
         if (buf != -1) {
             barcode_uuid[i++] = (char)buf;
         }
-    } while (Serial1.available() && i < CARTRIDGE_UUID_LENGTH);
+    } while (Serial1.available() && i < BARCODE_UUID_LENGTH);
     Serial.println();
 
     Serial1.end();
-    barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-    barcode_being_scanned = false;
+    barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
 
-    if (i < CARTRIDGE_UUID_LENGTH) {
-        memcpy(barcode_uuid, CARTRIDGE_ERROR_MESSAGE, CARTRIDGE_UUID_LENGTH);
+    if (i < BARCODE_UUID_LENGTH) {
+        memcpy(barcode_uuid, BARCODE_ERROR_MESSAGE, BARCODE_UUID_LENGTH);
         return false;
     } else {
         Serial.printlnf("Barcode read: %s, length: %d", barcode_uuid, i);
@@ -1888,7 +1885,7 @@ void reset_globals()
     test_percent_complete = 0;
 
     barcode_uuid[0] = '\0';
-    barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
+    barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
     test.cartridge_uuid[0] = '\0';
     test.cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
     assay.uuid[0] = '\0';
@@ -1960,18 +1957,6 @@ void run_test()
     turn_on_alert_buzzer();
 }
 
-int particle_run_test(String arg) {
-    if (arg.length() == CARTRIDGE_UUID_LENGTH) {
-        arg.toCharArray(barcode_uuid, CARTRIDGE_UUID_LENGTH + 1);
-        barcode_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-        Serial.printlnf("Running test for cartridge %s", barcode_uuid);
-        validate_cartridge();
-        return 1;
-    } else {
-        return -1;
-    }
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                          SETUP                          //
@@ -2035,9 +2020,6 @@ void startup_analyzer()
 
 void setup() {
     ledBusy.setActive(true);
-
-    // Particle.variable("register", particle_register, STRING);
-    Particle.function("run_test", particle_run_test);
 
     device_id = System.deviceID();
     Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
