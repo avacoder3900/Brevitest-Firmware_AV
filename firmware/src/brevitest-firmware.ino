@@ -1326,14 +1326,19 @@ void process_test_record(int index)
 
     len = sprintf(particle_register, "%.24s%c%c%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);
 
-    for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
-    {
-        c = t->reading[i].channel;
-        if (c == 'A' || c == '1' || c == '2') {
-            len += append_test_reading(len, &(t->reading[i]));
+    if (t->number_of_readings) { // test completed
+        for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
+        {
+            c = t->reading[i].channel;
+            if (c == 'A' || c == '1' || c == '2') {
+                len += append_test_reading(len, &(t->reading[i]));
+            }
         }
+        particle_register[len - 1] = '\0';
+    } else { // test cancelled
+        particle_register[len] = '0';
+        particle_register[len + 1] = '\0';
     }
-    particle_register[len - 1] = '\0';
 }
 
 void write_test_record_to_eeprom()
