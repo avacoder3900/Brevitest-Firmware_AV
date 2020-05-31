@@ -1277,7 +1277,7 @@ void callback_validate() {
     if (cartridge_validated) { // valid cartridge found
         if (load_assay_record(callback_data)) {
             ready_to_start_test = true;
-            Serial.printlnf("Assay information loaded. Test starting.");
+            Serial.printlnf("Assay information loaded. Test starting. %s", assay.BCODE);
         } else {
             Serial.println("Failed to load assay record. Will retry later.");
             cartridge_validated = false;
@@ -1462,6 +1462,7 @@ void write_test_record_to_eeprom()
     // increment test_index (check for overflow and if so reset circular buffer)
     if (test_cancelled) {
         test.number_of_readings = 0;
+        test_cancelled = false;
     }
     int test_index = (eeprom.most_recent_test == 255 ? 0 : eeprom.most_recent_test + 1) % CACHE_SIZE; // 255 is the reset value
     store_test(test_index);
@@ -1671,12 +1672,10 @@ int process_BCODE(int start_index)
     index = get_BCODE_token(start_index, &cmd);
     if ((start_index == 0) && (cmd != 0)) { // first command
         test_cancelled = true;
-        Serial.println("First command not found");
         return -1;
     } else {
         index = process_one_BCODE_command(cmd, index);
     }
-    Serial.printlnf("start_index: %d, index: %d, cmd: %d", start_index, index, cmd);
 
     while ((cmd != 99) && (index > 0) && !test_cancelled) {
         index = get_BCODE_token(index, &cmd);
@@ -2027,6 +2026,7 @@ void run_test()
     turn_on_buzzer_for_duration(1000, 600);
     delay(2000);
 
+    Serial.print("Disconnecting from cloud...");
     Particle.disconnect();
     delay(PARTICLE_CLOUD_DELAY);
     tries_remaining = 10;
@@ -2034,10 +2034,12 @@ void run_test()
         if (--tries_remaining == 0) {
            return;
         }
-        Serial.println("-");
+        Serial.print(".");
         Particle.disconnect();
         delay(PARTICLE_CLOUD_DELAY);
     }
+    Serial.println();
+    Serial.println("Now disconnected from cloud");
 
     ready_to_start_test = false;
     test_in_progress = true;
@@ -2053,17 +2055,20 @@ void run_test()
 
     start_temperature_control();
 
+    Serial.print("Reconnecting to cloud...");
     Particle.connect();
-    delay(PARTICLE_CLOUD_DELAY);
+    delay(1000);
     tries_remaining = 10;
     while (!Particle.connected()) {
-        Serial.println("+");
+        Serial.print(".");
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
         if (--tries_remaining == 0) {
             System.reset();
         }
     }
+    Serial.println();
+    Serial.println("Now connected to cloud");
 
     reset_stage(true);
     reset_globals();
