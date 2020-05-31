@@ -2081,7 +2081,7 @@ void registration_loop()
 }
 
 void validate_cartridge_loop() {
-    if (cartridge_present) {
+    if (device_registered && cartridge_present) {
         if (ready_to_scan_barcode) {
             ready_to_scan_barcode = false;
             if (scan_barcode()) {
@@ -2100,7 +2100,7 @@ void validate_cartridge_loop() {
 }
 
 void test_upload_loop() {
-    if (tests_to_upload() && next_upload < millis()) {
+    if (device_registered && tests_to_upload() && next_upload < millis()) {
         upload_tests();
         next_upload = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_UPLOAD;
     }
