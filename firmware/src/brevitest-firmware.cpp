@@ -1216,7 +1216,7 @@ void set_current_event(String event_name) {
         current_event_code = PUBSUB_REGISTER_DEVICE;
     } else if (strcmp(current_event, "validate-cartridge") == 0) {
         current_event_code = PUBSUB_VALIDATE_CARTRIDGE;
-    } else if (strcmp(current_event, "test-upload") == 0) {
+    } else if (strcmp(current_event, "upload-test") == 0) {
         current_event_code = PUBSUB_TEST_UPLOAD;
     } else {
         current_event_code = 0;
@@ -1486,7 +1486,7 @@ void upload_one_test(int test_number, char *cartridge_uuid)
 {
     process_test_record(test_number);
     Serial.printlnf("Payload length: %d, payload: %s", strlen(particle_register), particle_register);
-    brevitest_publish("test-upload", particle_register);
+    brevitest_publish("upload-test", particle_register);
 }
 
 void upload_tests() {
