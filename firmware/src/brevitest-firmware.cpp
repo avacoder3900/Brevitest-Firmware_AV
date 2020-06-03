@@ -1967,7 +1967,7 @@ void check_device_state(bool startup)
 
     if (cartridge_present) {
         ledBusy.setActive(true);
-        if (heater.temp_C_10X > HEATER_READY_TEMP) {
+        if (abs(heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_OFFSET) {
             turn_off_alert_buzzer();
             turn_on_buzzer_for_duration(400, 400);
             ready_to_scan_barcode = true;
@@ -2261,7 +2261,7 @@ void state_loop() {
 
     if (cartridge_present) {
         ledBusy.setActive(true);
-    } else if (heater.temp_C_10X < HEATER_READY_TEMP) {
+    } else if (abs(heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_OFFSET) {
         heater_ready_debounce_timeout = millis() + HEATER_READY_DEBOUNCE_DELAY;
     } else if (heater_ready_debounce_timeout < millis()) {
         ledAvailable.setActive(true);
