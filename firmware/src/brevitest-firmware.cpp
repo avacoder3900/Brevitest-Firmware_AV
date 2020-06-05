@@ -2262,9 +2262,9 @@ void state_loop() {
     if (cartridge_present) {
         ledBusy.setActive(true);
     } else if (abs(heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_OFFSET) {
-        heater_ready_debounce_timeout = millis() + HEATER_READY_DEBOUNCE_DELAY;
-    } else if (heater_ready_debounce_timeout < millis()) {
         ledAvailable.setActive(true);
+    } else {
+        ledBusy.setActive(true);
     }
 
     if (run_alert_buzzer) {

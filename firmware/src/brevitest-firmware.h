@@ -217,7 +217,6 @@ struct HeatingElement
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
 unsigned long control_heater_temperature_flag = false;
-unsigned long heater_ready_debounce_timeout = 0;
 
 // optical sensors
 void test_optical_sensors(void);
