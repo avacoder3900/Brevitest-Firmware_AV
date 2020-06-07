@@ -331,7 +331,7 @@ void update_progress(String, int);
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
-    update_progress("Moving magnets to position", (abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP) / 1000);
+    update_progress("Moving magnets to position", abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP);
     Serial.printlnf("Moving stage to position %d, distance = %d", position, move_distance);
     move_stage(move_distance, step_delay);
 }
@@ -1510,14 +1510,14 @@ int process_one_BCODE_command(int cmd, int index)
             // update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
             Serial.printlnf("Moving stage to prepare for reading");
             move_stage_to_optical_read_position();
-            update_progress("Reading", 6000);
+            update_progress("Reading", 10000);
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
             break;
         case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
             move_stage_to_optical_read_position();
-            update_progress("Reading", 6000);
+            update_progress("Reading", 10000);
             read_optical_sensors(param1, param2, false);
             break;
         case 20: // Repeat begin(number of iterations)
