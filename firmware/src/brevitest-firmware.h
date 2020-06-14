@@ -22,6 +22,7 @@
 // device open and cartridge validation
 #define BARCODE_ERROR_MESSAGE "--CARTRIDGE READ ERROR--"
 #define SUCCESS "SUCCESS"
+#define INVALID "INVALID"
 
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
@@ -40,6 +41,9 @@
 #define BUZZER_ALERT_FREQUENCY 850
 #define BUZZER_ALERT_DURATION 500
 #define BUZZER_ALERT_PERIOD 4000
+#define BUZZER_PROBLEM_FREQUENCY 620
+#define BUZZER_PROBLEM_DURATION 200
+#define BUZZER_PROBLEM_PERIOD 400
 
 // BCODE
 #define BCODE_CAPACITY 2000
@@ -79,7 +83,7 @@
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
 #define HEATER_DEFAULT_TEMP_TARGET 450
-#define HEATER_READY_TEMP_OFFSET 10
+#define HEATER_READY_TEMP_DELTA 10
 #define HEATER_READY_DEBOUNCE_DELAY 5000
 
 // thermistors
@@ -98,7 +102,7 @@
 #define PUBSUB_CALLBACK_TIMEOUT 10000
 #define PUBSUB_REGISTER_DEVICE 1
 #define PUBSUB_VALIDATE_CARTRIDGE 2
-#define PUBSUB_TEST_UPLOAD 3
+#define PUBSUB_UPLOAD_TEST 3
 
 // retry intervals - added to PUBSUB_CALLBACK_TIMEOUT
 #define RETRY_REGISTRATION 10000
@@ -160,6 +164,7 @@ bool ready_to_start_test = false;
 bool test_in_progress = false;
 bool test_cancelled = false;
 bool upload_test_pending = false;
+bool invalid_test = false;
 
 unsigned long callback_timeout = 0;
 unsigned long next_registration = 0;
@@ -216,7 +221,9 @@ struct HeatingElement
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
-unsigned long control_heater_temperature_flag = false;
+bool control_heater_temperature_flag = false;
+bool heater_debounced = true;
+unsigned long heater_debounce_time;
 
 // optical sensors
 void test_optical_sensors(void);
@@ -233,6 +240,10 @@ int read_optical_sensor_command_microns_to_move;
 void alert_buzzer(void);
 Timer alert_buzzer_timer(BUZZER_ALERT_PERIOD, alert_buzzer);
 bool run_alert_buzzer = false;
+
+void problem_buzzer(void);
+Timer problem_buzzer_timer(BUZZER_PROBLEM_PERIOD, problem_buzzer);
+bool run_problem_buzzer = false;
 
 // magnetometer
 unsigned long test_magnetometer_command_confirmation_timeout = 0;
