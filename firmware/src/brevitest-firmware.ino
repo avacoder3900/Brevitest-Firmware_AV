@@ -1624,7 +1624,7 @@ void i2c_bus_scan()
 
     if (enable_optical_sensors(true)) {
         Serial.println("Starting optical I2C bus scan");
-        for (addr = 0; addr < 127; addr++) {
+        for (addr = 110; addr < 120; addr++) {
             Wire.beginTransmission(addr);
             Wire.write(0x00);
             result = Wire.endTransmission();
