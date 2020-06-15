@@ -1880,13 +1880,14 @@ void cartridge_state_changed_interrupt()
     cartridge_state_changed = true;
 }
 
-void check_device_state(bool startup)
+void change_device_state(bool startup)
 {
     if (!startup) {
         cartridge_present = digitalRead(pinCartridgeLoaded) == LOW;
     }
     if (invalid_test) {
         invalid_test = false;
+        ledProblem.setActive(false);
         turn_off_problem_buzzer();
     }
     if (cartridge_present) {
@@ -2044,7 +2045,7 @@ void startup_analyzer()
     reset_globals();
     clear_current_event();
 
-    check_device_state(true);
+    change_device_state(true);
     attachInterrupt(pinCartridgeLoaded, cartridge_state_changed_interrupt, CHANGE);
 
     Serial.printlnf("device id: %s", device_id.c_str());
@@ -2175,7 +2176,7 @@ void state_loop() {
             cartridge_state_debounce = false;
             cartridge_state_changed = false;
             Serial.println("Cartridge state changed");
-            check_device_state(false);
+            change_device_state(false);
         } else {
             delay(50);
             cartridge_state_debounce = true;
