@@ -445,11 +445,9 @@ void move_stage_to_test_start_position()
     move_stage_to_position(MICRONS_TO_TEST_START_POSITION, SLOW_STEP_DELAY);
 }
 
-void update_progress(String, int);
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
-    update_progress("Moving magnets to position", abs(move_distance) * step_delay / MICRONS_PER_EIGHTH_STEP);
     Serial.printlnf("Moving stage to position %d, distance = %d", position, move_distance);
     move_stage(move_distance, step_delay);
 }
@@ -1590,7 +1588,16 @@ int BCODE_loop()
     unsigned long total_duration = millis();
 
     if (!reading_optical_sensors) set_heater_power(pid_controller());
-    test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
+    if (digitalRead(pinCartridgeLoaded) == HIGH) {
+        Serial.println("Cartridge movement detected...");
+        delay(500);
+        test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
+        if (test_cancelled) {
+            Serial.println("Cartridge removed. Test cancelled.");
+        } else {
+            Serial.println("Cartridge ok. Test continuing.");
+        }
+    }
 
     return (int) (millis() - total_duration);
 }
