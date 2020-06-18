@@ -1472,7 +1472,7 @@ int BCODE_loop()
     if (!reading_optical_sensors) set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeLoaded) == HIGH) {
         Serial.println("Cartridge movement detected...");
-        delay(500);
+        delay(100);
         test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
         if (test_cancelled) {
             Serial.println("Cartridge removed. Test cancelled.");
@@ -1496,6 +1496,7 @@ void BCODE_delay(int target_duration)
         if (test_cancelled) return;
     }
     loop_time = BCODE_loop();
+    if (test_cancelled) return;
     if (residual > loop_time) {
       delay(residual - loop_time);
     }
