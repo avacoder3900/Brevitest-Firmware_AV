@@ -1183,12 +1183,10 @@ void callback_validate() {
 
 void remove_test_from_cache(char *testToRemove)
 {
-    for (int i = 0; i < CACHE_SIZE; i += 1) {
-        if (strncmp(testToRemove, eeprom.cache[i].cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
-            memset(eeprom.cache[i].cartridge_uuid, '\0', sizeof(BrevitestTestRecord));
-            store_eeprom();
-            return;
-        }
+    if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
+        memset(eeprom.cache.cartridge_uuid, 0, sizeof(BrevitestTestRecord));
+        store_eeprom();
+        return;
     }
 }
 
@@ -1291,37 +1289,18 @@ void brevitest_callback(const char *event, const char *data)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void erase_test_from_cache(int index)
-{
-    memset(eeprom.cache[index].cartridge_uuid, '\0', sizeof(BrevitestTestRecord));
+void erase_test_from_cache() {
+    memset(eeprom.cache.cartridge_uuid, 0, sizeof(BrevitestTestRecord));
 }
 
-void initialize_test_cache()
-{    for (int i = 0; i < CACHE_SIZE; i += 1) {
-        erase_test_from_cache(i);
-    }
-
-    eeprom.most_recent_test = 255;
+void initialize_test_cache() {
+    erase_test_from_cache();
     store_eeprom();
 }
 
-int find_test_index_by_uuid(char *uuid)
+void store_test()
 {
-    if (uuid[0] == '\0') {
-        return -1;
-    }
-    for (int i = 0; i < CACHE_SIZE; i += 1) {
-        if (strncmp(uuid, eeprom.cache[i].cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-void store_test(int index)
-{
-    memcpy(eeprom.cache[index].cartridge_uuid, test.cartridge_uuid, sizeof(BrevitestTestRecord));
-    eeprom.most_recent_test = index;
+    memcpy(eeprom.cache.cartridge_uuid, test.cartridge_uuid, sizeof(BrevitestTestRecord));
     store_eeprom();
 }
 
@@ -1335,15 +1314,11 @@ int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
                    reading->temperature, ATTR_DELIM);
 }
 
-void process_test_record(int index)
+void process_test_record()
 {
-    BrevitestTestRecord *t;
-    int len;
     char c;
-
-    t = &eeprom.cache[index];
-
-    len = sprintf(particle_register, "%.24s%c%c%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);
+    BrevitestTestRecord *t = &eeprom.cache;
+    int len = sprintf(particle_register, "%.24s%c%c%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
 
     if (t->number_of_readings) { // test completed
         for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
@@ -1360,48 +1335,36 @@ void process_test_record(int index)
     }
 }
 
-int write_test_record_to_eeprom()
+void write_test_record_to_eeprom()
 {
     // increment test_index (check for overflow and if so reset circular buffer)
     if (test_cancelled) {
         test.number_of_readings = 0;
         test_cancelled = false;
     }
-    int test_index = (eeprom.most_recent_test == 255 ? 0 : eeprom.most_recent_test + 1) % CACHE_SIZE; // 255 is the reset value
-    store_test(test_index);
-    return test_index;
+    memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
+    store_test();
 }
 
-void upload_completed_test(int test_index) {
-    process_test_record(test_index);
-    Serial.printlnf("Payload length: %d, payload: %s", strlen(particle_register), particle_register);
-    brevitest_publish("upload-test", particle_register);
-    upload_test_pending = true;
-}
-
-bool tests_to_upload()
+bool test_cached()
 {
-    for (int i = 0; i < CACHE_SIZE; i += 1) {
-        if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
-            if (serial_messaging_on) {
-                Serial.printlnf("Test found for cartridge %s", eeprom.cache[i].cartridge_uuid);
-            }
-            return true;
+    if (eeprom.cache.cartridge_uuid[0] != '\0') {
+        if (serial_messaging_on) {
+            Serial.printlnf("Test cached for cartridge %s", eeprom.cache.cartridge_uuid);
         }
+        return true;
+    } else {
+        return false;
     }
-    return false;
 }
 
-void upload_tests() {
-    Serial.println("Looking for tests to upload...");
-    for (int i = 0; i < CACHE_SIZE; i += 1) {
-        if (eeprom.cache[i].cartridge_uuid[0] != '\0') {
-            process_test_record(i);
-            Serial.printlnf("Payload length: %d, payload: %s", strlen(particle_register), particle_register);
-            brevitest_publish("upload-test", particle_register);
-            upload_test_pending = true;
-            return;
-        }
+void upload_cached_test() {
+    if (eeprom.cache.cartridge_uuid[0] != '\0') {
+        process_test_record();
+        Serial.printlnf("Payload length: %d, payload: %s", strlen(particle_register), particle_register);
+        brevitest_publish("upload-test", particle_register);
+        upload_test_pending = true;
+        return;
     }
 }
 
@@ -1942,7 +1905,6 @@ void reset_globals()
 void run_test()
 {
     int tries_remaining;
-    int test_index;
 
     reset_stage(false);
     turn_on_buzzer_for_duration(1000, 600);
@@ -1971,8 +1933,10 @@ void run_test()
 
     SINGLE_THREADED_BLOCK()
     {
+        memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
+        store_eeprom();
         process_BCODE(0);
-        test_index = write_test_record_to_eeprom();
+        write_test_record_to_eeprom();
     }
 
     start_temperature_control();
@@ -1992,7 +1956,7 @@ void run_test()
     Serial.println();
     Serial.println("Now connected to cloud");
 
-    upload_completed_test(test_index);
+    upload_cached_test();
 
     reset_stage(true);
     reset_globals();
@@ -2049,14 +2013,23 @@ void startup_analyzer()
     change_device_state(true);
     attachInterrupt(pinCartridgeLoaded, cartridge_state_changed_interrupt, CHANGE);
 
+    bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
+
     Serial.printlnf("device id: %s", device_id.c_str());
     Serial.printlnf("eeprom.firmware_version: %d", eeprom.firmware_version);
     Serial.printlnf("eeprom.data_format_version: %d", eeprom.data_format_version);
-    Serial.printlnf("eeprom.most_recent_test: %d", eeprom.most_recent_test);
     Serial.printlnf("eeprom.maximum_stress_test_cycles: %d", eeprom.maximum_stress_test_cycles);
+    Serial.printlnf("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');    
+    Serial.printlnf("Cached test ? %c", test_cached() ? 'Y' : 'N');    
 
     start_temperature_control();
-    periodic_event = millis() + 5000;
+
+    if (test_interrupted) {
+        memcpy(eeprom.cache.cartridge_uuid, eeprom.running_test_uuid, CARTRIDGE_UUID_LENGTH);
+        eeprom.cache.number_of_readings = 0;
+        memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
+        store_eeprom();
+    }
 }
 
 void setup() {
@@ -2136,8 +2109,8 @@ void validate_cartridge_loop() {
 }
 
 void upload_test_loop() {
-    if (device_registered && tests_to_upload() && next_upload < millis()) {
-        upload_tests();
+    if (device_registered && test_cached() && next_upload < millis()) {
+        upload_cached_test();
         next_upload = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_UPLOAD;
     }
 }
@@ -2191,7 +2164,7 @@ void state_loop() {
 
     if (invalid_test) {
         ledProblem.setActive(true);
-    } else if (cartridge_present || tests_to_upload()) {
+    } else if (cartridge_present || test_cached()) {
         ledBusy.setActive(true);
     } else if (abs(heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
         if (ledBusy.isActive()) {

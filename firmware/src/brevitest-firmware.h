@@ -4,8 +4,8 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 23
-#define DATA_FORMAT_VERSION 16
+#define FIRMWARE_VERSION 24
+#define DATA_FORMAT_VERSION 17
 #define TEST_DATA_FORMAT_CODE 'B'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
@@ -48,9 +48,6 @@
 // BCODE
 #define BCODE_CAPACITY 2000
 #define BCODE_MAX_DELAY 500
-
-// caches
-#define CACHE_SIZE 4
 
 // particle
 #define PARTICLE_REGISTER_SIZE 622
@@ -143,8 +140,6 @@ int pinHeater = D8;
 bool new_device = true;
 int stage_position = 0;
 int microns_error = 0;
-unsigned long periodic_event;
-bool periodic_event_flag = false;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
@@ -305,14 +300,14 @@ struct Particle_EEPROM
     uint8_t data_format_version;
     int stress_test_cycles;
     int maximum_stress_test_cycles;
-    uint8_t most_recent_test;
-    BrevitestTestRecord cache[CACHE_SIZE]; // up to 10 tests cached
+    char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
+    BrevitestTestRecord cache;
     Particle_EEPROM()
     {
         firmware_version = FIRMWARE_VERSION;
         data_format_version = DATA_FORMAT_VERSION;
         stress_test_cycles = 0;
         maximum_stress_test_cycles = 0;
-        most_recent_test = 255;
+        memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
     }
 } eeprom;
