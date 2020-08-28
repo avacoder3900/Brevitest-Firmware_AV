@@ -1549,16 +1549,16 @@ int BCODE_loop()
     unsigned long total_duration = millis();
 
     if (!reading_optical_sensors) set_heater_power(pid_controller());
-    if (digitalRead(pinCartridgeLoaded) == HIGH) {
-        Serial.println("Cartridge movement detected...");
-        delay(100);
-        test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
-        if (test_cancelled) {
-            Serial.println("Cartridge removed. Test cancelled.");
-        } else {
-            Serial.println("Cartridge ok. Test continuing.");
-        }
-    }
+    // if (digitalRead(pinCartridgeLoaded) == HIGH) {
+    //     Serial.println("Cartridge movement detected...");
+    //     delay(100);
+    //     test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
+    //     if (test_cancelled) {
+    //         Serial.println("Cartridge removed. Test cancelled.");
+    //     } else {
+    //         Serial.println("Cartridge ok. Test continuing.");
+    //     }
+    // }
 
     return (int) (millis() - total_duration);
 }
