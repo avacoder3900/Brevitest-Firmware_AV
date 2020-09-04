@@ -518,7 +518,7 @@ bool scan_barcode()
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
 
     if (i < BARCODE_UUID_LENGTH) {
-        memcpy(barcode_uuid, BARCODE_ERROR_MESSAGE, BARCODE_UUID_LENGTH);
+        strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
         return false;
     } else {
         Serial.printlnf("Barcode read: %s, length: %d", barcode_uuid, i);
@@ -1135,7 +1135,7 @@ bool load_assay_record(char *responseString)
     strncpy(assay.BCODE, &responseString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
 
-    crc_calculated = abs(checksum(assay.BCODE, assay.BCODE_length));
+    crc_calculated = checksum(assay.BCODE, assay.BCODE_length);
 
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
 }
@@ -1300,7 +1300,7 @@ void callback_validate() {
 void remove_test_from_cache(char *testToRemove)
 {
     if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
-        memset(eeprom.cache.cartridge_uuid, 0, sizeof(BrevitestTestRecord));
+        memset(&eeprom.cache, 0, sizeof(BrevitestTestRecord));
         store_eeprom();
         return;
     }
@@ -1406,7 +1406,7 @@ void brevitest_callback(const char *event, const char *data)
 /////////////////////////////////////////////////////////////
 
 void erase_test_from_cache() {
-    memset(eeprom.cache.cartridge_uuid, 0, sizeof(BrevitestTestRecord));
+    memset(&eeprom.cache, 0, sizeof(BrevitestTestRecord));
 }
 
 void initialize_test_cache() {
