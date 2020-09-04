@@ -124,7 +124,7 @@ void state_loop();
 void loop();
 #line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(11170);
+PRODUCT_ID(11897);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
