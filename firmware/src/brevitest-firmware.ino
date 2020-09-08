@@ -1019,7 +1019,7 @@ bool load_assay_record(char *responseString)
     strncpy(assay.BCODE, &responseString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
 
-    crc_calculated = abs(checksum(assay.BCODE, assay.BCODE_length));
+    crc_calculated = checksum(assay.BCODE, assay.BCODE_length);
 
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
 }
