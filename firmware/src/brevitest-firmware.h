@@ -152,6 +152,9 @@ LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRI
 LEDStatus ledBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus ledAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
+// logging
+SerialLogHandler logHandler;
+
 // device state
 bool device_registered = false;
 bool cartridge_validated = false;
