@@ -1132,8 +1132,8 @@ bool load_assay_record(char *responseString)
     strncpy(assay.BCODE, &responseString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
 
-    crc_calculated = checksum(assay.BCODE, assay.BCODE_length);
-
+    crc_calculated = -checksum(assay.BCODE, assay.BCODE_length);
+    Log.info("crc_loaded: %d, crc_calculated: %d", crc_loaded, crc_calculated);
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
 }
 
