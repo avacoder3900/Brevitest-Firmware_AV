@@ -337,7 +337,7 @@ bool move_one_eighth_step(int dir, int step_delay)
     {
         if (digitalRead(pinStageLimit) == LOW)
         {
-            Log.info("Stage limit switch detected");
+            Log.info("Proximal stage limit switch detected");
             stage_position = 0;
             microns_error = 0;
             return false;
@@ -370,22 +370,23 @@ void move_stage(int microns, int step_delay)
     // move a specific number of microns - negative for reverse movement
     // microns: negative => move proximally, positive => move distally
 
-    int eighth_steps, abs_microns, dir, i;
+    int eighth_steps, abs_microns, dir, i, floored_step_delay;
 
     dir = (microns < 0) ? HIGH : LOW;
     digitalWrite(pinMotorDir, dir);
     /*Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
 
     abs_microns = abs(microns) + microns_error;
-    eighth_steps = abs_microns / MICRONS_PER_EIGHTH_STEP;
-    microns_error = abs_microns % MICRONS_PER_EIGHTH_STEP;
+    eighth_steps = abs_microns / MOTOR_MICRONS_PER_EIGHTH_STEP;
+    microns_error = abs_microns % MOTOR_MICRONS_PER_EIGHTH_STEP;
+    floored_step_delay = step_delay < MOTOR_MINIMUM_STEP_DELAY ? MOTOR_MINIMUM_STEP_DELAY : step_delay;
     /*Log.info("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
 
     // delay(10);
     for (i = 0; i < eighth_steps; i++)
     {
-        if (move_one_eighth_step(dir, step_delay)) {
-            stage_position += microns < 0 ? -MICRONS_PER_EIGHTH_STEP : MICRONS_PER_EIGHTH_STEP;
+        if (move_one_eighth_step(dir, floored_step_delay)) {
+            stage_position += microns < 0 ? -MOTOR_MICRONS_PER_EIGHTH_STEP : MOTOR_MICRONS_PER_EIGHTH_STEP;
             if (stage_position <= 0) {
                 stage_position = 0;
                 microns_error = 0;
@@ -421,12 +422,12 @@ void reset_stage(bool sleep)
 {
     stage_position = STAGE_POSITION_LIMIT;
     wake_motor();
-    move_stage(-60000, FAST_STEP_DELAY);
+    move_stage(STAGE_RESET_STEPS, MOTOR_FAST_STEP_DELAY);
     delay(100);
-    move_stage(2000, FAST_STEP_DELAY);
+    move_stage(2000, MOTOR_FAST_STEP_DELAY);
     delay(100);
-    move_stage(-3000, SLOW_STEP_DELAY);
-    move_stage(MICRONS_TO_INITIAL_POSITION, SLOW_STEP_DELAY);
+    move_stage(-3000, MOTOR_SLOW_STEP_DELAY);
+    move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_SLOW_STEP_DELAY);
     if (sleep)
     {
         sleep_motor();
@@ -435,12 +436,12 @@ void reset_stage(bool sleep)
 
 void move_stage_to_optical_read_position()
 {
-    move_stage_to_position(OPTICAL_SENSOR_READ_POSITION, SLOW_STEP_DELAY);
+    move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
 }
 
 void move_stage_to_test_start_position()
 {
-    move_stage_to_position(MICRONS_TO_TEST_START_POSITION, SLOW_STEP_DELAY);
+    move_stage_to_position(STAGE_MICRONS_TO_TEST_START_POSITION, MOTOR_SLOW_STEP_DELAY);
 }
 
 void move_stage_to_position(int position, int step_delay)
@@ -1150,28 +1151,28 @@ void do_stress_test_step(int step) {
             reset_stage(false);
             break;
         case 1: // move to start of well 2
-            move_stage(-2000, SLOW_STEP_DELAY);
+            move_stage(-2000, MOTOR_SLOW_STEP_DELAY);
             break;
         case 2: // oscillate in well 2
-            oscillate_stage(3000, OSCILLATION_STEP_DELAY, 500, false);
+            oscillate_stage(3000, MOTOR_OSCILLATION_STEP_DELAY, 500, false);
             break;
         case 3: // move to well 1
-            move_stage(-8600, SLOW_STEP_DELAY);
+            move_stage(-8600, MOTOR_SLOW_STEP_DELAY);
             break;
         case 4: // oscillate in well 1
-            oscillate_stage(4500, OSCILLATION_STEP_DELAY, 600, false);
+            oscillate_stage(4500, MOTOR_OSCILLATION_STEP_DELAY, 600, false);
             break;
         case 5: // move to well 2
-            move_stage(12300, SLOW_STEP_DELAY);
+            move_stage(12300, MOTOR_SLOW_STEP_DELAY);
             break;
         case 6: // oscillate in well 2
-            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 400, false);
+            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 400, false);
             break;
         case 7: // move to well 3
-            move_stage(8000, SLOW_STEP_DELAY);
+            move_stage(8000, MOTOR_SLOW_STEP_DELAY);
             break;
         case 8: // oscillate in well 3
-            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 300, false);
+            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 300, false);
             break;
         case 9: // read baseline sensors
             move_stage_to_optical_read_position();
@@ -1179,16 +1180,16 @@ void do_stress_test_step(int step) {
             read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
             break;
         case 10: // move to well 4
-            move_stage(9425, SLOW_STEP_DELAY);
+            move_stage(9425, MOTOR_SLOW_STEP_DELAY);
             break;
         case 11: // oscillate in well 4
-            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 400, false);
+            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 400, false);
             break;
         case 12: // move to well 5
-            move_stage(8400, SLOW_STEP_DELAY);
+            move_stage(8400, MOTOR_SLOW_STEP_DELAY);
             break;
         case 13: // oscillate in well 5
-            oscillate_stage(-4500, OSCILLATION_STEP_DELAY, 600, false);
+            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 600, false);
             break;
         case 14: // read sensors
             move_stage_to_optical_read_position();
@@ -1598,7 +1599,7 @@ int process_one_BCODE_command(int cmd, int index)
         case 2: // Move Microns(microns, microseconds)
             index = get_BCODE_token(index, &param1); // microns to move
             index = get_BCODE_token(index, &param2); // step_delay_us
-            update_progress("Moving", abs(param1) * param2 / MOVE_DURATION_UNIT);
+            update_progress("Moving", abs(param1) * param2 / MOTOR_MOVE_DURATION_UNIT);
             move_stage(param1, param2);
             BCODE_loop();
             break;
@@ -1606,7 +1607,7 @@ int process_one_BCODE_command(int cmd, int index)
             index = get_BCODE_token(index, &param1); // microns to move
             index = get_BCODE_token(index, &param2); // step_delay_us
             index = get_BCODE_token(index, &param3); // number of cycles
-            update_progress("Oscillating", abs(param1) * param2 * param3 / MOVE_DURATION_UNIT);
+            update_progress("Oscillating", abs(param1) * param2 * param3 / MOTOR_MOVE_DURATION_UNIT);
             oscillate_stage(param1, param2, param3, true);
             BCODE_loop();
             break;
@@ -1618,7 +1619,7 @@ int process_one_BCODE_command(int cmd, int index)
             BCODE_loop();
             break;
         case 10: // Read optical sensors with default param and LED power
-            // update_progress("Preparing", abs(stage_position - OPTICAL_SENSOR_READ_POSITION) * FAST_STEP_DELAY / MOVE_DURATION_UNIT);
+            // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
             Log.info("Moving stage to prepare for reading");
             move_stage_to_optical_read_position();
             update_progress("Reading", 10000);
@@ -1734,7 +1735,7 @@ int particle_command(String arg)
     switch (cmd) {
         case 1: // unused
             initialize_test_cache();
-            result = 0;
+            result = eeprom.cache.cartridge_uuid[0] == '\0' ? 1 : 0;
             break;
         case 2: // reset stage
             reset_stage(true);
@@ -1742,9 +1743,9 @@ int particle_command(String arg)
             break;
         case 3: // move microns, param1 microns with param2 step
             indx = get_next_command_param(arg, indx, &param1, 0);
-            indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
             wake_move_sleep_stage(param1, param2);
-            Log.info("Move stage %d steps, cumulative %d, error = %d", param1, stage_position, microns_error);
+            Log.info("Move stage %d microns, cumulative %d, error = %d", param1, stage_position, microns_error);
             result = stage_position;
             break;
         case 4: // read optical sensors param1 times after moving to read position
@@ -1759,7 +1760,7 @@ int particle_command(String arg)
             read_optical_sensor_command_microns_to_move = 0;
             result = param1;
             break;
-        case 5: // read optical sensors param1 times without waking motor
+        case 5: // read optical sensors param1 times at current location
             test.number_of_readings = 0;
             indx = get_next_command_param(arg, indx, &param1, 1);
             read_optical_sensors_command_param = OPTICAL_SENSOR_DEFAULT_PARAM;
@@ -1775,9 +1776,8 @@ int particle_command(String arg)
             result = 1;
             break;
         case 7: // read heater temperature
-            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
             Log.info("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
-            result = param1;
+            result = heater.temp_C_10X;
             break;
         case 8: // reset EEPROM
             reset_eeprom();
@@ -1793,19 +1793,19 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_control_1_LED_for_duration(param1, param2);
-            result = param2;
+            result = param1;
             break;
         case 11: // turn on control 2 LED for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_control_2_LED_for_duration(param1, param2);
-            result = param2;
+            result = param1;
             break;
         case 12: // turn on all LEDs for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_all_LEDs_for_duration(param1, param2);
-            result = param2;
+            result = param1;
             break;
         case 13: // turn on buzzer param1 duration param2 frequency
             indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
@@ -1815,7 +1815,7 @@ int particle_command(String arg)
             break;
         case 14: // move to specified location param1 at step delay param2
             indx = get_next_command_param(arg, indx, &param1, 0);
-            indx = get_next_command_param(arg, indx, &param2, SLOW_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
             reset_stage(false);
             move_stage_to_position(param1, param2);
             sleep_motor();
@@ -1869,14 +1869,14 @@ int particle_command(String arg)
             break;
         case 24: // turn on problem buzzer
             turn_on_problem_buzzer();
-            result =1;
+            result = 1;
             break;
         case 25: // return stage position
             result = stage_position;
             break;
         case 26: // magnetometer test param1 = step distance
             reset_stage(false);
-            move_stage(-MICRONS_TO_INITIAL_POSITION, SLOW_STEP_DELAY);
+            move_stage(-STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_SLOW_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE);
             test_magnetometer_command_flag = true;
             test_magnetometer_command_microns_to_move = param1;
@@ -1919,7 +1919,7 @@ int particle_command(String arg)
             break;
         case 33: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
             indx = get_next_command_param(arg, indx, &param1, 25);
-            indx = get_next_command_param(arg, indx, &param2, OSCILLATION_STEP_DELAY);
+            indx = get_next_command_param(arg, indx, &param2, MOTOR_OSCILLATION_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param3, 10);
             wake_motor();
             oscillate_stage(param1, param2, param3, false);
@@ -2235,7 +2235,7 @@ void long_duration_command_loop() {
             Log.info("Stage location: %d", stage_position);
             read_optical_sensors(read_optical_sensors_command_param, read_optical_sensors_command_led_power, false);
             if (read_optical_sensor_command_microns_to_move) {
-                move_stage(read_optical_sensor_command_microns_to_move, SLOW_STEP_DELAY);
+                move_stage(read_optical_sensor_command_microns_to_move, MOTOR_SLOW_STEP_DELAY);
             }
             read_optical_sensors_command_count--;
         }
@@ -2247,7 +2247,7 @@ void long_duration_command_loop() {
             System.reset();
         } else if (!test_magnetometer_awaiting_confirmation) {
             test_magnetometer_command_flag = false;
-            move_stage(test_magnetometer_command_microns_to_move, SLOW_STEP_DELAY);
+            move_stage(test_magnetometer_command_microns_to_move, MOTOR_SLOW_STEP_DELAY);
             read_magnetometer();
         }
     }
