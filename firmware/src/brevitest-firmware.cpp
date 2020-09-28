@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity Analyzer, part of the Brevitest Diagnostic Platform
@@ -122,7 +122,7 @@ void upload_test_loop();
 void long_duration_command_loop();
 void state_loop();
 void loop();
-#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(11897);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -2142,16 +2142,6 @@ void startup_analyzer()
 }
 
 void setup() {
-    while (!Particle.connected()) {
-        delay(PARTICLE_CLOUD_DELAY);
-    }
-
-    ledBusy.setActive(true);
-
-    device_id = System.deviceID();
-    Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
-    Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
-
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
 
@@ -2173,6 +2163,16 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);
+
+    while (!Particle.connected()) {
+        delay(PARTICLE_CLOUD_DELAY);
+    }
+
+    ledBusy.setActive(true);
+
+    device_id = System.deviceID();
+    Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
 
     setup_eeprom();
 
