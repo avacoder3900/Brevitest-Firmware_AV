@@ -409,18 +409,23 @@ int scan_barcode()
     } while (Serial1.available() && i < BARCODE_UUID_LENGTH);
 
     Serial1.end();
-    barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
+    barcode_uuid[i] = '\0';
 
     Log.info("Barcode read: %s, length: %d", barcode_uuid, i);
     switch (i) {
         case BARCODE_UUID_LENGTH:
             return BARCODE_TYPE_CARTRIDGE;
-        case MAGNETOMETER_UUID_LENGTH:
-            return BARCODE_TYPE_MAGNETOMETER;
-        case TEMPERATURE_UUID_LENGTH:
-            return BARCODE_TYPE_TEMPERATURE;
-        case OPTICAL_UUID_LENGTH:
-            return BARCODE_TYPE_OPTICAL;
+        case VALIDATION_UUID_LENGTH:
+            if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
+                return BARCODE_TYPE_MAGNETOMETER;
+            } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
+                return BARCODE_TYPE_TEMPERATURE;
+            } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
+                return BARCODE_TYPE_OPTICAL;
+            } else {
+                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
+                return BARCODE_TYPE_ERROR;
+            }
         default:
             strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
             return BARCODE_TYPE_ERROR;
@@ -438,6 +443,14 @@ void turn_on_buzzer_for_duration(int duration, int frequency)
     if (serial_messaging_on)
         Log.info("Turning on buzzer for duration %d at frequency %d", duration, frequency);
     tone(pinBuzzer, frequency, duration);
+}
+
+void alert_buzzer() {
+    start_alert_buzzer = true;
+}
+
+void problem_buzzer() {
+    start_problem_buzzer = true;
 }
 
 void turn_on_alert_buzzer() {
@@ -1161,9 +1174,9 @@ void brevitest_publish(String event_name, char *uuid)
 
 void startup_analyzer(void);
 void callback_register() {
+    device_registration_in_progress = false;
     Log.info("Device registration callback");
-    if ((strncmp(callback_status, SUCCESS, 7) == 0))
-    { // device registered
+    if ((strncmp(callback_status, SUCCESS, 7) == 0)) {
         Log.info("Device registered - starting up analyzer");
         device_registered = true;
         clear_current_event();
@@ -1177,11 +1190,13 @@ void callback_register() {
 }
 
 void callback_validate() {
+    cartridge_validation_in_progress = false;
     cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
-    Log.info("Cartridge validated? %c", cartridge_validated ? 'Y' : 'N');
+    Log.info("Cartridge %s %s", barcode_uuid, cartridge_validated ? "validated" : "failed validation");
     if (cartridge_validated) { // valid cartridge found
         if (load_assay_record(callback_data)) {
-            ready_to_start_test = true;
+            cartridge_validation_mode = false;
+            test_start_mode = true;
             Log.info("Assay information loaded. Test starting.");
         } else {
             Log.info("Failed to load assay record. Will retry later.");
@@ -1189,10 +1204,23 @@ void callback_validate() {
         }
     } else {
         Log.info("Invalid cartridge: %s", callback_data);
-        cartridge_present = false;
+        cartridge_invalid = true;
         turn_on_alert_buzzer();
     }
     clear_current_event();
+}
+
+void callback_start_test() {
+    test_start_in_progress = false;
+    test_underway = (strncmp(callback_status, SUCCESS, 7) == 0);
+    Log.info("Test %s %s", callback_data, test_underway ? "underway" : "failed to start");
+    if (test_underway) {
+        test_start_mode = false;
+        clear_current_event();
+        run_test();
+    }
+
+    Log.info("Test %s %s", callback_data, test_underway ? "underway" : "failed to start, will retry");
 }
 
 void remove_test_from_cache(char *testToRemove)
@@ -1204,29 +1232,16 @@ void remove_test_from_cache(char *testToRemove)
     }
 }
 
-void callback_start_test() {
-    test_start_in_progress = false;
-    test_underway = (strncmp(callback_status, SUCCESS, 7) == 0);
-    if (test_underway) {
-        clear_current_event();
-    } else {
-        // retry
-    }
-
-    Log.info("Test %s", callback_data, test_underway ? "underway" : "failed to start, will retry");
-}
-
 void callback_upload_test() {
-    upload_test_in_progress = false;
+    test_upload_in_progress = false;
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
     bool invalid = (strncmp(callback_status, INVALID, 7) == 0);
-    upload_test_finished = (success || invalid);
-    if (upload_test_finished) {
+    test_upload_finished = (success || invalid);
+    if (test_upload_finished) {
         test_invalid = invalid;
         remove_test_from_cache(callback_data);
+        test_upload_mode = false;
         clear_current_event();
-    } else {
-        // retry
     }
 
     Log.info("Test %s upload %s", callback_data, invalid ? "invalid" : success ? "succeeded" : "failed, will retry later");
@@ -1382,10 +1397,8 @@ bool test_cached()
 void upload_cached_test() {
     if (eeprom.cache.cartridge_uuid[0] != '\0') {
         process_test_record();
-        Log.info("Payload length: %d, payload: %s", strlen(particle_register), particle_register);
+        Log.info("Upload payload length: %d, payload: %s", strlen(particle_register), particle_register);
         brevitest_publish("upload-test", particle_register);
-        upload_test_pending = true;
-        return;
     }
 }
 
@@ -1855,13 +1868,35 @@ int particle_command(String arg)
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                       VALIDATION                        //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void start_magnetometer_validation() {
+    magnetometer_validation_in_progress = true;
+    magnetometer_validation_mode = false;
+}
+
+void start_temperature_validation() {
+    temperature_validation_in_progress = true;
+    temperature_validation_mode = false;
+}
+
+void start_optical_validation() {
+    optical_validation_in_progress = true;
+    optical_validation_mode = false;
+}
+
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                           TESTS                         //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
 void reset_globals()
 {
-    test_in_progress = false;
+    test_underway = false;
     cartridge_validated = false;
     callback_complete = false;
     optical_read_in_progress = false;
@@ -1879,35 +1914,37 @@ void reset_globals()
 
     particle_register[0] = '\0';
     particle_register[PARTICLE_REGISTER_SIZE] = '\0';
+}
 
-    next_upload = 0;
+void disconnect_from_cloud() {
+    Log.info("Disconnecting from cloud...");
+    while (Particle.connected()) {
+        Particle.disconnect();
+        delay(PARTICLE_CLOUD_DELAY);
+    }
+    Log.info("Disconnected from cloud");
+}
+
+void reconnect_to_cloud() {
+    Log.info("Reconnecting to cloud...");
+    Particle.connect();
+    delay(PARTICLE_CLOUD_DELAY);
+    while (!Particle.connected()) {
+        Particle.connect();
+        delay(PARTICLE_CLOUD_DELAY);
+    }
+    Log.info("Reconnected to cloud");
 }
 
 void run_test()
 {
-    int tries_remaining;
-
     reset_stage(false);
     turn_on_buzzer_for_duration(1000, 600);
     delay(2000);
 
-    Log.info("Disconnecting from cloud...");
-    Particle.disconnect();
-    delay(PARTICLE_CLOUD_DELAY);
-    tries_remaining = 10;
-    while (Particle.connected()) {
-        if (--tries_remaining == 0) {
-           return;
-        }
-        Particle.disconnect();
-        delay(PARTICLE_CLOUD_DELAY);
-    }
-    Log.info("Now disconnected from cloud");
-
-    ready_to_start_test = false;
-    test_in_progress = true;
     update_progress("Running test", 0);
 
+    disconnect_from_cloud();
     stop_temperature_control();
 
     SINGLE_THREADED_BLOCK()
@@ -1919,19 +1956,7 @@ void run_test()
     }
 
     start_temperature_control();
-
-    Log.info("Reconnecting to cloud...");
-    Particle.connect();
-    delay(PARTICLE_CLOUD_DELAY);
-    tries_remaining = 10;
-    while (!Particle.connected()) {
-        Particle.connect();
-        delay(PARTICLE_CLOUD_DELAY);
-        if (--tries_remaining == 0) {
-            System.reset();
-        }
-    }
-    Log.info("Now connected to cloud");
+    reconnect_to_cloud();
 
     upload_cached_test();
 
@@ -1967,7 +1992,7 @@ void set_device_indicators()
         if (buzzer_alert_running) turn_off_alert_buzzer();
         if (buzzer_problem_running) turn_off_problem_buzzer();
         if (!indicatorAvailable.isActive()) {
-            if ((heater.target_C_10X < heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
+            if ((heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
                 indicatorAvailable.setActive(true);
             }
         }
@@ -2003,6 +2028,7 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 
 void startup_analyzer()
 {
+    device_starting_up = false;
     Log.info("Registration complete. Starting up...");
     i2c_bus_scan();
 
@@ -2091,10 +2117,10 @@ void setup() {
 
 void registration_loop()
 {
-    if (!device_registered && next_registration < millis()) {
+    if (!device_registered && callback_timeout < millis()) {
         if (Particle.connected()) {
             brevitest_publish("register-device", (char *)device_id.c_str());
-            next_registration = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_REGISTRATION;
+            callback_timeout = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_DEVICE_REGISTRATION;
         } else {
             Particle.connect();
             delay(PARTICLE_CLOUD_DELAY);
@@ -2104,29 +2130,29 @@ void registration_loop()
 
 void barcode_scan_loop() {
     if (detector_on) {
-        if (barcode_ready_to_scan) {
-            barcode_ready_to_scan = false;
+        if (barcode_start_scan) {
+            barcode_start_scan = false;
             cartridge_invalid = false;
-            cartridge_inserted = cartridge_ready_to_validate = false;
-            magnetometer_inserted = magnetometer_validation_ready_to_start = false;
-            temperature_probe_inserted = temperature_validation_ready_to_start = false;
-            optical_probe_inserted = optical_validation_ready_to_start = false;
+            cartridge_inserted = cartridge_validation_mode = false;
+            magnetometer_inserted = magnetometer_validation_mode = false;
+            temperature_probe_inserted = temperature_validation_mode = false;
+            optical_probe_inserted = optical_validation_mode = false;
             switch (scan_barcode()) {
                 case BARCODE_TYPE_CARTRIDGE:
                     cartridge_inserted = true;
-                    cartridge_ready_to_validate = true;
+                    cartridge_validation_mode = true;
                     break;
                 case BARCODE_TYPE_MAGNETOMETER:
                     magnetometer_inserted = true;
-                    magnetometer_validation_ready_to_start = true;
+                    magnetometer_validation_mode = true;
                     break;
                 case BARCODE_TYPE_TEMPERATURE:
                     temperature_probe_inserted = true;
-                    temperature_validation_ready_to_start = true;
+                    temperature_validation_mode = true;
                     break;
                 case BARCODE_TYPE_OPTICAL:
                     optical_probe_inserted = true;
-                    optical_validation_ready_to_start = true;
+                    optical_validation_mode = true;
                     break;
                 default:
                     cartridge_invalid = true;
@@ -2136,21 +2162,30 @@ void barcode_scan_loop() {
 }
 
 void cartridge_validation_loop() {
-    if (!cartridge_validated && next_validation < millis()) {
-        Log.info("Cartridge validation timed out. Retrying.");
+    if (!cartridge_validated && callback_timeout < millis()) {
+        if (callback_timeout) Log.info("Cartridge validation timed out. Retrying.");
         validate_cartridge();
-        next_validation = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_VALIDATION;
+        callback_timeout = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_CARTRIDGE_VALIDATION;
     }
 }
 
-void upload_test_loop() {
-    if (device_registered && test_cached() && next_upload < millis()) {
+void test_start_loop() {
+    if (!test_start_in_progress && callback_timeout < millis()) {
+        if (callback_timeout) Log.info("Test start timed out. Retrying.");
         upload_cached_test();
-        next_upload = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_UPLOAD;
+        callback_timeout = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_TEST_START;
     }
 }
 
-void long_duration_command_loop() {
+void test_upload_loop() {
+    if (test_cached() && callback_timeout < millis()) {
+        if (callback_timeout) Log.info("Test upload timed out. Retrying.");
+        upload_cached_test();
+        callback_timeout = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_TEST_UPLOAD;
+    }
+}
+
+void long_duration_process_loop() {
     if (stress_test_running) {
         do_stress_test_step(stress_test_step);
         stress_test_step++;
@@ -2191,7 +2226,7 @@ void hardware_loop() {
                 turn_on_buzzer_for_duration(BUZZER_REMOVE_DURATION, BUZZER_REMOVE_FREQUENCY);
             }
             Log.info("Cartridge %s", detector_on ? "inserted" : "removed");
-            barcode_ready_to_scan = detector_on;
+            barcode_start_scan = detector_on;
         } else {
             delay(50);
             detector_debouncing = true;
@@ -2203,6 +2238,15 @@ void hardware_loop() {
     if (control_heater_temperature_flag) {
         control_heater_temperature_flag = false;
         set_heater_power(pid_controller());
+    }
+    
+    if (start_problem_buzzer) {
+        start_problem_buzzer = false;
+        turn_on_buzzer_for_duration(BUZZER_PROBLEM_DURATION, BUZZER_PROBLEM_FREQUENCY);
+    }
+    else if (start_alert_buzzer) {
+        start_alert_buzzer = false;
+        turn_on_buzzer_for_duration(BUZZER_ALERT_DURATION, BUZZER_ALERT_FREQUENCY);
     }
 }
 
@@ -2228,20 +2272,29 @@ void loop()
     } else {
         process_serial_port();
         hardware_loop();
-        long_duration_command_loop();
 
-        if (callback_complete) {
+        if (long_duration_process_running) {
+            long_duration_process_loop();
+        } else if (callback_complete) {
             process_callback_buffer();
         } else if (!callback_pending()) {
-            if (barcode_ready_to_scan) {
-                scan_barcode();
-            }
-            if (ready_to_start_test && !test_in_progress) {
-                run_test();
+            if (barcode_start_scan) {
+                barcode_scan_loop();
             } else {
-                registration_loop();
-                validate_cartridge_loop();
-                upload_test_loop();
+                callback_timeout = 0;
+                if (cartridge_validation_mode) {
+                    cartridge_validation_loop();
+                } else if (test_start_mode) {
+                    test_start_loop();
+                } else if (test_upload_mode) {
+                    test_upload_loop();
+                } else if (magnetometer_validation_mode) {
+                    start_magnetometer_validation();
+                } else if (temperature_validation_mode) {
+                    start_temperature_validation();
+                } else if (optical_validation_mode) {
+                    start_optical_validation();
+                }
             }
         }
     }

@@ -10,9 +10,7 @@
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
-#define MAGNETOMETER_UUID_LENGTH 32
-#define TEMPERATURE_UUID_LENGTH 30
-#define OPTICAL_UUID_LENGTH 28
+#define VALIDATION_UUID_LENGTH 32
 #define DEVICE_UUID_LENGTH 24
 
 #define ARG_DELIM ','
@@ -22,10 +20,14 @@
 #define MAX_ANALOG_READ 4095
 #define SERIAL_COMMAND_BUFFER_SIZE 40
 
-// device open and cartridge validation
-#define BARCODE_ERROR_MESSAGE "--CARTRIDGE READ ERROR--"
+// barcode and callback strings
+#define BARCODE_ERROR_MESSAGE "---BARCODE READ ERROR---"
 #define SUCCESS "SUCCESS"
 #define INVALID "INVALID"
+#define VALIDATION_PREFIX_LENGTH 8
+#define MAGNETOMETER_PREFIX "MAG-001-"
+#define TEMPERATURE_PREFIX "TMP-001-"
+#define OPTICAL_PREFIX "OPT-001-"
 
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
@@ -110,17 +112,17 @@
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 5000
-#define PUBSUB_CALLBACK_TIMEOUT 15000
+#define PUBSUB_CALLBACK_TIMEOUT 5000
 #define PUBSUB_REGISTER_DEVICE 10
 #define PUBSUB_VALIDATE_CARTRIDGE 20
 #define PUBSUB_START_TEST 30
 #define PUBSUB_UPLOAD_TEST 40
 
 // retry intervals - added to PUBSUB_CALLBACK_TIMEOUT
-#define RETRY_REGISTRATION 10000
-#define RETRY_VALIDATION 5000
-#define RETRY_START 5000
-#define RETRY_UPLOAD 30000
+#define RETRY_DEVICE_REGISTRATION 15000
+#define RETRY_CARTRIDGE_VALIDATION 5000
+#define RETRY_TEST_START 5000
+#define RETRY_TEST_UPLOAD 30000
 
 // application watchdog
 // void watchdog(void);
@@ -159,7 +161,6 @@ int microns_error = 0;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
-bool stress_test_running = false;
 int stress_test_count = 0;
 int stress_test_step = 0;
 
@@ -180,51 +181,46 @@ bool device_registered = false;
 bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
-bool barcode_ready_to_scan = false;
+bool barcode_start_scan = false;
 bool barcode_scanning = false;
 bool barcode_read_cartridge = false;
 bool barcode_read_validate_device = false;
 bool barcode_read_invalid = false;
 bool barcode_read_error = false;
 bool cartridge_inserted = false;
-bool cartridge_ready_to_validate = false;
-bool cartridge_validate_in_progress = false;
+bool cartridge_validation_mode = false;
+bool cartridge_validation_in_progress = false;
 bool cartridge_invalid = false;
 bool cartridge_validated = false;
-bool test_ready_to_start = false;
+bool test_start_mode = false;
 bool test_start_in_progress = false;
 bool test_underway = false;
 bool test_completed = false;
 bool test_cancelled = false;
 bool test_invalid = false;
-bool upload_test_ready_to_start = false;
-bool upload_test_in_progress = false;
-bool upload_finished = false;
+bool test_upload_mode = false;
+bool test_upload_in_progress = false;
+bool test_upload_finished = false;
 bool stress_test_running = false;
 bool optical_read_in_progress = false;
 bool magnetometer_inserted = false;
-bool magnetometer_validation_ready_to_start = false;
+bool magnetometer_validation_mode = false;
 bool magnetometer_validation_in_progress = false;
 bool magnetometer_validation_finished = false;
 bool temperature_probe_inserted = false;
-bool temperature_validation_ready_to_start = false;
+bool temperature_validation_mode = false;
 bool temperature_validation_in_progress = false;
 bool temperature_validation_finished = false;
 bool optical_probe_inserted = false;
-bool optical_validation_ready_to_start = false;
+bool optical_validation_mode = false;
 bool optical_validation_in_progress = false;
 bool optical_validation_completed = false;
 bool buzzer_problem_running = false;
 bool buzzer_alert_running = false;
+bool long_duration_process_running = false;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
-unsigned long next_registration = 0;
-unsigned long next_upload_test_data = 0;
-unsigned long next_validate_cartridge = 0;
-unsigned long next_start_test = 0;
-unsigned long next_upload_validation_results = 0;
-
 unsigned long next_optical_sensor_reading_time = 0;
 
 // temperature control system
@@ -286,11 +282,11 @@ int read_optical_sensor_command_microns_to_move;
 // buzzer
 void alert_buzzer(void);
 Timer alert_buzzer_timer(BUZZER_ALERT_PERIOD, alert_buzzer);
-bool run_alert_buzzer = false;
+bool start_alert_buzzer = false;
 
 void problem_buzzer(void);
 Timer problem_buzzer_timer(BUZZER_PROBLEM_PERIOD, problem_buzzer);
-bool run_problem_buzzer = false;
+bool start_problem_buzzer = false;
 
 // magnetometer
 unsigned long test_magnetometer_command_confirmation_timeout = 0;
@@ -306,7 +302,6 @@ int test_percent_complete;
 // uuids
 char barcode_uuid[BARCODE_UUID_LENGTH + 1];
 char assay_uuid[ASSAY_UUID_LENGTH + 1];
-char validation_uuid[VALIDATION_UUID_LENGTH + 1];
 String device_id;
 
 // publish and subscribe callback
