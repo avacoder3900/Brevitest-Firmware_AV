@@ -2125,7 +2125,9 @@ void registration_loop()
             Particle.connect();
             delay(PARTICLE_CLOUD_DELAY);
         }
-    } 
+    } else if (callback_complete) {
+        process_callback_buffer();
+    }
 }
 
 void barcode_scan_loop() {
@@ -2239,7 +2241,7 @@ void hardware_loop() {
         control_heater_temperature_flag = false;
         set_heater_power(pid_controller());
     }
-    
+
     if (start_problem_buzzer) {
         start_problem_buzzer = false;
         turn_on_buzzer_for_duration(BUZZER_PROBLEM_DURATION, BUZZER_PROBLEM_FREQUENCY);

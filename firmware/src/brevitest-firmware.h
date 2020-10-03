@@ -175,7 +175,7 @@ LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NOR
 SerialLogHandler logHandler;
 
 // device state
-bool device_starting_up = false;
+bool device_starting_up = true;
 bool device_registration_in_progress = false;
 bool device_registered = false;
 bool detector_changed = false;
