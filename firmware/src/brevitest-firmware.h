@@ -10,7 +10,9 @@
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
-#define VALIDATION_UUID_LENGTH 32
+#define MAGNETOMETER_UUID_LENGTH 32
+#define TEMPERATURE_UUID_LENGTH 30
+#define OPTICAL_UUID_LENGTH 28
 #define DEVICE_UUID_LENGTH 24
 
 #define ARG_DELIM ','
@@ -39,6 +41,10 @@
 // buzzer
 #define BUZZER_FREQUENCY 600
 #define BUZZER_DURATION 1000
+#define BUZZER_INSERT_FREQUENCY 620
+#define BUZZER_INSERT_DURATION 200
+#define BUZZER_REMOVE_FREQUENCY 620
+#define BUZZER_REMOVE_DURATION 500
 #define BUZZER_ALERT_FREQUENCY 850
 #define BUZZER_ALERT_DURATION 500
 #define BUZZER_ALERT_PERIOD 4000
@@ -59,7 +65,11 @@
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
 #define BARCODE_DELAY_AFTER_TRIGGER_MS 50
 #define BARCODE_READ_TIMEOUT 5000
-#define VALIDATE_CARTRIDGE_TIMEOUT 20000
+#define BARCODE_TYPE_CARTRIDGE 1
+#define BARCODE_TYPE_MAGNETOMETER 2
+#define BARCODE_TYPE_TEMPERATURE 3
+#define BARCODE_TYPE_OPTICAL 4
+#define BARCODE_TYPE_ERROR -1
 
 // motor
 #define MOTOR_MICRONS_PER_EIGHTH_STEP 25
@@ -164,10 +174,10 @@ LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NOR
 SerialLogHandler logHandler;
 
 // device state
-bool device_starting_up = true;
+bool device_starting_up = false;
 bool device_registration_in_progress = false;
 bool device_registered = false;
-volatile bool detector_changed = false;
+bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
 bool barcode_ready_to_scan = false;
@@ -189,16 +199,19 @@ bool test_cancelled = false;
 bool test_invalid = false;
 bool upload_test_ready_to_start = false;
 bool upload_test_in_progress = false;
-bool upload_test_finished = false;
+bool upload_finished = false;
 bool stress_test_running = false;
 bool optical_read_in_progress = false;
 bool magnetometer_inserted = false;
+bool magnetometer_validation_ready_to_start = false;
 bool magnetometer_validation_in_progress = false;
 bool magnetometer_validation_finished = false;
 bool temperature_probe_inserted = false;
+bool temperature_validation_ready_to_start = false;
 bool temperature_validation_in_progress = false;
 bool temperature_validation_finished = false;
 bool optical_probe_inserted = false;
+bool optical_validation_ready_to_start = false;
 bool optical_validation_in_progress = false;
 bool optical_validation_completed = false;
 bool buzzer_problem_running = false;

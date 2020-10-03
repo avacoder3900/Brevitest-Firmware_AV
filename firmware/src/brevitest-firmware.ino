@@ -367,7 +367,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-bool scan_barcode()
+int scan_barcode()
 {
     unsigned long timeout;
     int i = 0;
@@ -411,12 +411,19 @@ bool scan_barcode()
     Serial1.end();
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
 
-    if (i < BARCODE_UUID_LENGTH) {
-        strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
-        return false;
-    } else {
-        Log.info("Barcode read: %s, length: %d", barcode_uuid, i);
-        return true;
+    Log.info("Barcode read: %s, length: %d", barcode_uuid, i);
+    switch (i) {
+        case BARCODE_UUID_LENGTH:
+            return BARCODE_TYPE_CARTRIDGE;
+        case MAGNETOMETER_UUID_LENGTH:
+            return BARCODE_TYPE_MAGNETOMETER;
+        case TEMPERATURE_UUID_LENGTH:
+            return BARCODE_TYPE_TEMPERATURE;
+        case OPTICAL_UUID_LENGTH:
+            return BARCODE_TYPE_OPTICAL;
+        default:
+            strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
+            return BARCODE_TYPE_ERROR;
     }
 }
 
@@ -1808,7 +1815,7 @@ int particle_command(String arg)
             result = 1;
             break;
         case 30: // scan barcode
-            result = scan_barcode() ? 1 : 0;
+            result = scan_barcode();
             break;
         case 31: // stop reading magnetometer
             System.reset();
@@ -2015,7 +2022,7 @@ void startup_analyzer()
     reset_globals();
     clear_current_event();
 
-    cartridge_present = digitalRead(pinCartridgeDetected) == LOW;
+    detector_on = digitalRead(pinCartridgeDetected) == LOW;
     set_device_indicators();
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
@@ -2084,7 +2091,7 @@ void setup() {
 
 void registration_loop()
 {
-    if (device_starting_up || !device_registered && next_registration < millis()) {
+    if (!device_registered && next_registration < millis()) {
         if (Particle.connected()) {
             brevitest_publish("register-device", (char *)device_id.c_str());
             next_registration = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_REGISTRATION;
@@ -2095,22 +2102,44 @@ void registration_loop()
     } 
 }
 
-void validate_cartridge_loop() {
-    if (device_registered && cartridge_present) {
-        if (ready_to_scan_barcode) {
-            ready_to_scan_barcode = false;
-            if (scan_barcode()) {
-                validate_cartridge();
-                next_validation = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_VALIDATION;
-            } else {
-                cartridge_validated = false;
-                cartridge_present = false;
-                turn_on_alert_buzzer();
+void barcode_scan_loop() {
+    if (detector_on) {
+        if (barcode_ready_to_scan) {
+            barcode_ready_to_scan = false;
+            cartridge_invalid = false;
+            cartridge_inserted = cartridge_ready_to_validate = false;
+            magnetometer_inserted = magnetometer_validation_ready_to_start = false;
+            temperature_probe_inserted = temperature_validation_ready_to_start = false;
+            optical_probe_inserted = optical_validation_ready_to_start = false;
+            switch (scan_barcode()) {
+                case BARCODE_TYPE_CARTRIDGE:
+                    cartridge_inserted = true;
+                    cartridge_ready_to_validate = true;
+                    break;
+                case BARCODE_TYPE_MAGNETOMETER:
+                    magnetometer_inserted = true;
+                    magnetometer_validation_ready_to_start = true;
+                    break;
+                case BARCODE_TYPE_TEMPERATURE:
+                    temperature_probe_inserted = true;
+                    temperature_validation_ready_to_start = true;
+                    break;
+                case BARCODE_TYPE_OPTICAL:
+                    optical_probe_inserted = true;
+                    optical_validation_ready_to_start = true;
+                    break;
+                default:
+                    cartridge_invalid = true;
             }
-        } else if (!cartridge_validated && next_validation < millis()) {
-            Log.info("Cartridge validation timed out. Retrying.");
-            ready_to_scan_barcode = true;
         }
+    }
+}
+
+void cartridge_validation_loop() {
+    if (!cartridge_validated && next_validation < millis()) {
+        Log.info("Cartridge validation timed out. Retrying.");
+        validate_cartridge();
+        next_validation = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_VALIDATION;
     }
 }
 
@@ -2156,13 +2185,20 @@ void hardware_loop() {
             detector_debouncing = false;
             detector_changed = false;
             detector_on = digitalRead(pinCartridgeDetected) == LOW;
-            update_device_indicators();
+            if (detector_on) {
+                turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
+            } else {
+                turn_on_buzzer_for_duration(BUZZER_REMOVE_DURATION, BUZZER_REMOVE_FREQUENCY);
+            }
             Log.info("Cartridge %s", detector_on ? "inserted" : "removed");
+            barcode_ready_to_scan = detector_on;
         } else {
             delay(50);
             detector_debouncing = true;
         }
     }
+
+    set_device_indicators();
 
     if (control_heater_temperature_flag) {
         control_heater_temperature_flag = false;
@@ -2197,6 +2233,9 @@ void loop()
         if (callback_complete) {
             process_callback_buffer();
         } else if (!callback_pending()) {
+            if (barcode_ready_to_scan) {
+                scan_barcode();
+            }
             if (ready_to_start_test && !test_in_progress) {
                 run_test();
             } else {
