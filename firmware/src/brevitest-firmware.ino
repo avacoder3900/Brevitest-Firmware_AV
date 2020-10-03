@@ -1952,16 +1952,18 @@ void set_device_indicators()
     } else if (cartridge_inserted) {
          if (!indicatorBusy.isActive()) indicatorBusy.setActive(true);
          if (test_completed || test_cancelled) {
-            if (!buzzer_alert_running) turn_on_alert_buzzer()
+            if (!buzzer_alert_running) turn_on_alert_buzzer();
          } else if (cartridge_invalid) {
             if (!buzzer_problem_running) turn_on_problem_buzzer();
          }
-    } else if (!indicatorAvailable.isActive()) {
-        if ((heater.target_C_10X < heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
-            indicatorAvailable.setActive(true);
-        }
+    } else {
         if (buzzer_alert_running) turn_off_alert_buzzer();
         if (buzzer_problem_running) turn_off_problem_buzzer();
+        if (!indicatorAvailable.isActive()) {
+            if ((heater.target_C_10X < heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
+                indicatorAvailable.setActive(true);
+            }
+        }
     }
 }
 
