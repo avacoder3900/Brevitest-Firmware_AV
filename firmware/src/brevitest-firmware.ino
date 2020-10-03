@@ -211,6 +211,17 @@ void setup_eeprom()
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                       DETECTOR                          //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void detector_changed_interrupt()
+{
+    detector_changed = true;
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                        MOTOR                            //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -422,27 +433,23 @@ void turn_on_buzzer_for_duration(int duration, int frequency)
     tone(pinBuzzer, frequency, duration);
 }
 
-void alert_buzzer() {
-    run_alert_buzzer = true;
-}
-
 void turn_on_alert_buzzer() {
+    buzzer_alert_running = true;
     alert_buzzer_timer.start();
 }
 
 void turn_off_alert_buzzer() {
+    buzzer_alert_running = false;
     alert_buzzer_timer.stop();
 }
 
-void problem_buzzer() {
-    run_problem_buzzer = true;
-}
-
 void turn_on_problem_buzzer() {
+    buzzer_problem_running = true;
     problem_buzzer_timer.start();
 }
 
 void turn_off_problem_buzzer() {
+    buzzer_problem_running = false;
     problem_buzzer_timer.stop();
 }
 
@@ -809,7 +816,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 
     sum_x = sum_y = sum_z = sum_t = 0;
     
-    reading_optical_sensors = true;
+    optical_read_in_progress = true;
     turn_off_heater();
     turn_on_LED(channel, led_power);
     delay(100);
@@ -842,7 +849,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
     Log.info("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
-    reading_optical_sensors = false;
+    optical_read_in_progress = false;
     turn_off_LED(channel);
 }
 
@@ -962,7 +969,7 @@ int pid_controller()
 }
 
 void control_heater_temperature() {
-    control_heater_temperature_flag = !reading_optical_sensors;
+    control_heater_temperature_flag = !optical_read_in_progress;
 }
 
 void start_temperature_control()
@@ -1105,6 +1112,8 @@ void set_current_event(String event_name) {
         current_event_code = PUBSUB_REGISTER_DEVICE;
     } else if (strcmp(current_event, "validate-cartridge") == 0) {
         current_event_code = PUBSUB_VALIDATE_CARTRIDGE;
+    } else if (strcmp(current_event, "start-test") == 0) {
+        current_event_code = PUBSUB_START_TEST;
     } else if (strcmp(current_event, "upload-test") == 0) {
         current_event_code = PUBSUB_UPLOAD_TEST;
     } else {
@@ -1154,7 +1163,7 @@ void callback_register() {
         startup_analyzer();
     } else {
         Log.info("Device registration failed. Resetting device in 60 seconds.");
-        ledProblem.setActive(true);
+        indicatorProblem.setActive(true);
         delay(60000);
         System.reset();
     }
@@ -1188,28 +1197,32 @@ void remove_test_from_cache(char *testToRemove)
     }
 }
 
+void callback_start_test() {
+    test_start_in_progress = false;
+    test_underway = (strncmp(callback_status, SUCCESS, 7) == 0);
+    if (test_underway) {
+        clear_current_event();
+    } else {
+        // retry
+    }
+
+    Log.info("Test %s", callback_data, test_underway ? "underway" : "failed to start, will retry");
+}
+
 void callback_upload_test() {
+    upload_test_in_progress = false;
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
     bool invalid = (strncmp(callback_status, INVALID, 7) == 0);
-    if (success || invalid) {
-        if (invalid) {
-            Log.info("Test invalid; removing test %s from cache", callback_data);
-            ledProblem.setActive(true);
-            turn_on_problem_buzzer();
-            invalid_test = true;
-        } else {
-            Log.info("Upload successful; removing test %s from cache", callback_data);
-            ledAvailable.setActive(true);
-            turn_on_alert_buzzer();
-            invalid_test = false;
-        }
-        upload_test_pending = false;
+    upload_test_finished = (success || invalid);
+    if (upload_test_finished) {
+        test_invalid = invalid;
         remove_test_from_cache(callback_data);
         clear_current_event();
-        cartridge_present = false;
     } else {
-        Log.info("Test upload failed. Will retry later.");
+        // retry
     }
+
+    Log.info("Test %s upload %s", callback_data, invalid ? "invalid" : success ? "succeeded" : "failed, will retry later");
 }
 
 int extract_callback_params(char *param, int paramLen, int indx, char delim)
@@ -1252,6 +1265,9 @@ void process_callback_buffer()
                 break;
             case PUBSUB_VALIDATE_CARTRIDGE:
                 callback_validate();
+                break;
+            case PUBSUB_START_TEST:
+                callback_start_test();
                 break;
             case PUBSUB_UPLOAD_TEST:
                 callback_upload_test();
@@ -1430,13 +1446,13 @@ int BCODE_loop()
 {
     unsigned long total_duration = millis();
 
-    if (!reading_optical_sensors) set_heater_power(pid_controller());
-    if (digitalRead(pinCartridgeLoaded) == HIGH) {
+    if (!optical_read_in_progress) set_heater_power(pid_controller());
+    if (digitalRead(pinCartridgeDetected) == HIGH) {
         Log.info("Cartridge movement detected...");
         delay(100);
-        test_cancelled = digitalRead(pinCartridgeLoaded) == HIGH;
+        test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
         if (test_cancelled) {
-            Log.info("Cartridge removed. Test cancelled.");
+            Log.info("Cartridge removed while test underway. Test cancelled.");
         } else {
             Log.info("Cartridge ok. Test continuing.");
         }
@@ -1832,45 +1848,6 @@ int particle_command(String arg)
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                    DEVICE STATE                         //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void cartridge_state_changed_interrupt()
-{
-    cartridge_state_changed = true;
-}
-
-void change_device_state(bool startup)
-{
-    if (!startup) {
-        cartridge_present = digitalRead(pinCartridgeLoaded) == LOW;
-    }
-    if (invalid_test) {
-        invalid_test = false;
-        ledProblem.setActive(false);
-        turn_off_problem_buzzer();
-    }
-    if (cartridge_present) {
-        ledBusy.setActive(true);
-        if (abs(heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
-            turn_off_alert_buzzer();
-            turn_on_buzzer_for_duration(400, 400);
-            ready_to_scan_barcode = true;
-        } else {
-            cartridge_present = false;
-            turn_on_alert_buzzer();
-        }
-    } else {
-        turn_off_alert_buzzer();
-        turn_on_buzzer_for_duration(400, 300);
-    }
-
-    Log.info("Cartridge present? %c", cartridge_present ? 'Y' : 'N');
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                           TESTS                         //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -1880,7 +1857,7 @@ void reset_globals()
     test_in_progress = false;
     cartridge_validated = false;
     callback_complete = false;
-    reading_optical_sensors = false;
+    optical_read_in_progress = false;
 
     test_progress = 0;
     test_percent_complete = 0;
@@ -1957,6 +1934,39 @@ void run_test()
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                   DEVICE INDICATORS                     //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void set_device_indicators()
+{
+    if (test_invalid) {
+        if (!indicatorProblem.isActive()) indicatorProblem.setActive(true);
+        if (!buzzer_problem_running) turn_on_problem_buzzer();
+    } else if (test_cached()) {
+         if (!indicatorBusy.isActive()) indicatorBusy.setActive(true);
+    } else if (stress_test_running) {
+        if (!indicatorStressTest.isActive()) indicatorStressTest.setActive(true);
+    } else if (magnetometer_inserted || temperature_probe_inserted || optical_probe_inserted) {
+         if (!indicatorValidation.isActive()) indicatorValidation.setActive(true);
+    } else if (cartridge_inserted) {
+         if (!indicatorBusy.isActive()) indicatorBusy.setActive(true);
+         if (test_completed || test_cancelled) {
+            if (!buzzer_alert_running) turn_on_alert_buzzer()
+         } else if (cartridge_invalid) {
+            if (!buzzer_problem_running) turn_on_problem_buzzer();
+         }
+    } else if (!indicatorAvailable.isActive()) {
+        if ((heater.target_C_10X < heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
+            indicatorAvailable.setActive(true);
+        }
+        if (buzzer_alert_running) turn_off_alert_buzzer();
+        if (buzzer_problem_running) turn_off_problem_buzzer();
+    }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                          SETUP                          //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -2003,8 +2013,9 @@ void startup_analyzer()
     reset_globals();
     clear_current_event();
 
-    change_device_state(true);
-    attachInterrupt(pinCartridgeLoaded, cartridge_state_changed_interrupt, CHANGE);
+    cartridge_present = digitalRead(pinCartridgeDetected) == LOW;
+    set_device_indicators();
+    attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
 
@@ -2027,7 +2038,7 @@ void startup_analyzer()
 
 void setup() {
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
-    init_digital_pin(pinCartridgeLoaded, INPUT_PULLUP, 0);
+    init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
@@ -2052,7 +2063,7 @@ void setup() {
         delay(PARTICLE_CLOUD_DELAY);
     }
 
-    ledBusy.setActive(true);
+    indicatorBusy.setActive(true);
 
     device_id = System.deviceID();
     Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
@@ -2071,7 +2082,7 @@ void setup() {
 
 void registration_loop()
 {
-    if (!device_registered && next_registration < millis()) {
+    if (device_starting_up || !device_registered && next_registration < millis()) {
         if (Particle.connected()) {
             brevitest_publish("register-device", (char *)device_id.c_str());
             next_registration = millis() + PUBSUB_CALLBACK_TIMEOUT + RETRY_REGISTRATION;
@@ -2137,16 +2148,17 @@ void long_duration_command_loop() {
     }
 }
 
-void state_loop() {
-    if (cartridge_state_changed) {
-        if (cartridge_state_debounce) {
-            cartridge_state_debounce = false;
-            cartridge_state_changed = false;
-            Log.info("Cartridge state changed");
-            change_device_state(false);
+void hardware_loop() {
+    if (detector_changed) {
+        if (detector_debouncing) {
+            detector_debouncing = false;
+            detector_changed = false;
+            detector_on = digitalRead(pinCartridgeDetected) == LOW;
+            update_device_indicators();
+            Log.info("Cartridge %s", detector_on ? "inserted" : "removed");
         } else {
             delay(50);
-            cartridge_state_debounce = true;
+            detector_debouncing = true;
         }
     }
 
@@ -2154,65 +2166,42 @@ void state_loop() {
         control_heater_temperature_flag = false;
         set_heater_power(pid_controller());
     }
-
-    if (invalid_test) {
-        ledProblem.setActive(true);
-    } else if (cartridge_present || test_cached()) {
-        ledBusy.setActive(true);
-    } else if (abs(heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA) {
-        if (ledBusy.isActive()) {
-            if (heater_debounced) {
-                heater_debounced = false;
-                heater_debounce_time = millis() + HEATER_READY_DEBOUNCE_DELAY;
-            } else if (millis() > heater_debounce_time) {
-                ledAvailable.setActive(true);
-                heater_debounced = true;
-            }
-        }
-    } else {
-        ledBusy.setActive(true);
-    }
-
-    if (run_problem_buzzer) {
-        run_problem_buzzer = false;
-        turn_on_buzzer_for_duration(BUZZER_PROBLEM_DURATION, BUZZER_PROBLEM_FREQUENCY);
-    }
-    else if (run_alert_buzzer) {
-        run_alert_buzzer = false;
-        turn_on_buzzer_for_duration(BUZZER_ALERT_DURATION, BUZZER_ALERT_FREQUENCY);
-    }
 }
 
-void loop()
-{
-    while (Serial.available())
-    {
+void process_serial_port() {
+    if (Serial.available()) {
         char c = Serial.read();
-        serial_buffer[serial_buffer_index] = c;
-        
-        if (Serial.available()) {
-            serial_buffer_index++;
-            serial_buffer_index %= SERIAL_COMMAND_BUFFER_SIZE;
-        } else {
+        serial_buffer[serial_buffer_index] = c;    
+        serial_buffer_index++;
+        serial_buffer_index %= SERIAL_COMMAND_BUFFER_SIZE;
+        if (c == '\n') {
             serial_buffer[serial_buffer_index] = '\0';
             Log.info(serial_buffer);
             serial_buffer_index = 0;
             particle_command(String(serial_buffer));
         }
     }
+}
 
-    state_loop();
-    long_duration_command_loop();
+void loop()
+{
+    if (device_starting_up) {
+        registration_loop();
+    } else {
+        process_serial_port();
+        hardware_loop();
+        long_duration_command_loop();
 
-    if (callback_complete) {
-        process_callback_buffer();
-    } else if (!callback_pending()) {
-        if (ready_to_start_test && !test_in_progress) {
-            run_test();
-        } else {
-            registration_loop();
-            validate_cartridge_loop();
-            upload_test_loop();
+        if (callback_complete) {
+            process_callback_buffer();
+        } else if (!callback_pending()) {
+            if (ready_to_start_test && !test_in_progress) {
+                run_test();
+            } else {
+                registration_loop();
+                validate_cartridge_loop();
+                upload_test_loop();
+            }
         }
     }
 }

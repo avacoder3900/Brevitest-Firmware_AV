@@ -4,12 +4,13 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 4
+#define FIRMWARE_VERSION 5
 #define DATA_FORMAT_VERSION 17
 #define TEST_DATA_FORMAT_CODE 'B'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
+#define VALIDATION_UUID_LENGTH 32
 #define DEVICE_UUID_LENGTH 24
 
 #define ARG_DELIM ','
@@ -100,13 +101,15 @@
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 5000
 #define PUBSUB_CALLBACK_TIMEOUT 15000
-#define PUBSUB_REGISTER_DEVICE 1
-#define PUBSUB_VALIDATE_CARTRIDGE 2
-#define PUBSUB_UPLOAD_TEST 3
+#define PUBSUB_REGISTER_DEVICE 10
+#define PUBSUB_VALIDATE_CARTRIDGE 20
+#define PUBSUB_START_TEST 30
+#define PUBSUB_UPLOAD_TEST 40
 
 // retry intervals - added to PUBSUB_CALLBACK_TIMEOUT
 #define RETRY_REGISTRATION 10000
 #define RETRY_VALIDATION 5000
+#define RETRY_START 5000
 #define RETRY_UPLOAD 30000
 
 // application watchdog
@@ -125,7 +128,7 @@ int pinIRThermistor = A4;
 int pinIRThermopile = A5;
 int pinStageLimit = SCK;
 int pinMotorSleep = MOSI;
-int pinCartridgeLoaded = MISO;
+int pinCartridgeDetected = MISO;
 int pinRX = RX;
 int pinTX = TX;
 
@@ -151,34 +154,64 @@ int stress_test_count = 0;
 int stress_test_step = 0;
 
 // device LED
-LEDStatus ledProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
-LEDStatus ledBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus ledAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
+LEDStatus indicatorBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorStressTest(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;
 
 // device state
+bool device_starting_up = true;
+bool device_registration_in_progress = false;
 bool device_registered = false;
+volatile bool detector_changed = false;
+bool detector_debouncing = false;
+bool detector_on = false;
+bool barcode_ready_to_scan = false;
+bool barcode_scanning = false;
+bool barcode_read_cartridge = false;
+bool barcode_read_validate_device = false;
+bool barcode_read_invalid = false;
+bool barcode_read_error = false;
+bool cartridge_inserted = false;
+bool cartridge_ready_to_validate = false;
+bool cartridge_validate_in_progress = false;
+bool cartridge_invalid = false;
 bool cartridge_validated = false;
-bool ready_to_start_test = false;
-bool test_in_progress = false;
+bool test_ready_to_start = false;
+bool test_start_in_progress = false;
+bool test_underway = false;
+bool test_completed = false;
 bool test_cancelled = false;
-bool upload_test_pending = false;
-bool invalid_test = false;
+bool test_invalid = false;
+bool upload_test_ready_to_start = false;
+bool upload_test_in_progress = false;
+bool upload_test_finished = false;
+bool stress_test_running = false;
+bool optical_read_in_progress = false;
+bool magnetometer_inserted = false;
+bool magnetometer_validation_in_progress = false;
+bool magnetometer_validation_finished = false;
+bool temperature_probe_inserted = false;
+bool temperature_validation_in_progress = false;
+bool temperature_validation_finished = false;
+bool optical_probe_inserted = false;
+bool optical_validation_in_progress = false;
+bool optical_validation_completed = false;
+bool buzzer_problem_running = false;
+bool buzzer_alert_running = false;
 
+// pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
 unsigned long next_registration = 0;
-unsigned long next_upload = 0;
-unsigned long next_validation = 0;
+unsigned long next_upload_test_data = 0;
+unsigned long next_validate_cartridge = 0;
+unsigned long next_start_test = 0;
+unsigned long next_upload_validation_results = 0;
 
-volatile bool cartridge_state_changed = false;
-bool cartridge_state_debounce = false;
-bool cartridge_present = false;
-
-bool ready_to_scan_barcode = false;
-
-bool reading_optical_sensors = false;
 unsigned long next_optical_sensor_reading_time = 0;
 
 // temperature control system
@@ -260,6 +293,7 @@ int test_percent_complete;
 // uuids
 char barcode_uuid[BARCODE_UUID_LENGTH + 1];
 char assay_uuid[ASSAY_UUID_LENGTH + 1];
+char validation_uuid[VALIDATION_UUID_LENGTH + 1];
 String device_id;
 
 // publish and subscribe callback
@@ -287,7 +321,7 @@ struct BrevitestOpticalSensorRecord
 struct BrevitestTestRecord
 { // 206 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    uint8_t number_of_readings;
+    uint8_t number_of_readings; // 0 = cancelled
     BrevitestOpticalSensorRecord reading[OPTICAL_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
 } test;
 
