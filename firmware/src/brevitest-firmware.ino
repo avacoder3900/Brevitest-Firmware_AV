@@ -369,67 +369,74 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 
 int scan_barcode()
 {
-    unsigned long timeout;
-    int i = 0;
-    bool read_success = false;
-    int buf;
+    int buf; // a little buffer for reading barcode (we will coerce into character)
+    int i = 0; // index for reading barcode from serial port into barcode_uuid
+    int result; // return the type of cartridge (test, magentometer, temperature, optical) or error
+    bool success; // set to true if barcode read is successful
+    unsigned long timeout; // keep this from taking too long
 
-    Log.info("Start scanning barcode");
     Serial1.begin(9600); // barcode scanner interface through RX/TX pins
+    barcode_uuid[0] = '\0'; // reset barcode_uuid
+    timeout = millis() + BARCODE_READ_TIMEOUT; // set timeout for overall process
 
-    Log.info("Trigger barcode reader");
-    digitalWrite(pinBarcodeTrigger, LOW);
+    Log.info("Start barcode reader");
+    digitalWrite(pinBarcodeTrigger, LOW); // start read by pulling trigger pin low
 
-    timeout = millis() + BARCODE_READ_TIMEOUT;
-
-    Log.info("Wait for success, ready=%c", Serial1.available() ? 'Y' : 'N');
-    do {
-        read_success = digitalRead(pinBarcodeReady) == HIGH;
-        Particle.process();
-        delay(100);
-    } while (!read_success && millis() < timeout);
-
-    Log.info("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
-    digitalWrite(pinBarcodeTrigger, HIGH);
-
-    Log.info("Wait for barcode data");
-    while (!Serial1.available() && millis() < timeout) {
+    Log.info("Wait for read to complete");
+    while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout) { // if read is not complete or timed out, wait and check again
         delay(100);
         Particle.process();
     };
+    success = digitalRead(pinBarcodeReady) == HIGH; // successful if read is completed before timeout
+    digitalWrite(pinBarcodeTrigger, HIGH); // stop read by setting trigger pin back to high
 
-    delay(100); // allow barcode buffer to fill before reading
+    if (success) {
+        Log.info("Read successful - waiting for barcode data");
+        while (!Serial1.available() && millis() < timeout) { // if data buffer is empty, wait and check again
+            delay(100);
+            Particle.process();
+        };
 
-    Log.info("Reading barcode from Serial1, ready=%c", Serial1.available() ? 'Y' : 'N');
-    do {
-        buf = Serial1.read();
-        if (buf != -1) {
-            barcode_uuid[i++] = (char)buf;
-        }
-    } while (Serial1.available() && i < BARCODE_UUID_LENGTH);
+        delay(100); // allow barcode buffer to fill before reading
 
-    Serial1.end();
-    barcode_uuid[i] = '\0';
-
-    Log.info("Barcode read: %s, length: %d", barcode_uuid, i);
-    switch (i) {
-        case BARCODE_UUID_LENGTH:
-            return BARCODE_TYPE_CARTRIDGE;
-        case VALIDATION_UUID_LENGTH:
-            if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
-                return BARCODE_TYPE_MAGNETOMETER;
-            } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
-                return BARCODE_TYPE_TEMPERATURE;
-            } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
-                return BARCODE_TYPE_OPTICAL;
-            } else {
-                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
-                return BARCODE_TYPE_ERROR;
+        Log.info("Reading barcode from Serial1,%s ready", Serial1.available() ? "" : " not");
+        do {
+            buf = Serial1.read(); // read a byte of data (returns -1 if no data is available)
+            if (buf != -1) {
+                barcode_uuid[i++] = (char)buf; // coerce byte to character and append to barcode_uuid
             }
-        default:
-            strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
-            return BARCODE_TYPE_ERROR;
+        } while (Serial1.available() && i < BARCODE_UUID_LENGTH); // continue while data is available and there's no overflow
+    } else {
+        Log.info("Timeout - read failure");
     }
+
+    Serial1.end(); // close serial port to barcode scanner
+
+    switch (i) { // find out what this barcode is
+        case BARCODE_UUID_LENGTH: // is the barcode a test cartridge?
+            result = BARCODE_TYPE_CARTRIDGE;
+            break;
+        case VALIDATION_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
+            if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) { // is it a magnetometer?
+                result = BARCODE_TYPE_MAGNETOMETER;
+            } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) { // is it a temperature probe?
+                result = BARCODE_TYPE_TEMPERATURE;
+            } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) { // is it an optical probe?
+                result = BARCODE_TYPE_OPTICAL;
+            } else { // we must have goofed up somewhere
+                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
+                barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
+                result = BARCODE_TYPE_ERROR;
+            }
+            break;
+        default: // if you're not a test cartridge, or a validation cartridge, you're an error
+            strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
+            barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
+            result =  BARCODE_TYPE_ERROR;
+    }
+
+    Log.info("Barcode read: %s, length: %d, type: %d", barcode_uuid, i, result);
+    return result;
 }
 
 /////////////////////////////////////////////////////////////
@@ -1205,6 +1212,7 @@ void callback_validate() {
     } else {
         Log.info("Invalid cartridge: %s", callback_data);
         cartridge_invalid = true;
+        cartridge_validation_mode = false;
         turn_on_alert_buzzer();
     }
     clear_current_event();
@@ -1988,6 +1996,8 @@ void set_device_indicators()
          } else if (cartridge_invalid) {
             if (!buzzer_problem_running) turn_on_problem_buzzer();
          }
+    } else if (detector_on) {
+        if (!buzzer_alert_running) turn_on_alert_buzzer();
     } else {
         if (buzzer_alert_running) turn_off_alert_buzzer();
         if (buzzer_problem_running) turn_off_problem_buzzer();
@@ -2028,7 +2038,6 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 
 void startup_analyzer()
 {
-    device_starting_up = false;
     Log.info("Registration complete. Starting up...");
     i2c_bus_scan();
 
@@ -2069,6 +2078,8 @@ void startup_analyzer()
         memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
         store_eeprom();
     }
+
+    device_starting_up = false;
 }
 
 void setup() {

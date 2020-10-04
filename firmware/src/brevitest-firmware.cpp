@@ -496,8 +496,7 @@ int scan_barcode()
 {
     unsigned long timeout;
     int i = 0;
-    bool read_success = false;
-    int buf;
+    int buf, result;
 
     Log.info("Start scanning barcode");
     Serial1.begin(9600); // barcode scanner interface through RX/TX pins
@@ -507,15 +506,14 @@ int scan_barcode()
 
     timeout = millis() + BARCODE_READ_TIMEOUT;
 
-    Log.info("Wait for success, ready=%c", Serial1.available() ? 'Y' : 'N');
-    do {
-        read_success = digitalRead(pinBarcodeReady) == HIGH;
-        Particle.process();
-        delay(100);
-    } while (!read_success && millis() < timeout);
+    // Log.info("Wait for success, ready=%c", Serial1.available() ? 'Y' : 'N');
+    // while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout) {
+    //     delay(100);
+    //     Particle.process();
+    // };
 
-    Log.info("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
-    digitalWrite(pinBarcodeTrigger, HIGH);
+    // Log.info("Stop triggering barcode reader, ready=%c", Serial1.available() ? 'Y' : 'N');
+    // digitalWrite(pinBarcodeTrigger, HIGH);
 
     Log.info("Wait for barcode data");
     while (!Serial1.available() && millis() < timeout) {
@@ -525,7 +523,7 @@ int scan_barcode()
 
     delay(100); // allow barcode buffer to fill before reading
 
-    Log.info("Reading barcode from Serial1, ready=%c", Serial1.available() ? 'Y' : 'N');
+    Log.info("Reading barcode from Serial1,%s ready", Serial1.available() ? "" : " not");
     do {
         buf = Serial1.read();
         if (buf != -1) {
@@ -534,27 +532,30 @@ int scan_barcode()
     } while (Serial1.available() && i < BARCODE_UUID_LENGTH);
 
     Serial1.end();
-    barcode_uuid[i] = '\0';
 
-    Log.info("Barcode read: %s, length: %d", barcode_uuid, i);
     switch (i) {
         case BARCODE_UUID_LENGTH:
-            return BARCODE_TYPE_CARTRIDGE;
+            result = BARCODE_TYPE_CARTRIDGE;
+            break;
         case VALIDATION_UUID_LENGTH:
             if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
-                return BARCODE_TYPE_MAGNETOMETER;
+                result = BARCODE_TYPE_MAGNETOMETER;
             } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
-                return BARCODE_TYPE_TEMPERATURE;
+                result = BARCODE_TYPE_TEMPERATURE;
             } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) {
-                return BARCODE_TYPE_OPTICAL;
+                result = BARCODE_TYPE_OPTICAL;
             } else {
                 strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
-                return BARCODE_TYPE_ERROR;
+                result = BARCODE_TYPE_ERROR;
             }
+            break;
         default:
             strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE);
-            return BARCODE_TYPE_ERROR;
+            result =  BARCODE_TYPE_ERROR;
     }
+
+    Log.info("Barcode read: %s, length: %d", barcode_uuid, i);
+    return result;
 }
 
 /////////////////////////////////////////////////////////////
@@ -1330,6 +1331,7 @@ void callback_validate() {
     } else {
         Log.info("Invalid cartridge: %s", callback_data);
         cartridge_invalid = true;
+        cartridge_validation_mode = false;
         turn_on_alert_buzzer();
     }
     clear_current_event();
@@ -2113,6 +2115,8 @@ void set_device_indicators()
          } else if (cartridge_invalid) {
             if (!buzzer_problem_running) turn_on_problem_buzzer();
          }
+    } else if (detector_on) {
+        if (!buzzer_alert_running) turn_on_alert_buzzer();
     } else {
         if (buzzer_alert_running) turn_off_alert_buzzer();
         if (buzzer_problem_running) turn_off_problem_buzzer();
@@ -2153,7 +2157,6 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 
 void startup_analyzer()
 {
-    device_starting_up = false;
     Log.info("Registration complete. Starting up...");
     i2c_bus_scan();
 
@@ -2194,6 +2197,8 @@ void startup_analyzer()
         memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
         store_eeprom();
     }
+
+    device_starting_up = false;
 }
 
 void setup() {
@@ -2201,7 +2206,7 @@ void setup() {
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
-    init_digital_pin(pinBarcodeReady, INPUT, 0);
+    init_digital_pin(pinBarcodeReady, INPUT_PULLDOWN, 0);
 
     init_analog_pin(pinLEDAssay, OUTPUT, 0);
     init_analog_pin(pinLEDControl1, OUTPUT, 0);

@@ -22,6 +22,7 @@
 
 // barcode and callback strings
 #define BARCODE_ERROR_MESSAGE "---BARCODE READ ERROR---"
+#define BARCODE_ERROR_MESSAGE_LENGTH 24
 #define SUCCESS "SUCCESS"
 #define INVALID "INVALID"
 #define VALIDATION_PREFIX_LENGTH 8
@@ -178,7 +179,7 @@ SerialLogHandler logHandler;
 bool device_starting_up = true;
 bool device_registration_in_progress = false;
 bool device_registered = false;
-bool detector_changed = false;
+volatile bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
 bool barcode_start_scan = false;
