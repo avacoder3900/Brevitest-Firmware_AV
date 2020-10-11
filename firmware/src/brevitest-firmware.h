@@ -113,26 +113,18 @@
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 5000
-#define PUBSUB_CALLBACK_TIMEOUT 5000
-#define PUBSUB_REGISTER_DEVICE 10
+#define PUBSUB_VERIFY_DEVICE 10
 #define PUBSUB_VALIDATE_CARTRIDGE 20
 #define PUBSUB_START_TEST 30
 #define PUBSUB_UPLOAD_TEST 40
 
-// retry intervals - added to PUBSUB_CALLBACK_TIMEOUT
-#define RETRY_DEVICE_REGISTRATION 15000
-#define RETRY_CARTRIDGE_VALIDATION 5000
-#define RETRY_TEST_START 5000
-#define RETRY_TEST_UPLOAD 30000
-
-// application watchdog
-// void watchdog(void);
-// ApplicationWatchdog wd(60000, watchdog);
+// retry intervals
+#define RETRY_VERIFY_DEVICE 20000
+#define RETRY_VALIDATE_CARTRIDGE 10000
+#define RETRY_START_TEST 15000
+#define RETRY_UPLOAD_TEST 30000
 
 // pin definitions
-
-// PIN MAPPINGS
-
 int pinLEDControl2 = A0;
 int pinLEDControl1 = A1;
 int pinLEDAssay = A2;
@@ -144,7 +136,6 @@ int pinMotorSleep = MOSI;
 int pinCartridgeDetected = MISO;
 int pinRX = RX;
 int pinTX = TX;
-
 // int pinSDA = SDA;
 // int pinSCL = SCL;
 int pinBarcodeTrigger = D2;
@@ -177,21 +168,21 @@ SerialLogHandler logHandler;
 
 // device state
 bool device_starting_up = true;
-bool device_registration_in_progress = false;
-bool device_registered = false;
+bool device_verification_in_progress = false;
+bool device_verified = false;
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
-bool barcode_start_scan = false;
-bool barcode_scanning = false;
+bool barcode_scan_mode = false;
+bool barcode_scan_in_progress = false;
 bool barcode_read_cartridge = false;
 bool barcode_read_validate_device = false;
 bool barcode_read_invalid = false;
 bool barcode_read_error = false;
+bool barcode_invalid = false;
 bool cartridge_inserted = false;
 bool cartridge_validation_mode = false;
 bool cartridge_validation_in_progress = false;
-bool cartridge_invalid = false;
 bool cartridge_validated = false;
 bool test_start_mode = false;
 bool test_start_in_progress = false;
