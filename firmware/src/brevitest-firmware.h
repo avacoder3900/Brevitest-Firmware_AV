@@ -33,8 +33,12 @@
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
 #define OPTICAL_SENSOR_DEFAULT_PARAM 0xB6
-#define OPTICAL_SENSORS_TEST_INTERVAL 5000
 #define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 21
+#define OPTICAL_TEST_DEFAULT_READINGS 5
+#define OPTICAL_TEST_DEFAULT_DISTANCE 2000
+
+// async commands
+#define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
 // LEDs
 #define LED_DEFAULT_POWER 255
@@ -105,6 +109,8 @@
 #define TERMISTOR_TABLE_LENGTH 21
 
 // magnetometer test
+#define MAGNETOMETER_TEST_DEFAULT_READINGS 10
+#define MAGNETOMETER_TEST_MAXIMUM_READINGS 50
 #define MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE 200
 #define MAGNETOMETER_TEST_CONFIRM_TIMEOUT 20000
 
@@ -153,14 +159,13 @@ int microns_error = 0;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
-int stress_test_count = 0;
-int stress_test_step = 0;
+bool optical_read_in_progress = false;
 
 // device LED
 LEDStatus indicatorProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
 LEDStatus indicatorBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorStressTest(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorAsync(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
@@ -193,8 +198,6 @@ bool test_invalid = false;
 bool test_upload_mode = false;
 bool test_upload_in_progress = false;
 bool test_upload_finished = false;
-bool stress_test_running = false;
-bool optical_read_in_progress = false;
 bool magnetometer_inserted = false;
 bool magnetometer_validation_mode = false;
 bool magnetometer_validation_in_progress = false;
@@ -207,9 +210,6 @@ bool optical_probe_inserted = false;
 bool optical_validation_mode = false;
 bool optical_validation_in_progress = false;
 bool optical_validation_completed = false;
-bool buzzer_problem_running = false;
-bool buzzer_alert_running = false;
-bool long_duration_process_running = false;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
@@ -257,35 +257,39 @@ struct HeatingElement
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
 bool control_heater_temperature_flag = false;
-bool heater_debounced = true;
+bool heater_debouncing_in_progress = false;
 unsigned long heater_debounce_time;
+bool heater_ready = false;
+bool previous_heater_ready = false;
 
-// optical sensors
-void test_optical_sensors(void);
-Timer test_optical_sensors_timer(OPTICAL_SENSORS_TEST_INTERVAL, test_optical_sensors);
+// async commands
+void async_command(void);
+Timer async_command_timer(ASYNC_COMMAND_DEFAULT_INTERVAL, async_command);
+bool async_command_running = false;
 
-unsigned long last_optical_sensor_reading_time = 0;
-bool read_optical_sensors_command_flag = false;
-int read_optical_sensors_command_param;
-int read_optical_sensors_command_led_power;
-int read_optical_sensors_command_count;
-int read_optical_sensor_command_microns_to_move;
+bool async_command_magnet_running = false;
+bool magnet_test_take_reading = false;
+int magnet_test_count = 0;
+int magnet_test_readings = 0;
+int magnet_test_move = 0;
+
+bool async_command_optical_running = false;
+bool optical_test_take_reading = false;
+int optical_test_count = 0;
+int optical_test_readings = 0;
+int optical_test_move = 0;
+
+bool async_command_stress_test_running = false;
+int stress_test_step = 0;
+int stress_test_limit = 0;
 
 // buzzer
-void alert_buzzer(void);
-Timer alert_buzzer_timer(BUZZER_ALERT_PERIOD, alert_buzzer);
+void check_buzzer(void);
+Timer buzzer_timer(BUZZER_ALERT_PERIOD, check_buzzer);
 bool start_alert_buzzer = false;
-
-void problem_buzzer(void);
-Timer problem_buzzer_timer(BUZZER_PROBLEM_PERIOD, problem_buzzer);
+bool buzzer_alert_running = false;
 bool start_problem_buzzer = false;
-
-// magnetometer
-unsigned long test_magnetometer_command_confirmation_timeout = 0;
-bool test_magnetometer_command_flag = false;
-int test_magnetometer_command_microns_to_move;
-bool test_magnetometer_awaiting_confirmation = false;
-
+bool buzzer_problem_running = false;
 
 // progress
 int test_progress;
