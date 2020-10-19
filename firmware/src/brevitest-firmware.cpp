@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -64,6 +64,7 @@ void turn_on_assay_LED_for_duration(int duration, int power);
 void turn_on_control_1_LED_for_duration(int duration, int power);
 void turn_on_control_2_LED_for_duration(int duration, int power);
 void turn_on_all_LEDs_for_duration(int duration, int power);
+void magnetometer_read_confirm(const char *event, const char *data);
 void read_magnetometer();
 void config_optical_sensors(char channel, int param, int addr);
 bool optical_sensor_ready(uint8_t addr);
@@ -141,7 +142,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(11897);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -833,8 +834,16 @@ void turn_on_all_LEDs_for_duration(int duration, int power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void magnetometer_read_confirm(const char *event, const char *data) {
+    Log.info("Read confirm: event = %s, data = %s", event, data);
+    magnet_test_awaiting_confirmation = false;
+}
+
 void read_magnetometer() {
     Log.info("Magnetometer test, time = %u, position = %d", (unsigned int) millis(), stage_position);
+    Particle.publish("magnetometer-read", String(stage_position), PRIVATE);
+    magnet_test_awaiting_confirmation = true;
+    magnet_test_confirmation_timeout = millis() + MAGNETOMETER_TEST_CONFIRM_TIMEOUT;
 }
 
 
@@ -2057,6 +2066,7 @@ int particle_command(String arg)
 //  MAGNETOMETER
 //
         case 70: // magnetometer test param1 = step distance, param2 = steps, param3 = delay between readings
+            Particle.subscribe("magnetometer-confirm", magnetometer_read_confirm, MY_DEVICES);
             reset_stage(false);
             move_stage(-STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_SLOW_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE);
@@ -2069,6 +2079,7 @@ int particle_command(String arg)
             async_command_timer.changePeriod((unsigned long) param3);
             async_command_timer.start();
             async_command_running = true;
+            async_command_magnet_running = true;
             result = param2;
             break;
 //
@@ -2087,6 +2098,7 @@ int particle_command(String arg)
             async_command_timer.changePeriod((unsigned long) param2);
             async_command_timer.start();
             async_command_running = true;
+            async_command_optical_running = true;
             result = param1;
             break;
         case 81: // read optical sensors param1 times at interval param2 at current location
@@ -2101,6 +2113,7 @@ int particle_command(String arg)
             async_command_timer.changePeriod((unsigned long) param2);
             async_command_timer.start();
             async_command_running = true;
+            async_command_optical_running = true;
             result = param1;
             break;
         case 82: // start optical sensor sweep test, param1 = distance, param2 = readings, param3 = delay between readings
@@ -2117,6 +2130,7 @@ int particle_command(String arg)
             async_command_timer.changePeriod((unsigned long) param3);
             async_command_timer.start();
             async_command_running = true;
+            async_command_optical_running = true;
             result = param2;
             break;
 //
@@ -2598,17 +2612,26 @@ void async_command_loop() {
             sleep_motor();
         }
     } else if (async_command_magnet_running && magnet_test_take_reading) {
-        magnet_test_take_reading = false;
-        read_magnetometer();
-        if (magnet_test_move) {
-            move_stage(magnet_test_move, MOTOR_SLOW_STEP_DELAY);
-        }
-        magnet_test_count++;
-        if (magnet_test_count >= magnet_test_readings) {
-            async_command_magnet_running = false;
-            async_command_running = false;
-            async_command_timer.stop();
-            sleep_motor();
+        if (magnet_test_awaiting_confirmation) {
+            if (millis() > magnet_test_confirmation_timeout) {
+                async_command_magnet_running = false;
+                async_command_running = false;
+                async_command_timer.stop();
+                sleep_motor();
+            }
+        } else {
+            magnet_test_take_reading = false;
+            read_magnetometer();
+            if (magnet_test_move) {
+                move_stage(magnet_test_move, MOTOR_SLOW_STEP_DELAY);
+            }
+            magnet_test_count++;
+            if (magnet_test_count >= magnet_test_readings || stage_position + magnet_test_move > STAGE_POSITION_LIMIT) {
+                async_command_magnet_running = false;
+                async_command_running = false;
+                async_command_timer.stop();
+                sleep_motor();
+            }
         }
     }
 }

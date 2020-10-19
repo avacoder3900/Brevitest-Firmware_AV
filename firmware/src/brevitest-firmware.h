@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 5
+#define FIRMWARE_VERSION 6
 #define DATA_FORMAT_VERSION 17
 #define TEST_DATA_FORMAT_CODE 'B'
 #define ASSAY_UUID_LENGTH 8
@@ -269,9 +269,11 @@ bool async_command_running = false;
 
 bool async_command_magnet_running = false;
 bool magnet_test_take_reading = false;
+bool magnet_test_awaiting_confirmation = false;
 int magnet_test_count = 0;
 int magnet_test_readings = 0;
 int magnet_test_move = 0;
+unsigned long magnet_test_confirmation_timeout;
 
 bool async_command_optical_running = false;
 bool optical_test_take_reading = false;
