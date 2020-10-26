@@ -550,12 +550,14 @@ int scan_barcode()
             result = BARCODE_TYPE_CARTRIDGE;
             break;
         case VALIDATION_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
-            if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) { // is it a magnetometer?
+            if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a magnetometer?
                 result = BARCODE_TYPE_MAGNETOMETER;
-            } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) { // is it a temperature probe?
+            } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a temperature probe?
                 result = BARCODE_TYPE_TEMPERATURE;
-            } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, VALIDATION_PREFIX_LENGTH) == 0) { // is it an optical probe?
+            } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an optical probe?
                 result = BARCODE_TYPE_OPTICAL;
+            } else if (strncmp(barcode_uuid, SHIPPING_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an shipping bolt installation?
+                result = BARCODE_TYPE_SHIPPING;
             } else { // we must have goofed up somewhere
                 strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
                 barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
@@ -1975,6 +1977,13 @@ int particle_command(String arg)
             sleep_motor();
             result = stage_position;
             break;
+        case 27: // move to shipping bolt location
+            wake_motor();
+            move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
+            Log.info("Ready to insert shipping bolt");
+            result = stage_position;
+            break;
+
 //
 //  STAGE LEDs
 //
@@ -2549,6 +2558,11 @@ void barcode_scan_loop() {
                     optical_probe_inserted = true;
                     optical_validation_mode = true;
                     Log.info("Optical probe inserted");
+                    break;
+                case BARCODE_TYPE_SHIPPING:
+                    wake_motor();
+                    move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
+                    Log.info("Ready to insert shipping bolt");
                     break;
                 default:
                     barcode_invalid = true;
