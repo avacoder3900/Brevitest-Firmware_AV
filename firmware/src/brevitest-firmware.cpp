@@ -539,6 +539,9 @@ int scan_barcode()
                 barcode_uuid[i++] = (char)buf; // coerce byte to character and append to barcode_uuid
             }
         } while (Serial1.available() && i < BARCODE_UUID_LENGTH); // continue while data is available and there's no overflow
+        if (i < BARCODE_UUID_LENGTH) {
+            i--;
+        }
     } else {
         Log.info("Timeout - read failure");
     }
