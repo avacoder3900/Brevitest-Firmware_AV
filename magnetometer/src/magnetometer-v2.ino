@@ -18,6 +18,8 @@
 #define kRECEIVEDNACKONDATAERROR 3
 #define kOTHERERROR 4
 
+#define BUFFER_SIZE 512
+
 // led blinking support
 bool ledState = false;
 int ledPin = D7;
@@ -30,6 +32,7 @@ const int LASTCHANNEL = 0x6E; //sensor 110
 // SDA Pin = 18
 
 bool readMagnetometer = false;
+char bluetooth_buffer[BUFFER_SIZE];
 
 void getMagnetometerReading(int location) {
     for(int deviceAddress = FIRSTCHANNEL; deviceAddress <= LASTCHANNEL; deviceAddress++) //reads sensors 96 through 110 and puts a space after reading 110
@@ -50,11 +53,15 @@ void getMagnetometerReading(int location) {
 // and sets the ALS31300 into customer access mode.
 //
 
-void particle_magnetometer_read(const char *event, const char *data) {
+void send_message(const char *message_type, const char *message) {
+
+}
+
+void receive_message(const char *event, const char *data) {
     // Serial.printlnf("Read: event = %s, data = %s", event, data);
     int location = atoi(data);
     getMagnetometerReading(location);
-    Particle.publish("magnetometer-confirm", "success", PRIVATE);
+    send_message("magnetometer-confirm", "success");
 }
 
 void setup()
@@ -87,7 +94,7 @@ void setup()
         }
     }
     
-    Particle.subscribe("magnetometer-read", particle_magnetometer_read, MY_DEVICES);
+    receive_message("magnetometer-read", bluetooth_buffer);
 }
 
 // loop
@@ -105,6 +112,7 @@ void loop()
 
     if (readMagnetometer) {
         getMagnetometerReading(0);
+        send_message
     }
 
     delay(2000);
