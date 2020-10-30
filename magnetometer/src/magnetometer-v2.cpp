@@ -1,3 +1,9 @@
+/******************************************************/
+//       THIS IS A GENERATED FILE - DO NOT EDIT       //
+/******************************************************/
+
+#include "Particle.h"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
 /*
  *    Example source code for an Arduino to show
  *    how to communicate with an Allegro ALS31313
@@ -12,6 +18,17 @@
 #include <math.h>
 
 // Return values of endTransmission in the Wire library
+void getMagnetometerReading(int location);
+void send_message(const char *message_type, const char *message);
+void receive_message(const char *event, const char *data);
+void initialize_BLE();
+void setup();
+void loop();
+void readALS31300ADC(int busAddress, int location);
+uint16_t write(int busAddress, uint8_t address, uint32_t value);
+uint16_t read(int busAddress, uint8_t address, uint32_t& value);
+long SignExtendBitfield(uint32_t data, int width);
+#line 15 "/Users/leo3linbeck/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
 #define kNOERROR 0
 #define kDATATOOLONGERROR 1
 #define kRECEIVEDNACKONADDRESSERROR 2
