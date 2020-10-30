@@ -8,7 +8,16 @@
 		"extensions.ignoreRecommendations": true,
 		"cortex-debug.openocdPath": "${command:particle.getDebuggerOpenocdPath}",
 		"files.associations": {
-			"*.ino": "cpp"
+			"*.ino": "cpp",
+			"__bit_reference": "cpp",
+			"__hash_table": "cpp",
+			"__split_buffer": "cpp",
+			"array": "cpp",
+			"initializer_list": "cpp",
+			"string": "cpp",
+			"string_view": "cpp",
+			"unordered_map": "cpp",
+			"vector": "cpp"
 		}
 	}
 }

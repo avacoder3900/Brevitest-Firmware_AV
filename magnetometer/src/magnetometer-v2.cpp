@@ -17,7 +17,6 @@
 #include <Wire.h>
 #include <math.h>
 
-// Return values of endTransmission in the Wire library
 void getMagnetometerReading(int location);
 void send_message(const char *message_type, const char *message);
 void receive_message(const char *event, const char *data);
@@ -28,7 +27,10 @@ void readALS31300ADC(int busAddress, int location);
 uint16_t write(int busAddress, uint8_t address, uint32_t value);
 uint16_t read(int busAddress, uint8_t address, uint32_t& value);
 long SignExtendBitfield(uint32_t data, int width);
-#line 15 "/Users/leo3linbeck/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
+#line 14 "/Users/leo3linbeck/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
+SYSTEM_THREAD(ENABLED);
+
+// Return values of endTransmission in the Wire library
 #define kNOERROR 0
 #define kDATATOOLONGERROR 1
 #define kRECEIVEDNACKONADDRESSERROR 2
@@ -51,7 +53,7 @@ const int LASTCHANNEL = 0x6E; //sensor 110
 // SDA Pin = 18
 
 bool readMagnetometer = false;
-char bluetooth_buffer[BUFFER_SIZE];
+bool ble_connected = false;
 
 #define BLE_NOTIFY BleCharacteristicProperty::NOTIFY
 BleAdvertisingData advertData;
@@ -108,15 +110,19 @@ void initialize_BLE() {
     // add magnetometer service to advertising
     advertData.appendServiceUUID(magnetometerService);
     advertData.appendCustomData(idBuf, 24);
+    advertData.appendLocalName("Magnetometer");
 
     // Continuously advertise when not connected
+    BLE.addCharacteristic(magnetometerWell1Characteristic);
+    BLE.addCharacteristic(magnetometerWell2Characteristic);
+    BLE.addCharacteristic(magnetometerWell3Characteristic);
+    BLE.addCharacteristic(magnetometerWell4Characteristic);
+    BLE.addCharacteristic(magnetometerWell5Characteristic);
     BLE.advertise(&advertData);
 }
 
 void setup()
 {
-    // Disconnect from cloud - only communication is via bluetooth
-    Particle.disconnect();
     // Initialize the I2C communication library
     Wire.begin();
     Wire.setClock(1000000);    // 1 MHz What the heck is this. (original CLOCK_SPEED_100KHZ) - CWL
@@ -126,6 +132,7 @@ void setup()
     // If using a Arduino with USB built in, uncomment the next line,
     // this allows the errors in Setup to be seen
     // while (!Serial);
+
 
     // Setup hardware and variables for code which blinks the LED
     nextTime = millis();
@@ -143,6 +150,9 @@ void setup()
     }
 
     initialize_BLE();
+
+    // Disconnect from cloud - only communication is via bluetooth
+    // Particle.disconnect();
 }
 
 // loop
@@ -161,8 +171,10 @@ void loop()
     // if (readMagnetometer) {
     //     getMagnetometerReading(0);
     // }
-
-    delay(2000);
+    if (BLE.connected() ^ ble_connected) {
+        ble_connected = BLE.connected();
+        Log.info("Bluetooth %sconnected", ble_connected ? "" : "dis");
+    }
 }
 
 //
