@@ -12,6 +12,8 @@
 #include <math.h>
 
 SYSTEM_THREAD(ENABLED);
+PRODUCT_ID(12430);
+PRODUCT_VERSION(1);
 
 // Return values of endTransmission in the Wire library
 #define kNOERROR 0
@@ -24,17 +26,36 @@ SYSTEM_THREAD(ENABLED);
 
 SerialLogHandler logHandler;
 
+struct MagnetometerReading
+{ // 14 bytes
+    int address;
+    float mx;
+    float my;
+    float mz;
+    float temperature;
+} sample, controlLow, controlHigh;
+
 // led blinking support
 bool ledState = false;
 int ledPin = D7;
 unsigned long nextTime;
 
-//deviceAddress: ninetysix=0x60;
-const int FIRSTCHANNEL = 0x60; //sensor 96
-const int LASTCHANNEL = 0x6E; //sensor 110
+#define READ_CYCLE 5000
+
+#define FIRSTCHANNEL 0x60
+#define LASTCHANNEL 0x6E
+
+#define WELL_1_ADDR 0x64
+#define OFFSET_SAMPLE 0
+#define OFFSET_CONTROL_LOW 5
+#define OFFSET_CONTROL_HIGH 10
+
+char result[100];
+
 // SCL Pin = 19
 // SDA Pin = 18
 
+unsigned long read_time = 0;
 bool readMagnetometer = false;
 bool ble_connected = false;
 
@@ -49,16 +70,12 @@ BleUuid well3uuid("2230e907-583b-4328-84a4-8f9023a681c1");
 BleUuid well4uuid("8c58309c-7c2d-4805-b71f-8137eb4a01f8");
 BleUuid well5uuid("b9dc1dd4-a0da-4328-8003-6c72a526a12b");
 
-void getMagnetometerReading(int location) {
-    for(int deviceAddress = FIRSTCHANNEL; deviceAddress <= LASTCHANNEL; deviceAddress++) //reads sensors 96 through 110 and puts a space after reading 110
-    {
-        readALS31300ADC(deviceAddress, location);
-    }
-    Serial.println();
-    // Blink the LED
-    ledState = !ledState;
-    digitalWrite(ledPin, ledState);
-}
+BleCharacteristic magnetometerWell1Characteristic("well_1", BLE_NOTIFY, well1uuid, magnetometerService);
+BleCharacteristic magnetometerWell2Characteristic("well_2", BLE_NOTIFY, well2uuid, magnetometerService);
+BleCharacteristic magnetometerWell3Characteristic("well_3", BLE_NOTIFY, well3uuid, magnetometerService);
+BleCharacteristic magnetometerWell4Characteristic("well_4", BLE_NOTIFY, well4uuid, magnetometerService);
+BleCharacteristic magnetometerWell5Characteristic("well_5", BLE_NOTIFY, well5uuid, magnetometerService);
+
 //
 // setup
 //
@@ -68,26 +85,8 @@ void getMagnetometerReading(int location) {
 // and sets the ALS31300 into customer access mode.
 //
 
-void send_message(const char *message_type, const char *message) {
-
-}
-
-void receive_message(const char *event, const char *data) {
-    // Serial.printlnf("Read: event = %s, data = %s", event, data);
-    int location = atoi(data);
-    getMagnetometerReading(location);
-    send_message("magnetometer-confirm", "success");
-}
-
 void initialize_BLE() {
     byte idBuf[24];
-
-    BleCharacteristic magnetometerWell1Characteristic("well_1", BLE_NOTIFY, well1uuid, magnetometerService);
-    BleCharacteristic magnetometerWell2Characteristic("well_2", BLE_NOTIFY, well2uuid, magnetometerService);
-    BleCharacteristic magnetometerWell3Characteristic("well_3", BLE_NOTIFY, well3uuid, magnetometerService);
-    BleCharacteristic magnetometerWell4Characteristic("well_4", BLE_NOTIFY, well4uuid, magnetometerService);
-    BleCharacteristic magnetometerWell5Characteristic("well_5", BLE_NOTIFY, well5uuid, magnetometerService);
-
     System.deviceID().getBytes(idBuf, 24);
 
     // add magnetometer service to advertising
@@ -104,8 +103,7 @@ void initialize_BLE() {
     BLE.advertise(&advertData);
 }
 
-void setup()
-{
+void setup() {
     // Initialize the I2C communication library
     Wire.begin();
     Wire.setClock(1000000);    // 1 MHz What the heck is this. (original CLOCK_SPEED_100KHZ) - CWL
@@ -122,8 +120,7 @@ void setup()
     pinMode(ledPin, OUTPUT);
     digitalWrite(ledPin, LOW);
    
-    for(int deviceAddress = FIRSTCHANNEL; deviceAddress <= LASTCHANNEL; deviceAddress++)
-    {
+    for(int deviceAddress = FIRSTCHANNEL; deviceAddress <= LASTCHANNEL; deviceAddress++) {
         // Enter customer access mode on the ALS31300
         uint16_t error = write(deviceAddress, 0x24, 0x2C413534);
         if (error != kNOERROR)
@@ -143,17 +140,18 @@ void setup()
 // Every half second, read the ADCs of the ALS31300 and display
 // the values and toggle the state of the LED.
 //
-void loop()
-{    
+void loop() {    
     // if (Serial.available())
     // {
     //     while (Serial.available()) Serial.read();
     //     readMagnetometer = !readMagnetometer;
     // }
 
-    // if (readMagnetometer) {
-    //     getMagnetometerReading(0);
-    // }
+    if (read_time < millis()) {
+        getMagnetometerReading();
+        read_time = millis() + READ_CYCLE;
+    }
+
     if (BLE.connected() ^ ble_connected) {
         ble_connected = BLE.connected();
         Log.info("Bluetooth %sconnected", ble_connected ? "" : "dis");
@@ -165,16 +163,15 @@ void loop()
 // Read the X, Y, Z 12 bit values from Register 0x28 and 0x29
 // eight times quickly using the full loop mode.
 //
-void readALS31300ADC(int busAddress, int location)
-{
+void readALS31300ADC(int busAddress, MagnetometerReading &reading) {
     uint32_t value0x27;
     
     // // Read the register the I2C loop mode is in
     uint16_t error = read(busAddress, 0x27, value0x27);
-    if (error != kNOERROR)
-    {
+    if (error != kNOERROR) {
         Serial.print("Unable to read the ALS31300. error = ");
         Serial.println(error);
+        return;
     }
     
     // I2C loop mode is in bits 2 and 3 so mask them out and set them to the full loop mode
@@ -182,10 +179,10 @@ void readALS31300ADC(int busAddress, int location)
     
     // // Write the new values to the register the I2C loop mode is in
     error = write(busAddress, 0x27, value0x27);
-    if (error != kNOERROR)
-    {
+    if (error != kNOERROR) {
         Serial.print("Unable to read the ALS31300. error = ");
         Serial.println(error);
+        return;
     }
     
     // Write the address that is going to be read from the ALS31300
@@ -194,59 +191,51 @@ void readALS31300ADC(int busAddress, int location)
     error = Wire.endTransmission(false);
     
     // The ALS31300 accepted the address
-    if (error == kNOERROR)
-    {
+    if (error == kNOERROR) {
         int x;
         int y;
         int z;
         int t;
-        // Eight times is arbitrary, there is no limit. What is being demonstrated
-        // is that once the address is set to 0x28, the first four bytes read will be from 0x28
-        // and the next four will be from 0x29 after that it starts all over at 0x28
-        // until the register address is changed or the loop mode is changed.
 
-        for (int count = 0; count < 1; ++count)
-        {
-            // Start the read and request 8 bytes which is the contents of register 0x28 and 0x29
-            Wire.requestFrom(busAddress, 8);
-            
-            // Read the first 4 bytes which are the contents of register 0x28
-            x = Wire.read() << 4;
-            y = Wire.read() << 4;
-            z = Wire.read() << 4;
-            t = (Wire.read() & 0x3F) << 6; // not sure if first 4 bytes for temp - CWL
-                    
-            // Read the next 4 bytes which are the contents of register 0x29
-            Wire.read();    // Upper byte not used
-            x |= Wire.read() & 0x0F;
-            byte d = Wire.read();
-            y |= (d >> 4) & 0x0F;
-            z |= d & 0x0F;
-            t |= Wire.read() & 0x3F;    // temp - CWL
-            //t |= (d >> 5) & 0x0F;    // temp - CWL
-            
-            // Sign extend the 12th bit for x, y and z.
-            x = SignExtendBitfield((uint32_t)x, 12);
-            y = SignExtendBitfield((uint32_t)y, 12);
-            z = SignExtendBitfield((uint32_t)z, 12);
-            t = SignExtendBitfield((uint32_t)t, 12);
-            
-            // Display the values of x, y and z
-            float mx = (float)x / 1.0;
-            float my = (float)y / 1.0;
-            float mz = (float)z / 0.25;
-            
-           // float mag = sqrt(mx * mx + my * my + mz * mz);
-           // float temp = (float)t /8; //temperature slope = 8 LSB/deg C
-            float temp = ((((float)t+2000)/8+25)); //temperature slope = 8 LSB/deg C ***Nick says use 22 instead of 25 because 0xb0 = 22 in decimal
-            Log.info("%lu\t%d\t%d\t%.1f\t%.1f\t%.1f\t%.1f", millis(), busAddress, location, temp, mx, my, mz); //output sensor address, magnet vector in gauss, temperature in deg C
-            //Serial.printlnf("%d: %.1f, %.1f, %.1f, %.1f", busAddress, mx, my, mz, temp); //output sensor address, magnet vector in gauss, temperature in deg C
-        }
+        // Start the read and request 8 bytes which is the contents of register 0x28 and 0x29
+        Wire.requestFrom(busAddress, 8);
+        
+        // Read the first 4 bytes which are the contents of register 0x28
+        x = Wire.read() << 4;
+        y = Wire.read() << 4;
+        z = Wire.read() << 4;
+        t = (Wire.read() & 0x3F) << 6; // not sure if first 4 bytes for temp - CWL
+                
+        // Read the next 4 bytes which are the contents of register 0x29
+        Wire.read();    // Upper byte not used
+        x |= Wire.read() & 0x0F;
+        byte d = Wire.read();
+        y |= (d >> 4) & 0x0F;
+        z |= d & 0x0F;
+        t |= Wire.read() & 0x3F;    // temp - CWL
+        //t |= (d >> 5) & 0x0F;    // temp - CWL
+        
+        // Sign extend the 12th bit for x, y and z.
+        x = SignExtendBitfield((uint32_t)x, 12);
+        y = SignExtendBitfield((uint32_t)y, 12);
+        z = SignExtendBitfield((uint32_t)z, 12);
+        t = SignExtendBitfield((uint32_t)t, 12);
+        
+        reading.address = busAddress;
+
+        // Display the values of x, y and z
+        reading.mx = (float)x / 1.0;
+        reading.my = (float)y / 1.0;
+        reading.mz = (float)z / 0.25;
+        
+        // float mag = sqrt(mx * mx + my * my + mz * mz);
+        // float temp = (float)t /8; //temperature slope = 8 LSB/deg C
+        reading.temperature = (((float)t + 2000) / 8 + 25); //temperature slope = 8 LSB/deg C ***Nick says use 22 instead of 25 because 0xb0 = 22 in decimal
+        // Log.info("%lu\t%d\t%.1f\t%.1f\t%.1f\t%.1f", millis(), busAddress, temp, mx, my, mz); //output sensor address, magnet vector in gauss, temperature in deg C
+        //Serial.printlnf("%d: %.1f, %.1f, %.1f, %.1f", busAddress, mx, my, mz, temp); //output sensor address, magnet vector in gauss, temperature in deg C
    
-    }
-    else
-    {
-        Serial.printlnf("%d: error = %d", busAddress, error);
+    } else {
+        Log.error("%d: error = %d", busAddress, error);
     }
 }
 
@@ -254,8 +243,7 @@ void readALS31300ADC(int busAddress, int location)
 //
 // Using I2C, write 32 bit data to an address to the device at the bus address
 //
-uint16_t write(int busAddress, uint8_t address, uint32_t value)
-{
+uint16_t write(int busAddress, uint8_t address, uint32_t value) {
     // Write the address that is to be written to the device
     // and then the 4 bytes of data, MSB first
     Wire.beginTransmission(busAddress);
@@ -273,8 +261,7 @@ uint16_t write(int busAddress, uint8_t address, uint32_t value)
 //
 // Using I2C, read 32 bits of data from the address on the device at the bus address
 //
-uint16_t read(int busAddress, uint8_t address, uint32_t& value)
-{
+uint16_t read(int busAddress, uint8_t address, uint32_t& value) {
     // Write the address that is to be read to the device
     Wire.beginTransmission(busAddress);
     Wire.write(address);
@@ -282,8 +269,7 @@ uint16_t read(int busAddress, uint8_t address, uint32_t& value)
     // if the device accepted the address,
     // request 4 bytes from the device
     // and then read them, MSB first
-    if (error == kNOERROR)
-    {
+    if (error == kNOERROR) {
         Wire.requestFrom(busAddress, 4);
         value = Wire.read() << 24;
         value += Wire.read() << 16;
@@ -299,15 +285,52 @@ uint16_t read(int busAddress, uint8_t address, uint32_t& value)
 // Sign extend a right justified value
 //
 
-long SignExtendBitfield(uint32_t data, int width)
-{
+long SignExtendBitfield(uint32_t data, int width) {
     long x = (long)data;
     long mask = 1L << (width - 1);
 
-    if (width < 32)
-    {
+    if (width < 32) {
         x = x & ((1 << width) - 1); // make sure the upper bits are zero
     }
 
     return (long)((x ^ mask) - mask);
+}
+
+void readOneWell(int well) {
+    int addr = WELL_1_ADDR - well;
+    readALS31300ADC(addr + OFFSET_SAMPLE, sample);
+    readALS31300ADC(addr + OFFSET_CONTROL_LOW, controlLow);
+    readALS31300ADC(addr + OFFSET_CONTROL_HIGH, controlHigh);
+    sprintf(result, "%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f",
+        sample.temperature, sample.mx, sample.my, sample.mz,
+        controlLow.temperature, controlLow.mx, controlLow.my, controlLow.mz,
+        controlHigh.temperature, controlHigh.mx, controlHigh.my, controlHigh.mz);
+    Log.info("well %d: %s", well + 1, result);
+    switch(well) {
+        case 0:
+            magnetometerWell1Characteristic.setValue(result);
+            break;
+        case 1:
+            magnetometerWell2Characteristic.setValue(result);
+            break;
+        case 2:
+            magnetometerWell3Characteristic.setValue(result);
+            break;
+        case 3:
+            magnetometerWell4Characteristic.setValue(result);
+            break;
+        case 4:
+            magnetometerWell5Characteristic.setValue(result);
+            break;
+    }
+}
+
+void getMagnetometerReading() {
+    for(int i = 0; i < 5; i++) {
+        readOneWell(i);
+    }
+    Serial.println();
+    // Blink the LED
+    ledState = !ledState;
+    digitalWrite(ledPin, ledState);
 }

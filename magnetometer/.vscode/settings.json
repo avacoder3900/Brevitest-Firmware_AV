@@ -5,7 +5,7 @@
     "files.associations": {
         "*.ino": "cpp"
     },
-    "particle.firmwareVersion": "2.0.0-rc.3",
+    "particle.firmwareVersion": "2.0.0-rc.4",
     "particle.targetPlatform": "argon",
     "particle.targetDevice": "BT-M01-0000-0001"
 }
