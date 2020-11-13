@@ -441,6 +441,37 @@ int scan_barcode()
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                    BLUETOOTH LE                         //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+int BLE_scan() {
+    Vector<BleScanResult> scanResults = BLE.scan();
+
+    if (scanResults.size()) {
+        Log.info("%d devices found", scanResults.size());
+
+        for (int ii = 0; ii < scanResults.size(); ii++) {
+            Log.info("MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %dBm",
+                    scanResults[ii].address[0], scanResults[ii].address[1], scanResults[ii].address[2],
+                    scanResults[ii].address[3], scanResults[ii].address[4], scanResults[ii].address[5], scanResults[ii].rssi);
+
+            String name = scanResults[ii].advertisingData.deviceName();
+            Log.info("Advertising name: %s", name.c_str());
+
+            char data[25];
+            if (scanResults[ii].scanResponse.customData((uint8_t *) data, 24)) {
+                data[24] = '\0';
+                Log.info("Scan response: %s", data);
+            }
+        }
+    }
+
+    return scanResults.size();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                        BUZZER                           //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -2051,6 +2082,15 @@ int particle_command(String arg)
         case 121: // stop validate optics
             stop_optical_validation();
             result = 1;
+            break;
+//
+//  BLUETOOTH LE
+//
+        case 200: // scan BLE
+            result = BLE_scan();
+            if (result > 0) {
+                Log.info("%d devices found", result);
+            }
             break;
 //
 //  ASYNC COMMAND

@@ -60,7 +60,7 @@ bool readMagnetometer = false;
 bool ble_connected = false;
 
 #define BLE_NOTIFY BleCharacteristicProperty::NOTIFY
-BleAdvertisingData advertData;
+BleAdvertisingData advertData, scanResponse;
 
 BleUuid magnetometerService("4d2b2311-bb00-43e3-a284-5c73b737c369");
 
@@ -86,13 +86,16 @@ BleCharacteristic magnetometerWell5Characteristic("well_5", BLE_NOTIFY, well5uui
 //
 
 void initialize_BLE() {
-    byte idBuf[24];
+    byte idBuf[25];
     System.deviceID().getBytes(idBuf, 24);
+    scanResponse.appendCustomData(idBuf, 24);
+
+    BLE.setDeviceName("Magnetometer");
 
     // add magnetometer service to advertising
     advertData.appendServiceUUID(magnetometerService);
-    advertData.appendCustomData(idBuf, 24);
-    advertData.appendLocalName("Magnetometer");
+    // advertData.append()
+    // advertData.appendLocalName("Magnetometer");
 
     // Continuously advertise when not connected
     BLE.addCharacteristic(magnetometerWell1Characteristic);
@@ -100,7 +103,8 @@ void initialize_BLE() {
     BLE.addCharacteristic(magnetometerWell3Characteristic);
     BLE.addCharacteristic(magnetometerWell4Characteristic);
     BLE.addCharacteristic(magnetometerWell5Characteristic);
-    BLE.advertise(&advertData);
+
+    BLE.advertise(&advertData, &scanResponse);
 }
 
 void setup() {
@@ -148,6 +152,7 @@ void loop() {
     // }
 
     if (read_time < millis()) {
+        Log.info("Device name: %s", BLE.getDeviceName().c_str());
         getMagnetometerReading();
         read_time = millis() + READ_CYCLE;
     }

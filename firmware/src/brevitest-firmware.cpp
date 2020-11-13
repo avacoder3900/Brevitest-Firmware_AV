@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -35,6 +35,7 @@ void move_stage_to_test_start_position();
 void move_stage_to_position(int position, int step_delay);
 void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE);
 int scan_barcode();
+int BLE_scan();
 void turn_on_buzzer_for_duration(int duration, int frequency);
 void check_buzzer();
 void turn_on_buzzer_alert();
@@ -142,7 +143,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(11897);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -573,6 +574,37 @@ int scan_barcode()
 
     Log.info("Barcode read: %s, length: %d, type: %d", barcode_uuid, i, result);
     return result;
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                    BLUETOOTH LE                         //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+int BLE_scan() {
+    Vector<BleScanResult> scanResults = BLE.scan();
+
+    if (scanResults.size()) {
+        Log.info("%d devices found", scanResults.size());
+
+        for (int ii = 0; ii < scanResults.size(); ii++) {
+            Log.info("MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %dBm",
+                    scanResults[ii].address[0], scanResults[ii].address[1], scanResults[ii].address[2],
+                    scanResults[ii].address[3], scanResults[ii].address[4], scanResults[ii].address[5], scanResults[ii].rssi);
+
+            String name = scanResults[ii].advertisingData.deviceName();
+            Log.info("Advertising name: %s", name.c_str());
+
+            char data[25];
+            if (scanResults[ii].scanResponse.customData((uint8_t *) data, 24)) {
+                data[24] = '\0';
+                Log.info("Scan response: %s", data);
+            }
+        }
+    }
+
+    return scanResults.size();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2187,6 +2219,15 @@ int particle_command(String arg)
         case 121: // stop validate optics
             stop_optical_validation();
             result = 1;
+            break;
+//
+//  BLUETOOTH LE
+//
+        case 200: // scan BLE
+            result = BLE_scan();
+            if (result > 0) {
+                Log.info("%d devices found", result);
+            }
             break;
 //
 //  ASYNC COMMAND

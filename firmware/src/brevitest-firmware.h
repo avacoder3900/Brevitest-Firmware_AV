@@ -360,3 +360,20 @@ struct Particle_EEPROM
         memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
     }
 } eeprom;
+
+#define BLE_NOTIFY BleCharacteristicProperty::NOTIFY
+BleAdvertisingData advertData, scanResponse;
+
+BleUuid magnetometerService("4d2b2311-bb00-43e3-a284-5c73b737c369");
+
+BleUuid well1uuid("b1c14499-8e1d-41b2-b1bc-c89faa88d62a");
+BleUuid well2uuid("2216cfb5-38a7-46a3-9509-ad7f287a569a");
+BleUuid well3uuid("2230e907-583b-4328-84a4-8f9023a681c1");
+BleUuid well4uuid("8c58309c-7c2d-4805-b71f-8137eb4a01f8");
+BleUuid well5uuid("b9dc1dd4-a0da-4328-8003-6c72a526a12b");
+
+BleCharacteristic magnetometerWell1Characteristic("well_1", BLE_NOTIFY, well1uuid, magnetometerService);
+BleCharacteristic magnetometerWell2Characteristic("well_2", BLE_NOTIFY, well2uuid, magnetometerService);
+BleCharacteristic magnetometerWell3Characteristic("well_3", BLE_NOTIFY, well3uuid, magnetometerService);
+BleCharacteristic magnetometerWell4Characteristic("well_4", BLE_NOTIFY, well4uuid, magnetometerService);
+BleCharacteristic magnetometerWell5Characteristic("well_5", BLE_NOTIFY, well5uuid, magnetometerService);
