@@ -713,7 +713,7 @@ void scanResultCallback(const BleScanResult *scanResult, void *context) {
     if (scanResult->scanResponse.customData(data, 26)) {
         *(id + 24) = '\0';
         Log.info("Device ID: %s", id);
-        if (strncmp(id, &barcode_uuid[8], 24) == 0) {
+        if (strncmp(id, &barcode_uuid[8], 24) == 0 && strncmp(name, "Magnetometer", 12) == 0) {
             magnetometer_found = true;
             magnetometer_address = scanResult->address;
             Log.info("Barcode matched. MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %ddBm",
