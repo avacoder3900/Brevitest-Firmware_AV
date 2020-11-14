@@ -37,8 +37,6 @@ PRODUCT_VERSION(1);
 #define kRECEIVEDNACKONDATAERROR 3
 #define kOTHERERROR 4
 
-#define BUFFER_SIZE 512
-
 SerialLogHandler logHandler;
 
 struct MagnetometerReading
@@ -71,6 +69,7 @@ bool log_readings = false;
 bool ble_connected = false;
 
 #define BLE_TYPE BleCharacteristicProperty::READ
+
 BleAdvertisingData advertData, scanResponse;
 
 BleUuid magnetometerService("4d2b2311-bb00-43e3-a284-5c73b737c369");
@@ -80,13 +79,13 @@ BleUuid well2uuid("2216cfb5-38a7-46a3-9509-ad7f287a569a");
 BleUuid well3uuid("2230e907-583b-4328-84a4-8f9023a681c1");
 BleUuid well4uuid("8c58309c-7c2d-4805-b71f-8137eb4a01f8");
 BleUuid well5uuid("b9dc1dd4-a0da-4328-8003-6c72a526a12b");
+BleUuid bleCharUuid[5] = { well1uuid, well2uuid, well3uuid, well4uuid, well5uuid };
 
 BleCharacteristic wellChar1("well_1", BLE_TYPE, well1uuid, magnetometerService);
 BleCharacteristic wellChar2("well_2", BLE_TYPE, well2uuid, magnetometerService);
 BleCharacteristic wellChar3("well_3", BLE_TYPE, well3uuid, magnetometerService);
 BleCharacteristic wellChar4("well_4", BLE_TYPE, well4uuid, magnetometerService);
 BleCharacteristic wellChar5("well_5", BLE_TYPE, well5uuid, magnetometerService);
-
 BleCharacteristic bleWell[5] = { wellChar1, wellChar2, wellChar3, wellChar4, wellChar5 };
 
 void initialize_BLE() {

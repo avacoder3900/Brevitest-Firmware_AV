@@ -379,8 +379,8 @@ BleCharacteristic wellChar2("well_2", BLE_TYPE, well2uuid, magnetometerService);
 BleCharacteristic wellChar3("well_3", BLE_TYPE, well3uuid, magnetometerService);
 BleCharacteristic wellChar4("well_4", BLE_TYPE, well4uuid, magnetometerService);
 BleCharacteristic wellChar5("well_5", BLE_TYPE, well5uuid, magnetometerService);
-
 BleCharacteristic bleWell[5] = { wellChar1, wellChar2, wellChar3, wellChar4, wellChar5 };
+
 int well_move[5] = { -8000, 8000, 8000, 8000, 8000 };
 
 BleAddress magnetometer_address;
