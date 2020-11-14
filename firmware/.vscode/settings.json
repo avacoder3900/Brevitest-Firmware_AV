@@ -1,5 +1,4 @@
 {
-    "particle.targetPlatform": "boron",
-    "particle.firmwareVersion": "2.0.0-rc.4",
-    "particle.targetDevice": "BT-B01-0000-0020"
+    "particle.targetPlatform": "argon",
+    "particle.firmwareVersion": "2.0.0-rc.4"
 }

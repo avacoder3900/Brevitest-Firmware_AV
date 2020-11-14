@@ -8,7 +8,7 @@
 #include "brevitest-firmware.h"
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(11897);
+PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
