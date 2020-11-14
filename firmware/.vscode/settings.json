@@ -1,4 +1,4 @@
 {
-    "particle.targetPlatform": "argon",
+    "particle.targetPlatform": "boron",
     "particle.firmwareVersion": "2.0.0-rc.4"
 }
