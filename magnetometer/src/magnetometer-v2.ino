@@ -1,12 +1,12 @@
 /*
- *    Example source code for an Arduino to show
- *    how to communicate with an Allegro ALS31313
+ *    Code to validate the magnets on a Brevitest Acuity sample processing unit.
  *
- *    Written by K. Robert Bate, Allegro MicroSystems, LLC.
+ *    Written by Leo Linbeck III and Christine Luk, BreviTest Technologies, LLC
+ *    ALS31300 elements adapted from code by K. Robert Bate, Allegro MicroSystems, LLC.
  *
- *    ALS31300Demo is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *    Copyright 2020 by BreviTest Technologies, LLC
+ *    All rights reserved. Distribution, copying, or changes make without prior written consent is forbidden.
+ * 
  */
 #include <Wire.h>
 #include <math.h>
