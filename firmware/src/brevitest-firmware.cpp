@@ -92,6 +92,7 @@ bool test_in_cache();
 void pubsub_upload_test();
 void remove_test_from_cache(char *testToRemove);
 void callback_upload_test();
+void callback_validate_magnets();
 void set_current_event(String event_name);
 void clear_current_event();
 void set_publish_params(String event_name);
@@ -884,7 +885,6 @@ int check_magnets_in_one_well(int well, int mark) {
 }
 
 int validate_magnets() {
-    int mark = 0;
 
     magnetometer_validation_mode = false;
     magnetometer_found = false;
@@ -893,7 +893,10 @@ int validate_magnets() {
         Log.info("Magnetometer found, connecting...");
         magnetometer = BLE.connect(magnetometer_address);
         if (magnetometer.connected()) {
+            int mark = 32;
             Log.info("Connected to magnetometer");
+            strncpy(particle_register, barcode_uuid, 32);
+            particle_register[mark++] = '\n';
             reset_stage(false);
             for (int i = 0; i < 5; i++) {
                 mark = check_magnets_in_one_well(i, mark);
@@ -901,10 +904,8 @@ int validate_magnets() {
                     return 0;
                 }
             }
-            particle_register[mark] = '\0';
-            Log.info(particle_register);
-            Log.info("Length = %d", mark);
             magnetometer.disconnect();
+            particle_register[mark] = '\0';
             brevitest_publish("validate-magnets", particle_register);
             return 1;
         } else {
@@ -1451,6 +1452,24 @@ void callback_upload_test() {
 }
 
 /////////////////////////////////////////////////////
+//                VALIDATE MAGNETS                 //
+/////////////////////////////////////////////////////
+
+void callback_validate_magnets() {
+    clear_current_event();
+    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
+    if (success) {
+        if (strncmp(callback_data, "validated", 9) != 0) {
+            Log.info("Magnets %s", callback_data);
+            delay(2000);
+            System.reset();
+        }
+    }
+
+    Log.info("Magnet validation %s", success ? "succeeded" : "failed, will retry later");
+}
+
+/////////////////////////////////////////////////////
 //               PUBSUB FUNCTIONS                  //
 /////////////////////////////////////////////////////
 
@@ -1536,7 +1555,8 @@ void process_callback_buffer()
             case PUBSUB_UPLOAD_TEST:
                 callback_upload_test();
                 break;
-            case PUBSUB_VALIDATE_MAGNETS:   // nothing to do
+            case PUBSUB_VALIDATE_MAGNETS:
+                callback_validate_magnets();
                 break;
             default:
                 Log.info("Unknown event code %d", current_event_code);
