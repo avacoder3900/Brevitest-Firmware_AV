@@ -66,7 +66,7 @@ void turn_on_control_2_LED_for_duration(int duration, int power);
 void turn_on_all_LEDs_for_duration(int duration, int power);
 void scanResultCallback(const BleScanResult *scanResult, void *context);
 int BLE_scan();
-void check_magnets_in_one_well(int well);
+int check_magnets_in_one_well(int well, int mark);
 int validate_magnets();
 void config_optical_sensors(char channel, int param, int addr);
 bool optical_sensor_ready(uint8_t addr);
@@ -95,7 +95,7 @@ void callback_upload_test();
 void set_current_event(String event_name);
 void clear_current_event();
 void set_publish_params(String event_name);
-void brevitest_publish(String event_name, char *uuid);
+void brevitest_publish(String event_name, char *payload);
 int extract_callback_params(char *param, int paramLen, int indx, char delim);
 void process_callback_buffer();
 void brevitest_error(const char *event, const char *data);
@@ -855,6 +855,7 @@ void scanResultCallback(const BleScanResult *scanResult, void *context) {
             Log.info("Barcode matched. MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %ddBm",
                     magnetometer_address[0], magnetometer_address[1], magnetometer_address[2],
                     magnetometer_address[3], magnetometer_address[4], magnetometer_address[5], scanResult->rssi);
+            BLE.stopScanning();
         }
     }
 }
@@ -867,20 +868,24 @@ int BLE_scan() {
     return count;
 }
 
-void check_magnets_in_one_well(int well) {
+int check_magnets_in_one_well(int well, int mark) {
     BleCharacteristic characteristic;
 
     move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
     if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well])) {
         String result;
         characteristic.getValue(result);
-        Log.info("%d\t%d\t%lu\t%s", well + 1, stage_position, millis(), result.c_str());
+        int len = sprintf(&particle_register[mark], "%d\t%s\n", well + 1, result.c_str());
+        return len + mark;
     } else {
         Log.info("Could not find magnetometer data for well %d", well + 1);
+        return -1;
     }
 }
 
 int validate_magnets() {
+    int mark = 0;
+
     magnetometer_validation_mode = false;
     magnetometer_found = false;
     BLE_scan();
@@ -891,9 +896,16 @@ int validate_magnets() {
             Log.info("Connected to magnetometer");
             reset_stage(false);
             for (int i = 0; i < 5; i++) {
-                check_magnets_in_one_well(i);
+                mark = check_magnets_in_one_well(i, mark);
+                if (mark > PARTICLE_REGISTER_SIZE || mark == -1) {
+                    return 0;
+                }
             }
+            particle_register[mark] = '\0';
+            Log.info(particle_register);
+            Log.info("Length = %d", mark);
             magnetometer.disconnect();
+            brevitest_publish("validate-magnets", particle_register);
             return 1;
         } else {
             Log.info("Could not connect to magnetometer %s", barcode_uuid);
@@ -1452,6 +1464,8 @@ void set_current_event(String event_name) {
         current_event_code = PUBSUB_START_TEST;
     } else if (strcmp(current_event, "upload-test") == 0) {
         current_event_code = PUBSUB_UPLOAD_TEST;
+    } else if (strcmp(current_event, "validate-magnets") == 0) {
+        current_event_code = PUBSUB_VALIDATE_MAGNETS;
     } else {
         current_event_code = 0;
     }
@@ -1469,11 +1483,11 @@ void set_publish_params(String event_name) {
     callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE] = '\0';
 }
 
-void brevitest_publish(String event_name, char *uuid)
+void brevitest_publish(String event_name, char *payload)
 {
     set_publish_params(event_name);
-    Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(uuid), PRIVATE, NO_ACK);
-    Log.info("PUBLISH: event = %s, uuid = %s", event_name.c_str(), uuid);
+    Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(payload), PRIVATE, NO_ACK);
+    Log.info("PUBLISH: event = %s, payload = %s", event_name.c_str(), payload);
 }
 
 int extract_callback_params(char *param, int paramLen, int indx, char delim)
@@ -1521,6 +1535,8 @@ void process_callback_buffer()
                 break;
             case PUBSUB_UPLOAD_TEST:
                 callback_upload_test();
+                break;
+            case PUBSUB_VALIDATE_MAGNETS:   // nothing to do
                 break;
             default:
                 Log.info("Unknown event code %d", current_event_code);
