@@ -2327,12 +2327,6 @@ void startup_device()
 
     clear_state();
 
-    attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
-    detector_on = digitalRead(pinCartridgeDetected) == LOW;
-    if (detector_on) {
-        barcode_invalid = true;
-    }
-
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
 
     Log.info("device id: %s", device_id.c_str());
@@ -2341,8 +2335,6 @@ void startup_device()
     Log.info("eeprom.maximum_stress_test_cycles: %d", eeprom.maximum_stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');    
     Log.info("Cached test ? %c", test_cached() ? 'Y' : 'N');    
-
-    start_temperature_control();
 
     if (test_interrupted) {
         memcpy(eeprom.cache.cartridge_uuid, eeprom.running_test_uuid, CARTRIDGE_UUID_LENGTH);
@@ -2391,6 +2383,14 @@ void setup() {
     setup_eeprom();
 
     Serial.begin(115200); // standard serial port
+
+    attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
+    detector_on = digitalRead(pinCartridgeDetected) == LOW;
+    if (detector_on) {
+        barcode_invalid = true;
+    }
+
+    start_temperature_control();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2428,7 +2428,7 @@ void set_device_indicators()
         turn_on_async_LED();
     } else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode) {
         turn_on_busy_LED();
-    } else if (magnetometer_validation_mode || temperature_validation_mode || optical_validation_mode) {
+    } else if (device_starting_up || magnetometer_validation_mode || temperature_validation_mode || optical_validation_mode) {
         turn_on_validation_LED();
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
@@ -2457,7 +2457,14 @@ void set_device_indicators()
 
 void verify_device_loop()
 {
-    if (device_verification_in_progress) {
+    barcode_scan_loop();
+    if (magnetometer_validation_mode) {
+        validate_magnets();
+    } else if (temperature_validation_mode) {
+        start_temperature_validation();
+    } else if (optical_validation_mode) {
+        start_optical_validation();
+    } else if (device_verification_in_progress) {
         if (callback_complete) {
             process_callback_buffer();
         } else if (millis() > callback_timeout) {
