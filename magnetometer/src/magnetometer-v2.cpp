@@ -5,26 +5,26 @@
 #include "Particle.h"
 #line 1 "/Users/leo3linbeck/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
 /*
- *    Example source code for an Arduino to show
- *    how to communicate with an Allegro ALS31313
+ *    Code to validate the magnets on a Brevitest Acuity sample processing unit.
  *
- *    Written by K. Robert Bate, Allegro MicroSystems, LLC.
+ *    Written by Leo Linbeck III and Christine Luk, BreviTest Technologies, LLC
+ *    ALS31300 elements adapted from code by K. Robert Bate, Allegro MicroSystems, LLC.
  *
- *    ALS31300Demo is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *    Copyright 2020 by BreviTest Technologies, LLC
+ *    All rights reserved. Distribution, copying, or changes make without prior written consent is forbidden.
+ * 
  */
 #include <Wire.h>
 #include <math.h>
 
 void initialize_BLE();
 void setup();
+void readOneWell(int well);
+void getMagnetometerReading();
 void loop();
 uint16_t write(int busAddress, uint8_t address, uint32_t value);
 uint16_t read(int busAddress, uint8_t address, uint32_t& value);
 long SignExtendBitfield(uint32_t data, int width);
-void readOneWell(int well);
-void getMagnetometerReading();
 #line 14 "/Users/leo3linbeck/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(12430);
@@ -42,7 +42,7 @@ PRODUCT_VERSION(1);
 SerialLogHandler logHandler;
 
 struct MagnetometerReading
-{ // 14 bytes
+{
     int address;
     float mx;
     float my;
@@ -50,7 +50,6 @@ struct MagnetometerReading
     float temperature;
 } sample, controlLow, controlHigh;
 
-// led blinking support
 bool ledState = false;
 int ledPin = D7;
 unsigned long nextTime;
@@ -66,9 +65,6 @@ unsigned long nextTime;
 #define OFFSET_CONTROL_HIGH 10
 
 char result[100];
-
-// SCL Pin = 19
-// SDA Pin = 18
 
 unsigned long read_time = 0;
 bool log_readings = false;
@@ -92,15 +88,6 @@ BleCharacteristic wellChar4("well_4", BLE_TYPE, well4uuid, magnetometerService);
 BleCharacteristic wellChar5("well_5", BLE_TYPE, well5uuid, magnetometerService);
 
 BleCharacteristic bleWell[5] = { wellChar1, wellChar2, wellChar3, wellChar4, wellChar5 };
-
-//
-// setup
-//
-// Initializes the Wire library for I2C communications,
-// Serial for displaying the results and error messages,
-// the hardware and variables to blink the LED,
-// and sets the ALS31300 into customer access mode.
-//
 
 void initialize_BLE() {
     byte idBuf[27];
@@ -126,11 +113,7 @@ void setup() {
     Wire.setClock(1000000);    // 1 MHz What the heck is this. (original CLOCK_SPEED_100KHZ) - CWL
     
     // Initialize the serial port
-    // Serial.begin(115200);
-    // If using a Arduino with USB built in, uncomment the next line,
-    // this allows the errors in Setup to be seen
-    // while (!Serial);
-
+    Serial.begin(115200);
 
     // Setup hardware and variables for code which blinks the LED
     nextTime = millis();
@@ -147,28 +130,38 @@ void setup() {
     }
 
     initialize_BLE();
-
-    // Disconnect from cloud - only communication is via bluetooth
-    // Particle.disconnect();
 }
 
-// loop
-//
-// Every half second, read the ADCs of the ALS31300 and display
-// the values and toggle the state of the LED.
-//
+void readALS31300ADC(int busAddress, MagnetometerReading &reading);
+
+void readOneWell(int well) {
+    int addr = WELL_1_ADDR - well;
+    readALS31300ADC(addr + OFFSET_SAMPLE, sample);
+    readALS31300ADC(addr + OFFSET_CONTROL_LOW, controlLow);
+    readALS31300ADC(addr + OFFSET_CONTROL_HIGH, controlHigh);
+    sprintf(result, "%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f",
+        sample.temperature, sample.mx, sample.my, sample.mz,
+        controlLow.temperature, controlLow.mx, controlLow.my, controlLow.mz,
+        controlHigh.temperature, controlHigh.mx, controlHigh.my, controlHigh.mz);
+    if (log_readings) Log.info("well %d: %s", well + 1, result);
+    bleWell[well].setValue(result);
+}
+
+void getMagnetometerReading() {
+    for(int i = 0; i < 5; i++) {
+        readOneWell(i);
+    }
+    if (log_readings) Log.info("-------------------------");
+    // Blink the LED
+    ledState = !ledState;
+    digitalWrite(ledPin, ledState);
+}
+
 void loop() {    
-    if (Serial.available())
-    {
+    if (Serial.available()) { // sending any data to serial port toggles logging
         while (Serial.available()) Serial.read();
         log_readings = !log_readings;
     }
-
-    // if (read_time < millis()) {
-    //     Log.info("Device name: %s", BLE.getDeviceName().c_str());
-    //     getMagnetometerReading();
-    //     read_time = millis() + READ_CYCLE;
-    // }
 
     if (BLE.connected() ^ ble_connected) {
         ble_connected = BLE.connected();
@@ -249,20 +242,15 @@ void readALS31300ADC(int busAddress, MagnetometerReading &reading) {
         reading.my = (float)y / 1.0;
         reading.mz = (float)z / 0.25;
         
-        // float mag = sqrt(mx * mx + my * my + mz * mz);
         // float temp = (float)t /8; //temperature slope = 8 LSB/deg C
         reading.temperature = (((float)t + 2000) / 8 + 25); //temperature slope = 8 LSB/deg C ***Nick says use 22 instead of 25 because 0xb0 = 22 in decimal
-        // Log.info("%lu\t%d\t%.1f\t%.1f\t%.1f\t%.1f", millis(), busAddress, temp, mx, my, mz); //output sensor address, magnet vector in gauss, temperature in deg C
-        //Serial.printlnf("%d: %.1f, %.1f, %.1f, %.1f", busAddress, mx, my, mz, temp); //output sensor address, magnet vector in gauss, temperature in deg C
    
     } else {
         Log.error("%d: error = %d", busAddress, error);
     }
 }
 
-// write
-//
-// Using I2C, write 32 bit data to an address to the device at the bus address
+// 32 bit write utility function
 //
 uint16_t write(int busAddress, uint8_t address, uint32_t value) {
     // Write the address that is to be written to the device
@@ -278,7 +266,7 @@ uint16_t write(int busAddress, uint8_t address, uint32_t value) {
 
 
 //
-// read
+// 32 bit read utility function
 //
 // Using I2C, read 32 bits of data from the address on the device at the bus address
 //
@@ -315,27 +303,4 @@ long SignExtendBitfield(uint32_t data, int width) {
     }
 
     return (long)((x ^ mask) - mask);
-}
-
-void readOneWell(int well) {
-    int addr = WELL_1_ADDR - well;
-    readALS31300ADC(addr + OFFSET_SAMPLE, sample);
-    readALS31300ADC(addr + OFFSET_CONTROL_LOW, controlLow);
-    readALS31300ADC(addr + OFFSET_CONTROL_HIGH, controlHigh);
-    sprintf(result, "%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f",
-        sample.temperature, sample.mx, sample.my, sample.mz,
-        controlLow.temperature, controlLow.mx, controlLow.my, controlLow.mz,
-        controlHigh.temperature, controlHigh.mx, controlHigh.my, controlHigh.mz);
-    if (log_readings) Log.info("well %d: %s", well + 1, result);
-    bleWell[well].setValue(result);
-}
-
-void getMagnetometerReading() {
-    for(int i = 0; i < 5; i++) {
-        readOneWell(i);
-    }
-    if (log_readings) Log.info("-------------------------");
-    // Blink the LED
-    ledState = !ledState;
-    digitalWrite(ledPin, ledState);
 }
