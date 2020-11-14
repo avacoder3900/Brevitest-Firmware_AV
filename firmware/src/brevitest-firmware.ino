@@ -441,37 +441,6 @@ int scan_barcode()
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                    BLUETOOTH LE                         //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-int BLE_scan() {
-    Vector<BleScanResult> scanResults = BLE.scan();
-
-    if (scanResults.size()) {
-        Log.info("%d devices found", scanResults.size());
-
-        for (int ii = 0; ii < scanResults.size(); ii++) {
-            Log.info("MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %dBm",
-                    scanResults[ii].address[0], scanResults[ii].address[1], scanResults[ii].address[2],
-                    scanResults[ii].address[3], scanResults[ii].address[4], scanResults[ii].address[5], scanResults[ii].rssi);
-
-            String name = scanResults[ii].advertisingData.deviceName();
-            Log.info("Advertising name: %s", name.c_str());
-
-            char data[25];
-            if (scanResults[ii].scanResponse.customData((uint8_t *) data, 24)) {
-                data[24] = '\0';
-                Log.info("Scan response: %s", data);
-            }
-        }
-    }
-
-    return scanResults.size();
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                        BUZZER                           //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -732,18 +701,73 @@ void turn_on_all_LEDs_for_duration(int duration, int power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void magnetometer_read_confirm(const char *event, const char *data) {
-    Log.info("Read confirm: event = %s, data = %s", event, data);
-    magnet_test_awaiting_confirmation = false;
+void scanResultCallback(const BleScanResult *scanResult, void *context) {
+
+    String name = scanResult->advertisingData.deviceName();
+    if (name.length() > 0) {
+        Log.info("Advertising name: %s", name.c_str());
+    }
+
+    uint8_t data[27];
+    char *id = (char *) &data[2];
+    if (scanResult->scanResponse.customData(data, 26)) {
+        *(id + 24) = '\0';
+        Log.info("Device ID: %s", id);
+        if (strncmp(id, &barcode_uuid[8], 24) == 0) {
+            magnetometer_found = true;
+            magnetometer_address = scanResult->address;
+            Log.info("Barcode matched. MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %ddBm",
+                    magnetometer_address[0], magnetometer_address[1], magnetometer_address[2],
+                    magnetometer_address[3], magnetometer_address[4], magnetometer_address[5], scanResult->rssi);
+        }
+    }
 }
 
-void read_magnetometer() {
-    Log.info("Magnetometer test, time = %u, position = %d", (unsigned int) millis(), stage_position);
-    Particle.publish("magnetometer-read", String(stage_position), PRIVATE);
-    magnet_test_awaiting_confirmation = true;
-    magnet_test_confirmation_timeout = millis() + MAGNETOMETER_TEST_CONFIRM_TIMEOUT;
+int BLE_scan() {
+    int count = BLE.scan(scanResultCallback, NULL);
+    if (count > 0) {
+        Log.info("%d devices found", count);
+    }
+    return count;
 }
 
+void check_magnets_in_one_well(int well) {
+    BleCharacteristic characteristic;
+
+    move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
+    if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well])) {
+        String result;
+        characteristic.getValue(result);
+        Log.info("%d\t%d\t%s", well + 1, stage_position, result.c_str());
+    } else {
+        Log.info("Could not find magnetometer data for well %d", well + 1);
+    }
+}
+
+int validate_magnets() {
+    magnetometer_validation_mode = false;
+    magnetometer_found = false;
+    BLE_scan();
+    if (magnetometer_found) {
+        Log.info("Magnetometer found, connecting...");
+        magnetometer = BLE.connect(magnetometer_address);
+        if (magnetometer.connected()) {
+            Log.info("Connected to magnetometer");
+            reset_stage(false);
+            for (int i = 0; i < 5; i++) {
+                check_magnets_in_one_well(i);
+            }
+            magnetometer.disconnect();
+            return 1;
+        } else {
+            Log.info("Could not connect to magnetometer %s", barcode_uuid);
+            return 0;
+        }
+    } else {
+        Log.info("Magnetometer not found");
+        return 0;
+    }
+}
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1970,22 +1994,8 @@ int particle_command(String arg)
 //
 //  MAGNETOMETER
 //
-        case 70: // magnetometer test param1 = step distance, param2 = steps, param3 = delay between readings
-            Particle.subscribe("magnetometer-confirm", magnetometer_read_confirm, MY_DEVICES);
-            reset_stage(false);
-            move_stage(-STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_SLOW_STEP_DELAY);
-            indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_TEST_DEFAULT_STEP_DISTANCE);
-            indx = get_next_command_param(arg, indx, &param2, MAGNETOMETER_TEST_MAXIMUM_READINGS);
-            indx = get_next_command_param(arg, indx, &param3, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            magnet_test_move = param1;
-            magnet_test_readings = param2 < 0 ? 1 : (param2 > MAGNETOMETER_TEST_MAXIMUM_READINGS ? MAGNETOMETER_TEST_MAXIMUM_READINGS : param2);
-            magnet_test_count = 0;
-            magnet_test_take_reading = true;
-            async_command_timer.changePeriod((unsigned long) param3);
-            async_command_timer.start();
-            async_command_running = true;
-            async_command_magnet_running = true;
-            result = param2;
+        case 70: // validate magnets
+            result = validate_magnets();
             break;
 //
 //  OPTICAL SENSORS
@@ -2059,13 +2069,11 @@ int particle_command(String arg)
 //
 //  VALIDATION
 //
-        case 100: // start validate magnetometer
-            start_magnetometer_validation();
-            result = 1;
+        case 100: // validate magnets
+            result = validate_magnets();
             break;
-        case 101: // stop validate magnetometer
-            stop_magnetometer_validation();
-            result = 1;
+        case 101: // not used
+            result = 0;
             break;
         case 110: // start validate temperature
             start_temperature_validation();
@@ -2114,15 +2122,6 @@ int particle_command(String arg)
 //                       VALIDATION                        //
 //                                                         //
 /////////////////////////////////////////////////////////////
-
-void start_magnetometer_validation() {
-    magnetometer_validation_in_progress = true;
-}
-
-void stop_magnetometer_validation() {
-    magnetometer_validation_in_progress = false;
-    magnetometer_validation_mode = false;
-}
 
 void start_temperature_validation() {
     temperature_validation_in_progress = true;
@@ -2399,7 +2398,7 @@ void set_device_indicators()
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
         turn_on_buzzer_alert();
-    } else if (cartridge_inserted) {
+    } else if (cartridge_inserted || magnetometer_inserted) {
         if (cartridge_validated) {
             turn_on_busy_LED();
             if (test_completed || test_cancelled) {
@@ -2530,28 +2529,6 @@ void async_command_loop() {
             async_command_timer.stop();
             sleep_motor();
         }
-    } else if (async_command_magnet_running && magnet_test_take_reading) {
-        if (magnet_test_awaiting_confirmation) {
-            if (millis() > magnet_test_confirmation_timeout) {
-                async_command_magnet_running = false;
-                async_command_running = false;
-                async_command_timer.stop();
-                sleep_motor();
-            }
-        } else {
-            magnet_test_take_reading = false;
-            read_magnetometer();
-            if (magnet_test_move) {
-                move_stage(magnet_test_move, MOTOR_SLOW_STEP_DELAY);
-            }
-            magnet_test_count++;
-            if (magnet_test_count >= magnet_test_readings || stage_position + magnet_test_move > STAGE_POSITION_LIMIT) {
-                async_command_magnet_running = false;
-                async_command_running = false;
-                async_command_timer.stop();
-                sleep_motor();
-            }
-        }
     }
 }
 
@@ -2634,7 +2611,7 @@ void loop()
     } else if (barcode_scan_mode) {
         barcode_scan_loop();
     } else if (magnetometer_validation_mode) {
-        start_magnetometer_validation();
+        validate_magnets();
     } else if (temperature_validation_mode) {
         start_temperature_validation();
     } else if (optical_validation_mode) {

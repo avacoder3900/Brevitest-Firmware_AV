@@ -56,10 +56,10 @@ char result[100];
 // SDA Pin = 18
 
 unsigned long read_time = 0;
-bool readMagnetometer = false;
+bool log_readings = false;
 bool ble_connected = false;
 
-#define BLE_NOTIFY BleCharacteristicProperty::NOTIFY
+#define BLE_TYPE BleCharacteristicProperty::READ
 BleAdvertisingData advertData, scanResponse;
 
 BleUuid magnetometerService("4d2b2311-bb00-43e3-a284-5c73b737c369");
@@ -70,11 +70,13 @@ BleUuid well3uuid("2230e907-583b-4328-84a4-8f9023a681c1");
 BleUuid well4uuid("8c58309c-7c2d-4805-b71f-8137eb4a01f8");
 BleUuid well5uuid("b9dc1dd4-a0da-4328-8003-6c72a526a12b");
 
-BleCharacteristic magnetometerWell1Characteristic("well_1", BLE_NOTIFY, well1uuid, magnetometerService);
-BleCharacteristic magnetometerWell2Characteristic("well_2", BLE_NOTIFY, well2uuid, magnetometerService);
-BleCharacteristic magnetometerWell3Characteristic("well_3", BLE_NOTIFY, well3uuid, magnetometerService);
-BleCharacteristic magnetometerWell4Characteristic("well_4", BLE_NOTIFY, well4uuid, magnetometerService);
-BleCharacteristic magnetometerWell5Characteristic("well_5", BLE_NOTIFY, well5uuid, magnetometerService);
+BleCharacteristic wellChar1("well_1", BLE_TYPE, well1uuid, magnetometerService);
+BleCharacteristic wellChar2("well_2", BLE_TYPE, well2uuid, magnetometerService);
+BleCharacteristic wellChar3("well_3", BLE_TYPE, well3uuid, magnetometerService);
+BleCharacteristic wellChar4("well_4", BLE_TYPE, well4uuid, magnetometerService);
+BleCharacteristic wellChar5("well_5", BLE_TYPE, well5uuid, magnetometerService);
+
+BleCharacteristic bleWell[5] = { wellChar1, wellChar2, wellChar3, wellChar4, wellChar5 };
 
 //
 // setup
@@ -86,23 +88,19 @@ BleCharacteristic magnetometerWell5Characteristic("well_5", BLE_NOTIFY, well5uui
 //
 
 void initialize_BLE() {
-    byte idBuf[25];
-    System.deviceID().getBytes(idBuf, 24);
-    scanResponse.appendCustomData(idBuf, 24);
+    byte idBuf[27];
+    String id = System.deviceID();
+    idBuf[0] = 0xFF;
+    idBuf[1] = 0xFF;
+    id.getBytes(&idBuf[2], 25);
+    scanResponse.appendCustomData(idBuf, 26);
 
     BLE.setDeviceName("Magnetometer");
+    advertData.appendLocalName("Magnetometer");
 
-    // add magnetometer service to advertising
-    advertData.appendServiceUUID(magnetometerService);
-    // advertData.append()
-    // advertData.appendLocalName("Magnetometer");
-
-    // Continuously advertise when not connected
-    BLE.addCharacteristic(magnetometerWell1Characteristic);
-    BLE.addCharacteristic(magnetometerWell2Characteristic);
-    BLE.addCharacteristic(magnetometerWell3Characteristic);
-    BLE.addCharacteristic(magnetometerWell4Characteristic);
-    BLE.addCharacteristic(magnetometerWell5Characteristic);
+    for (int i = 0; i < 5; i++) {
+        BLE.addCharacteristic(bleWell[i]);
+    }
 
     BLE.advertise(&advertData, &scanResponse);
 }
@@ -145,21 +143,26 @@ void setup() {
 // the values and toggle the state of the LED.
 //
 void loop() {    
-    // if (Serial.available())
-    // {
-    //     while (Serial.available()) Serial.read();
-    //     readMagnetometer = !readMagnetometer;
-    // }
-
-    if (read_time < millis()) {
-        Log.info("Device name: %s", BLE.getDeviceName().c_str());
-        getMagnetometerReading();
-        read_time = millis() + READ_CYCLE;
+    if (Serial.available())
+    {
+        while (Serial.available()) Serial.read();
+        log_readings = !log_readings;
     }
+
+    // if (read_time < millis()) {
+    //     Log.info("Device name: %s", BLE.getDeviceName().c_str());
+    //     getMagnetometerReading();
+    //     read_time = millis() + READ_CYCLE;
+    // }
 
     if (BLE.connected() ^ ble_connected) {
         ble_connected = BLE.connected();
         Log.info("Bluetooth %sconnected", ble_connected ? "" : "dis");
+        digitalWrite(ledPin, LOW);
+    }
+
+    if (BLE.connected() || log_readings) {
+        getMagnetometerReading();
     }
 }
 
@@ -174,8 +177,7 @@ void readALS31300ADC(int busAddress, MagnetometerReading &reading) {
     // // Read the register the I2C loop mode is in
     uint16_t error = read(busAddress, 0x27, value0x27);
     if (error != kNOERROR) {
-        Serial.print("Unable to read the ALS31300. error = ");
-        Serial.println(error);
+        Log.error("Unable to read the ALS31300. error = %d", error);
         return;
     }
     
@@ -185,8 +187,7 @@ void readALS31300ADC(int busAddress, MagnetometerReading &reading) {
     // // Write the new values to the register the I2C loop mode is in
     error = write(busAddress, 0x27, value0x27);
     if (error != kNOERROR) {
-        Serial.print("Unable to read the ALS31300. error = ");
-        Serial.println(error);
+        Log.error("Unable to read the ALS31300. error = %d", error);
         return;
     }
     
@@ -310,31 +311,15 @@ void readOneWell(int well) {
         sample.temperature, sample.mx, sample.my, sample.mz,
         controlLow.temperature, controlLow.mx, controlLow.my, controlLow.mz,
         controlHigh.temperature, controlHigh.mx, controlHigh.my, controlHigh.mz);
-    Log.info("well %d: %s", well + 1, result);
-    switch(well) {
-        case 0:
-            magnetometerWell1Characteristic.setValue(result);
-            break;
-        case 1:
-            magnetometerWell2Characteristic.setValue(result);
-            break;
-        case 2:
-            magnetometerWell3Characteristic.setValue(result);
-            break;
-        case 3:
-            magnetometerWell4Characteristic.setValue(result);
-            break;
-        case 4:
-            magnetometerWell5Characteristic.setValue(result);
-            break;
-    }
+    if (log_readings) Log.info("well %d: %s", well + 1, result);
+    bleWell[well].setValue(result);
 }
 
 void getMagnetometerReading() {
     for(int i = 0; i < 5; i++) {
         readOneWell(i);
     }
-    Serial.println();
+    if (log_readings) Log.info("-------------------------");
     // Blink the LED
     ledState = !ledState;
     digitalWrite(ledPin, ledState);
