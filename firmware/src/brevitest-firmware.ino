@@ -768,6 +768,7 @@ int validate_magnets() {
                 }
             }
             magnetometer.disconnect();
+            reset_stage(true);
             particle_register[mark] = '\0';
             brevitest_publish("validate-magnets", particle_register);
             return 1;
