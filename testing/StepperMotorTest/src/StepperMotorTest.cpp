@@ -11,49 +11,48 @@
  * Date: 2 January 2021
  */
 
+#include <Adafruit-MotorShield-V2.h>
+
+// Create the motor shield object with the default I2C address
 void setup();
 void loop();
-#line 8 "/Users/leo3linbeck/github/brevitest-device/testing/StepperMotorTest/src/StepperMotorTest.ino"
-#define MOTOR_STEP_DELAY 1000
+#line 11 "/Users/leo3linbeck/github/brevitest-device/testing/StepperMotorTest/src/StepperMotorTest.ino"
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+// Or, create it with a different I2C address (say for stacking)
+// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61); 
+
+// Connect a stepper motor with 200 steps per revolution (1.8 degree)
+// to motor port #2 (M3 and M4)
+Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 2);
+
 
 SerialLogHandler logHandler;
 
-bool motorOn = false;
-int pinMotorOn = D4;
-int pinMotorDir = D5;
-int pinMotorStep = D6;
-
 void setup() {
-    pinMode(pinMotorOn, INPUT_PULLDOWN);
-    pinMode(pinMotorStep, OUTPUT);
-    digitalWrite(pinMotorStep, LOW);
-    pinMode(pinMotorDir, OUTPUT);
-    digitalWrite(pinMotorDir, LOW);
-    pinMode(D7, OUTPUT);
-    digitalWrite(D7, LOW);
+    AFMS.begin();  // create with the default frequency 1.6KHz
+    //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
 
-    // Serial.begin(115200); // standard serial port
-    Log.info("Setup complete");
+    myMotor->setSpeed(60);  // 60 rpm   
+
+    Log.info("StepperTest setup complete");
 }
 
 void loop() {
-    if (motorOn != (digitalRead(pinMotorOn) == HIGH)) {
-        delay(100);
-        if (motorOn != (digitalRead(pinMotorOn) == HIGH)) {
-            motorOn = digitalRead(pinMotorOn) == HIGH;
-            Log.info("Motor %s", motorOn ? "on" : "off");
-        }
-    }
+  Log.info("Single coil steps");
+  myMotor->step(10, FORWARD, MICROSTEP); 
+  myMotor->step(10, BACKWARD, MICROSTEP); 
 
-    if (motorOn) {
-        digitalWrite(D7, HIGH);
+  delay(5000);
 
-        digitalWrite(pinMotorStep, HIGH);
-        delayMicroseconds(MOTOR_STEP_DELAY);
-
-        digitalWrite(D7, LOW);
-
-        digitalWrite(pinMotorStep, LOW);
-        delayMicroseconds(MOTOR_STEP_DELAY);
-    }
+//   Log.info("Double coil steps");
+//   myMotor->step(100, FORWARD, DOUBLE); 
+//   myMotor->step(100, BACKWARD, DOUBLE);
+  
+//   Log.info("Interleave coil steps");
+//   myMotor->step(100, FORWARD, INTERLEAVE); 
+//   myMotor->step(100, BACKWARD, INTERLEAVE); 
+  
+//   Log.info("Microstep steps");
+//   myMotor->step(50, FORWARD, MICROSTEP); 
+//   myMotor->step(50, BACKWARD, MICROSTEP);
 }
