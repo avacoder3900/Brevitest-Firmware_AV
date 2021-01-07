@@ -57,7 +57,7 @@ void Adafruit_PWMServoDriver::setPWMFreq(float freq) {
 }
 
 void Adafruit_PWMServoDriver::setPWM(uint8_t num, uint16_t on, uint16_t off) {
-  Log.info("Setting PWM %d: %d -> %d", num, on, off);
+  // Log.info("Setting PWM %d: %d -> %d", num, on, off);
 
   Wire.beginTransmission(_i2caddr);
 

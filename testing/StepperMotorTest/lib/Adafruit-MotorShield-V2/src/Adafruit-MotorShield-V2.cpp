@@ -14,11 +14,13 @@
  All text above must be included in any redistribution.
  ******************************************************************/
 
+
+// #define MOTORDEBUG true
+
 #include "application.h"
 #include "Adafruit-MotorShield-V2.h"
 #include "Adafruit_PWMServoDriver.h"
 
-#define MOTORDEBUG true
 #if (MICROSTEPS == 8)
 uint8_t microstepcurve[] = {0, 50, 98, 142, 180, 212, 236, 250, 255};
 #elif (MICROSTEPS == 16)
@@ -34,7 +36,7 @@ Adafruit_MotorShield::Adafruit_MotorShield(uint8_t addr)
 void Adafruit_MotorShield::begin(uint16_t freq)
 {
   // init PWM w/_freq
-  Wire.begin();
+  // Wire.begin();
   _pwm.begin();
   _freq = freq;
   _pwm.setPWMFreq(_freq); // This is the maximum PWM frequency
@@ -230,10 +232,8 @@ uint16_t steps, Adafruit_MotorShield controller)  {
 
 void Adafruit_StepperMotor::setSpeed(uint16_t rpm)
 {
-  //Log.info("steps per rev: %d", revsteps);
-  //Log.info("RPM: %d", rpm);
-
   usperstep = 60000000 / ((uint32_t)revsteps * (uint32_t)rpm);
+  Log.info("steps per rev: %d, RPM: %d, usperstep: %lu", revsteps, rpm, usperstep);
 }
 
 void Adafruit_StepperMotor::release(void)
@@ -251,27 +251,19 @@ void Adafruit_StepperMotor::step(uint16_t steps, uint8_t dir, uint8_t style)
   uint32_t uspers = usperstep;
   uint8_t ret = 0;
 
-  if (style == INTERLEAVE)
-  {
+  if (style == INTERLEAVE) {
     uspers /= 2;
-  }
-  else if (style == MICROSTEP)
-  {
+  } else if (style == MICROSTEP) {
     uspers /= MICROSTEPS;
     steps *= MICROSTEPS;
-#ifdef MOTORDEBUG
-    Log.info("steps = %d", steps);
-#endif
+    Log.info("steps: %d, uspers: %lu", steps, uspers);
   }
 
-  while (steps--)
-  {
-    Log.info("step! %lu", uspers);
+  while (steps--) {
     ret = onestep(dir, style);
     delayMicroseconds(uspers);
   }
-  if (style == MICROSTEP)
-  {
+  if (style == MICROSTEP) {
     while ((ret != 0) && (ret != MICROSTEPS))
     {
       ret = onestep(dir, style);
@@ -287,77 +279,47 @@ uint8_t Adafruit_StepperMotor::onestep(uint8_t dir, uint8_t style)
   ocra = ocrb = 255;
 
   // next determine what sort of stepping procedure we're up to
-  if (style == SINGLE)
-  {
-    if ((currentstep / (MICROSTEPS / 2)) % 2)
-    { // we're at an odd step, weird
-      if (dir == FORWARD)
-      {
+  if (style == SINGLE) {
+    if ((currentstep / (MICROSTEPS / 2)) % 2) { // we're at an odd step, weird
+      if (dir == FORWARD) {
         currentstep += MICROSTEPS / 2;
-      }
-      else
-      {
+      } else {
         currentstep -= MICROSTEPS / 2;
       }
-    }
-    else
-    { // go to the next even step
-      if (dir == FORWARD)
-      {
+    } else { // go to the next even step
+      if (dir == FORWARD) {
         currentstep += MICROSTEPS;
-      }
-      else
-      {
+      } else {
         currentstep -= MICROSTEPS;
       }
     }
   }
-  else if (style == DOUBLE)
-  {
-    if (!(currentstep / (MICROSTEPS / 2) % 2))
-    { // we're at an even step, weird
-      if (dir == FORWARD)
-      {
+  else if (style == DOUBLE) {
+    if (!(currentstep / (MICROSTEPS / 2) % 2)) { // we're at an even step, weird
+      if (dir == FORWARD) {
         currentstep += MICROSTEPS / 2;
-      }
-      else
-      {
+      } else {
         currentstep -= MICROSTEPS / 2;
       }
-    }
-    else
-    { // go to the next odd step
-      if (dir == FORWARD)
-      {
+    } else { // go to the next odd step
+      if (dir == FORWARD) {
         currentstep += MICROSTEPS;
-      }
-      else
-      {
+      } else {
         currentstep -= MICROSTEPS;
       }
     }
   }
-  else if (style == INTERLEAVE)
-  {
-    if (dir == FORWARD)
-    {
+  else if (style == INTERLEAVE) {
+    if (dir == FORWARD) {
       currentstep += MICROSTEPS / 2;
-    }
-    else
-    {
+    } else {
       currentstep -= MICROSTEPS / 2;
     }
   }
-
-  if (style == MICROSTEP)
-  {
-    if (dir == FORWARD)
-    {
+  else if (style == MICROSTEP) {
+    if (dir == FORWARD) {
       currentstep++;
-    }
-    else
-    {
-      // BACKWARDS
+    } else { // BACKWARDS
       currentstep--;
     }
 
@@ -385,25 +347,18 @@ uint8_t Adafruit_StepperMotor::onestep(uint8_t dir, uint8_t style)
       ocra = microstepcurve[currentstep - MICROSTEPS * 3];
       ocrb = microstepcurve[MICROSTEPS * 4 - currentstep];
     }
-  }
+  } 
 
   currentstep += MICROSTEPS * 4;
   currentstep %= MICROSTEPS * 4;
 
-#ifdef MOTORDEBUG
-  Log.info("current step: %d", currentstep);
-  Log.info(" pwmA = %d", ocra);
-  Log.info(" pwmB = %d", ocrb);
-#endif
-  MC->setPWM(PWMApin, ocra * 16);
-  MC->setPWM(PWMBpin, ocrb * 16);
+  // MC->setPWM(PWMApin, ocra * 16);
+  // MC->setPWM(PWMBpin, ocrb * 16);
 
   // release all
   uint8_t latch_state = 0; // all motor pins to 0
 
-  Log.info("step");
-  if (style == MICROSTEP)
-  {
+  if (style == MICROSTEP) {
     if ((currentstep >= 0) && (currentstep < MICROSTEPS))
       latch_state |= 0x03;
     if ((currentstep >= MICROSTEPS) && (currentstep < MICROSTEPS * 2))
@@ -412,9 +367,7 @@ uint8_t Adafruit_StepperMotor::onestep(uint8_t dir, uint8_t style)
       latch_state |= 0x0C;
     if ((currentstep >= MICROSTEPS * 3) && (currentstep < MICROSTEPS * 4))
       latch_state |= 0x09;
-  }
-  else
-  {
+  } else {
     switch (currentstep / (MICROSTEPS / 2))
     {
     case 0:
@@ -443,46 +396,18 @@ uint8_t Adafruit_StepperMotor::onestep(uint8_t dir, uint8_t style)
       break;
     }
   }
+
 #ifdef MOTORDEBUG
-  Log.info("Latch: %X",latch_state);
+  Log.info("current step: %d, pwmA = %d, pwmB = %d, latch = 0x%X", currentstep, ocra, ocrb, latch_state);
 #endif
 
-  if (latch_state & 0x1)
-  {
-    Log.info("AIN2pin: %d", AIN2pin);
-    MC->setPin(AIN2pin, HIGH);
-  }
-  else
-  {
-    MC->setPin(AIN2pin, LOW);
-  }
-  if (latch_state & 0x2)
-  {
-    Log.info("BIN1pin: %d", BIN1pin);
-    MC->setPin(BIN1pin, HIGH);
-  }
-  else
-  {
-    MC->setPin(BIN1pin, LOW);
-  }
-  if (latch_state & 0x4)
-  {
-    Log.info("AIN1pin: %d", AIN1pin);
-    MC->setPin(AIN1pin, HIGH);
-  }
-  else
-  {
-    MC->setPin(AIN1pin, LOW);
-  }
-  if (latch_state & 0x8)
-  {
-    Log.info("BIN2pin: %d", BIN2pin);
-    MC->setPin(BIN2pin, HIGH);
-  }
-  else
-  {
-    MC->setPin(BIN2pin, LOW);
-  }
+  MC->setPWM(PWMApin, ocra * 16);
+  MC->setPWM(PWMBpin, ocrb * 16);
+
+  MC->setPin(AIN2pin, latch_state & 0x1 ? HIGH : LOW);
+  MC->setPin(AIN1pin, latch_state & 0x4 ? HIGH : LOW);
+  MC->setPin(BIN1pin, latch_state & 0x2 ? HIGH : LOW);
+  MC->setPin(BIN2pin, latch_state & 0x8 ? HIGH : LOW);
 
   return currentstep;
 }

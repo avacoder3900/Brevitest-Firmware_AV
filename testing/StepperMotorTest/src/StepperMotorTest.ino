@@ -23,15 +23,17 @@ void setup() {
     AFMS.begin();  // create with the default frequency 1.6KHz
     //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
 
-    myMotor->setSpeed(60);  // 60 rpm   
+    myMotor->setSpeed(10);  // rpm   
 
     Log.info("StepperTest setup complete");
 }
 
 void loop() {
-  Log.info("Single coil steps");
-  myMotor->step(10, FORWARD, MICROSTEP); 
-  myMotor->step(10, BACKWARD, MICROSTEP); 
+  Log.info("Move forward");
+  myMotor->step(2000, FORWARD, MICROSTEP); 
+  delay(2000);
+  Log.info("Move backward");
+  myMotor->step(2000, BACKWARD, MICROSTEP); 
 
   delay(5000);
 
