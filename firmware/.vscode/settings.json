@@ -1,4 +1,5 @@
 {
     "particle.targetPlatform": "argon",
-    "particle.firmwareVersion": "2.0.1"
+    "particle.firmwareVersion": "2.0.1",
+    "particle.targetDevice": "SPU0005"
 }

@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -143,7 +143,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -533,9 +533,10 @@ int scan_barcode()
             delay(100);
             Particle.process();
         };
-        delay(100); // allow barcode buffer to fill before reading
+        delay(500); // allow barcode buffer to fill before reading
         do {
             buf = Serial1.read(); // read a byte of data (returns -1 if no data is available)
+            Log.info("buf: %d", buf);
             if (buf != -1) {
                 barcode_uuid[i++] = (char)buf; // coerce byte to character and append to barcode_uuid
             }
