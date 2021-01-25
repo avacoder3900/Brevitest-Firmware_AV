@@ -895,7 +895,6 @@ int check_magnets_in_one_well(int well, int mark) {
 }
 
 int validate_magnets() {
-
     magnetometer_validation_mode = false;
     magnetometer_found = false;
     BLE_scan();
@@ -1202,8 +1201,10 @@ int start_optical_sensor_test(int distance, int readings, int period)
 }
 
 void validate_optics() {
+    optical_validation_mode = false;
+
     char c;
-    int len = sprintf(particle_register, "%c%c",TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
+    int len = sprintf(particle_register, "%s%c%c%c",barcode_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
 
     Log.info("Validating optics...");
     test.number_of_readings = 0;
@@ -1534,7 +1535,6 @@ void callback_validate_optics() {
             System.reset();
         }
     }
-    optical_validation_mode = false;
 
     Log.info("Optics validation %s", success ? "succeeded" : "failed, will retry later");
 }
