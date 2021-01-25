@@ -75,6 +75,8 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power);
 bool enable_optical_sensors(bool force_read);
 void disable_optical_sensors();
 void read_optical_sensors(int param, int led_power, bool inBCODE);
+int start_optical_sensor_test(int distance, int readings, int period);
+void validate_optics();
 int get_heater_temperature();
 void heater_temperature_read();
 int pid_controller();
@@ -93,6 +95,7 @@ void pubsub_upload_test();
 void remove_test_from_cache(char *testToRemove);
 void callback_upload_test();
 void callback_validate_magnets();
+void callback_validate_optics();
 void set_current_event(String event_name);
 void clear_current_event();
 void set_publish_params(String event_name);
@@ -533,10 +536,9 @@ int scan_barcode()
             delay(100);
             Particle.process();
         };
-        delay(500); // allow barcode buffer to fill before reading
+        delay(100); // allow barcode buffer to fill before reading
         do {
             buf = Serial1.read(); // read a byte of data (returns -1 if no data is available)
-            Log.info("buf: %d", buf);
             if (buf != -1) {
                 barcode_uuid[i++] = (char)buf; // coerce byte to character and append to barcode_uuid
             }
@@ -557,20 +559,27 @@ int scan_barcode()
                 result = BARCODE_TYPE_MAGNETOMETER;
             } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a temperature probe?
                 result = BARCODE_TYPE_TEMPERATURE;
-            } else if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an optical probe?
-                result = BARCODE_TYPE_OPTICAL;
             } else if (strncmp(barcode_uuid, SHIPPING_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an shipping bolt installation?
                 result = BARCODE_TYPE_SHIPPING;
+            } else {
+                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
+                barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
+                result = BARCODE_TYPE_VALIDATION_ERROR;
+            }
+            break;
+        case OPTICAL_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
+            if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an optical probe?
+                result = BARCODE_TYPE_OPTICAL;
             } else { // we must have goofed up somewhere
                 strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
                 barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
-                result = BARCODE_TYPE_ERROR;
+                result = BARCODE_TYPE_OPTICAL_ERROR;
             }
             break;
         default: // if you're not a test cartridge, or a validation cartridge, you're an error
             strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
             barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
-            result =  BARCODE_TYPE_ERROR;
+            result =  BARCODE_TYPE_GENERAL_ERROR;
     }
 
     Log.info("Barcode read: %s, length: %d, type: %d", barcode_uuid, i, result);
@@ -1178,6 +1187,46 @@ void read_optical_sensors(int param, int led_power, bool inBCODE)
         Log.info("Elapsed time: %u", (unsigned int) (millis() - elapsed));
 }
 
+int start_optical_sensor_test(int distance, int readings, int period)
+{
+    test.number_of_readings = 0;
+    optical_test_readings = readings <= 0 ? 1 : (readings > OPTICAL_MAXIMUM_NUMBER_OF_READINGS ? OPTICAL_MAXIMUM_NUMBER_OF_READINGS : readings);
+    optical_test_count = 0;
+    optical_test_move = distance;
+    optical_test_take_reading = true;
+    async_command_timer.changePeriod((unsigned long) period);
+    async_command_timer.start();
+    async_command_running = true;
+    async_command_optical_running = true;
+    return readings;
+}
+
+void validate_optics() {
+    char c;
+    int len = sprintf(particle_register, "%c%c",TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
+
+    Log.info("Validating optics...");
+    test.number_of_readings = 0;
+    reset_stage(false);
+    move_stage_to_optical_read_position();
+    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+
+    if (test.number_of_readings == 3) { // test completed
+        for (int i = 0; i < 3; i++)
+        {
+            c = test.reading[i].channel;
+            if (c == 'A' || c == '1' || c == '2') {
+                len += append_test_reading(len, &(test.reading[i]));
+            }
+        }
+        particle_register[len - 1] = '\0';
+    }
+
+    Log.info("particle_register: %s", particle_register);
+    brevitest_publish("validate-optics", particle_register);
+    reset_stage(true);
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //               TEMPERATURE CONTROL SYSTEM                //
@@ -1472,6 +1521,25 @@ void callback_validate_magnets() {
 }
 
 /////////////////////////////////////////////////////
+//                VALIDATE OPTICS                  //
+/////////////////////////////////////////////////////
+
+void callback_validate_optics() {
+    clear_current_event();
+    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
+    if (success) {
+        if (strncmp(callback_data, "validated", 9) != 0) {
+            Log.info("Optics %s", callback_data);
+            delay(2000);
+            System.reset();
+        }
+    }
+    optical_validation_mode = false;
+
+    Log.info("Optics validation %s", success ? "succeeded" : "failed, will retry later");
+}
+
+/////////////////////////////////////////////////////
 //               PUBSUB FUNCTIONS                  //
 /////////////////////////////////////////////////////
 
@@ -1487,6 +1555,8 @@ void set_current_event(String event_name) {
         current_event_code = PUBSUB_UPLOAD_TEST;
     } else if (strcmp(current_event, "validate-magnets") == 0) {
         current_event_code = PUBSUB_VALIDATE_MAGNETS;
+    } else if (strcmp(current_event, "validate-optics") == 0) {
+        current_event_code = PUBSUB_VALIDATE_OPTICS;
     } else {
         current_event_code = 0;
     }
@@ -1559,6 +1629,9 @@ void process_callback_buffer()
                 break;
             case PUBSUB_VALIDATE_MAGNETS:
                 callback_validate_magnets();
+                break;
+            case PUBSUB_VALIDATE_OPTICS:
+                callback_validate_optics();
                 break;
             default:
                 Log.info("Unknown event code %d", current_event_code);
@@ -2177,33 +2250,15 @@ int particle_command(String arg)
         case 80: // read optical sensors param1 times at interval param2 after moving to read position
             reset_stage(false);
             move_stage_to_optical_read_position();
-            test.number_of_readings = 0;
             indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_READINGS);
             indx = get_next_command_param(arg, indx, &param2, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            optical_test_readings = param1 <= 0 ? 1 : (param1 > OPTICAL_MAXIMUM_NUMBER_OF_READINGS ? OPTICAL_MAXIMUM_NUMBER_OF_READINGS : param1);
-            optical_test_count = 0;
-            optical_test_move = 0;
-            optical_test_take_reading = true;
-            async_command_timer.changePeriod((unsigned long) param2);
-            async_command_timer.start();
-            async_command_running = true;
-            async_command_optical_running = true;
-            result = param1;
+            result = start_optical_sensor_test(0, param1, param2);
             break;
         case 81: // read optical sensors param1 times at interval param2 at current location
             wake_motor();
-            test.number_of_readings = 0;
             indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_READINGS);
             indx = get_next_command_param(arg, indx, &param2, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            optical_test_readings = param1 < 0 ? 1 : (param1 > OPTICAL_MAXIMUM_NUMBER_OF_READINGS ? OPTICAL_MAXIMUM_NUMBER_OF_READINGS : param1);
-            optical_test_count = 0;
-            optical_test_move = 0;
-            optical_test_take_reading = true;
-            async_command_timer.changePeriod((unsigned long) param2);
-            async_command_timer.start();
-            async_command_running = true;
-            async_command_optical_running = true;
-            result = param1;
+            result = start_optical_sensor_test(0, param1, param2);
             break;
         case 82: // start optical sensor sweep test, param1 = distance, param2 = readings, param3 = delay between readings
             reset_stage(false);
@@ -2212,15 +2267,7 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_DISTANCE);
             indx = get_next_command_param(arg, indx, &param2, OPTICAL_TEST_DEFAULT_READINGS);
             indx = get_next_command_param(arg, indx, &param3, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            optical_test_move = param1;
-            optical_test_readings = param2 < 0 ? 1 : (param2 > OPTICAL_MAXIMUM_NUMBER_OF_READINGS ? OPTICAL_MAXIMUM_NUMBER_OF_READINGS : param2);
-            optical_test_count = 0;
-            optical_test_take_reading = true;
-            async_command_timer.changePeriod((unsigned long) param3);
-            async_command_timer.start();
-            async_command_running = true;
-            async_command_optical_running = true;
-            result = param2;
+            result = start_optical_sensor_test(param1, param2, param3);
             break;
 //
 //  STRESS TEST
@@ -2246,9 +2293,6 @@ int particle_command(String arg)
         case 100: // validate magnets
             result = validate_magnets();
             break;
-        case 101: // not used
-            result = 0;
-            break;
         case 110: // start validate temperature
             start_temperature_validation();
             result = 0;
@@ -2257,12 +2301,8 @@ int particle_command(String arg)
             stop_temperature_validation();
             result = 1;
             break;
-        case 120: // start validate optics
-            start_optical_validation();
-            result = 1;
-            break;
-        case 121: // stop validate optics
-            stop_optical_validation();
+        case 120: // validate optics
+            validate_optics();
             result = 1;
             break;
 //
@@ -2572,7 +2612,7 @@ void set_device_indicators()
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
         turn_on_buzzer_alert();
-    } else if (cartridge_inserted || magnetometer_inserted) {
+    } else if (cartridge_inserted || magnetometer_inserted || optical_probe_inserted) {
         if (cartridge_validated) {
             turn_on_busy_LED();
             if (test_completed || test_cancelled) {
@@ -2602,7 +2642,7 @@ void verify_device_loop()
     } else if (temperature_validation_mode) {
         start_temperature_validation();
     } else if (optical_validation_mode) {
-        start_optical_validation();
+        validate_optics();
     } else if (device_verification_in_progress) {
         if (callback_complete) {
             process_callback_buffer();
@@ -2796,7 +2836,7 @@ void loop()
     } else if (temperature_validation_mode) {
         start_temperature_validation();
     } else if (optical_validation_mode) {
-        start_optical_validation();
+        validate_optics();
     }
 
     delay(100);
