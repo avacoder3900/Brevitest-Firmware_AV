@@ -13,13 +13,18 @@
 #define MOTOR_SLOW_STEP_DELAY 1000
 #define MOTOR_OSCILLATION_STEP_DELAY 250
 
+// stage
+#define STAGE_POSITION_LIMIT 39500
+#define STAGE_RESET_STEPS -60000
+#define STAGE_MICRONS_TO_INITIAL_POSITION 12300
+
 // pin definitions
-int pinMotorSleep = D2;
-int pinMotorDir = D3;
-int pinMotorStep = D7;
+int pinStageLimit = D0;
+int pinMotorEnable = A0;
+int pinMotorDir = A1;
+int pinMotorStep = A2;
 
 // global variables
-bool new_device = true;
 int stage_position = 0;
 
 // logging
@@ -33,26 +38,26 @@ SerialLogHandler logHandler;
 
 bool move_one_eighth_step(int dir, int step_delay)
 {
-    // if (dir == HIGH)
-    // {
-    //     if (digitalRead(pinStageLimit) == LOW)
-    //     {
-    //         Log.info("Proximal stage limit switch detected");
-    //         stage_position = 0;
-    //         return false;
-    //     }
-    //     if (stage_position <= 0)
-    //     {
-    //         Log.info("Stage position at zero");
-    //         stage_position = 0;
-    //         return false;
-    //     }
-    // }
-    // else if (stage_position >= STAGE_POSITION_LIMIT)
-    // {
-    //     Log.info("Stage distal limit reached");
-    //     return false;
-    // }
+    if (dir == HIGH)
+    {
+        if (digitalRead(pinStageLimit) == LOW)
+        {
+            Log.info("Proximal stage limit switch detected");
+            stage_position = 0;
+            return false;
+        }
+        if (stage_position <= 0)
+        {
+            Log.info("Stage position at zero");
+            stage_position = 0;
+            return false;
+        }
+    }
+    else if (stage_position >= STAGE_POSITION_LIMIT)
+    {
+        Log.info("Stage distal limit reached");
+        return false;
+    }
 
     digitalWrite(pinMotorStep, HIGH);
     delayMicroseconds(step_delay);
@@ -94,21 +99,36 @@ void move_stage(int microns, int step_delay)
             i = eighth_steps;
         }
     }
-    /*Log.info("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);*/
+    Log.info("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);
 }
 
 void sleep_motor()
 {
-    digitalWrite(pinMotorSleep, LOW);
+    digitalWrite(pinMotorEnable, LOW);
     delay(20);
 }
 
 void wake_motor()
 {
-    digitalWrite(pinMotorSleep, HIGH);
+    digitalWrite(pinMotorEnable, HIGH);
     delay(10);
 }
 
+void reset_stage(bool sleep)
+{
+    stage_position = STAGE_POSITION_LIMIT;
+    wake_motor();
+    move_stage(STAGE_RESET_STEPS, MOTOR_FAST_STEP_DELAY);
+    delay(100);
+    move_stage(2000, MOTOR_FAST_STEP_DELAY);
+    delay(100);
+    move_stage(-3000, MOTOR_SLOW_STEP_DELAY);
+    move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_SLOW_STEP_DELAY);
+    if (sleep)
+    {
+        sleep_motor();
+    }
+}
 void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
     pinMode(pin, mode);
@@ -121,7 +141,8 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 void setup() {
   // Put initialization like pinMode and begin functions here.
   Serial.begin(115200);
-  init_digital_pin(pinMotorSleep, OUTPUT, LOW);
+  init_digital_pin(pinStageLimit, INPUT_PULLDOWN, LOW);
+  init_digital_pin(pinMotorEnable, OUTPUT, LOW);
   init_digital_pin(pinMotorStep, OUTPUT, LOW);
   init_digital_pin(pinMotorDir, OUTPUT, LOW);
 }
@@ -135,9 +156,9 @@ void loop() {
     }
 
     wake_motor();
-    move_stage(10000, MOTOR_SLOW_STEP_DELAY);
+    move_stage(1000, MOTOR_SLOW_STEP_DELAY);
     delay(1000);
-    move_stage(-10000, MOTOR_SLOW_STEP_DELAY);
+    move_stage(-1000, MOTOR_SLOW_STEP_DELAY);
     sleep_motor();
     delay(3000);
 }

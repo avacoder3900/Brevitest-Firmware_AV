@@ -11,50 +11,32 @@
  * Date: 2 January 2021
  */
 
-#include <Adafruit-MotorShield-V2.h>
+#include <Stepper.h>
 
-// Create the motor shield object with the default I2C address
 void setup();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/testing/StepperMotorTest/src/StepperMotorTest.ino"
-Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-// Or, create it with a different I2C address (say for stacking)
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61); 
+#line 10 "/Users/leo3linbeck/github/brevitest-device/testing/StepperMotorTest/src/StepperMotorTest.ino"
+const int stepsPerRevolution = 64;  // change this to fit the number of steps per revolution
+// for your motor
 
-// Connect a stepper motor with 200 steps per revolution (1.8 degree)
-// to motor port #2 (M3 and M4)
-Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 2);
-
-
-SerialLogHandler logHandler;
+// initialize the stepper library on pins 8 through 11:
+Stepper myStepper(stepsPerRevolution, A0, A2, A1, A3);
 
 void setup() {
-    AFMS.begin();  // create with the default frequency 1.6KHz
-    //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
-
-    myMotor->setSpeed(10);  // rpm   
-
-    Log.info("StepperTest setup complete");
+  // set the speed at 60 rpm:
+  myStepper.setSpeed(60);
+  // initialize the serial port:
+  Serial.begin(115200);
 }
 
 void loop() {
-  Log.info("Move forward");
-  myMotor->step(2000, FORWARD, MICROSTEP); 
-  delay(2000);
-  Log.info("Move backward");
-  myMotor->step(2000, BACKWARD, MICROSTEP); 
+  // step one revolution  in one direction:
+  Serial.println("clockwise");
+  myStepper.step(4 * stepsPerRevolution);
+  delay(500);
 
-  delay(5000);
-
-//   Log.info("Double coil steps");
-//   myMotor->step(100, FORWARD, DOUBLE); 
-//   myMotor->step(100, BACKWARD, DOUBLE);
-  
-//   Log.info("Interleave coil steps");
-//   myMotor->step(100, FORWARD, INTERLEAVE); 
-//   myMotor->step(100, BACKWARD, INTERLEAVE); 
-  
-//   Log.info("Microstep steps");
-//   myMotor->step(50, FORWARD, MICROSTEP); 
-//   myMotor->step(50, BACKWARD, MICROSTEP);
+  // // step one revolution in the other direction:
+  // Serial.println("counterclockwise");
+  // myStepper.step(-stepsPerRevolution);
+  // delay(500);
 }
