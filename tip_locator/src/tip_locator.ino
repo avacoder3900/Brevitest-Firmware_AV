@@ -9,8 +9,8 @@
  */
 
 SYSTEM_THREAD(ENABLED);
-// PRODUCT_ID(12430);
-// PRODUCT_VERSION(1);
+PRODUCT_ID(14260);
+PRODUCT_VERSION(1);
 
 // Return values of endTransmission in the Wire library
 #define kNOERROR 0

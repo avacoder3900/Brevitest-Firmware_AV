@@ -7,5 +7,5 @@
     },
     "particle.firmwareVersion": "3.0.0",
     "particle.targetPlatform": "argon",
-    "particle.targetDevice": "TIP-LOCATOR-1"
+    "particle.targetDevice": "TIP-LOCATOR-3"
 }
