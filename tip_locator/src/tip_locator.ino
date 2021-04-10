@@ -22,15 +22,13 @@ SYSTEM_THREAD(ENABLED);
 SerialLogHandler logHandler;
 
 int pinLED = D7;
-int pinXDetect = A0;
-int pinYDetect = A1;
-int pinButton = A2;
-bool logReadings = false;
+int pinXDetect = A1;
+int pinYDetect = A0;
+bool monitoringX = false;
+bool monitoringY = false;
+char dir;
 
 void setup() {
-    // Initialize the I2C communication library
-    Wire.begin();
-    
     // Initialize the serial port
     Serial.begin(115200);
 
@@ -39,36 +37,41 @@ void setup() {
     digitalWrite(pinLED, LOW);
     pinMode(pinXDetect, INPUT);
     pinMode(pinYDetect, INPUT);
-    pinMode(pinButton, INPUT);
 }
 
 void loop() {    
-    if (Serial.available()) { // sending any data to serial port toggles logging
+    if (Serial.available()) { // sending any data to serial port toggles monitoring
+        dir = Serial.read();
+        switch(dir) {
+            case 'X':
+                monitoringX = true;
+                monitoringY = false;
+                break;
+            case 'Y':
+                monitoringX = false;
+                monitoringY = true;
+                break;
+            default:
+                monitoringX = false;
+                monitoringY = false;
+                break;
+        }
         while (Serial.available()) Serial.read();
-        logReadings = !logReadings;
     }
 
-    Log.info("pinXDetect: %c", digitalRead(pinXDetect) == HIGH ? 'H' : 'L');
-    Log.info("pinYDetect: %c", digitalRead(pinYDetect) == HIGH ? 'H' : 'L');
-    Log.info("pinButton: %c", digitalRead(pinButton) == HIGH ? 'H' : 'L');
+    if (monitoringX && digitalRead(pinXDetect) == HIGH) {
+        Serial.write('X');
+        monitoringX = false;
+        digitalWrite(pinLED, HIGH);
+        delay(200);
+        digitalWrite(pinLED, LOW);
+    }
 
-    delay(2000);
-    // if (digitalRead(pinXDetect) == HIGH) {
-    //     Log.info("X detected");
-    //     digitalWrite(pinLED, HIGH);
-    //     delay(1000);
-    //     digitalWrite(pinLED, LOW);
-    // }
-    // if (digitalRead(pinYDetect) == HIGH) {
-    //     Log.info("Y detected");
-    //     digitalWrite(pinLED, HIGH);
-    //     delay(1000);
-    //     digitalWrite(pinLED, LOW);
-    // }
-    // if (digitalRead(pinButton) == HIGH) {
-    //     Log.info("Button detected");
-    //     digitalWrite(pinLED, HIGH);
-    //     delay(1000);
-    //     digitalWrite(pinLED, LOW);
-    // }
+    if (monitoringY && digitalRead(pinYDetect) == HIGH) {
+        Serial.write('Y');
+        monitoringY = false;
+        digitalWrite(pinLED, HIGH);
+        delay(200);
+        digitalWrite(pinLED, LOW);
+    }
 }
