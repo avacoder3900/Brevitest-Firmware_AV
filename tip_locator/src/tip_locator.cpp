@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/tip_locator/src/tip_locator.ino"
+#line 1 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
 /*
  *    Code to locate and calibrate tip location on an Opentrons pipetting robot.
  *
@@ -16,7 +16,7 @@
 
 void setup();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/tip_locator/src/tip_locator.ino"
+#line 11 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(14260);
 PRODUCT_VERSION(1);
