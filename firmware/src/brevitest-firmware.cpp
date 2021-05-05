@@ -64,7 +64,7 @@ void turn_on_assay_LED_for_duration(int duration, int power);
 void turn_on_control_1_LED_for_duration(int duration, int power);
 void turn_on_control_2_LED_for_duration(int duration, int power);
 void turn_on_all_LEDs_for_duration(int duration, int power);
-void scanResultCallback(const BleScanResult *scanResult, void *context);
+void scanResultCallback(const BleScanResult &scanResult, void *context);
 int BLE_scan();
 int check_magnets_in_one_well(int well, int mark);
 int validate_magnets();
@@ -848,31 +848,31 @@ void turn_on_all_LEDs_for_duration(int duration, int power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void scanResultCallback(const BleScanResult *scanResult, void *context) {
+void scanResultCallback(const BleScanResult &scanResult, void *context) {
 
-    String name = scanResult->advertisingData.deviceName();
+    String name = scanResult.advertisingData().deviceName();
     if (name.length() > 0) {
         Log.info("Advertising name: %s", name.c_str());
     }
 
     uint8_t data[27];
     char *id = (char *) &data[2];
-    if (scanResult->scanResponse.customData(data, 26)) {
+    if (scanResult.scanResponse().customData(data, 26)) {
         *(id + 24) = '\0';
         Log.info("Device ID: %s", id);
         if (strncmp(id, &barcode_uuid[8], 24) == 0 && strncmp(name, "Magnetometer", 12) == 0) {
             magnetometer_found = true;
-            magnetometer_address = scanResult->address;
+            magnetometer_address = scanResult.address();
             Log.info("Barcode matched. MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %ddBm",
                     magnetometer_address[0], magnetometer_address[1], magnetometer_address[2],
-                    magnetometer_address[3], magnetometer_address[4], magnetometer_address[5], scanResult->rssi);
+                    magnetometer_address[3], magnetometer_address[4], magnetometer_address[5], scanResult.rssi());
             BLE.stopScanning();
         }
     }
 }
 
 int BLE_scan() {
-    int count = BLE.scan(scanResultCallback, NULL);
+    int count = BLE.scan(scanResultCallback);
     if (count > 0) {
         Log.info("%d devices found", count);
     }
@@ -2538,13 +2538,11 @@ void setup() {
     init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
     init_analog_pin(pinHeaterThermistor, INPUT, 0);
-    init_analog_pin(pinIRThermistor, INPUT, 0);
-    init_analog_pin(pinIRThermopile, INPUT, 0);
 
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
-    init_analog_pin(pinMotorPFD, OUTPUT, 128);
+    init_digital_pin(pinMotorReset, OUTPUT, HIGH);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);

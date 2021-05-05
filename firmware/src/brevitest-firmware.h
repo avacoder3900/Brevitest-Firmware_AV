@@ -6,12 +6,12 @@
 // general constants
 #if PLATFORM_ID == PLATFORM_ARGON
 #define PRODUCT_NUMBER 11170
-#define FIRMWARE_VERSION 26
+#define FIRMWARE_VERSION 27
 #endif
 
 #if PLATFORM_ID == PLATFORM_BORON
 #define PRODUCT_NUMBER 11897
-#define FIRMWARE_VERSION 11
+#define FIRMWARE_VERSION 12
 #endif
 
 #define DATA_FORMAT_VERSION 17
@@ -147,22 +147,20 @@ int pinLEDControl2 = A0;
 int pinLEDControl1 = A1;
 int pinLEDAssay = A2;
 int pinHeaterThermistor = A3;
-int pinIRThermistor = A4;
-int pinIRThermopile = A5;
 int pinStageLimit = SCK;
-int pinMotorSleep = MOSI;
+int pinMotorDir = MOSI;
 int pinCartridgeDetected = MISO;
 int pinRX = RX;
 int pinTX = TX;
 // int pinSDA = SDA;
 // int pinSCL = SCL;
 int pinBarcodeTrigger = D2;
-int pinMotorPFD = D3;
+int pinBuzzer = D3;
 int pinBarcodeReady = D4;
-int pinMotorDir = D5;
-int pinMotorStep = D6;
-int pinBuzzer = D7;
-int pinHeater = D8;
+int pinMotorStep = D5;
+int pinMotorSleep = D6;
+int pinHeater = D7;
+int pinMotorReset = D8;
 
 // global variables
 bool new_device = true;
