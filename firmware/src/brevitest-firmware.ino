@@ -317,12 +317,12 @@ void reset_stage(bool sleep)
 {
     stage_position = STAGE_POSITION_LIMIT;
     wake_motor();
-    move_stage(STAGE_RESET_STEPS, MOTOR_FAST_STEP_DELAY);
+    move_stage(STAGE_RESET_STEPS, MOTOR_RESET_STEP_DELAY);
     delay(100);
-    move_stage(2000, MOTOR_FAST_STEP_DELAY);
+    move_stage(2000, MOTOR_RESET_STEP_DELAY);
     delay(100);
-    move_stage(-3000, MOTOR_SLOW_STEP_DELAY);
-    move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_SLOW_STEP_DELAY);
+    move_stage(-3000, MOTOR_RESET_STEP_DELAY);
+    move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_RESET_STEP_DELAY);
     if (sleep)
     {
         sleep_motor();
@@ -635,32 +635,38 @@ void turn_on_all_LEDs(int power)
 
 void turn_on_assay_LED(int power)
 {
+    pinMode(pinLEDAssay, OUTPUT);
     analogWrite(pinLEDAssay, power);
 }
 
 void turn_on_control_1_LED(int power)
 {
+    pinMode(pinLEDControl1, OUTPUT);
     analogWrite(pinLEDControl1, power);
 }
 
 void turn_on_control_2_LED(int power)
 {
+    pinMode(pinLEDControl2, OUTPUT);
     analogWrite(pinLEDControl2, power);
 }
 
 void turn_off_assay_LED()
 {
     analogWrite(pinLEDAssay, 0);
+    pinMode(pinLEDAssay, INPUT_PULLDOWN);
 }
 
 void turn_off_control_1_LED()
 {
     analogWrite(pinLEDControl1, 0);
+    pinMode(pinLEDControl1, INPUT_PULLDOWN);
 }
 
 void turn_off_control_2_LED()
 {
     analogWrite(pinLEDControl2, 0);
+    pinMode(pinLEDControl2, INPUT_PULLDOWN);
 }
 
 void turn_off_all_LEDs()
@@ -2121,13 +2127,15 @@ int particle_command(String arg)
             result = start_optical_sensor_test(0, param1, param2);
             break;
         case 82: // start optical sensor sweep test, param1 = distance, param2 = readings, param3 = delay between readings
-            reset_stage(false);
-            move_stage_to_optical_read_position();
             test.number_of_readings = 0;
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_DISTANCE);
-            indx = get_next_command_param(arg, indx, &param2, OPTICAL_TEST_DEFAULT_READINGS);
-            indx = get_next_command_param(arg, indx, &param3, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            result = start_optical_sensor_test(param1, param2, param3);
+            indx = get_next_command_param(arg, indx, &param1, STAGE_OPTICAL_SENSOR_READ_POSITION);
+            indx = get_next_command_param(arg, indx, &param2, OPTICAL_TEST_DEFAULT_DISTANCE);
+            indx = get_next_command_param(arg, indx, &param3, OPTICAL_TEST_DEFAULT_READINGS);
+            indx = get_next_command_param(arg, indx, &param4, ASYNC_COMMAND_DEFAULT_INTERVAL);
+            reset_stage(false);
+            move_stage_to_position(param1 - (param2 * param3), MOTOR_SLOW_STEP_DELAY);
+            param3 *= 2;
+            result = start_optical_sensor_test(param2, param3, param4);
             break;
 //
 //  STRESS TEST
@@ -2393,9 +2401,9 @@ void setup() {
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
 
-    init_analog_pin(pinLEDAssay, OUTPUT, 0);
-    init_analog_pin(pinLEDControl1, OUTPUT, 0);
-    init_analog_pin(pinLEDControl2, OUTPUT, 0);
+    init_digital_pin(pinLEDAssay, INPUT_PULLDOWN, 0);
+    init_digital_pin(pinLEDControl1, INPUT_PULLDOWN, 0);
+    init_digital_pin(pinLEDControl2, INPUT_PULLDOWN, 0);
 
     init_analog_pin(pinHeaterThermistor, INPUT, 0);
 
