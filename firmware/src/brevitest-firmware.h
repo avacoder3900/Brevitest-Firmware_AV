@@ -268,6 +268,8 @@ struct HeatingElement
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
+void turn_off_heater(void);
+Timer control_heater_off(HEATER_CONTROL_INTERVAL, turn_off_heater, true);
 bool control_heater_temperature_flag = false;
 bool heater_debouncing_in_progress = false;
 unsigned long heater_debounce_time;

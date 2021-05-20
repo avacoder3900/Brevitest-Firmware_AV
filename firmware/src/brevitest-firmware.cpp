@@ -369,25 +369,24 @@ void detector_changed_interrupt()
 
 bool move_one_eighth_step(int dir, int step_delay)
 {
-    if (dir == HIGH)
-    {
-        if (digitalRead(pinStageLimit) == LOW)
-        {
-            Log.info("Proximal stage limit switch detected at position %d", stage_position);
-            stage_position = 0;
-            microns_error = 0;
-            return false;
+    if (dir == HIGH) {
+        if (digitalRead(pinStageLimit) == LOW) {
+            delay(10);
+            if (digitalRead(pinStageLimit) == LOW) {
+                Log.info("Proximal stage limit switch detected at position %d", stage_position);
+                stage_position = 0;
+                microns_error = 0;
+                return false;
+            }
         }
-        if (stage_position <= 0)
-        {
+        if (stage_position <= 0) {
             Log.info("Stage position at zero");
             stage_position = 0;
             microns_error = 0;
             return false;
         }
     }
-    else if (stage_position >= STAGE_POSITION_LIMIT)
-    {
+    else if (stage_position >= STAGE_POSITION_LIMIT) {
         Log.info("Stage distal limit reached");
         return false;
     }
@@ -410,26 +409,27 @@ void move_stage(int microns, int step_delay)
 
     dir = (microns < 0) ? HIGH : LOW;
     digitalWrite(pinMotorDir, dir);
-    /*Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');*/
+    Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
 
     abs_microns = abs(microns) + microns_error;
     eighth_steps = abs_microns / MOTOR_MICRONS_PER_EIGHTH_STEP;
     microns_error = abs_microns % MOTOR_MICRONS_PER_EIGHTH_STEP;
     floored_step_delay = step_delay < MOTOR_MINIMUM_STEP_DELAY ? MOTOR_MINIMUM_STEP_DELAY : step_delay;
-    /*Log.info("move_stage: microns = %d, dir = %d, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);*/
+    Log.info("move_stage: microns = %d, dir = %c, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);
 
     // delay(10);
     for (i = 0; i < eighth_steps; i++)
     {
         if (move_one_eighth_step(dir, floored_step_delay)) {
-            stage_position += microns < 0 ? -MOTOR_MICRONS_PER_EIGHTH_STEP : MOTOR_MICRONS_PER_EIGHTH_STEP;
             if (stage_position <= 0) {
                 stage_position = 0;
                 microns_error = 0;
-                i = eighth_steps;
+                break;
+            } else {
+                stage_position += microns < 0 ? -MOTOR_MICRONS_PER_EIGHTH_STEP : MOTOR_MICRONS_PER_EIGHTH_STEP;
             }
         } else {
-            i = eighth_steps;
+            break;
         }
     }
     /*Log.info("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);*/
@@ -733,14 +733,17 @@ int limit(int value, int max, int min)
 int set_heater_power(int power)
 {
     unsigned long start = millis();
-    power = limit(power, HEATER_MAX_POWER, 0);
-    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+    power = limit(power, HEATER_CONTROL_INTERVAL, 0);
+    control_heater_off.changePeriod(power);
     heater.power = power;
     heater.heater_on = power != 0;
-    if (heater.heater_on)
-    {
+    if (heater.heater_on) {
+        analogWrite(heater.heater_pin, 255);
+        control_heater_off.start();
         if (serial_messaging_on)
             Log.info("Heater set to power %d", power);
+    } else {
+        turn_off_heater();
     }
 
     return (int)(millis() - start);
@@ -2178,6 +2181,9 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param1, MOTOR_SLOW_STEP_DELAY);
             wake_move_sleep_stage(-stage_position, param1);
             result = stage_position;
+            break;
+        case 29: // wake motor
+            wake_motor();
             break;
 
 //
