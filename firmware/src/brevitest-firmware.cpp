@@ -26,6 +26,7 @@ void setup_eeprom();
 void detector_changed_interrupt();
 bool move_one_eighth_step(int dir, int step_delay);
 void move_stage(int microns, int step_delay);
+void move_stage_until_proximal_limit(int step_delay);
 void wake_move_sleep_stage(int microns, int step_delay);
 void sleep_motor();
 void wake_motor();
@@ -372,7 +373,7 @@ bool move_one_eighth_step(int dir, int step_delay)
     {
         if (digitalRead(pinStageLimit) == LOW)
         {
-            Log.info("Proximal stage limit switch detected");
+            Log.info("Proximal stage limit switch detected at position %d", stage_position);
             stage_position = 0;
             microns_error = 0;
             return false;
@@ -434,6 +435,23 @@ void move_stage(int microns, int step_delay)
     /*Log.info("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);*/
 }
 
+void move_stage_until_proximal_limit(int step_delay) {
+    int count = 1600;
+    digitalWrite(pinMotorDir, HIGH);
+    while (digitalRead(pinStageLimit) == HIGH && count-- > 0) {
+        digitalWrite(pinMotorStep, HIGH);
+        delayMicroseconds(step_delay);
+
+        digitalWrite(pinMotorStep, LOW);
+        delayMicroseconds(step_delay);
+        
+        stage_position -= MOTOR_MICRONS_PER_EIGHTH_STEP;
+    }
+    Log.info("Proximal stage limit switch detected at position %d", stage_position);
+    stage_position = 0;
+    microns_error = 0;
+}
+
 void wake_move_sleep_stage(int microns, int step_delay)
 {
     wake_motor();
@@ -455,13 +473,13 @@ void wake_motor()
 
 void reset_stage(bool sleep)
 {
-    stage_position = STAGE_POSITION_LIMIT;
+    // stage_position = STAGE_POSITION_LIMIT;
     wake_motor();
-    move_stage(STAGE_RESET_STEPS, MOTOR_RESET_STEP_DELAY);
-    delay(100);
-    move_stage(2000, MOTOR_RESET_STEP_DELAY);
-    delay(100);
-    move_stage(-3000, MOTOR_RESET_STEP_DELAY);
+    move_stage_until_proximal_limit(MOTOR_RESET_STEP_DELAY);
+    // delay(100);
+    // move_stage(1000, MOTOR_BOUNCE_STEP_DELAY);
+    // delay(100);
+    // move_stage(-1500, MOTOR_BOUNCE_STEP_DELAY);
     move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_RESET_STEP_DELAY);
     if (sleep)
     {
@@ -2154,6 +2172,11 @@ int particle_command(String arg)
             wake_motor();
             move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
             Log.info("Ready to insert shipping bolt");
+            result = stage_position;
+            break;
+        case 28: // move to position zero at param1 step_delay
+            indx = get_next_command_param(arg, indx, &param1, MOTOR_SLOW_STEP_DELAY);
+            wake_move_sleep_stage(-stage_position, param1);
             result = stage_position;
             break;
 
