@@ -24,12 +24,11 @@ void erase_eeprom();
 void reset_eeprom();
 void setup_eeprom();
 void detector_changed_interrupt();
+void sleep_motor();
+void wake_motor();
 bool move_one_eighth_step(int dir, int step_delay);
 void move_stage(int microns, int step_delay);
 void move_stage_until_proximal_limit(int step_delay);
-void wake_move_sleep_stage(int microns, int step_delay);
-void sleep_motor();
-void wake_motor();
 void reset_stage(bool sleep);
 void move_stage_to_optical_read_position();
 void move_stage_to_test_start_position();
@@ -47,7 +46,6 @@ void turn_on_busy_LED();
 void turn_on_available_LED();
 void turn_on_async_LED();
 void turn_on_validation_LED();
-void turn_on_heater(int power);
 void turn_off_heater();
 int limit(int value, int max, int min);
 int set_heater_power(int power);
@@ -367,6 +365,19 @@ void detector_changed_interrupt()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void sleep_motor()
+{
+    digitalWrite(pinMotorSleep, LOW);
+    motor_awake = false;
+}
+
+void wake_motor()
+{
+    digitalWrite(pinMotorSleep, HIGH);
+    delay(10);
+    motor_awake = true;
+}
+
 bool move_one_eighth_step(int dir, int step_delay)
 {
     if (dir == HIGH) {
@@ -393,9 +404,13 @@ bool move_one_eighth_step(int dir, int step_delay)
 
     digitalWrite(pinMotorStep, HIGH);
     delayMicroseconds(step_delay);
-
     digitalWrite(pinMotorStep, LOW);
     delayMicroseconds(step_delay);
+    stage_position += dir == HIGH ? -MOTOR_MICRONS_PER_EIGHTH_STEP : MOTOR_MICRONS_PER_EIGHTH_STEP;
+    if (stage_position <= 0) {
+        stage_position = 0;
+        microns_error = 0;
+    }
 
     return true;
 }
@@ -407,6 +422,9 @@ void move_stage(int microns, int step_delay)
 
     int eighth_steps, abs_microns, dir, i, floored_step_delay;
 
+    if (!motor_awake) {
+        wake_motor();
+    }
     dir = (microns < 0) ? HIGH : LOW;
     digitalWrite(pinMotorDir, dir);
     Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
@@ -418,17 +436,8 @@ void move_stage(int microns, int step_delay)
     Log.info("move_stage: microns = %d, dir = %c, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);
 
     // delay(10);
-    for (i = 0; i < eighth_steps; i++)
-    {
-        if (move_one_eighth_step(dir, floored_step_delay)) {
-            if (stage_position <= 0) {
-                stage_position = 0;
-                microns_error = 0;
-                break;
-            } else {
-                stage_position += microns < 0 ? -MOTOR_MICRONS_PER_EIGHTH_STEP : MOTOR_MICRONS_PER_EIGHTH_STEP;
-            }
-        } else {
+    for (i = 0; i < eighth_steps; i++) {
+        if (!move_one_eighth_step(dir, floored_step_delay)) {
             break;
         }
     }
@@ -436,7 +445,7 @@ void move_stage(int microns, int step_delay)
 }
 
 void move_stage_until_proximal_limit(int step_delay) {
-    int count = 1600;
+    int count = STAGE_POSITION_LIMIT / MOTOR_MICRONS_PER_EIGHTH_STEP + 40;
     digitalWrite(pinMotorDir, HIGH);
     while (digitalRead(pinStageLimit) == HIGH && count-- > 0) {
         digitalWrite(pinMotorStep, HIGH);
@@ -452,37 +461,14 @@ void move_stage_until_proximal_limit(int step_delay) {
     microns_error = 0;
 }
 
-void wake_move_sleep_stage(int microns, int step_delay)
-{
-    wake_motor();
-    move_stage(microns, step_delay);
-    sleep_motor();
-}
-
-void sleep_motor()
-{
-    digitalWrite(pinMotorSleep, LOW);
-    delay(20);
-}
-
-void wake_motor()
-{
-    digitalWrite(pinMotorSleep, HIGH);
-    delay(10);
-}
-
 void reset_stage(bool sleep)
 {
-    // stage_position = STAGE_POSITION_LIMIT;
-    wake_motor();
+    if (!motor_awake) {
+        wake_motor();
+    }
     move_stage_until_proximal_limit(MOTOR_RESET_STEP_DELAY);
-    // delay(100);
-    // move_stage(1000, MOTOR_BOUNCE_STEP_DELAY);
-    // delay(100);
-    // move_stage(-1500, MOTOR_BOUNCE_STEP_DELAY);
     move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_RESET_STEP_DELAY);
-    if (sleep)
-    {
+    if (sleep) {
         sleep_motor();
     }
 }
@@ -710,17 +696,17 @@ void turn_on_validation_LED() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_heater(int power)
-{
-    power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
-    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    heater.power = power;
-    heater.heater_on = true;
-}
+// void turn_on_heater(int power)
+// {
+//     power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
+//     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+//     heater.power = power;
+//     heater.heater_on = true;
+// }
 
 void turn_off_heater()
 {
-    analogWrite(heater.heater_pin, 0);
+    digitalWrite(heater.heater_pin, LOW);
     heater.heater_on = false;
     heater.power = 0;
 }
@@ -738,7 +724,7 @@ int set_heater_power(int power)
     heater.power = power;
     heater.heater_on = power != 0;
     if (heater.heater_on) {
-        analogWrite(heater.heater_pin, 255);
+        digitalWrite(heater.heater_pin, HIGH);
         control_heater_off.start();
         if (serial_messaging_on)
             Log.info("Heater set to power %d", power);
@@ -796,38 +782,32 @@ void turn_on_all_LEDs(int power)
 
 void turn_on_assay_LED(int power)
 {
-    pinMode(pinLEDAssay, OUTPUT);
     analogWrite(pinLEDAssay, power);
 }
 
 void turn_on_control_1_LED(int power)
 {
-    pinMode(pinLEDControl1, OUTPUT);
     analogWrite(pinLEDControl1, power);
 }
 
 void turn_on_control_2_LED(int power)
 {
-    pinMode(pinLEDControl2, OUTPUT);
     analogWrite(pinLEDControl2, power);
 }
 
 void turn_off_assay_LED()
 {
     analogWrite(pinLEDAssay, 0);
-    pinMode(pinLEDAssay, INPUT_PULLDOWN);
 }
 
 void turn_off_control_1_LED()
 {
     analogWrite(pinLEDControl1, 0);
-    pinMode(pinLEDControl1, INPUT_PULLDOWN);
 }
 
 void turn_off_control_2_LED()
 {
     analogWrite(pinLEDControl2, 0);
-    pinMode(pinLEDControl2, INPUT_PULLDOWN);
 }
 
 void turn_off_all_LEDs()
@@ -2129,16 +2109,17 @@ int particle_command(String arg)
 //  STAGE MOTION
 //
         case 20: // reset stage
-            reset_stage(true);
+            reset_stage(false);
             result = stage_position;
             break;
-        case 21: // return stage position
+        case 21: // wake motor
+            wake_motor();
             result = stage_position;
             break;
         case 22: // move microns, param1 microns with param2 step
             indx = get_next_command_param(arg, indx, &param1, 0);
             indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
-            wake_move_sleep_stage(param1, param2);
+            move_stage(param1, param2);
             Log.info("Move stage %d microns, cumulative %d, error = %d", param1, stage_position, microns_error);
             result = stage_position;
             break;
@@ -2147,43 +2128,38 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
             reset_stage(false);
             move_stage_to_position(param1, param2);
-            sleep_motor();
             result = stage_position;
             break;
         case 24: // move stage to test start position
             reset_stage(false);
             move_stage_to_test_start_position();
-            sleep_motor();
             result = stage_position;
             break;
         case 25: // move stage to optical read position
             reset_stage(false);
             move_stage_to_optical_read_position();
-            sleep_motor();
             result = stage_position;
             break;
         case 26: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
             indx = get_next_command_param(arg, indx, &param1, 25);
             indx = get_next_command_param(arg, indx, &param2, MOTOR_OSCILLATION_STEP_DELAY);
             indx = get_next_command_param(arg, indx, &param3, 10);
-            wake_motor();
             oscillate_stage(param1, param2, param3, false);
-            sleep_motor();
             result = stage_position;
             break;
         case 27: // move to shipping bolt location
-            wake_motor();
             move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
             Log.info("Ready to insert shipping bolt");
             result = stage_position;
             break;
         case 28: // move to position zero at param1 step_delay
             indx = get_next_command_param(arg, indx, &param1, MOTOR_SLOW_STEP_DELAY);
-            wake_move_sleep_stage(-stage_position, param1);
+            move_stage(-stage_position, param1);
             result = stage_position;
             break;
-        case 29: // wake motor
-            wake_motor();
+        case 29: // sleep motor
+            sleep_motor();
+            result = stage_position;
             break;
 
 //
@@ -2242,9 +2218,9 @@ int particle_command(String arg)
             result = heater.temp_C_10X;
             break;
         case 51: // turn on heater at power param1
-            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
-            turn_on_heater(param1);
-            result = param1;
+            // indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
+            // turn_on_heater(param1);
+            // result = param1;
             break;
         case 52: // turn off heater
             turn_off_heater();
@@ -2290,7 +2266,6 @@ int particle_command(String arg)
             result = start_optical_sensor_test(0, param1, param2);
             break;
         case 81: // read optical sensors param1 times at interval param2 at current location
-            wake_motor();
             indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_READINGS);
             indx = get_next_command_param(arg, indx, &param2, ASYNC_COMMAND_DEFAULT_INTERVAL);
             result = start_optical_sensor_test(0, param1, param2);
@@ -2570,9 +2545,9 @@ void setup() {
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
 
-    init_digital_pin(pinLEDAssay, INPUT_PULLDOWN, 0);
-    init_digital_pin(pinLEDControl1, INPUT_PULLDOWN, 0);
-    init_digital_pin(pinLEDControl2, INPUT_PULLDOWN, 0);
+    init_analog_pin(pinLEDAssay, OUTPUT, 0);
+    init_analog_pin(pinLEDControl1, OUTPUT, 0);
+    init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
     init_analog_pin(pinHeaterThermistor, INPUT, 0);
 
@@ -2580,9 +2555,9 @@ void setup() {
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
+    init_digital_pin(pinHeater, OUTPUT, LOW);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
-    init_analog_pin(pinHeater, OUTPUT, 0);
 
     while (!Particle.connected()) {
         delay(PARTICLE_CLOUD_DELAY);
@@ -2720,7 +2695,7 @@ void barcode_scan_loop() {
                     Log.info("Optical probe inserted");
                     break;
                 case BARCODE_TYPE_SHIPPING:
-                    wake_motor();
+                    // wake_motor();
                     move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
                     Log.info("Ready to insert shipping bolt");
                     break;

@@ -1,5 +1,5 @@
 {
     "particle.targetPlatform": "argon",
     "particle.firmwareVersion": "3.0.0",
-    "particle.targetDevice": ""
+    "particle.targetDevice": "BT-A01-0000-0100"
 }
