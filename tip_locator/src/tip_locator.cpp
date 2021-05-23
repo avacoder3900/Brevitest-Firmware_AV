@@ -14,15 +14,20 @@
  * 
  */
 
+int save_calibration(String params);
+void load_calibration_string();
 void setup();
 void loop();
 #line 11 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(14260);
-PRODUCT_VERSION(1);
+PRODUCT_VERSION(2);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
+#define DEFAULT_CALIBRATION_STRING "0.0:0.0"
+#define EEPROM_VERSION 1
+#define EEPROM_CALIBRATION_ADDRESS 4
 
 SerialLogHandler logHandler;
 
@@ -32,6 +37,26 @@ int pinYDetect = A0;
 bool monitoringX = false;
 bool monitoringY = false;
 char dir;
+int version;
+char calibration_str[24];
+
+int save_calibration(String params) {
+    strcpy(calibration_str, params.c_str());
+    EEPROM.put(EEPROM_CALIBRATION_ADDRESS, calibration_str);
+    return 1;
+}
+
+void load_calibration_string() {
+    EEPROM.get(0, version);
+    if (version != EEPROM_VERSION) {
+        version = EEPROM_VERSION;
+        EEPROM.put(0, version);
+        strcpy(calibration_str, DEFAULT_CALIBRATION_STRING);
+        EEPROM.put(EEPROM_CALIBRATION_ADDRESS, calibration_str);
+    } else {
+        EEPROM.get(EEPROM_CALIBRATION_ADDRESS, calibration_str);
+    }
+}
 
 void setup() {
     // Initialize the serial port
@@ -42,12 +67,24 @@ void setup() {
     digitalWrite(pinLED, LOW);
     pinMode(pinXDetect, INPUT_PULLDOWN);
     pinMode(pinYDetect, INPUT_PULLDOWN);
+
+    load_calibration_string();
+
+    Particle.function("save_calibration", save_calibration);
+    Particle.variable("calibration_string", calibration_str);
 }
 
 void loop() {
     if (Serial.available()) { // check to see if Opentrons has requested monitoring to start
         dir = Serial.read(); // read single character
+        while (Serial.available()) Serial.read(); // swallow rest of serial buffer
         switch(dir) {
+            case 'C': // send the calibration string
+                monitoringX = false;
+                monitoringY = false;
+                Serial.println(calibration_str);
+                Particle.publish("read_calibration", calibration_str); // send a message to the cloud for the central committee
+                break;
             case 'X': // let's track the X direction
                 monitoringX = true;
                 monitoringY = false;
@@ -63,7 +100,6 @@ void loop() {
                 monitoringY = false;
                 break;
         }
-        while (Serial.available()) Serial.read(); // swallow rest of serial buffer
     }
 
     if (digitalRead(pinXDetect) == HIGH) { // hey, may be show time!
