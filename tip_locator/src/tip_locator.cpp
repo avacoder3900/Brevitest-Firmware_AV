@@ -21,7 +21,7 @@ void loop();
 #line 11 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(14260);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(3);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
@@ -77,7 +77,6 @@ void setup() {
 void loop() {
     if (Serial.available()) { // check to see if Opentrons has requested monitoring to start
         dir = Serial.read(); // read single character
-        while (Serial.available()) Serial.read(); // swallow rest of serial buffer
         switch(dir) {
             case 'C': // send the calibration string
                 monitoringX = false;
@@ -100,6 +99,7 @@ void loop() {
                 monitoringY = false;
                 break;
         }
+        while (Serial.available()) Serial.read(); // swallow rest of serial buffer
     }
 
     if (digitalRead(pinXDetect) == HIGH) { // hey, may be show time!
@@ -108,6 +108,7 @@ void loop() {
             if (monitoringX) { // if we're monitoring, let everyone know we're done with our bit
                 monitoringX = false;
                 Serial.write('X'); // send the OK to the Opentrons
+                Serial.flush();
                 Particle.publish("X-finish"); // publish a message that says we're done here
             }
             digitalWrite(pinLED, HIGH); // blink the LED so everyone knows it's game on
@@ -122,6 +123,7 @@ void loop() {
             if (monitoringY) {
                 monitoringY = false;
                 Serial.write('Y');
+                Serial.flush();
                 Particle.publish("Y-finish");
             }
             digitalWrite(pinLED, HIGH);
