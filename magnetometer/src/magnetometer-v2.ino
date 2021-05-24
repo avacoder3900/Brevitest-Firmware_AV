@@ -13,7 +13,7 @@
 
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(12430);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(3);
 
 // Return values of endTransmission in the Wire library
 #define kNOERROR 0
@@ -49,6 +49,7 @@ unsigned long nextTime;
 
 #define READ_Z_MIN 1200
 #define READ_Z_MAX 1700
+#define Z_ERROR 0.05
 
 bool qualified = false;
 LEDStatus blinkRed(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
@@ -58,6 +59,16 @@ char result[100];
 unsigned long read_time = 0;
 bool log_readings = false;
 bool ble_connected = false;
+
+static float z_mean[5][3] = {
+    {1550, 1420, 1500},
+    {1370, 1360, 1470},
+    {1470, 1290, 1400},
+    {1540, 1445, 1455},
+    {1620, 1570, 1585}
+};
+// float z_max[5][3];
+// float z_min[5][3];
 
 #define BLE_TYPE BleCharacteristicProperty::READ
 
@@ -111,7 +122,15 @@ void setup() {
     nextTime = millis();
     pinMode(ledPin, OUTPUT);
     digitalWrite(ledPin, LOW);
-   
+
+    // for (int i = 0; i < 5; i++) {
+    //     for (int j = 0; j < 3; j++) {
+    //         int z_error = z_mean[i][j] * Z_ERROR / 100;
+    //         z_max[i][j] = z_mean[i][j] + z_error;
+    //         z_min[i][j] = z_mean[i][j] - z_error;
+    //     }
+    // }
+
     for(int deviceAddress = FIRSTCHANNEL; deviceAddress <= LASTCHANNEL; deviceAddress++) {
         // Enter customer access mode on the ALS31300
         uint16_t error = write(deviceAddress, 0x24, 0x2C413534);
@@ -158,8 +177,10 @@ void getMagnetometerReading() {
 }
 
 bool validate_reading(int well, char channel, MagnetometerReading reading) {
-    bool isOK = reading.mz >= READ_Z_MIN && reading.mz <= READ_Z_MAX;
-    Serial.printlnf("%d-%c:\t%s\t%.1f\t%.1f\t%.1f\t%.1f", well + 1, channel, isOK ? "OK" : "BAD", reading.temperature, reading.mx, reading.my, reading.mz);
+    int c = channel == 'A' ? 0 : (channel == '1' ? 1 : 2);
+    float error = (z_mean[well][c] - reading.mz) / z_mean[well][c];
+    bool isOK = abs(error) < Z_ERROR;
+    Serial.printlnf("%d-%c:\t%s\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f", well + 1, channel, isOK ? "OK" : "BAD", reading.temperature, reading.mx, reading.my, reading.mz, error * 100);
     return isOK;
 }
 
