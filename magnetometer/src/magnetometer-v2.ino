@@ -13,7 +13,7 @@
 
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(12430);
-PRODUCT_VERSION(1);
+PRODUCT_VERSION(2);
 
 // Return values of endTransmission in the Wire library
 #define kNOERROR 0
@@ -46,6 +46,12 @@ unsigned long nextTime;
 #define OFFSET_SAMPLE 0
 #define OFFSET_CONTROL_LOW 5
 #define OFFSET_CONTROL_HIGH 10
+
+#define READ_Z_MIN 1200
+#define READ_Z_MAX 1700
+
+bool qualified = false;
+LEDStatus blinkRed(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 char result[100];
 
@@ -87,7 +93,9 @@ void initialize_BLE() {
     for (int i = 0; i < 5; i++) {
         BLE.addCharacteristic(bleWell[i]);
     }
+}
 
+void startAdvertising() {
     BLE.advertise(&advertData, &scanResponse);
 }
 
@@ -114,11 +122,19 @@ void setup() {
     }
 
     initialize_BLE();
+
+    qualified = ((char) EEPROM.read(0)) == 'Y';
+    if (qualified) {
+        startAdvertising();
+    } else {
+        Log.info("Magnetometer not qualified!");
+        blinkRed.setActive(true);
+    }
 }
 
 void readALS31300ADC(int busAddress, MagnetometerReading &reading);
 
-void readOneWell(int well) {
+void bleReadOneWell(int well) {
     int addr = WELL_1_ADDR - well;
     readALS31300ADC(addr + OFFSET_SAMPLE, sample);
     readALS31300ADC(addr + OFFSET_CONTROL_LOW, controlLow);
@@ -133,7 +149,7 @@ void readOneWell(int well) {
 
 void getMagnetometerReading() {
     for(int i = 0; i < 5; i++) {
-        readOneWell(i);
+        bleReadOneWell(i);
     }
     if (log_readings) Log.info("-------------------------");
     // Blink the LED
@@ -141,20 +157,68 @@ void getMagnetometerReading() {
     digitalWrite(ledPin, ledState);
 }
 
-void loop() {    
+bool validate_reading(int well, char channel, MagnetometerReading reading) {
+    bool isOK = reading.mz >= READ_Z_MIN && reading.mz <= READ_Z_MAX;
+    Serial.printlnf("%d-%c:\t%s\t%.1f\t%.1f\t%.1f\t%.1f", well + 1, channel, isOK ? "OK" : "BAD", reading.temperature, reading.mx, reading.my, reading.mz);
+    return isOK;
+}
+
+bool check_one_well(int well) {
+    bool isOK = true;
+    int addr = WELL_1_ADDR - well;
+    readALS31300ADC(addr + OFFSET_SAMPLE, sample);
+    isOK = validate_reading(well, 'A', sample) && isOK;
+    readALS31300ADC(addr + OFFSET_CONTROL_LOW, controlLow);
+    isOK = validate_reading(well, '1', controlLow) && isOK;
+    readALS31300ADC(addr + OFFSET_CONTROL_HIGH, controlHigh);
+    return validate_reading(well, '2', controlHigh) && isOK;
+}
+
+void qualify_magnetometer() {
+    bool isOK = true;
+    Log.info("Qualifying magnetometer...");
+    for(int i = 0; i < 5; i++) {
+        isOK = check_one_well(i) && isOK;
+    }
+    Serial.printlnf("ID: %s, Date: %s, Result: %s", System.deviceID().c_str(), Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL).c_str(), isOK ? "QUALIFIED" : "UNACCEPTABLE");
+    EEPROM.put(0, isOK ? 'Y' : 'N');
+
+    if (!isOK) {
+        if (BLE.advertising()) {
+            BLE.stopAdvertising();
+        }
+        if (ble_connected || BLE.connected()) {
+            BLE.disconnect();
+            ble_connected = false;
+        }
+    } else if (!BLE.advertising()) {
+        startAdvertising();
+    }
+    blinkRed.setActive(!isOK);
+    qualified = isOK;
+}
+
+void loop() {
     if (Serial.available()) { // sending any data to serial port toggles logging
+        char b = Serial.read();
+        if (b == 'q' || b == 'Q') {
+            qualify_magnetometer();
+        } else {
+            log_readings = !log_readings;
+        }
         while (Serial.available()) Serial.read();
-        log_readings = !log_readings;
     }
 
-    if (BLE.connected() ^ ble_connected) {
-        ble_connected = BLE.connected();
-        Log.info("Bluetooth %sconnected", ble_connected ? "" : "dis");
-        digitalWrite(ledPin, LOW);
-    }
+    if (qualified) {
+        if (BLE.connected() ^ ble_connected) {
+            ble_connected = BLE.connected();
+            Log.info("Bluetooth %sconnected", ble_connected ? "" : "dis");
+            digitalWrite(ledPin, LOW);
+        }
 
-    if (BLE.connected() || log_readings) {
-        getMagnetometerReading();
+        if (BLE.connected() || log_readings) {
+            getMagnetometerReading();
+        }
     }
 }
 
