@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -145,7 +145,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -1109,30 +1109,31 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 
     reading = &(test.reading[test.number_of_readings % OPTICAL_MAXIMUM_NUMBER_OF_READINGS]);
     test.number_of_readings++;
-
-    sum_x = sum_y = sum_z = sum_t = 0;
     
     optical_read_in_progress = true;
     turn_off_heater();
     turn_on_LED(channel, led_power);
-    delay(100);
+    delay(500);
     
     config_optical_sensors(channel, param, addr);
 
     reading->channel = channel;
     reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
-    for (int i = 0; i < reading->samples; i++) {
-        read_attempt = 1;
-        while (read_attempt <= 3) {
-            if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) {
-                sum_x += x;
-                sum_y += y;
-                sum_z += z;
-                sum_t += tempC;
-                read_attempt = 4;
-            } else {
-                Log.info("Read optical sensor failed, channel %c, try %d", channel, read_attempt);
-                read_attempt++;
+    sum_x = sum_y = sum_z = sum_t = 0;
+    if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) { // first pancake
+        for (int i = 0; i < reading->samples; i++) {
+            read_attempt = 1;
+            while (read_attempt <= 3) {
+                if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) {
+                    sum_x += x;
+                    sum_y += y;
+                    sum_z += z;
+                    sum_t += tempC;
+                    read_attempt = 4;
+                } else {
+                    Log.info("Read optical sensor failed, channel %c, try %d", channel, read_attempt);
+                    read_attempt++;
+                }
             }
         }
     }
