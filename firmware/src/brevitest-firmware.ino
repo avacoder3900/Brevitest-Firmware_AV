@@ -974,7 +974,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
     optical_read_in_progress = true;
     turn_off_heater();
     turn_on_LED(channel, led_power);
-    delay(500);
+    delay(100);
     
     config_optical_sensors(channel, param, addr);
 
