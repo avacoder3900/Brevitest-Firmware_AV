@@ -49,12 +49,13 @@
 #define OPTICAL_TEST_DEFAULT_READINGS 5
 #define OPTICAL_TEST_DEFAULT_DISTANCE 2000
 #define OPTICAL_TARGET_L_VALUE 8000
+#define OPTICAL_L_WEIGHT 45
 
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
 // LEDs
-#define LED_DEFAULT_POWER 32
+#define LED_DEFAULT_POWER 128
 #define LED_WARMUP_DELAY_MS 1000
 #define LED_DURATION 500
 
@@ -329,16 +330,24 @@ int current_event_code = 0;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
+
 struct BrevitestOpticalBaselineChannel {
     uint8_t led_power;
     uint16_t l_value;
     int error;
 };
+
 struct BrevitestOpticalBaselineLEDPower {
     uint8_t assay;
     uint8_t control_1;
     uint8_t control_2;
-} baseline_led;
+    BrevitestOpticalBaselineLEDPower() {
+        assay = LED_DEFAULT_POWER;
+        control_1 = LED_DEFAULT_POWER;
+        control_1 = LED_DEFAULT_POWER;
+    }
+} led_power;
+
 struct BrevitestOpticalSensorRecord
 { // 14 bytes
     char channel;

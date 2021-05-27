@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -49,6 +49,7 @@ void turn_on_validation_LED();
 void turn_off_heater();
 int limit(int value, int max, int min);
 int set_heater_power(int power);
+void set_power_on_all_LEDs(int power);
 void turn_on_LED(char channel, int power);
 void turn_off_LED(char channel);
 void turn_on_all_LEDs(int power);
@@ -70,14 +71,15 @@ int validate_magnets();
 void config_optical_sensors(char channel, int param, int addr);
 bool optical_sensor_ready(uint8_t addr);
 bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y, uint16_t *z, uint16_t *tempC);
-void get_data_from_one_optical_sensor(char channel, int param, int led_power);
+void get_data_from_one_optical_sensor(char channel, int param, int pwr);
 bool enable_optical_sensors(bool force_read);
 void disable_optical_sensors();
-void read_optical_sensors(int param, int led_power, bool inBCODE);
+void read_optical_sensors(int param, bool inBCODE);
 int start_optical_sensor_test(int distance, int readings, int period);
 void validate_optics();
 uint16_t calculate_L(int index);
-void find_baseline(char channel);
+uint8_t find_baseline_led_power(char channel);
+void set_baselines();
 int get_heater_temperature();
 void heater_temperature_read();
 int pid_controller();
@@ -147,7 +149,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -429,13 +431,13 @@ void move_stage(int microns, int step_delay)
     }
     dir = (microns < 0) ? HIGH : LOW;
     digitalWrite(pinMotorDir, dir);
-    Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
+    // Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
 
     abs_microns = abs(microns) + microns_error;
     eighth_steps = abs_microns / MOTOR_MICRONS_PER_EIGHTH_STEP;
     microns_error = abs_microns % MOTOR_MICRONS_PER_EIGHTH_STEP;
     floored_step_delay = step_delay < MOTOR_MINIMUM_STEP_DELAY ? MOTOR_MINIMUM_STEP_DELAY : step_delay;
-    Log.info("move_stage: microns = %d, dir = %c, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);
+    // Log.info("move_stage: microns = %d, dir = %c, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);
 
     // delay(10);
     for (i = 0; i < eighth_steps; i++) {
@@ -488,7 +490,6 @@ void move_stage_to_test_start_position()
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
-    Log.info("Moving stage to position %d, distance = %d", position, move_distance);
     move_stage(move_distance, step_delay);
 }
 
@@ -742,6 +743,12 @@ int set_heater_power(int power)
 //                     STAGE LEDS                          //
 //                                                         //
 /////////////////////////////////////////////////////////////
+
+void set_power_on_all_LEDs(int power) {
+    led_power.assay = power;
+    led_power.control_1 = power;
+    led_power.control_2 = power;
+}
 
 void turn_on_LED(char channel, int power)
 {
@@ -1091,7 +1098,7 @@ bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y,
     return true;
 }
 
-void get_data_from_one_optical_sensor(char channel, int param, int led_power)
+void get_data_from_one_optical_sensor(char channel, int param, int pwr)
 {
     uint8_t addr;
     int read_attempt, sum_x, sum_y, sum_z, sum_t;
@@ -1114,7 +1121,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
     
     optical_read_in_progress = true;
     turn_off_heater();
-    turn_on_LED(channel, led_power);
+    turn_on_LED(channel, pwr);
     delay(100);
     
     config_optical_sensors(channel, param, addr);
@@ -1146,7 +1153,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 
     tempF = ((reading->temperature * 9) / 5) + 32;
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-    Log.info("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, led_power, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
+    Log.info("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, pwr, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
     optical_read_in_progress = false;
     // turn_off_LED(channel);
@@ -1172,17 +1179,17 @@ void disable_optical_sensors()
     Wire.end();
 }
 
-void read_optical_sensors(int param, int led_power, bool inBCODE)
+void read_optical_sensors(int param, bool inBCODE)
 {
     unsigned long elapsed = millis();
 
     if (enable_optical_sensors(true))
     {
-        get_data_from_one_optical_sensor('A', param, led_power);
+        get_data_from_one_optical_sensor('A', param, led_power.assay);
         if (inBCODE) BCODE_loop(); else Particle.process();
-        get_data_from_one_optical_sensor('1', param, led_power);
+        get_data_from_one_optical_sensor('1', param, led_power.control_1);
         if (inBCODE) BCODE_loop(); else Particle.process();
-        get_data_from_one_optical_sensor('2', param, led_power);
+        get_data_from_one_optical_sensor('2', param, led_power.control_2);
         if (inBCODE) BCODE_loop(); else Particle.process();
     }
     else
@@ -1220,7 +1227,8 @@ void validate_optics() {
     test.number_of_readings = 0;
     reset_stage(false);
     move_stage_to_optical_read_position();
-    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+    set_power_on_all_LEDs(LED_DEFAULT_POWER);
+    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
 
     if (test.number_of_readings == 3) { // test completed
         for (int i = 0; i < 3; i++)
@@ -1242,47 +1250,49 @@ uint16_t calculate_L(int index) {
     return integerSqrt((test.reading[index].x * test.reading[index].x) + (test.reading[index].y * test.reading[index].y) + (test.reading[index].z * test.reading[index].z));
 }
 
-void find_baseline(char channel) {
-    BrevitestOpticalBaselineChannel a, b;
-    int offset;
+uint8_t find_baseline_led_power(char channel) {
+    uint8_t pwr, last_pwr;
+    uint16_t l_value;
+    int error, i, last_error, offset;
 
-    if (enable_optical_sensors(true)) {
-        a.led_power = 32;
-        b.led_power = 255;
-        for (int i = 0; i < 8; i++) {
-            test.number_of_readings = 0;
-            get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, a.led_power);
-            a.l_value = calculate_L(0);
-            a.error = OPTICAL_TARGET_L_VALUE - a.l_value;
-
-            get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, b.led_power);
-            b.l_value = calculate_L(1);
-            b.error = OPTICAL_TARGET_L_VALUE - b.l_value;
-
-            Log.info("i = %d | a: led = %d, L = %d, err = %d | b: led = %d, L = %d, err = %d", i, a.led_power, a.l_value, a.error, b.led_power, b.l_value, b.error);
-            if (abs(b.led_power - a.led_power) <= 1) {
-                if (channel == 'A') {
-                    baseline_led.assay = a.led_power;
-                    Log.info("baseline for assay channel = %d", baseline_led.assay);
-                } else if (channel == '1') {
-                    baseline_led.control_1 = a.led_power;
-                    Log.info("baseline for control 1 channel = %d", baseline_led.control_1);
-                } else if (channel == '2') {
-                    baseline_led.control_2 = a.led_power;
-                    Log.info("baseline for control 2 channel = %d", baseline_led.control_2);
-                }
-                break;
+    pwr = 128;
+    for (i = 0; i < 8; i++) {
+        test.number_of_readings = 0;
+        get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, pwr);
+        l_value = calculate_L(0);
+        error = OPTICAL_TARGET_L_VALUE - l_value;
+        // Log.info("i = %d, pwr = %d, L = %d, err = %d", i, pwr, l_value, error);
+        offset = error / OPTICAL_L_WEIGHT;
+        if (offset == 0) {
+            if (error > 0) {
+                last_pwr = pwr + 1;
             } else {
-                offset = a.error;
-                offset *= (b.led_power - a.led_power);
-                offset /= b.l_value - a.l_value;
-                a.led_power += offset;
-                offset = b.error;
-                offset *= (b.led_power - a.led_power);
-                offset /= b.l_value - a.l_value;
-                b.led_power += offset;
+                last_pwr = pwr - 1;
             }
+            test.number_of_readings = 0;
+            get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, last_pwr);
+            last_error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
+            if (abs(error) > abs(last_error)) {
+                pwr = last_pwr;
+                error = last_error;
+            }
+            Log.info("last, pwr = %d, err = %d", pwr, error);
+            break;
+        } else {
+            pwr += offset;
         }
+    }
+    return pwr;
+}
+
+void set_baselines() {
+    if (enable_optical_sensors(true)) {
+        led_power.assay = find_baseline_led_power('A');
+        Log.info("baseline for assay channel = %d", led_power.assay);
+        led_power.control_1 = find_baseline_led_power('1');
+        Log.info("baseline for control 1 channel = %d", led_power.control_1);
+        led_power.control_2 = find_baseline_led_power('2');
+        Log.info("baseline for control 2 channel = %d", led_power.control_2);
     }
     disable_optical_sensors();
 }
@@ -1894,7 +1904,7 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, start_index;
+    int param1, param2, param3, saved_position, start_index;
 
     if (test_cancelled) return index;
 
@@ -1932,17 +1942,40 @@ int process_one_BCODE_command(int cmd, int index)
             break;
         case 10: // Read optical sensors with default param and LED power
             // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
-            Log.info("Moving stage to prepare for reading");
             move_stage_to_optical_read_position();
             update_progress("Reading", 2000);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            set_power_on_all_LEDs(LED_DEFAULT_POWER);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
             break;
         case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
             index = get_BCODE_token(index, &param1); // params
             index = get_BCODE_token(index, &param2); // LED power
             move_stage_to_optical_read_position();
             update_progress("Reading", 2000);
-            read_optical_sensors(param1, param2, false);
+            set_power_on_all_LEDs(param2);
+            read_optical_sensors(param1, false);
+            break;
+        case 12: // Find baseline LED power and take param1 baseline readings - stage returns back to position prior to reading
+            index = get_BCODE_token(index, &param1); // params
+            saved_position = stage_position;
+            move_stage_to_optical_read_position();
+            update_progress("Setting baselines", 2000);
+            set_baselines();
+            update_progress("Reading", 2000);
+            for (int i = 0; i < param1; i++) {
+                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            }
+            move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
+            break;
+        case 13: // Take param1 readings - stage returns back to position prior to reading
+            index = get_BCODE_token(index, &param1); // params
+            saved_position = stage_position;
+            move_stage_to_optical_read_position();
+            update_progress("Reading", 2000);
+            for (int i = 0; i < param1; i++) {
+                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            }
+            move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
             break;
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
@@ -2027,8 +2060,9 @@ void do_stress_test_step(int step) {
             break;
         case 9: // read baseline sensors
             move_stage_to_optical_read_position();
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            set_baselines();
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
             break;
         case 10: // move to well 4
             move_stage(9425, MOTOR_SLOW_STEP_DELAY);
@@ -2044,9 +2078,9 @@ void do_stress_test_step(int step) {
             break;
         case 14: // read sensors
             move_stage_to_optical_read_position();
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
             break;
         case 15: // save cycle number
             eeprom.stress_test_cycles++;
@@ -2333,12 +2367,10 @@ int particle_command(String arg)
             param3 *= 2;
             result = start_optical_sensor_test(param2, param3, param4);
             break;
-        case 83: // find optical baseline param and LED power for each channel
+        case 83: // find optical baseline LED power for each channel
             reset_stage(false);
             move_stage_to_optical_read_position();
-            find_baseline('A');
-            find_baseline('1');
-            find_baseline('2');
+            set_baselines();
             sleep_motor();
             result = 1;
             break;
@@ -2811,7 +2843,8 @@ void async_command_loop() {
     } else if (async_command_optical_running && optical_test_take_reading) {
         optical_test_take_reading = false;
         Log.info("Stage location: %d", stage_position);
-        read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, LED_DEFAULT_POWER, false);
+        set_power_on_all_LEDs(LED_DEFAULT_POWER);
+        read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
         if (optical_test_move) {
             move_stage(optical_test_move, MOTOR_SLOW_STEP_DELAY);
         }
