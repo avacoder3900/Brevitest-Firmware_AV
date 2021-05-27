@@ -979,7 +979,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr)
     optical_read_in_progress = true;
     turn_off_heater();
     turn_on_LED(channel, pwr);
-    delay(100);
+    delay(300);
     
     config_optical_sensors(channel, param, addr);
 
@@ -1013,7 +1013,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr)
     Log.info("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, pwr, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
     optical_read_in_progress = false;
-    // turn_off_LED(channel);
+    turn_off_LED(channel);
 }
 
 bool enable_optical_sensors(bool force_read)
@@ -1152,6 +1152,7 @@ void set_baselines() {
         Log.info("baseline for control 2 channel = %d", led_power.control_2);
     }
     disable_optical_sensors();
+    test.number_of_readings = 0;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2454,12 +2455,12 @@ void startup_device()
     reset_stage(true);
 
     Log.info("Turning on LEDs");
-    turn_on_all_LEDs(LED_DEFAULT_POWER);
-    // turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
-    // delay(500);
-    // turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
-    // delay(500);
-    // turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
+    // turn_on_all_LEDs(LED_DEFAULT_POWER);
+    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+    delay(500);
+    turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
+    delay(500);
+    turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
