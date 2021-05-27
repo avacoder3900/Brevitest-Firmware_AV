@@ -44,10 +44,11 @@
 
 // optical sensors
 #define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
-#define OPTICAL_SENSOR_DEFAULT_PARAM 0xA7
+#define OPTICAL_SENSOR_DEFAULT_PARAM 0xA5
 #define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 21
 #define OPTICAL_TEST_DEFAULT_READINGS 5
 #define OPTICAL_TEST_DEFAULT_DISTANCE 2000
+#define OPTICAL_TARGET_L_VALUE 8000
 
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
@@ -328,7 +329,16 @@ int current_event_code = 0;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
-
+struct BrevitestOpticalBaselineChannel {
+    uint8_t led_power;
+    uint16_t l_value;
+    int error;
+};
+struct BrevitestOpticalBaselineLEDPower {
+    uint8_t assay;
+    uint8_t control_1;
+    uint8_t control_2;
+} baseline_led;
 struct BrevitestOpticalSensorRecord
 { // 14 bytes
     char channel;

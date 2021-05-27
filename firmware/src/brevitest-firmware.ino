@@ -1005,10 +1005,10 @@ void get_data_from_one_optical_sensor(char channel, int param, int led_power)
 
     tempF = ((reading->temperature * 9) / 5) + 32;
     l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-    Log.info("S: %c %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
+    Log.info("S: %c %d %d %d => T = %d˚C %d˚F, X = %d, Y = %d, Z = %d, L = %d", channel, param, led_power, reading->samples, reading->temperature, tempF, reading->x, reading->y, reading->z, l_value);
 
     optical_read_in_progress = false;
-    turn_off_LED(channel);
+    // turn_off_LED(channel);
 }
 
 bool enable_optical_sensors(bool force_read)
@@ -1095,6 +1095,55 @@ void validate_optics() {
     Log.info("particle_register: %s", particle_register);
     brevitest_publish("validate-optics", particle_register);
     reset_stage(true);
+}
+
+uint16_t calculate_L(int index) {
+    return integerSqrt((test.reading[index].x * test.reading[index].x) + (test.reading[index].y * test.reading[index].y) + (test.reading[index].z * test.reading[index].z));
+}
+
+void find_baseline(char channel) {
+    BrevitestOpticalBaselineChannel a, b;
+    int offset;
+
+    if (enable_optical_sensors(true)) {
+        a.led_power = 32;
+        b.led_power = 255;
+        for (int i = 0; i < 8; i++) {
+            test.number_of_readings = 0;
+            get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, a.led_power);
+            a.l_value = calculate_L(0);
+            a.error = OPTICAL_TARGET_L_VALUE - a.l_value;
+
+            get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, b.led_power);
+            b.l_value = calculate_L(1);
+            b.error = OPTICAL_TARGET_L_VALUE - b.l_value;
+
+            Log.info("i = %d | a: led = %d, L = %d, err = %d | b: led = %d, L = %d, err = %d", i, a.led_power, a.l_value, a.error, b.led_power, b.l_value, b.error);
+            if (abs(b.led_power - a.led_power) <= 1) {
+                if (channel == 'A') {
+                    baseline_led.assay = a.led_power;
+                    Log.info("baseline for assay channel = %d", baseline_led.assay);
+                } else if (channel == '1') {
+                    baseline_led.control_1 = a.led_power;
+                    Log.info("baseline for control 1 channel = %d", baseline_led.control_1);
+                } else if (channel == '2') {
+                    baseline_led.control_2 = a.led_power;
+                    Log.info("baseline for control 2 channel = %d", baseline_led.control_2);
+                }
+                break;
+            } else {
+                offset = a.error;
+                offset *= (b.led_power - a.led_power);
+                offset /= b.l_value - a.l_value;
+                a.led_power += offset;
+                offset = b.error;
+                offset *= (b.led_power - a.led_power);
+                offset /= b.l_value - a.l_value;
+                b.led_power += offset;
+            }
+        }
+    }
+    disable_optical_sensors();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2143,6 +2192,15 @@ int particle_command(String arg)
             param3 *= 2;
             result = start_optical_sensor_test(param2, param3, param4);
             break;
+        case 83: // find optical baseline param and LED power for each channel
+            reset_stage(false);
+            move_stage_to_optical_read_position();
+            find_baseline('A');
+            find_baseline('1');
+            find_baseline('2');
+            sleep_motor();
+            result = 1;
+            break;
 //
 //  STRESS TEST
 //
@@ -2366,11 +2424,12 @@ void startup_device()
     reset_stage(true);
 
     Log.info("Turning on LEDs");
-    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
-    delay(500);
-    turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
-    delay(500);
-    turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
+    turn_on_all_LEDs(LED_DEFAULT_POWER);
+    // turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+    // delay(500);
+    // turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
+    // delay(500);
+    // turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
