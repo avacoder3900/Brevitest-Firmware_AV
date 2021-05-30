@@ -49,13 +49,14 @@
 #define OPTICAL_TEST_DEFAULT_READINGS 5
 #define OPTICAL_TEST_DEFAULT_DISTANCE 2000
 #define OPTICAL_TARGET_L_VALUE 8000
-#define OPTICAL_L_WEIGHT 45
+#define OPTICAL_L_WEIGHT 60
+#define OPTICAL_ERROR_THRESHOLD 8
 
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
 // LEDs
-#define LED_DEFAULT_POWER 128
+#define LED_DEFAULT_POWER 113
 #define LED_WARMUP_DELAY_MS 1000
 #define LED_DURATION 500
 
@@ -108,7 +109,7 @@
 // stage
 #define STAGE_RESET_STEPS -60000
 #define STAGE_POSITION_LIMIT 45000
-#define STAGE_OPTICAL_SENSOR_READ_POSITION 21400
+#define STAGE_OPTICAL_SENSOR_READ_POSITION 20900
 #define STAGE_MICRONS_TO_INITIAL_POSITION 12800
 #define STAGE_MICRONS_TO_TEST_START_POSITION STAGE_MICRONS_TO_INITIAL_POSITION
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
@@ -337,16 +338,22 @@ struct BrevitestOpticalBaselineChannel {
     int error;
 };
 
-struct BrevitestOpticalBaselineLEDPower {
-    uint8_t assay;
-    uint8_t control_1;
-    uint8_t control_2;
-    BrevitestOpticalBaselineLEDPower() {
-        assay = LED_DEFAULT_POWER;
-        control_1 = LED_DEFAULT_POWER;
-        control_1 = LED_DEFAULT_POWER;
+struct BrevitestOpticalBaseline {
+    uint8_t led_assay;
+    uint8_t led_c1;
+    uint8_t led_c2;
+    int pos_assay;
+    int pos_c1;
+    int pos_c2;
+    BrevitestOpticalBaseline() {
+        led_assay = LED_DEFAULT_POWER;
+        led_c1 = LED_DEFAULT_POWER;
+        led_c2 = LED_DEFAULT_POWER;
+        pos_assay = STAGE_OPTICAL_SENSOR_READ_POSITION;
+        pos_c1 = STAGE_OPTICAL_SENSOR_READ_POSITION;
+        pos_c2 = STAGE_OPTICAL_SENSOR_READ_POSITION;
     }
-} led_power;
+} baseline;
 
 struct BrevitestOpticalSensorRecord
 { // 14 bytes
