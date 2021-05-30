@@ -43,20 +43,21 @@
 #define SHIPPING_PREFIX "SHP-"
 
 // optical sensors
-#define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 5
-#define OPTICAL_SENSOR_DEFAULT_PARAM 0xA5
+#define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 4
+#define OPTICAL_SENSOR_DEFAULT_PARAM 0x93
 #define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 21
 #define OPTICAL_TEST_DEFAULT_READINGS 5
 #define OPTICAL_TEST_DEFAULT_DISTANCE 2000
-#define OPTICAL_TARGET_L_VALUE 8000
+#define OPTICAL_TARGET_L_VALUE 26000
 #define OPTICAL_L_WEIGHT 60
-#define OPTICAL_ERROR_THRESHOLD 8
+#define OPTICAL_SEARCH_THRESHOLD 26
+#define OPTICAL_ERROR_THRESHOLD 65
 
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
 // LEDs
-#define LED_DEFAULT_POWER 113
+#define LED_DEFAULT_POWER 224
 #define LED_WARMUP_DELAY_MS 1000
 #define LED_DURATION 500
 
@@ -272,8 +273,6 @@ struct HeatingElement
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
-void turn_off_heater(void);
-Timer control_heater_off(HEATER_CONTROL_INTERVAL, turn_off_heater, true);
 bool control_heater_temperature_flag = false;
 bool heater_debouncing_in_progress = false;
 unsigned long heater_debounce_time;

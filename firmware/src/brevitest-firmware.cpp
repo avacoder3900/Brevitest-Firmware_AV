@@ -46,6 +46,7 @@ void turn_on_busy_LED();
 void turn_on_available_LED();
 void turn_on_async_LED();
 void turn_on_validation_LED();
+void turn_on_heater(int power);
 void turn_off_heater();
 int limit(int value, int max, int min);
 int set_heater_power(int power);
@@ -80,7 +81,7 @@ void validate_optics();
 uint16_t calculate_L(int index);
 uint8_t find_baseline_led_power(char channel, int *error);
 int find_baseline_position(char channel, uint8_t pwr, int *min_error);
-void set_baselines();
+bool set_baselines();
 int get_heater_temperature();
 void heater_temperature_read();
 int pid_controller();
@@ -504,9 +505,9 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
     for (i = 0; i < cycles; i++)
     {
         move_stage(amplitude, step_delay);
-        if (inBCODE) BCODE_loop(); else Particle.process();
+        if (inBCODE) BCODE_loop();
         move_stage(-amplitude, step_delay);
-        if (inBCODE) BCODE_loop(); else Particle.process();
+        if (inBCODE) BCODE_loop();
         if (test_cancelled) return;
     }
 }
@@ -702,19 +703,21 @@ void turn_on_validation_LED() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-// void turn_on_heater(int power)
-// {
-//     power = power > HEATER_MAX_POWER ? HEATER_MAX_POWER : (power < 0 ? 0 : power);
-//     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-//     heater.power = power;
-//     heater.heater_on = true;
-// }
+void turn_on_heater(int power)
+{
+    power = limit(power, HEATER_MAX_POWER, 0);
+    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+    heater.power = power;
+    heater.heater_on = true;
+    if (serial_messaging_on) Log.info("Heater set to power %d", power);
+}
 
 void turn_off_heater()
 {
-    digitalWrite(heater.heater_pin, LOW);
+    analogWrite(heater.heater_pin, 0);
     heater.heater_on = false;
     heater.power = 0;
+    if (serial_messaging_on) Log.info("Heater turned off");
 }
 
 int limit(int value, int max, int min)
@@ -725,15 +728,8 @@ int limit(int value, int max, int min)
 int set_heater_power(int power)
 {
     unsigned long start = millis();
-    power = limit(power, HEATER_CONTROL_INTERVAL, 0);
-    control_heater_off.changePeriod(power);
-    heater.power = power;
-    heater.heater_on = power != 0;
-    if (heater.heater_on) {
-        digitalWrite(heater.heater_pin, HIGH);
-        control_heater_off.start();
-        if (serial_messaging_on)
-            Log.info("Heater set to power %d", power);
+    if (power != 0) {
+        if (!optical_read_in_progress) turn_on_heater(power);
     } else {
         turn_off_heater();
     }
@@ -1122,8 +1118,6 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
     reading = &(test.reading[test.number_of_readings % OPTICAL_MAXIMUM_NUMBER_OF_READINGS]);
     test.number_of_readings++;
     
-    optical_read_in_progress = true;
-    turn_off_heater();
     turn_on_LED(channel, pwr);
     delay(100);
     
@@ -1150,7 +1144,6 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
         }
     }
     turn_off_LED(channel);
-    optical_read_in_progress = false;
 
     reading->x = sum_x / reading->samples;
     reading->y = sum_y / reading->samples;
@@ -1165,6 +1158,10 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
 
 bool enable_optical_sensors(bool force_read)
 {
+    optical_read_in_progress = true;
+    turn_off_heater();
+    delay(100);
+
     if (Wire.isEnabled())
     {
         return true;
@@ -1181,6 +1178,7 @@ bool enable_optical_sensors(bool force_read)
 void disable_optical_sensors()
 {
     Wire.end();
+    optical_read_in_progress = false;
 }
 
 void read_optical_sensors(int param, bool inBCODE)
@@ -1191,13 +1189,13 @@ void read_optical_sensors(int param, bool inBCODE)
     {
         move_stage_to_position(baseline.pos_assay, MOTOR_SLOW_STEP_DELAY);
         get_data_from_one_optical_sensor('A', param, baseline.led_assay, true);
-        if (inBCODE) BCODE_loop(); else Particle.process();
+        if (inBCODE) BCODE_loop();
         move_stage_to_position(baseline.pos_c1, MOTOR_SLOW_STEP_DELAY);
         get_data_from_one_optical_sensor('1', param, baseline.led_c1, true);
-        if (inBCODE) BCODE_loop(); else Particle.process();
+        if (inBCODE) BCODE_loop();
         move_stage_to_position(baseline.pos_c2, MOTOR_SLOW_STEP_DELAY);
         get_data_from_one_optical_sensor('2', param, baseline.led_c2, true);
-        if (inBCODE) BCODE_loop(); else Particle.process();
+        if (inBCODE) BCODE_loop();
     }
     else
     {
@@ -1262,6 +1260,7 @@ uint8_t find_baseline_led_power(char channel, int *error) {
     int l_value, last_l_value;
     int i, last_error, offset;
 
+    move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
     pwr = last_pwr = LED_DEFAULT_POWER;
     l_value = OPTICAL_TARGET_L_VALUE;
     for (i = 0; i < 10; i++) {
@@ -1272,7 +1271,7 @@ uint8_t find_baseline_led_power(char channel, int *error) {
         *error = OPTICAL_TARGET_L_VALUE - l_value;
         // Log.info("i = %d, pwr = %d, L = %d, err = %d", i, pwr, l_value, error);
         if (i == 0) {
-            pwr += *error / OPTICAL_L_WEIGHT;
+            pwr += *error > 0 ? 10 : -10;
             continue;
         } else if (abs(*error) <= OPTICAL_ERROR_THRESHOLD) {
             break;
@@ -1303,28 +1302,31 @@ uint8_t find_baseline_led_power(char channel, int *error) {
 }
 
 int find_baseline_position(char channel, uint8_t pwr, int *min_error) {
-    int error = 60000;
-    int l_value;
+    int error;
     int best_pos = STAGE_OPTICAL_SENSOR_READ_POSITION;
 
     if (abs(*min_error) > OPTICAL_ERROR_THRESHOLD) {
-        move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION - 8 * MOTOR_MICRONS_PER_EIGHTH_STEP, MOTOR_SLOW_STEP_DELAY);
-        for (int i = 0; i < 17; i++) {
+        for (int i = -2; i < 3; i ++) {
+            move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION + i * MOTOR_MICRONS_PER_EIGHTH_STEP, MOTOR_SLOW_STEP_DELAY);
             test.number_of_readings = 0;
             get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, pwr, true);
-            l_value = calculate_L(0);
-            error = OPTICAL_TARGET_L_VALUE - l_value;
+            error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
             if(abs(error) < OPTICAL_ERROR_THRESHOLD) {
                 best_pos = stage_position;
                 *min_error = error;
+                move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION + (i + 1) * MOTOR_MICRONS_PER_EIGHTH_STEP, MOTOR_SLOW_STEP_DELAY);
+                test.number_of_readings = 0;
+                get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, pwr, true);
+                error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
+                if (abs(error) < abs(*min_error)) {
+                    *min_error = error;
+                    best_pos = stage_position;
+                }
                 break;
             } else if(abs(error) < abs(*min_error)) {
                 *min_error = error;
                 best_pos = stage_position;
-            } else if (l_value < OPTICAL_TARGET_L_VALUE) {
-                break;
             }
-            move_stage(MOTOR_MICRONS_PER_EIGHTH_STEP, MOTOR_SLOW_STEP_DELAY);
         }
         move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
     }
@@ -1332,23 +1334,31 @@ int find_baseline_position(char channel, uint8_t pwr, int *min_error) {
     return best_pos;
 }
 
-void set_baselines() {
+bool set_baselines() {
     int error;
-    if (enable_optical_sensors(true)) {
-        baseline.led_assay = find_baseline_led_power('A', &error);
-        baseline.pos_assay = find_baseline_position('A', baseline.led_assay, &error);
-        Log.info("baseline for assay channel: pwr = %d, pos = %d, error = %d", baseline.led_assay, baseline.pos_assay, error);
+    int max_error = 100;
+    int attempt = 0;
+    while (max_error > OPTICAL_ERROR_THRESHOLD && attempt++ < 3) {
+        if (enable_optical_sensors(true)) {
+            baseline.led_assay = find_baseline_led_power('A', &error);
+            // baseline.pos_assay = find_baseline_position('A', baseline.led_assay, &error);
+            Log.info("baseline for assay channel: attempt = %d, pwr = %d, pos = %d, error = %d", attempt, baseline.led_assay, baseline.pos_assay, error);
+            max_error = abs(error);
 
-        baseline.led_c1 = find_baseline_led_power('1', &error);
-        baseline.pos_c1 = find_baseline_position('1', baseline.led_c1, &error);
-        Log.info("baseline for control 1 channel: pwr = %d, pos = %d, error = %d", baseline.led_c1, baseline.pos_c1, error);
+            baseline.led_c1 = find_baseline_led_power('1', &error);
+            // baseline.pos_c1 = find_baseline_position('1', baseline.led_c1, &error);
+            Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, pos = %d, error = %d", attempt, baseline.led_c1, baseline.pos_c1, error);
+            max_error = abs(error) > max_error ? abs(error) : max_error;
 
-        baseline.led_c2 = find_baseline_led_power('2', &error);
-        baseline.pos_c2 = find_baseline_position('2', baseline.led_c2, &error);
-        Log.info("baseline for control 2 channel: pwr = %d, pos = %d, error = %d", baseline.led_c2, baseline.pos_c2, error);
+            baseline.led_c2 = find_baseline_led_power('2', &error);
+            // baseline.pos_c2 = find_baseline_position('2', baseline.led_c2, &error);
+            Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, pos = %d, error = %d", attempt, baseline.led_c2, baseline.pos_c2, error);
+            max_error = abs(error) > max_error ? abs(error) : max_error;
+        }
+        disable_optical_sensors();
     }
-    disable_optical_sensors();
     test.number_of_readings = 0;
+    return max_error <= OPTICAL_ERROR_THRESHOLD;
 }
 
 /////////////////////////////////////////////////////////////
@@ -1922,7 +1932,7 @@ int BCODE_loop()
 {
     unsigned long total_duration = millis();
 
-    if (!optical_read_in_progress) set_heater_power(pid_controller());
+    set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeDetected) == HIGH) {
         Log.info("Cartridge movement detected...");
         delay(100);
@@ -2012,19 +2022,20 @@ int process_one_BCODE_command(int cmd, int index)
         case 12: // Find baseline LED power and take param1 baseline readings - stage returns back to position prior to reading
             index = get_BCODE_token(index, &param1); // params
             saved_position = stage_position;
-            move_stage_to_optical_read_position();
             update_progress("Setting baselines", 2000);
-            set_baselines();
-            update_progress("Reading", 2000);
-            for (int i = 0; i < param1; i++) {
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            if (set_baselines()) {
+                update_progress("Reading", 2000);
+                for (int i = 0; i < param1; i++) {
+                    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+                }
+                move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
+            } else {
+                test_cancelled = true;
             }
-            move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
             break;
         case 13: // Take param1 readings - stage returns back to position prior to reading
             index = get_BCODE_token(index, &param1); // params
             saved_position = stage_position;
-            move_stage_to_optical_read_position();
             update_progress("Reading", 2000);
             for (int i = 0; i < param1; i++) {
                 read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
@@ -2088,53 +2099,67 @@ void do_stress_test_step(int step) {
         case 0: // restart stress test
             reset_stage(false);
             break;
-        case 1: // move to start of well 2
-            move_stage(-2000, MOTOR_SLOW_STEP_DELAY);
+        case 1: // move to start of well 2 and wait one minute
+            move_stage(-1500, MOTOR_SLOW_STEP_DELAY);
+            delay(60000);
             break;
-        case 2: // oscillate in well 2
-            oscillate_stage(3000, MOTOR_OSCILLATION_STEP_DELAY, 500, false);
+        case 2: // oscillate in well 2 and wait for beads to gather
+            oscillate_stage(3000, 250, 100, true);
+            delay(3000);
             break;
         case 3: // move to well 1
-            move_stage(-8600, MOTOR_SLOW_STEP_DELAY);
+            move_stage(-6000, 65000);
             break;
         case 4: // oscillate in well 1
-            oscillate_stage(4500, MOTOR_OSCILLATION_STEP_DELAY, 600, false);
+            oscillate_stage(-4500, 250, 250, true);
+            delay(4000);
             break;
         case 5: // move to well 2
-            move_stage(12300, MOTOR_SLOW_STEP_DELAY);
+            move_stage(6000, 80000);
+            delay(3000);
+            move_stage(3750, 10000);
             break;
         case 6: // oscillate in well 2
-            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 400, false);
+            oscillate_stage(-4500, 250, 200, true);
+            delay(3000);
             break;
         case 7: // move to well 3
-            move_stage(8000, MOTOR_SLOW_STEP_DELAY);
+            move_stage(4800, 80000);
+            delay(3000);
+            move_stage(3200, 10000);
             break;
         case 8: // oscillate in well 3
-            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 300, false);
+            oscillate_stage(-4500, 250, 150, true);
             break;
         case 9: // read baseline sensors
-            move_stage_to_optical_read_position();
             set_baselines();
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+            delay(1500);
             break;
         case 10: // move to well 4
-            move_stage(9425, MOTOR_SLOW_STEP_DELAY);
+            move_stage(4800, 80000);
+            delay(3000);
+            move_stage(3200, 10000);
             break;
         case 11: // oscillate in well 4
-            oscillate_stage(-4500, MOTOR_OSCILLATION_STEP_DELAY, 400, false);
+            oscillate_stage(-4500, 250, 500, true);
+            delay(1500);
             break;
         case 12: // move to well 5
-            move_stage(8400, MOTOR_SLOW_STEP_DELAY);
+            move_stage(4400, 80000);
+            delay(3000);
             break;
         case 13: // oscillate in well 5
-            oscillate_stage(-6500, MOTOR_OSCILLATION_STEP_DELAY, 600, false);
+            oscillate_stage(6500, 250, 400, true);
+            delay(5000);
             break;
         case 14: // read sensors
-            move_stage_to_optical_read_position();
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            move_stage(-5000, 65000);
+            delay(300);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
             break;
         case 15: // save cycle number
             eeprom.stress_test_cycles++;
@@ -2143,9 +2168,8 @@ void do_stress_test_step(int step) {
                 eeprom.maximum_stress_test_cycles = eeprom.stress_test_cycles;
             }
             store_eeprom();
-            if (stress_test_limit != 0 && eeprom.stress_test_cycles > stress_test_limit) {
+            if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit) {
                 async_command_stress_test_running = false;
-                async_command_running = false;
             }
             break;
     }
@@ -2358,9 +2382,9 @@ int particle_command(String arg)
             result = heater.temp_C_10X;
             break;
         case 51: // turn on heater at power param1
-            // indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
-            // turn_on_heater(param1);
-            // result = param1;
+            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
+            turn_on_heater(param1);
+            result = param1;
             break;
         case 52: // turn off heater
             turn_off_heater();
@@ -2425,6 +2449,8 @@ int particle_command(String arg)
             reset_stage(false);
             move_stage_to_optical_read_position();
             set_baselines();
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
             reset_stage(true);
             result = 1;
             break;
@@ -2443,7 +2469,7 @@ int particle_command(String arg)
             break;
         case 91: // stop stress test
             async_command_stress_test_running = false;
-            async_command_running = false;
+            async_command_running = true;
             result = eeprom.stress_test_cycles;
             break;
 //
@@ -2698,12 +2724,12 @@ void setup() {
     init_analog_pin(pinLEDControl2, OUTPUT, 0);
 
     init_analog_pin(pinHeaterThermistor, INPUT, 0);
+    init_analog_pin(pinHeater, OUTPUT, 0);
 
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
-    init_digital_pin(pinHeater, OUTPUT, LOW);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
@@ -2913,6 +2939,10 @@ void async_command_loop() {
             async_command_timer.stop();
             sleep_motor();
         }
+    } else if (async_command_running && !async_command_stress_test_running) {
+        async_command_running = false;
+        async_command_timer.stop();
+        sleep_motor();
     }
 }
 
