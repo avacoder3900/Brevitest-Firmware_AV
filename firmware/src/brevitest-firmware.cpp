@@ -80,7 +80,6 @@ int start_optical_sensor_test(int distance, int readings, int period);
 void validate_optics();
 uint16_t calculate_L(int index);
 uint8_t find_baseline_led_power(char channel, int *error);
-int find_baseline_position(char channel, uint8_t pwr, int *min_error);
 bool set_baselines();
 int get_heater_temperature();
 void heater_temperature_read();
@@ -1265,15 +1264,15 @@ uint8_t find_baseline_led_power(char channel, int *error) {
     l_value = OPTICAL_TARGET_L_VALUE;
     for (i = 0; i < 10; i++) {
         test.number_of_readings = 0;
-        get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) pwr, true);
+        get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) pwr, false);
         last_l_value = l_value;
         l_value = calculate_L(0);
         *error = OPTICAL_TARGET_L_VALUE - l_value;
         // Log.info("i = %d, pwr = %d, L = %d, err = %d", i, pwr, l_value, error);
-        if (i == 0) {
-            pwr += *error > 0 ? 10 : -10;
+        if (i <= 1) {
+            pwr += *error > 0 ? 10 - 5 * i : -10 + 5 * i;
             continue;
-        } else if (abs(*error) <= OPTICAL_ERROR_THRESHOLD) {
+        } else if (abs(*error) <= OPTICAL_SEARCH_THRESHOLD) {
             break;
         } else {
             offset = *error * (last_pwr - pwr) / (last_l_value - l_value);
@@ -1284,7 +1283,7 @@ uint8_t find_baseline_led_power(char channel, int *error) {
                     last_pwr = pwr - 1;
                 }
                 test.number_of_readings = 0;
-                get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) last_pwr, true);
+                get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) last_pwr, false);
                 last_error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
                 if (abs(*error) > abs(last_error)) {
                     pwr = last_pwr;
@@ -1301,39 +1300,6 @@ uint8_t find_baseline_led_power(char channel, int *error) {
     return pwr;
 }
 
-int find_baseline_position(char channel, uint8_t pwr, int *min_error) {
-    int error;
-    int best_pos = STAGE_OPTICAL_SENSOR_READ_POSITION;
-
-    if (abs(*min_error) > OPTICAL_ERROR_THRESHOLD) {
-        for (int i = -2; i < 3; i ++) {
-            move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION + i * MOTOR_MICRONS_PER_EIGHTH_STEP, MOTOR_SLOW_STEP_DELAY);
-            test.number_of_readings = 0;
-            get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, pwr, true);
-            error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
-            if(abs(error) < OPTICAL_ERROR_THRESHOLD) {
-                best_pos = stage_position;
-                *min_error = error;
-                move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION + (i + 1) * MOTOR_MICRONS_PER_EIGHTH_STEP, MOTOR_SLOW_STEP_DELAY);
-                test.number_of_readings = 0;
-                get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, pwr, true);
-                error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
-                if (abs(error) < abs(*min_error)) {
-                    *min_error = error;
-                    best_pos = stage_position;
-                }
-                break;
-            } else if(abs(error) < abs(*min_error)) {
-                *min_error = error;
-                best_pos = stage_position;
-            }
-        }
-        move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
-    }
-    // Log.info("pos = %d, err = %d", pos, error);
-    return best_pos;
-}
-
 bool set_baselines() {
     int error;
     int max_error = 100;
@@ -1341,24 +1307,21 @@ bool set_baselines() {
     while (max_error > OPTICAL_ERROR_THRESHOLD && attempt++ < 3) {
         if (enable_optical_sensors(true)) {
             baseline.led_assay = find_baseline_led_power('A', &error);
-            // baseline.pos_assay = find_baseline_position('A', baseline.led_assay, &error);
             Log.info("baseline for assay channel: attempt = %d, pwr = %d, pos = %d, error = %d", attempt, baseline.led_assay, baseline.pos_assay, error);
             max_error = abs(error);
 
             baseline.led_c1 = find_baseline_led_power('1', &error);
-            // baseline.pos_c1 = find_baseline_position('1', baseline.led_c1, &error);
             Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, pos = %d, error = %d", attempt, baseline.led_c1, baseline.pos_c1, error);
             max_error = abs(error) > max_error ? abs(error) : max_error;
 
             baseline.led_c2 = find_baseline_led_power('2', &error);
-            // baseline.pos_c2 = find_baseline_position('2', baseline.led_c2, &error);
             Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, pos = %d, error = %d", attempt, baseline.led_c2, baseline.pos_c2, error);
             max_error = abs(error) > max_error ? abs(error) : max_error;
         }
         disable_optical_sensors();
     }
     test.number_of_readings = 0;
-    return max_error <= OPTICAL_ERROR_THRESHOLD;
+    return max_error <= OPTICAL_FAILURE_THRESHOLD;
 }
 
 /////////////////////////////////////////////////////////////
