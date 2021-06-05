@@ -16,7 +16,7 @@
 
 #define DATA_FORMAT_VERSION 17
 
-#define TEST_DATA_FORMAT_CODE 'B'
+#define TEST_DATA_FORMAT_CODE 'C'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -355,9 +355,10 @@ struct BrevitestOpticalBaseline {
 } baseline;
 
 struct BrevitestOpticalSensorRecord
-{ // 14 bytes
+{ // 28 bytes
     char channel;
     uint8_t samples;
+    unsigned long msec;
     uint16_t x;
     uint16_t y;
     uint16_t z;

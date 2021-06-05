@@ -1000,6 +1000,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
     }
     turn_off_LED(channel);
 
+    reading->msec = millis();
     reading->x = sum_x / reading->samples;
     reading->y = sum_y / reading->samples;
     reading->z = sum_z / reading->samples;
@@ -1007,7 +1008,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
 
     if (log) {
         l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-        Log.info("%c\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d", channel, param, pwr, stage_position, reading->samples, reading->temperature, reading->x, reading->y, reading->z, l_value);
+        Log.info("%c\t%d\t%d\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d", channel, param, pwr, stage_position, reading->samples, reading->msec, reading->temperature, reading->x, reading->y, reading->z, l_value);
     }
 }
 
@@ -1633,8 +1634,10 @@ void store_test()
 
 int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%X%c%X%c%X%c%X%c",
+    return sprintf(&(particle_register[start]), "%c%c%X%c%lX%c%X%c%X%c%X%c%X%c",
                    reading->channel, ARG_DELIM,
+                   reading->samples, ARG_DELIM,
+                   reading->msec, ARG_DELIM,
                    reading->x, ARG_DELIM,
                    reading->y, ARG_DELIM,
                    reading->z, ARG_DELIM,
@@ -1839,12 +1842,12 @@ int process_one_BCODE_command(int cmd, int index)
             read_optical_sensors(param1, false);
             break;
         case 12: // Find baseline LED power and take param1 baseline readings - stage returns back to position prior to reading
-            index = get_BCODE_token(index, &param1); // params
+            index = get_BCODE_token(index, &param1); // number of readings
             saved_position = stage_position;
-            update_progress("Setting baselines", 2000);
+            update_progress("Setting baselines", 10000);
             if (set_baselines()) {
-                update_progress("Reading", 2000);
                 for (int i = 0; i < param1; i++) {
+                    update_progress("Reading", 5000);
                     read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
                 }
                 move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
@@ -1853,11 +1856,23 @@ int process_one_BCODE_command(int cmd, int index)
             }
             break;
         case 13: // Take param1 readings - stage returns back to position prior to reading
-            index = get_BCODE_token(index, &param1); // params
+            index = get_BCODE_token(index, &param1); // number of readings
             saved_position = stage_position;
-            update_progress("Reading", 2000);
             for (int i = 0; i < param1; i++) {
+                update_progress("Reading", 5000);
                 read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+            }
+            move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
+            break;
+        case 14: // Take param1 readings with pause of param2 ms between reads - stage returns back to position prior to reading
+            index = get_BCODE_token(index, &param1); // number of readings
+            index = get_BCODE_token(index, &param2); // pause between readings
+            saved_position = stage_position;
+            for (int i = 0; i < param1; i++) {
+                update_progress("Reading", 5000);
+                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
+                update_progress("Pausing", param2);
+                BCODE_delay(param2);
             }
             move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
             break;
