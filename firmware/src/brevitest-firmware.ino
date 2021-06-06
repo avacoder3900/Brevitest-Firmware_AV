@@ -1870,10 +1870,12 @@ int process_one_BCODE_command(int cmd, int index)
             index = get_BCODE_token(index, &param2); // pause between readings
             saved_position = stage_position;
             for (int i = 0; i < param1; i++) {
+                if (i > 0) {
+                    update_progress("Pausing", param2);
+                    BCODE_delay(param2);
+                }
                 update_progress("Reading", 5000);
                 read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-                update_progress("Pausing", param2);
-                BCODE_delay(param2);
             }
             move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
             break;
