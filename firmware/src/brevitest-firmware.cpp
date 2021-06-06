@@ -2023,6 +2023,7 @@ int process_one_BCODE_command(int cmd, int index)
             break;
         case 15: // Set baseline time for param1 number of readings
             index = get_BCODE_token(index, &param1); // number of readings
+            param1 *= 3; // three channels per reading
             msec = millis();
             update_progress("Timestamping", 10);
             for (int i = 0; i < param1; i++) {
