@@ -6,7 +6,7 @@
 // general constants
 #if PLATFORM_ID == PLATFORM_ARGON
 #define PRODUCT_NUMBER 11170
-#define FIRMWARE_VERSION 30
+#define FIRMWARE_VERSION 31
 #endif
 
 #if PLATFORM_ID == PLATFORM_BORON

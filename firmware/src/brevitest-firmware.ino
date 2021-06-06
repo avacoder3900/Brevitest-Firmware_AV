@@ -1791,6 +1791,7 @@ int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
     int param1, param2, param3, saved_position, start_index;
+    unsigned long msec;
 
     if (test_cancelled) return index;
 
@@ -1875,6 +1876,14 @@ int process_one_BCODE_command(int cmd, int index)
                 BCODE_delay(param2);
             }
             move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
+            break;
+        case 15: // Set baseline time for param1 number of readings
+            index = get_BCODE_token(index, &param1); // number of readings
+            msec = millis();
+            update_progress("Timestamping", 10);
+            for (int i = 0; i < param1; i++) {
+                test.reading[i].msec = msec;
+            }
             break;
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
