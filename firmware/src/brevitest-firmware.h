@@ -395,7 +395,8 @@ struct Particle_EEPROM
         data_format_version = DATA_FORMAT_VERSION;
         stress_test_cycles = 0;
         maximum_stress_test_cycles = 0;
-        memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
+        memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH + 1);
+        memset(&cache, 0, sizeof(BrevitestTestRecord));
     }
 } eeprom;
 
