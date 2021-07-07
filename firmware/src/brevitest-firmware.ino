@@ -777,6 +777,7 @@ int validate_magnets() {
             strncpy(particle_register, barcode_uuid, 32);
             particle_register[mark++] = '\n';
             reset_stage(false);
+            move_stage_to_test_start_position();
             for (int i = 0; i < 5; i++) {
                 mark = check_magnets_in_one_well(i, mark);
                 if (mark > PARTICLE_REGISTER_SIZE || mark == -1) {
@@ -1086,8 +1087,8 @@ void validate_optics() {
 
     Log.info("Validating optics...");
     test.number_of_readings = 0;
-    reset_stage(false);
     set_power_on_all_LEDs(LED_DEFAULT_POWER);
+    reset_stage(false);
     if (enable_optical_system(true)) read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
     disable_optical_system();
 
@@ -1957,6 +1958,7 @@ void do_stress_test_step(int step) {
     switch(step % 16) {
         case 0: // restart stress test
             reset_stage(false);
+            move_stage_to_test_start_position();
             break;
         case 1: // move to start of well 2 and wait one minute
             move_stage(-1500, MOTOR_SLOW_STEP_DELAY);
@@ -2138,7 +2140,7 @@ int particle_command(String arg)
 //  STAGE MOTION
 //
         case 20: // reset stage
-            reset_stage(false);
+            reset_stage(true);
             result = stage_position;
             break;
         case 21: // wake motor
@@ -2157,16 +2159,19 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
             reset_stage(false);
             move_stage_to_position(param1, param2);
+            sleep_motor();
             result = stage_position;
             break;
         case 24: // move stage to test start position
             reset_stage(false);
             move_stage_to_test_start_position();
+            sleep_motor();
             result = stage_position;
             break;
         case 25: // move stage to optical read position
             reset_stage(false);
             move_stage_to_optical_read_position();
+            sleep_motor();
             result = stage_position;
             break;
         case 26: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
@@ -2460,6 +2465,7 @@ void reconnect_to_cloud() {
 void run_test()
 {
     reset_stage(false);
+    move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
     delay(2000);
 
@@ -2821,6 +2827,9 @@ void hardware_loop() {
             detector_on = digitalRead(pinCartridgeDetected) == LOW;
             Log.info("%s detected", detector_on ? "Insertion" : "Removal");
             if (detector_on) {
+                reset_stage(false);
+                move_stage_to_test_start_position();
+                sleep_motor();
                 if (heater_ready) {
                     turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
                     turn_on_busy_LED();
@@ -2833,6 +2842,7 @@ void hardware_loop() {
                 turn_on_buzzer_for_duration(BUZZER_REMOVE_DURATION, BUZZER_REMOVE_FREQUENCY);
                 turn_off_buzzer_timer();
                 clear_state();
+                reset_stage(true);
             }
         } else {
             delay(50);
