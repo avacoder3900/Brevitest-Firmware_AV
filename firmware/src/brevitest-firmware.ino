@@ -2635,15 +2635,22 @@ void setup() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_ready_indicator(bool force) {
-    if (force) {
-        turn_on_available_LED();
-    } else if (previous_heater_ready != heater_ready) {
+bool heater_debounced() {
+    if (previous_heater_ready != heater_ready) {
         heater_debouncing_in_progress = true;
         heater_debounce_time = millis() + HEATER_READY_DEBOUNCE_DELAY;
     } else if (heater_debouncing_in_progress) {
         heater_debouncing_in_progress = millis() < heater_debounce_time;
     } else if (heater_ready) {
+        return true;
+    }
+    return false;
+}
+
+void turn_on_ready_indicator(bool force) {
+    if (force) {
+        turn_on_available_LED();
+    } else if (heater_debounced()) {
         turn_on_available_LED();
     } else {
         turn_on_busy_LED();
@@ -2665,7 +2672,11 @@ void set_device_indicators()
     } else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode) {
         turn_on_busy_LED();
     } else if (device_starting_up || magnetometer_validation_mode || temperature_validation_mode || optical_validation_mode) {
-        turn_on_validation_LED();
+        if (heater_debounced()) {
+            turn_on_validation_LED();
+        } else {
+            turn_on_busy_LED();
+        }
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
         turn_on_buzzer_alert();
@@ -2707,7 +2718,7 @@ void verify_device_loop()
             Log.info("Device verification timed out. Retrying.");
             pubsub_verify_device();
         }
-    } else {
+    } else if (heater_debounced()) {
         pubsub_verify_device();
     }
 }
