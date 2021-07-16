@@ -5,8 +5,8 @@
 
 // general constants
 #define PRODUCT_NUMBER 11170
-#define FIRMWARE_VERSION 34
-#define DATA_FORMAT_VERSION 18
+#define PRODUCT_NUMBER 14974
+#define FIRMWARE_VERSION 3
 
 #define TEST_DATA_FORMAT_CODE 'C'
 #define ASSAY_UUID_LENGTH 8
