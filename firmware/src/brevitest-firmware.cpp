@@ -8,7 +8,7 @@
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
  * Author: Leo Linbeck III
- * Date: April-October 2020
+ * Date: April 2020-July 2021
  */
 
 #include "brevitest-firmware.h"
