@@ -919,6 +919,7 @@ int validate_magnets() {
         Log.info("Magnetometer found, connecting...");
         magnetometer = BLE.connect(magnetometer_address);
         if (magnetometer.connected()) {
+            delay(MAGNETOMETER_INITIAL_HEATING_DELAY);
             int mark = 32;
             Log.info("Connected to magnetometer");
             strncpy(particle_register, barcode_uuid, 32);
