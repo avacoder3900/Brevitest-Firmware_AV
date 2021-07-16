@@ -753,6 +753,7 @@ int check_magnets_in_one_well(int well, int mark) {
     BleCharacteristic characteristic;
 
     move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
+    delay(MAGNETOMETER_HEATING_DELAY);
     if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well])) {
         String result;
         characteristic.getValue(result);

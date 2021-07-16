@@ -5,7 +5,7 @@
 
 // general constants
 #define PRODUCT_NUMBER 14974
-#define FIRMWARE_VERSION 1
+#define FIRMWARE_VERSION 2
 #define DATA_FORMAT_VERSION 18
 
 #define TEST_DATA_FORMAT_CODE 'C'
@@ -139,6 +139,9 @@
 #define RETRY_VALIDATE_CARTRIDGE 10000
 #define RETRY_START_TEST 15000
 #define RETRY_UPLOAD_TEST 30000
+
+// magnetometer
+#define MAGNETOMETER_HEATING_DELAY 4000
 
 // pin definitions
 int pinLEDControl2 = A0;
