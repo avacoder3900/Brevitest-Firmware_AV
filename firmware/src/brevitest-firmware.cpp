@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -152,7 +152,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -919,6 +919,7 @@ int validate_magnets() {
         Log.info("Magnetometer found, connecting...");
         magnetometer = BLE.connect(magnetometer_address);
         if (magnetometer.connected()) {
+            delay(MAGNETOMETER_INITIAL_HEATING_DELAY);
             int mark = 32;
             Log.info("Connected to magnetometer");
             strncpy(particle_register, barcode_uuid, 32);
