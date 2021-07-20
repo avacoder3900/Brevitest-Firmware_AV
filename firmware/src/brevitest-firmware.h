@@ -5,7 +5,7 @@
 
 // general constants
 #define PRODUCT_NUMBER 11170
-#define FIRMWARE_VERSION 34
+#define FIRMWARE_VERSION 35
 #define DATA_FORMAT_VERSION 18
 
 #define TEST_DATA_FORMAT_CODE 'C'
@@ -142,7 +142,7 @@
 
 // magnetometer
 #define MAGNETOMETER_HEATING_DELAY 3000
-#define MAGNETOMETER_INITIAL_HEATING_DELAY 15000
+#define MAGNETOMETER_INITIAL_HEATING_DELAY 60000
 
 // pin definitions
 int pinLEDControl2 = A0;
@@ -212,6 +212,8 @@ bool test_upload_mode = false;
 bool test_upload_in_progress = false;
 bool test_upload_finished = false;
 bool magnetometer_inserted = false;
+int magnetometer_initial_heating_delay = MAGNETOMETER_INITIAL_HEATING_DELAY;
+int magnetometer_heating_delay = MAGNETOMETER_HEATING_DELAY;
 bool magnetometer_validation_mode = false;
 bool magnetometer_validation_in_progress = false;
 bool magnetometer_validation_finished = false;
