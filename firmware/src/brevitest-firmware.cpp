@@ -899,7 +899,7 @@ int check_magnets_in_one_well(int well, int mark) {
     BleCharacteristic characteristic;
 
     move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
-    delay(MAGNETOMETER_HEATING_DELAY);
+    delay(magnetometer_heating_delay);
     if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well])) {
         String result;
         characteristic.getValue(result);
@@ -919,7 +919,7 @@ int validate_magnets() {
         Log.info("Magnetometer found, connecting...");
         magnetometer = BLE.connect(magnetometer_address);
         if (magnetometer.connected()) {
-            delay(MAGNETOMETER_INITIAL_HEATING_DELAY);
+            delay(magnetometer_initial_heating_delay);
             int mark = 32;
             Log.info("Connected to magnetometer");
             strncpy(particle_register, barcode_uuid, 32);
@@ -2436,6 +2436,14 @@ int particle_command(String arg)
 //
         case 70: // validate magnets
             result = validate_magnets();
+            break;
+        case 71: // set initial heating delay
+            indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_INITIAL_HEATING_DELAY);
+            magnetometer_initial_heating_delay = param1;
+            break;
+        case 72: // set initial heating delay
+            indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_HEATING_DELAY);
+            magnetometer_heating_delay = param1;
             break;
 //
 //  OPTICAL SENSORS
