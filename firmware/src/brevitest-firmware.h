@@ -5,7 +5,7 @@
 
 // general constants
 #define PRODUCT_NUMBER 11170
-#define FIRMWARE_VERSION 35
+#define FIRMWARE_VERSION 37
 #define DATA_FORMAT_VERSION 18
 
 #define TEST_DATA_FORMAT_CODE 'C'
@@ -339,16 +339,10 @@ struct BrevitestOpticalBaseline {
     uint8_t led_assay;
     uint8_t led_c1;
     uint8_t led_c2;
-    int pos_assay;
-    int pos_c1;
-    int pos_c2;
     BrevitestOpticalBaseline() {
         led_assay = LED_DEFAULT_POWER;
         led_c1 = LED_DEFAULT_POWER;
         led_c2 = LED_DEFAULT_POWER;
-        pos_assay = STAGE_OPTICAL_SENSOR_READ_POSITION;
-        pos_c1 = STAGE_OPTICAL_SENSOR_READ_POSITION;
-        pos_c2 = STAGE_OPTICAL_SENSOR_READ_POSITION;
     }
 } baseline;
 
