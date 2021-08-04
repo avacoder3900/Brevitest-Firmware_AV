@@ -1261,7 +1261,7 @@ uint16_t calculate_L(int index) {
 uint8_t find_baseline_led_power(char channel, int *error) {
     int pwr, last_pwr;
     int l_value, last_l_value;
-    int i, last_error, offset;
+    int i, offset;
 
     pwr = last_pwr = LED_DEFAULT_POWER;
     l_value = OPTICAL_TARGET_L_VALUE;
@@ -1272,34 +1272,16 @@ uint8_t find_baseline_led_power(char channel, int *error) {
         l_value = calculate_L(0);
         *error = OPTICAL_TARGET_L_VALUE - l_value;
         // Log.info("i = %d, pwr = %d, L = %d, err = %d", i, pwr, l_value, error);
-        if (i <= 1) {
-            last_pwr = pwr;
-            pwr += *error > 0 ? 32 - 16 * i : -32 + 16 * i;
-            continue;
-        } else if (abs(*error) <= OPTICAL_SEARCH_THRESHOLD) {
+        if (abs(*error) <= OPTICAL_SEARCH_THRESHOLD) {
             break;
         } else {
             offset = *error * (last_pwr - pwr) / (last_l_value - l_value);
-            offset = offset > 32 ? 32 : offset < -32 ? -32 : offset;
-            if (offset == 0) { // no change, interrogate +1 or -1
-                last_pwr = pwr;
-                last_error = *error;
-                if (*error > 0) {
-                    pwr += 1;
-                } else {
-                    pwr -= 1;
-                }
-                test.number_of_readings = 0;
-                get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) pwr, false);
-                *error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
-                if (abs(*error) > abs(last_error)) {
-                    pwr = last_pwr;
-                    *error = last_error;
-                }
+            offset = offset > 4 ? 4 : offset < -4 ? -4 : offset;
+            if (offset == 0) { // no change, stop
                 break;
             } else {
                 last_pwr = pwr;
-                pwr = pwr + offset > 255 ? 255 : pwr + offset;
+                pwr = (pwr + offset) > 255 ? 255 : pwr + offset;
             }
         }
     }
