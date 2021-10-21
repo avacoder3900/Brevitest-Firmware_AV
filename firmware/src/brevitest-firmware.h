@@ -4,9 +4,9 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define PRODUCT_NUMBER 11170
-#define FIRMWARE_VERSION 38
-#define DATA_FORMAT_VERSION 18
+#define PRODUCT_NUMBER 14974
+#define FIRMWARE_VERSION 7
+#define DATA_FORMAT_VERSION 19
 
 #define TEST_DATA_FORMAT_CODE 'C'
 #define ASSAY_UUID_LENGTH 8
@@ -123,7 +123,7 @@
 #define TERMISTOR_TABLE_LENGTH 21
 
 // pubsub
-#define PUBSUB_EVENT_NAME "brevitest-development"
+#define PUBSUB_EVENT_NAME "brevitest-production"
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 5000
@@ -143,6 +143,9 @@
 // magnetometer
 #define MAGNETOMETER_HEATING_DELAY 3000
 #define MAGNETOMETER_INITIAL_HEATING_DELAY 60000
+
+// stress test
+#define STRESS_TEST_MAXIMUM_RECORDS 24
 
 // pin definitions
 int pinLEDControl2 = A0;
@@ -297,8 +300,10 @@ int optical_test_readings = 0;
 int optical_test_move = 0;
 
 bool async_command_stress_test_running = false;
+bool async_command_stress_test_stop = false;
 int stress_test_step = 0;
 int stress_test_limit = 0;
+int stress_test_LED_power = 0;
 
 // buzzer
 void check_buzzer(void);
@@ -347,7 +352,7 @@ struct BrevitestOpticalBaseline {
 } baseline;
 
 struct BrevitestOpticalSensorRecord
-{ // 28 bytes
+{ // 12 bytes
     char channel;
     uint8_t samples;
     unsigned long msec;
@@ -381,6 +386,9 @@ struct Particle_EEPROM
     int maximum_stress_test_cycles;
     char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
     BrevitestTestRecord cache;
+    int stress_test_reading_count;
+    BrevitestOpticalSensorRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS];
+
     Particle_EEPROM()
     {
         firmware_version = FIRMWARE_VERSION;
@@ -389,6 +397,8 @@ struct Particle_EEPROM
         maximum_stress_test_cycles = 0;
         memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH + 1);
         memset(&cache, 0, sizeof(BrevitestTestRecord));
+        stress_test_reading_count = 0;
+        memset(&stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestOpticalSensorRecord));
     }
 } eeprom;
 

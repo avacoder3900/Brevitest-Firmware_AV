@@ -7,6 +7,7 @@
 
 #include "brevitest-firmware.h"
 
+SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -1065,6 +1066,13 @@ void read_optical_sensors(int param, bool inBCODE)
         Log.info("Elapsed time: %u", (unsigned int) (millis() - elapsed));
 }
 
+void stress_test_read_optical_sensors(int param, int led_power)
+{
+    get_data_from_one_optical_sensor('A', param, led_power ? led_power : baseline.led_assay, true);
+    get_data_from_one_optical_sensor('1', param, led_power ? led_power : baseline.led_c1, true);
+    get_data_from_one_optical_sensor('2', param, led_power ? led_power : baseline.led_c2, true);
+}
+
 int start_optical_sensor_test(int distance, int readings, int period)
 {
     test.number_of_readings = 0;
@@ -1956,8 +1964,101 @@ int process_BCODE(int start_index)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+int start_stress_test(int limit, int led_power) {
+    eeprom.stress_test_cycles = 0;
+    eeprom.stress_test_reading_count = 0;
+    memset(&eeprom.stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestOpticalSensorRecord));
+    store_eeprom();
+    test.number_of_readings = 0;
+    stress_test_limit = limit;
+    stress_test_LED_power = led_power;
+    stress_test_step = 0;
+    async_command_stress_test_running = true;
+    async_command_stress_test_stop = false;
+    async_command_running = true;
+    Particle.disconnect();
+    return 1;
+}
+
+void stop_stress_test() {
+    while (!WiFi.isOn()) {
+        WiFi.on();
+        delay(2000);
+    }
+    Particle.connect();
+    async_command_stress_test_running = false;
+    async_command_stress_test_stop = false;
+}
+
+void stress_test_store_optical_readings() {
+    int base, i;
+    BrevitestOpticalSensorRecord *r, *s;
+    for (i = 3; i < 9; i++) {
+        base = i % 3;
+        test.reading[base].temperature += test.reading[i].temperature;
+        test.reading[base].x += test.reading[i].x;
+        test.reading[base].y += test.reading[i].y;
+        test.reading[base].z += test.reading[i].z;
+    }
+    
+    if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS) {
+        eeprom.stress_test_reading_count = 0;
+    }
+    Log.info("count: %d", eeprom.stress_test_reading_count);
+    for (i = 0; i < 3; i++) {
+        base = eeprom.stress_test_reading_count + i;
+        r = &(eeprom.stress_test_reading[base]);
+        s = &(test.reading[i]);
+        r->channel = s->channel;
+        r->samples = s-> samples;
+        r->msec = s->msec;
+        r->temperature = s->temperature / 3;
+        r->x = test.reading[i].x / 3;
+        r->y = test.reading[i].y / 3;
+        r->z = test.reading[i].z / 3;
+        // Log.info("C: %c, n: %d, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->samples, r->msec, r->temperature, r->x, r->y, r->z);
+    }
+    eeprom.stress_test_reading_count = eeprom.stress_test_reading_count + 3;
+    store_eeprom();
+}
+
+int stress_test_loop() {
+    unsigned long total_duration = millis();
+    set_heater_power(pid_controller());
+    return (int) (millis() - total_duration);
+}
+
+void stress_test_delay(int target_duration)
+{
+    int cycles = target_duration / BCODE_MAX_DELAY;
+    int residual = target_duration % BCODE_MAX_DELAY;
+    int loop_time = 0;
+
+    for (int i = 0; i < cycles; i++) {
+        loop_time = stress_test_loop();
+        delay(BCODE_MAX_DELAY - loop_time);
+        if (test_cancelled) return;
+    }
+    loop_time = BCODE_loop();
+
+    if (residual > loop_time) {
+      delay(residual - loop_time);
+    }
+}
+
+void stress_test_oscillate_stage(int amplitude, int step_delay, int cycles)
+{
+    for (int i = 0; i < cycles; i++) {
+        move_stage(amplitude, step_delay);
+        set_heater_power(pid_controller());
+        move_stage(-amplitude, step_delay);
+        set_heater_power(pid_controller());
+    }
+}
+
 void do_stress_test_step(int step) {
     Serial.print('.');
+    set_heater_power(pid_controller());
     switch(step % 16) {
         case 0: // restart stress test
             reset_stage(false);
@@ -1965,69 +2066,73 @@ void do_stress_test_step(int step) {
             break;
         case 1: // move to start of well 2 and wait one minute
             move_stage(-1500, MOTOR_SLOW_STEP_DELAY);
-            delay(60000);
+            stress_test_delay(60000);
             break;
         case 2: // oscillate in well 2 and wait for beads to gather
-            oscillate_stage(3000, 250, 100, true);
-            delay(3000);
+            stress_test_oscillate_stage(3000, 350, 70);
+            stress_test_delay(3000);
             break;
         case 3: // move to well 1
             move_stage(-6000, 65000);
             break;
         case 4: // oscillate in well 1
-            oscillate_stage(-4500, 250, 250, true);
-            delay(4000);
+            stress_test_oscillate_stage(-4500, 350, 175);
+            stress_test_delay(4000);
             break;
         case 5: // move to well 2
             move_stage(6000, 80000);
-            delay(3000);
+            stress_test_delay(3000);
             move_stage(3750, 10000);
             break;
         case 6: // oscillate in well 2
-            oscillate_stage(-4500, 250, 200, true);
-            delay(3000);
+            stress_test_oscillate_stage(-4500, 400, 125);
+            stress_test_delay(3000);
             break;
         case 7: // move to well 3
             move_stage(4800, 80000);
-            delay(3000);
+            stress_test_delay(3000);
             move_stage(3200, 10000);
             break;
         case 8: // oscillate in well 3
-            oscillate_stage(-4500, 250, 150, true);
+            stress_test_oscillate_stage(-4500, 350, 100);
             break;
         case 9: // read baseline sensors
             if (enable_optical_system(true))
             {
                 set_baselines();
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
+                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
             }
             disable_optical_system();
-            delay(1500);
+            stress_test_delay(1500);
             break;
         case 10: // move to well 4
             move_stage(4800, 80000);
-            delay(3000);
+            stress_test_delay(3000);
             move_stage(3200, 10000);
             break;
         case 11: // oscillate in well 4
-            oscillate_stage(-4500, 250, 500, true);
-            delay(1500);
+            stress_test_oscillate_stage(-4500, 375, 200);
+            stress_test_delay(1500);
             break;
         case 12: // move to well 5
             move_stage(4400, 80000);
-            delay(3000);
+            stress_test_delay(3000);
             break;
         case 13: // oscillate in well 5
-            oscillate_stage(6500, 250, 400, true);
-            delay(5000);
+            stress_test_oscillate_stage(6500, 400, 200);
+            stress_test_delay(5000);
+            move_stage(-5000, 65000);
+            stress_test_delay(300);
             break;
         case 14: // read sensors
             if (enable_optical_system(true))
             {
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, true);
+                test.number_of_readings = 0;
+                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
+                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
+                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
+                stress_test_store_optical_readings();
             }
             disable_optical_system();
             break;
@@ -2039,7 +2144,7 @@ void do_stress_test_step(int step) {
             }
             store_eeprom();
             if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit) {
-                async_command_stress_test_running = false;
+                async_command_stress_test_stop = true;
             }
             break;
     }
@@ -2340,20 +2445,25 @@ int particle_command(String arg)
 //
 //  STRESS TEST
 //
-        case 90: // start stress test, up to param1 cycles (0 means no limit)
-            eeprom.stress_test_cycles = 0;
-            store_eeprom();
+        case 90: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+            WiFi.off();
+        case 91: // start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
             indx = get_next_command_param(arg, indx, &param1, 25);
-            stress_test_limit = param1;
-            stress_test_step = 0;
-            async_command_stress_test_running = true;
-            async_command_running = true;
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            result = start_stress_test(param1, param2);
+            break;
+        case 92: // stop stress test
+            async_command_stress_test_stop = true;
             result = 1;
             break;
-        case 91: // stop stress test
-            async_command_stress_test_running = false;
-            async_command_running = true;
-            result = eeprom.stress_test_cycles;
+        case 93: // send stress test readings to serial port
+            BrevitestOpticalSensorRecord *r;
+            Log.info("cycles: %d, max cycles: %d, readings: %d", eeprom.stress_test_cycles, eeprom.maximum_stress_test_cycles, eeprom.stress_test_reading_count);
+            for (int i = 0; i < STRESS_TEST_MAXIMUM_RECORDS; i++) {
+                r = &(eeprom.stress_test_reading[i]);
+                Log.info("C: %c, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->msec, r->temperature, r->x, r->y, r->z);
+            }
+            result = eeprom.stress_test_reading_count;
             break;
 //
 //  VALIDATION
@@ -2462,8 +2572,8 @@ void disconnect_from_cloud() {
     Log.info("Disconnected from cloud");
 }
 
-void reconnect_to_cloud() {
-    Log.info("Reconnecting to cloud...");
+void connect_to_cloud() {
+    Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
     while (!Particle.connected()) {
@@ -2498,7 +2608,7 @@ void run_test()
     test_underway = false;
     test_upload_mode = true;
 
-    reconnect_to_cloud();
+    connect_to_cloud();
     pubsub_upload_test();
 
     reset_stage(true);
@@ -2556,6 +2666,8 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 void startup_device()
 {
     i2c_bus_scan();
+
+    Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
 
     Log.info("Resetting stage");
     reset_stage(true);
@@ -2617,9 +2729,7 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
-    while (!Particle.connected()) {
-        delay(PARTICLE_CLOUD_DELAY);
-    }
+    connect_to_cloud();
 
     indicatorBusy.setActive(true);
 
@@ -2813,8 +2923,14 @@ void test_upload_loop() {
 
 void async_command_loop() {
     if (async_command_stress_test_running) {
-        do_stress_test_step(stress_test_step);
-        stress_test_step++;
+        if (async_command_stress_test_stop) {
+            stop_stress_test();
+        } else {
+            SINGLE_THREADED_BLOCK() {
+                do_stress_test_step(stress_test_step);
+            }
+            stress_test_step++;
+        }
     } else if (async_command_optical_running && optical_test_take_reading) {
         optical_test_take_reading = false;
         Log.info("Stage location: %d", stage_position);
@@ -2931,5 +3047,5 @@ void loop()
         validate_optics();
     }
 
-    delay(100);
+    delay(10);
 }
