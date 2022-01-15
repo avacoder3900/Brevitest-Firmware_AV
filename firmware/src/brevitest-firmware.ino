@@ -190,8 +190,14 @@ void reset_eeprom()
 {
     Particle_EEPROM e;
 
+    int lifetime = eeprom.lifetime_stress_test_cycles;
+    if (lifetime == -1) {
+        lifetime = 0;
+    }
     erase_eeprom();
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
+    eeprom.lifetime_stress_test_cycles = lifetime;
+    store_eeprom();
 }
 
 void setup_eeprom()
@@ -378,7 +384,7 @@ int scan_barcode()
 {
     int buf; // a little buffer for reading barcode (we will coerce into character)
     int i = 0; // index for reading barcode from serial port into barcode_uuid
-    int result; // return the type of cartridge (test, magentometer, temperature, optical) or error
+    int result; // return the type of cartridge (test, magnetometer, temperature, optical) or error
     bool success; // set to true if barcode read is successful
     unsigned long timeout; // keep this from taking too long
 
@@ -767,7 +773,7 @@ int check_magnets_in_one_well(int well, int mark) {
 }
 
 int validate_magnets() {
-    magnetometer_validation_mode = false;
+    magnet_validation_in_progress = true;
     magnetometer_found = false;
     BLE_scan();
     if (magnetometer_found) {
@@ -790,7 +796,6 @@ int validate_magnets() {
             magnetometer.disconnect();
             reset_stage(true);
             particle_register[mark] = '\0';
-            brevitest_publish("validate-magnets", particle_register);
             return 1;
         } else {
             Log.info("Could not connect to magnetometer %s", barcode_uuid);
@@ -1088,8 +1093,7 @@ int start_optical_sensor_test(int distance, int readings, int period)
 }
 
 void validate_optics() {
-    optical_validation_mode = false;
-
+    optical_validation_in_progress = true;
     char c;
     int len = sprintf(particle_register, "%s%c%c%c",barcode_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
 
@@ -1112,7 +1116,6 @@ void validate_optics() {
     }
 
     Log.info("particle_register: %s", particle_register);
-    brevitest_publish("validate-optics", particle_register);
     reset_stage(true);
 }
 
@@ -1292,16 +1295,10 @@ void stop_temperature_control()
 
 void pubsub_verify_device()
 {
-    callback_timeout = millis() + RETRY_VERIFY_DEVICE;
     device_verification_in_progress = true;
     device_verified = false;
-    if (Particle.connected()) {
-        Log.info("Verifying device");
-        brevitest_publish("verify-device", (char *)device_id.c_str());
-    } else {
-        Log.info("Not connected to the cloud. Wait and retry.");
-        delay(PARTICLE_CLOUD_DELAY);
-    }
+    Log.info("Verifying device, attempt %d", pubsub_retry_attempt);
+    brevitest_publish("verify-device", (char *)device_id.c_str());
 }
 
 void startup_device(void);
@@ -1321,13 +1318,10 @@ void callback_verify_device() {
 
 void pubsub_validate_cartridge()
 {
-    callback_timeout = millis() + RETRY_VALIDATE_CARTRIDGE;
     cartridge_validation_in_progress = true;
     cartridge_validated = false;
-    if (Particle.connected()) {
-        Log.info("Validating cartridge");
-        brevitest_publish("validate-cartridge", barcode_uuid);
-    } else {
+    Log.info("Validating cartridge, attempt %d", pubsub_retry_attempt);
+    if (!brevitest_publish("validate-cartridge", barcode_uuid)) {
         Log.info("Not connected to the cloud. Remove cartridge.");
         cartridge_validation_in_progress = false;
         cartridge_validation_mode = false;
@@ -1390,15 +1384,10 @@ void callback_validate_cartridge() {
 /////////////////////////////////////////////////////
 
 void pubsub_start_test() {
-    callback_timeout = millis() + RETRY_START_TEST;
     test_start_in_progress = true;
     test_underway = false;
-    if (Particle.connected()) {
-        Log.info("Starting test");
-        brevitest_publish("start-test", test.cartridge_uuid);
-    } else {
-        Log.info("Not connected to the cloud. Wait and retry.");
-    }
+    Log.info("Starting test, attempt %d", pubsub_retry_attempt);
+    brevitest_publish("start-test", test.cartridge_uuid);
 }
 
 void callback_start_test() {
@@ -1428,14 +1417,9 @@ void pubsub_upload_test() {
     if (test_in_cache()) {
         test_upload_in_progress = true;
         test_upload_finished = false;
-        callback_timeout = millis() + RETRY_UPLOAD_TEST;
-        if (Particle.connected()) {
-            process_test_record();
-            Log.info("Uploading test, payload length: %d, payload: %s", strlen(particle_register), particle_register);
-            brevitest_publish("upload-test", particle_register);
-        } else {
-            Log.info("Not connected to the cloud. Wait and retry.");
-        }
+        process_test_record();
+        Log.info("Uploading test, attempt %d, payload length: %d, payload: %s", pubsub_retry_attempt, strlen(particle_register), particle_register);
+        brevitest_publish("upload-test", particle_register);
     } else {
         test_upload_in_progress = false;
         test_upload_finished = true;
@@ -1470,7 +1454,12 @@ void callback_upload_test() {
 //                VALIDATE MAGNETS                 //
 /////////////////////////////////////////////////////
 
-void callback_validate_magnets() {
+void pubsub_upload_magnet_validation() {
+    Log.info("Uploading magnet validation data, attempt %d", pubsub_retry_attempt);
+    brevitest_publish("validate-magnets", particle_register);
+}
+
+void callback_upload_magnet_validation() {
     clear_current_event();
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
     if (success) {
@@ -1488,14 +1477,19 @@ void callback_validate_magnets() {
 //                VALIDATE OPTICS                  //
 /////////////////////////////////////////////////////
 
-void callback_validate_optics() {
+void pubsub_upload_optical_validation() {
+    Log.info("Uploading optical validation data, attempt %d", pubsub_retry_attempt);
+    brevitest_publish("validate-optics", particle_register);
+}
+
+void callback_upload_optical_validation() {
     clear_current_event();
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
     if (success) {
         if (strncmp(callback_data, "validated", 9) != 0) {
             Log.info("Optics %s", callback_data);
-            delay(2000);
-            System.reset();
+            optical_validation_in_progress = false;
+            optical_validation_mode = false;
         }
     }
 
@@ -1537,11 +1531,23 @@ void set_publish_params(String event_name) {
     callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE] = '\0';
 }
 
-void brevitest_publish(String event_name, char *payload)
+bool brevitest_publish(String event_name, char *payload)
 {
-    set_publish_params(event_name);
-    Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(payload), PRIVATE, NO_ACK);
-    Log.info("PUBLISH: event = %s, payload = %s", event_name.c_str(), payload);
+    if (pubsub_retry_attempt < pubsub_retry_max_index) {
+        callback_timeout = millis() + pubsub_retry_intervals[pubsub_retry_attempt];
+    } else {
+        callback_timeout = millis() + pubsub_retry_intervals[pubsub_retry_max_index];
+    }
+    pubsub_retry_attempt++;
+    if (Particle.connected()) {
+        set_publish_params(event_name);
+        Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(payload), PRIVATE, NO_ACK);
+        Log.info("PUBLISH: event = %s, payload = %s", event_name.c_str(), payload);
+        return true;
+    } else {
+        Log.info("Particle not connected. Will retry later.");
+        return false;
+    }
 }
 
 int extract_callback_params(char *param, int paramLen, int indx, char delim)
@@ -1591,10 +1597,10 @@ void process_callback_buffer()
                 callback_upload_test();
                 break;
             case PUBSUB_VALIDATE_MAGNETS:
-                callback_validate_magnets();
+                callback_upload_magnet_validation();
                 break;
             case PUBSUB_VALIDATE_OPTICS:
-                callback_validate_optics();
+                callback_upload_optical_validation();
                 break;
             default:
                 Log.info("Unknown event code %d", current_event_code);
@@ -2138,10 +2144,9 @@ void do_stress_test_step(int step) {
             break;
         case 15: // save cycle number
             eeprom.stress_test_cycles++;
-            Log.info("Stress test cycle %d complete, record is %d", eeprom.stress_test_cycles, eeprom.maximum_stress_test_cycles);
-            if (eeprom.stress_test_cycles > eeprom.maximum_stress_test_cycles) {
-                eeprom.maximum_stress_test_cycles = eeprom.stress_test_cycles;
-            }
+            eeprom.stress_test_cycles_since_reset++;
+            eeprom.lifetime_stress_test_cycles++;
+            Log.info("Stress test cycles: current = %d, since reset = %d, lifetime = %d", eeprom.stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.lifetime_stress_test_cycles);
             store_eeprom();
             if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit) {
                 async_command_stress_test_stop = true;
@@ -2445,20 +2450,23 @@ int particle_command(String arg)
 //
 //  STRESS TEST
 //
-        case 90: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+        case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+            eeprom.stress_test_cycles_since_reset = 0;
+            store_eeprom();
+        case 91: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
             WiFi.off();
-        case 91: // start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+        case 92: // start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
             indx = get_next_command_param(arg, indx, &param1, 25);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             result = start_stress_test(param1, param2);
             break;
-        case 92: // stop stress test
+        case 93: // stop stress test
             async_command_stress_test_stop = true;
             result = 1;
             break;
-        case 93: // send stress test readings to serial port
+        case 94: // send stress test readings to serial port
             BrevitestOpticalSensorRecord *r;
-            Log.info("cycles: %d, max cycles: %d, readings: %d", eeprom.stress_test_cycles, eeprom.maximum_stress_test_cycles, eeprom.stress_test_reading_count);
+            Log.info("lifetime cycles: %d, cycles since reset: %d, cycles: %d, readings: %d", eeprom.lifetime_stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.stress_test_cycles, eeprom.stress_test_reading_count);
             for (int i = 0; i < STRESS_TEST_MAXIMUM_RECORDS; i++) {
                 r = &(eeprom.stress_test_reading[i]);
                 Log.info("C: %c, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->msec, r->temperature, r->x, r->y, r->z);
@@ -2470,14 +2478,9 @@ int particle_command(String arg)
 //
         case 100: // validate magnets
             result = validate_magnets();
-            break;
-        case 110: // start validate temperature
-            start_temperature_validation();
-            result = 0;
-            break;
-        case 111: // stop validate temperature
-            stop_temperature_validation();
-            result = 1;
+            if (result == 1) {
+                pubsub_upload_magnet_validation();
+            }
             break;
         case 120: // validate optics
             validate_optics();
@@ -2508,31 +2511,6 @@ int particle_command(String arg)
 
     return result;
 }
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                       VALIDATION                        //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void start_temperature_validation() {
-    temperature_validation_in_progress = true;
-}
-
-void stop_temperature_validation() {
-    temperature_validation_in_progress = false;
-    temperature_validation_mode = false;
-}
-
-void start_optical_validation() {
-    optical_validation_in_progress = true;
-}
-
-void stop_optical_validation() {
-    optical_validation_in_progress = false;
-    optical_validation_mode = false;
-}
-
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -2627,9 +2605,7 @@ void clear_state() {
     test_start_in_progress = false;
     test_upload_in_progress = false;
 
-    cartridge_inserted = false;
     magnetometer_inserted = false;
-    temperature_probe_inserted = false;
     optical_probe_inserted = false;
 
     barcode_scan_mode = false;
@@ -2637,8 +2613,7 @@ void clear_state() {
     test_start_mode = false;
     test_underway = false;
     test_upload_mode = test_in_cache();
-    magnetometer_validation_mode = false;
-    temperature_validation_mode = false;
+    magnet_validation_mode = false;
     optical_validation_mode = false;
     
     test_invalid = false;
@@ -2693,7 +2668,9 @@ void startup_device()
     Log.info("device id: %s", device_id.c_str());
     Log.info("eeprom.firmware_version: %d", eeprom.firmware_version);
     Log.info("eeprom.data_format_version: %d", eeprom.data_format_version);
-    Log.info("eeprom.maximum_stress_test_cycles: %d", eeprom.maximum_stress_test_cycles);
+    Log.info("eeprom.lifetime_stress_test_cycles: %d", eeprom.lifetime_stress_test_cycles);
+    Log.info("eeprom.stress_test_cycles_since_reset: %d", eeprom.stress_test_cycles_since_reset);
+    Log.info("eeprom.stress_test_cycles: %d", eeprom.stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');    
     Log.info("Cached test ? %c", test_cached() ? 'Y' : 'N');    
 
@@ -2704,8 +2681,6 @@ void startup_device()
         store_eeprom();
         test_upload_mode = true;
     }
-
-    device_starting_up = false;
 }
 
 void setup() {
@@ -2790,14 +2765,16 @@ void set_device_indicators()
         turn_on_buzzer_problem();
     } else if (async_command_running) {
         turn_on_async_LED();
-    } else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode) {
-        turn_on_busy_LED();
-    } else if (device_starting_up || magnetometer_validation_mode || temperature_validation_mode || optical_validation_mode) {
+    } else if (!device_verified) {
         if (heater_debounced()) {
             turn_on_validation_LED();
         } else {
             turn_on_busy_LED();
         }
+    } else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode) {
+        turn_on_busy_LED();
+    } else if (!device_verified || magnet_validation_mode || optical_validation_mode) {
+        turn_on_validation_LED();
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
         turn_on_buzzer_alert();
@@ -2825,22 +2802,16 @@ void set_device_indicators()
 
 void verify_device_loop()
 {
-    barcode_scan_loop();
-    if (magnetometer_validation_mode) {
-        validate_magnets();
-    } else if (temperature_validation_mode) {
-        start_temperature_validation();
-    } else if (optical_validation_mode) {
-        validate_optics();
-    } else if (device_verification_in_progress) {
-        if (callback_complete) {
-            process_callback_buffer();
-        } else if (millis() > callback_timeout) {
-            Log.info("Device verification timed out. Retrying.");
+    if (heater_debounced()) {
+        if (device_verification_in_progress) {
+            if (millis() > callback_timeout) {
+                Log.info("Device verification timed out. Retrying.");
+                pubsub_verify_device();
+            }
+        } else {
+            pubsub_retry_attempt = 0;
             pubsub_verify_device();
         }
-    } else if (heater_debounced()) {
-        pubsub_verify_device();
     }
 }
 
@@ -2849,8 +2820,7 @@ void barcode_scan_loop() {
         if (barcode_scan_mode) {
             barcode_scan_in_progress = true;
             cartridge_inserted = cartridge_validation_mode = false;
-            magnetometer_inserted = magnetometer_validation_mode = false;
-            temperature_probe_inserted = temperature_validation_mode = false;
+            magnetometer_inserted = magnet_validation_mode = false;
             optical_probe_inserted = optical_validation_mode = false;
             switch (scan_barcode()) {
                 case BARCODE_TYPE_CARTRIDGE:
@@ -2860,13 +2830,8 @@ void barcode_scan_loop() {
                     break;
                 case BARCODE_TYPE_MAGNETOMETER:
                     magnetometer_inserted = true;
-                    magnetometer_validation_mode = true;
+                    magnet_validation_mode = true;
                     Log.info("Magnetometer inserted");
-                    break;
-                case BARCODE_TYPE_TEMPERATURE:
-                    temperature_probe_inserted = true;
-                    temperature_validation_mode = true;
-                    Log.info("Temperature probe inserted");
                     break;
                 case BARCODE_TYPE_OPTICAL:
                     optical_probe_inserted = true;
@@ -2888,13 +2853,45 @@ void barcode_scan_loop() {
     }
 }
 
-void cartridge_validation_loop() {
-    if (cartridge_validation_in_progress) {
+void magnet_validation_loop() {
+    if (magnet_validation_in_progress) {
         if (millis() > callback_timeout) {
-            Log.info("Cartridge validation timed out. Retrying.");
-            pubsub_validate_cartridge();
+            Log.info("Uploading magnet validation data timed out. Retrying.");
+            pubsub_upload_magnet_validation();
         }
     } else {
+        if (validate_magnets()) {
+            pubsub_retry_attempt = 0;
+            pubsub_upload_magnet_validation();
+        } else {
+            magnet_validation_in_progress = false;
+            magnet_validation_mode = false;
+        }
+    }
+}
+
+void optical_validation_loop() {
+    if (optical_validation_in_progress) {
+        if (millis() > callback_timeout) {
+            Log.info("Uploading optical validation data timed out. Retrying.");
+            pubsub_upload_optical_validation();
+        }
+    } else {
+        validate_optics();
+        pubsub_retry_attempt = 0;
+        pubsub_upload_optical_validation();
+    }
+}
+
+void cartridge_validation_loop() {
+    if (!cartridge_validation_in_progress) {
+        if (millis() > callback_timeout) {
+            Log.info("Cartridge validation timed out. Remove cartridge.");
+            cartridge_validation_in_progress = false;
+            cartridge_validation_mode = false;
+        }
+    } else {
+        pubsub_retry_attempt = 0;
         pubsub_validate_cartridge();
     }
 }
@@ -2906,6 +2903,7 @@ void test_start_loop() {
             pubsub_start_test();
         }
     } else {
+        pubsub_retry_attempt = 0;
         pubsub_start_test();
     }
 }
@@ -2917,6 +2915,7 @@ void test_upload_loop() {
             pubsub_upload_test();
         }
     } else {
+        pubsub_retry_attempt = 0;
         pubsub_upload_test();
     }
 }
@@ -3027,10 +3026,10 @@ void loop()
     
     if (async_command_running) {
         async_command_loop();
-    } else if (device_starting_up) {
-        verify_device_loop();
     } else if (callback_complete) {
         process_callback_buffer();
+    } else if (!device_verified) {
+        verify_device_loop();
     } else if (test_upload_mode) {
         test_upload_loop();
     } else if (test_start_mode) {
@@ -3039,12 +3038,10 @@ void loop()
         cartridge_validation_loop();
     } else if (barcode_scan_mode) {
         barcode_scan_loop();
-    } else if (magnetometer_validation_mode) {
-        validate_magnets();
-    } else if (temperature_validation_mode) {
-        start_temperature_validation();
     } else if (optical_validation_mode) {
-        validate_optics();
+        optical_validation_loop();
+    } else if (magnet_validation_mode) {
+        magnet_validation_loop();
     }
 
     delay(10);

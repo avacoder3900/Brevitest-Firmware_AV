@@ -5,10 +5,10 @@
 
 // general constants
 #define PRODUCT_NUMBER 14974
-#define FIRMWARE_VERSION 7
-#define DATA_FORMAT_VERSION 19
+#define FIRMWARE_VERSION 8
+#define DATA_FORMAT_VERSION 20
 
-#define TEST_DATA_FORMAT_CODE 'C'
+#define TEST_DATA_FORMAT_CODE 'D'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -134,12 +134,6 @@
 #define PUBSUB_VALIDATE_MAGNETS 50
 #define PUBSUB_VALIDATE_OPTICS 60
 
-// retry intervals
-#define RETRY_VERIFY_DEVICE 20000
-#define RETRY_VALIDATE_CARTRIDGE 10000
-#define RETRY_START_TEST 15000
-#define RETRY_UPLOAD_TEST 30000
-
 // magnetometer
 #define MAGNETOMETER_HEATING_DELAY 3000
 #define MAGNETOMETER_INITIAL_HEATING_DELAY 60000
@@ -188,9 +182,8 @@ LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NOR
 SerialLogHandler logHandler;
 
 // device state
-bool device_starting_up = true;
-bool device_verification_in_progress = false;
 bool device_verified = false;
+bool device_verification_in_progress = false;
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
@@ -217,20 +210,18 @@ bool test_upload_finished = false;
 bool magnetometer_inserted = false;
 int magnetometer_initial_heating_delay = MAGNETOMETER_INITIAL_HEATING_DELAY;
 int magnetometer_heating_delay = MAGNETOMETER_HEATING_DELAY;
-bool magnetometer_validation_mode = false;
-bool magnetometer_validation_in_progress = false;
-bool magnetometer_validation_finished = false;
-bool temperature_probe_inserted = false;
-bool temperature_validation_mode = false;
-bool temperature_validation_in_progress = false;
-bool temperature_validation_finished = false;
+bool magnet_validation_mode = false;
+bool magnet_validation_in_progress = false;
 bool optical_probe_inserted = false;
 bool optical_validation_mode = false;
 bool optical_validation_in_progress = false;
-bool optical_validation_completed = false;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
+bool pubsub_in_progress = false;
+int pubsub_retry_attempt = 0;
+int pubsub_retry_max_index = 11;
+int pubsub_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
 unsigned long next_optical_sensor_reading_time = 0;
 
 // temperature control system
@@ -382,8 +373,10 @@ struct Particle_EEPROM
 {
     uint8_t firmware_version; // 8 bytes
     uint8_t data_format_version;
+    int lifetime_stress_test_cycles;
+    int stress_test_cycles_since_reset;
     int stress_test_cycles;
-    int maximum_stress_test_cycles;
+    int reserved[4];
     char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
     BrevitestTestRecord cache;
     int stress_test_reading_count;
@@ -393,8 +386,9 @@ struct Particle_EEPROM
     {
         firmware_version = FIRMWARE_VERSION;
         data_format_version = DATA_FORMAT_VERSION;
+        lifetime_stress_test_cycles = 0;
+        stress_test_cycles_since_reset = 0;
         stress_test_cycles = 0;
-        maximum_stress_test_cycles = 0;
         memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH + 1);
         memset(&cache, 0, sizeof(BrevitestTestRecord));
         stress_test_reading_count = 0;
