@@ -218,10 +218,10 @@ bool optical_validation_in_progress = false;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
-bool pubsub_in_progress = false;
-int pubsub_retry_attempt = 0;
-int pubsub_retry_max_index = 11;
-unsigned long pubsub_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
+bool publish_in_progress = false;
+int publish_retry_attempt = 0;
+int publish_retry_max_index = 11;
+unsigned long publish_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
 unsigned long next_optical_sensor_reading_time = 0;
 
 // temperature control system
