@@ -2034,8 +2034,8 @@ void do_stress_test_step(int step) {
             stress_test_oscillate_stage(-4500, 350, 100);
             break;
         case 9: // read baseline sensors
-            if (enable_optical_system(true))
-            {
+            if (enable_optical_system(true)) {
+                Serial.println();
                 set_baselines();
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
             }
@@ -2062,8 +2062,8 @@ void do_stress_test_step(int step) {
             stress_test_delay(300);
             break;
         case 14: // read sensors
-            if (enable_optical_system(true))
-            {
+            if (enable_optical_system(true)) {
+                Serial.println();
                 test.number_of_readings = 0;
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
