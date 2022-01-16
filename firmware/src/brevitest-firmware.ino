@@ -2510,6 +2510,8 @@ void connect_to_cloud() {
 
 void run_test()
 {
+    unsigned long start_millis, finish_millis;
+
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
@@ -2520,15 +2522,19 @@ void run_test()
     disconnect_from_cloud();
     stop_temperature_control();
 
-    SINGLE_THREADED_BLOCK()
-    {
-        test.duration = millis();
-        memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
-        store_eeprom();
+    memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
+    store_eeprom();
+    start_millis = millis();
+    Serial.printlnf("Start millis = %lu", start_millis);
+
+    SINGLE_THREADED_BLOCK() {
         process_BCODE(0);
-        test.duration = millis() - test.duration;
-        write_test_record_to_eeprom();
     }
+
+    finish_millis = millis();
+    test.duration = (int) (finish_millis - start_millis);
+    write_test_record_to_eeprom();
+    Serial.printlnf("Finish millis = %lu, duration = %d", finish_millis, test.duration);
 
     start_temperature_control();
 
