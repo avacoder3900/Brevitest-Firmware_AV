@@ -2235,6 +2235,7 @@ void do_stress_test_step(int step) {
             store_eeprom();
             if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit) {
                 stress_test_stop_flag = true;
+                reset_stage(true);
             }
             break;
     }
@@ -2773,6 +2774,11 @@ void startup_device()
         store_eeprom();
         test_upload_mode = true;
     }
+
+    detector_on = digitalRead(pinCartridgeDetected) == LOW;
+    if (detector_on) {
+        barcode_invalid = true;
+    }
 }
 
 void setup() {
@@ -2809,10 +2815,6 @@ void setup() {
     Serial.begin(115200); // standard serial port
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
-    detector_on = digitalRead(pinCartridgeDetected) == LOW;
-    if (detector_on) {
-        barcode_invalid = true;
-    }
 
     start_temperature_control();
 }
