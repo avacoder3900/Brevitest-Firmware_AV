@@ -1533,10 +1533,11 @@ void set_publish_params(String event_name) {
 
 bool brevitest_publish(String event_name, char *payload)
 {
+    unsigned long offset = millis() + rand() * 1000;
     if (pubsub_retry_attempt < pubsub_retry_max_index) {
-        callback_timeout = millis() + pubsub_retry_intervals[pubsub_retry_attempt];
+        callback_timeout = offset + pubsub_retry_intervals[pubsub_retry_attempt];
     } else {
-        callback_timeout = millis() + pubsub_retry_intervals[pubsub_retry_max_index];
+        callback_timeout = offset + pubsub_retry_intervals[pubsub_retry_max_index];
     }
     pubsub_retry_attempt++;
     if (Particle.connected()) {
