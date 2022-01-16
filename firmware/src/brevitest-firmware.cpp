@@ -2941,7 +2941,7 @@ void barcode_scan_loop() {
                     // wake_motor();
                     shipping_bolt_cartridge_inserted = true;
                     move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
-                    Log.info("Ready shipping bolt");
+                    Log.info("Ready for shipping bolt - please unplug the device");
                     break;
                 default:
                     barcode_invalid = true;
