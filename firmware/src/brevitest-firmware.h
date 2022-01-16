@@ -239,11 +239,13 @@ bool optical_validation_in_progress = false;
 // stress test
 bool stress_test_cartridge_inserted = false;
 bool stress_test_mode = false;
-bool stress_test_in_progress = false;
 bool stress_test_stop_flag = false;
 int stress_test_step = 0;
 int stress_test_limit = 0;
 int stress_test_LED_power = 0;
+
+// shipping bolt
+bool shipping_bolt_cartridge_inserted = false;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;

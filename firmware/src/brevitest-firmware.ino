@@ -1913,7 +1913,6 @@ int start_stress_test(int limit, int led_power) {
     stress_test_limit = limit;
     stress_test_LED_power = led_power;
     stress_test_step = 0;
-    stress_test_in_progress = true;
     stress_test_stop_flag = false;
     Particle.disconnect();
     return 1;
@@ -1925,7 +1924,7 @@ void stop_stress_test() {
         delayMicroseconds(2000000);
     }
     Particle.connect();
-    stress_test_in_progress = false;
+    stress_test_mode = false;
     stress_test_stop_flag = false;
 }
 
@@ -2544,6 +2543,7 @@ void clear_state() {
     magnetometer_inserted = false;
     optical_probe_inserted = false;
     stress_test_cartridge_inserted = false;
+    shipping_bolt_cartridge_inserted = false;
 
     barcode_scan_mode = false;
     stress_test_mode = false;
@@ -2701,7 +2701,7 @@ void set_device_indicators()
     } else if (test_invalid) {
         turn_on_problem_LED();
         turn_on_buzzer_problem();
-    } else if (async_command_running) {
+    } else if (async_command_running || stress_test_mode) {
         turn_on_async_LED();
     } else if (!device_verified) {
         if (heater_debounced()) {
@@ -2716,7 +2716,7 @@ void set_device_indicators()
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
         turn_on_buzzer_alert();
-    } else if (cartridge_inserted || magnetometer_inserted || optical_probe_inserted) {
+    } else if (cartridge_inserted || magnetometer_inserted || optical_probe_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted) {
         if (cartridge_validated) {
             turn_on_busy_LED();
             if (test_completed || test_cancelled) {
@@ -2785,8 +2785,9 @@ void barcode_scan_loop() {
                     break;
                 case BARCODE_TYPE_SHIPPING:
                     // wake_motor();
+                    shipping_bolt_cartridge_inserted = true;
                     move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
-                    Log.info("Ready to insert shipping bolt");
+                    Log.info("Ready shipping bolt");
                     break;
                 default:
                     barcode_invalid = true;
