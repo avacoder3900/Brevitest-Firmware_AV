@@ -1459,10 +1459,10 @@ void callback_verify_device() {
     clear_current_event();
     if (strncmp(callback_status, SUCCESS, 7) == 0) {
         Log.info("Device verified - starting up...");
-        device_verification_in_progress = false;
         device_verified = true;
         startup_device();
     }
+    device_verification_in_progress = false;
 }
 
 /////////////////////////////////////////////////////
@@ -3038,7 +3038,7 @@ void optical_validation_loop() {
 }
 
 void cartridge_validation_loop() {
-    if (!cartridge_validation_in_progress) {
+    if (cartridge_validation_in_progress) {
         if (millis() > callback_timeout) {
             Log.info("Cartridge validation timed out. Remove cartridge.");
             cartridge_validation_in_progress = false;
