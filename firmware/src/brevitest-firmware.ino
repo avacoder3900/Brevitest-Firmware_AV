@@ -376,7 +376,6 @@ int scan_barcode()
 {
     int buf; // a little buffer for reading barcode (we will coerce into character)
     int i = 0; // index for reading barcode from serial port into barcode_uuid
-    int result; // return the type of cartridge (test, magnetometer, temperature, optical) or error
     bool success; // set to true if barcode read is successful
     unsigned long timeout; // keep this from taking too long
 
@@ -412,47 +411,33 @@ int scan_barcode()
 
     switch (i) { // find out what this barcode is
         case BARCODE_UUID_LENGTH: // is the barcode a test cartridge?
-            result = BARCODE_TYPE_CARTRIDGE;
+            return BARCODE_TYPE_CARTRIDGE;
             break;
-        case VALIDATION_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
+        case MAGNETOMETER_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
             if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a magnetometer?
-                result = BARCODE_TYPE_MAGNETOMETER;
-            } else if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a temperature probe?
-                result = BARCODE_TYPE_STRESS_TEST;
-            } else if (strncmp(barcode_uuid, SHIPPING_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an shipping bolt installation?
-                result = BARCODE_TYPE_SHIPPING;
-            } else {
-                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
-                barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
-                result = BARCODE_TYPE_VALIDATION_ERROR;
+                return BARCODE_TYPE_MAGNETOMETER;
             }
             break;
         case OPTICAL_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
             if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an optical probe?
-                result = BARCODE_TYPE_OPTICAL;
-            } else { // we must have goofed up somewhere
-                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
-                barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
-                result = BARCODE_TYPE_OPTICAL_ERROR;
+                return BARCODE_TYPE_OPTICAL;
+            }
+            break;
+        case SHIPPING_BOLT_UUID_LENGTH:
+            if (strncmp(barcode_uuid, SHIPPING_BOLT_BARCODE, SHIPPING_BOLT_UUID_LENGTH) == 0) { // is it a shipping bolt cartridge?
+                return BARCODE_TYPE_SHIPPING;
             }
             break;
         case STRESS_TEST_UUID_LENGTH:
-            if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a stress test cartridge?
-                result = BARCODE_TYPE_STRESS_TEST;
-            } else {
-                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
-                barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
-                result = BARCODE_TYPE_VALIDATION_ERROR;
+            if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, STRESS_TEST_PREFIX_LENGTH) == 0) { // is it a stress test cartridge?
+                return BARCODE_TYPE_STRESS_TEST;
             }
             break;
-        default: // if you're not a test cartridge, or a validation cartridge, you're an error
-            strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
-            barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
-            result =  BARCODE_TYPE_GENERAL_ERROR;
     }
-
-    Log.info("Barcode read: %s, length: %d, type: %d", barcode_uuid, i, result);
-    return result;
+    Log.info("Barcode error read: %s, length: %d", barcode_uuid, i);
+    strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
+    barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
+    return BARCODE_TYPE_VALIDATION_ERROR;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2054,7 +2039,6 @@ void do_stress_test_step(int step) {
             {
                 set_baselines();
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
-                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
             }
             disable_optical_system();
             stress_test_delay(1500);
@@ -2082,6 +2066,7 @@ void do_stress_test_step(int step) {
             if (enable_optical_system(true))
             {
                 test.number_of_readings = 0;
+                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
                 stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
