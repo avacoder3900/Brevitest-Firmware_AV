@@ -242,7 +242,7 @@ void sleep_motor()
 void wake_motor()
 {
     digitalWrite(pinMotorSleep, HIGH);
-    delay(10);
+    delayMicroseconds(10000);
     motor_awake = true;
 }
 
@@ -250,23 +250,20 @@ bool move_one_eighth_step(int dir, int step_delay)
 {
     if (dir == HIGH) {
         if (digitalRead(pinStageLimit) == LOW) {
-            delay(10);
+            delayMicroseconds(10000);
             if (digitalRead(pinStageLimit) == LOW) {
-                Log.info("Proximal stage limit switch detected at position %d", stage_position);
                 stage_position = 0;
                 microns_error = 0;
                 return false;
             }
         }
         if (stage_position <= 0) {
-            Log.info("Stage position at zero");
             stage_position = 0;
             microns_error = 0;
             return false;
         }
     }
     else if (stage_position >= STAGE_POSITION_LIMIT) {
-        Log.info("Stage distal limit reached");
         return false;
     }
 
@@ -295,21 +292,17 @@ void move_stage(int microns, int step_delay)
     }
     dir = (microns < 0) ? HIGH : LOW;
     digitalWrite(pinMotorDir, dir);
-    // Log.info("Stepping, dir = %c", dir == LOW ? 'L' : 'H');
 
     abs_microns = abs(microns) + microns_error;
     eighth_steps = abs_microns / MOTOR_MICRONS_PER_EIGHTH_STEP;
     microns_error = abs_microns % MOTOR_MICRONS_PER_EIGHTH_STEP;
     floored_step_delay = step_delay < MOTOR_MINIMUM_STEP_DELAY ? MOTOR_MINIMUM_STEP_DELAY : step_delay;
-    // Log.info("move_stage: microns = %d, dir = %c, eighth_steps = %d, microns_error = %d", microns, dir == LOW ? 'L' : 'H', eighth_steps, microns_error);
 
-    // delay(10);
     for (i = 0; i < eighth_steps; i++) {
         if (!move_one_eighth_step(dir, floored_step_delay)) {
             break;
         }
     }
-    /*Log.info("Move complete, stage location = %d, limit = %d", stage_position, STAGE_POSITION_LIMIT);*/
 }
 
 void move_stage_until_proximal_limit(int step_delay) {
@@ -324,7 +317,6 @@ void move_stage_until_proximal_limit(int step_delay) {
         
         stage_position -= MOTOR_MICRONS_PER_EIGHTH_STEP;
     }
-    Log.info("Proximal stage limit switch detected at position %d", stage_position);
     stage_position = 0;
     microns_error = 0;
 }
@@ -392,22 +384,17 @@ int scan_barcode()
     barcode_uuid[0] = '\0'; // reset barcode_uuid
     timeout = millis() + BARCODE_READ_TIMEOUT; // set timeout for overall process
 
-    Log.info("Start barcode reader");
     digitalWrite(pinBarcodeTrigger, LOW); // start read by pulling trigger pin low
 
-    Log.info("Wait for read to complete");
     while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout) { // if read is not complete or timed out, wait and check again
         delay(100);
-        Particle.process();
     };
     success = digitalRead(pinBarcodeReady) == HIGH; // successful if read is completed before timeout
     digitalWrite(pinBarcodeTrigger, HIGH); // stop read by setting trigger pin back to high
 
     if (success) {
-        Log.info("Read successful - waiting for barcode data");
         while (!Serial1.available() && millis() < timeout) { // if data buffer is empty, wait and check again
             delay(100);
-            Particle.process();
         };
         delay(100); // allow barcode buffer to fill before reading
         do {
@@ -418,7 +405,7 @@ int scan_barcode()
         } while (Serial1.available() && i <= BARCODE_UUID_LENGTH); // continue while data is available and there's no overflow
         barcode_uuid[--i] = '\0'; // 
     } else {
-        Log.info("Timeout - read failure");
+        Serial.println("Timeout - read failure");
     }
 
     Serial1.end(); // close serial port to barcode scanner
@@ -430,8 +417,8 @@ int scan_barcode()
         case VALIDATION_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
             if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a magnetometer?
                 result = BARCODE_TYPE_MAGNETOMETER;
-            } else if (strncmp(barcode_uuid, TEMPERATURE_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a temperature probe?
-                result = BARCODE_TYPE_TEMPERATURE;
+            } else if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a temperature probe?
+                result = BARCODE_TYPE_STRESS_TEST;
             } else if (strncmp(barcode_uuid, SHIPPING_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an shipping bolt installation?
                 result = BARCODE_TYPE_SHIPPING;
             } else {
@@ -447,6 +434,15 @@ int scan_barcode()
                 strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
                 barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
                 result = BARCODE_TYPE_OPTICAL_ERROR;
+            }
+            break;
+        case STRESS_TEST_UUID_LENGTH:
+            if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a stress test cartridge?
+                result = BARCODE_TYPE_STRESS_TEST;
+            } else {
+                strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
+                barcode_uuid[BARCODE_ERROR_MESSAGE_LENGTH] = '\0';
+                result = BARCODE_TYPE_VALIDATION_ERROR;
             }
             break;
         default: // if you're not a test cartridge, or a validation cartridge, you're an error
@@ -467,8 +463,6 @@ int scan_barcode()
 
 void turn_on_buzzer_for_duration(int duration, int frequency)
 {
-    if (serial_messaging_on)
-        Log.info("Turning on buzzer for duration %d at frequency %d", duration, frequency);
     tone(pinBuzzer, frequency, duration);
 }
 
@@ -690,21 +684,21 @@ void turn_off_all_LEDs()
 void turn_on_assay_LED_for_duration(int duration, int power)
 {
     turn_on_assay_LED(power);
-    delay(duration);
+    delayMicroseconds(1000 * duration);
     turn_off_assay_LED();
 }
 
 void turn_on_control_1_LED_for_duration(int duration, int power)
 {
     turn_on_control_1_LED(power);
-    delay(duration);
+    delayMicroseconds(1000 * duration);
     turn_off_control_1_LED();
 }
 
 void turn_on_control_2_LED_for_duration(int duration, int power)
 {
     turn_on_control_2_LED(power);
-    delay(duration);
+    delayMicroseconds(1000 * duration);
     turn_off_control_2_LED();
 }
 
@@ -713,7 +707,7 @@ void turn_on_all_LEDs_for_duration(int duration, int power)
     turn_on_assay_LED(power);
     turn_on_control_1_LED(power);
     turn_on_control_2_LED(power);
-    delay(duration);
+    delayMicroseconds(1000 * duration);
     turn_off_assay_LED();
     turn_off_control_1_LED();
     turn_off_control_2_LED();
@@ -896,7 +890,7 @@ bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y,
     while (!ready && millis() < timeout)
     {
         /*Serial.print('.');*/
-        delay(100);
+        delayMicroseconds(100000);
         ready = optical_sensor_ready(addr);
     }
 
@@ -975,7 +969,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
     } else if (channel == '2') {
         addr = 0x76;
     } else {
-        Log.info("ERROR: Channel %c not found", channel);
+        Serial.printlnf("ERROR: Channel %c not found", channel);
         return;
     }
 
@@ -983,7 +977,7 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
     test.number_of_readings++;
     
     turn_on_LED(channel, pwr);
-    delay(100);
+    delayMicroseconds(100000);
     
     config_optical_sensors(channel, param, addr);
 
@@ -1001,7 +995,6 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
                     sum_t += tempC;
                     read_attempt = 4;
                 } else {
-                    Log.info("Read optical sensor failed, channel %c, try %d", channel, read_attempt);
                     read_attempt++;
                 }
             }
@@ -1017,17 +1010,16 @@ void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log
 
     if (log) {
         l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-        Log.info("%c\t%d\t%d\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d", channel, param, pwr, stage_position, reading->samples, reading->msec, reading->temperature, reading->x, reading->y, reading->z, l_value);
+        Serial.printlnf("%c\t%d\t%d\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d", channel, param, pwr, stage_position, reading->samples, reading->msec, reading->temperature, reading->x, reading->y, reading->z, l_value);
     }
 }
 
 bool startI2C() {
     if (Wire.isEnabled()) return true;
 
-    /*Log.info("Attempting to read optical sensors");*/
     Wire.setSpeed(CLOCK_SPEED_100KHZ);
     Wire.begin();
-    delay(100);
+    delayMicroseconds(100000);
 
     return Wire.isEnabled();
 }
@@ -1037,17 +1029,9 @@ bool enable_optical_system(bool force_read)
     move_stage_to_optical_read_position();
     optical_read_in_progress = true;
     turn_off_heater();
-    delay(100);
+    delayMicroseconds(100000);
 
-    if (startI2C()) {
-        return true;
-    }
-    else
-    {
-        Log.info("Unable to start communication with optical sensors");
-        return false;
-    }
-    
+    return startI2C();
 }
 
 void disable_optical_system()
@@ -1058,17 +1042,12 @@ void disable_optical_system()
 
 void read_optical_sensors(int param, bool inBCODE)
 {
-    unsigned long elapsed = millis();
-
     get_data_from_one_optical_sensor('A', param, baseline.led_assay, true);
     if (inBCODE) BCODE_loop();
     get_data_from_one_optical_sensor('1', param, baseline.led_c1, true);
     if (inBCODE) BCODE_loop();
     get_data_from_one_optical_sensor('2', param, baseline.led_c2, true);
     if (inBCODE) BCODE_loop();
-
-    if (serial_messaging_on)
-        Log.info("Elapsed time: %u", (unsigned int) (millis() - elapsed));
 }
 
 void stress_test_read_optical_sensors(int param, int led_power)
@@ -1136,7 +1115,6 @@ uint8_t find_baseline_led_power(char channel, int *error) {
         last_l_value = l_value;
         l_value = calculate_L(0);
         *error = OPTICAL_TARGET_L_VALUE - l_value;
-        // Log.info("i = %d, pwr = %d, L = %d, err = %d", i, pwr, l_value, error);
         if (i <= 1) {
             last_pwr = pwr;
             pwr += *error > 0 ? 4 - 2 * i : -4 + 2 * i;
@@ -1168,7 +1146,6 @@ uint8_t find_baseline_led_power(char channel, int *error) {
             }
         }
     }
-    // Log.info("last, pwr = %d, err = %d", pwr, *error);
     return pwr;
 }
 
@@ -1178,15 +1155,15 @@ bool set_baselines() {
     int max_error = OPTICAL_FAILURE_THRESHOLD;
     while (max_error > OPTICAL_ERROR_THRESHOLD && attempt++ < 3) {
         baseline.led_assay = find_baseline_led_power('A', &error);
-        Log.info("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
+        Serial.printlnf("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
         max_error = abs(error);
 
         baseline.led_c1 = find_baseline_led_power('1', &error);
-        Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
+        Serial.printlnf("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
         max_error = abs(error) > max_error ? abs(error) : max_error;
 
         baseline.led_c2 = find_baseline_led_power('2', &error);
-        Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
+        Serial.printlnf("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
         max_error = abs(error) > max_error ? abs(error) : max_error;
     }
     test.number_of_readings = 0;
@@ -1202,7 +1179,7 @@ bool set_baselines() {
 int get_heater_temperature()
 {
     analogWrite(heater.heater_pin, 0);
-    delay(10);
+    delayMicroseconds(10000);
     int raw = analogRead(heater.thermistor_pin);
     analogWrite(heater.heater_pin, heater.power);
     
@@ -1641,7 +1618,7 @@ void process_test_record()
 {
     char c;
     BrevitestTestRecord *t = &eeprom.cache;
-    int len = sprintf(particle_register, "%.24s%c%c%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
+    int len = sprintf(particle_register, "%.24s%c%c%c%d%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM);;
 
     if (t->number_of_readings) { // test completed
         for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
@@ -1740,7 +1717,6 @@ void update_progress(String message, int duration)
             test_percent_complete = new_percent_complete;
         }
     }
-    Log.info("%s, %d percent complete, temp = %d.%d", message.c_str(), test_percent_complete, heater.temp_C_10X / 10, heater.temp_C_10X % 10);
 }
 
 int BCODE_loop()
@@ -1749,13 +1725,13 @@ int BCODE_loop()
 
     set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeDetected) == HIGH) {
-        Log.info("Cartridge movement detected...");
-        delay(100);
+        Serial.println("Cartridge movement detected...");
+        delayMicroseconds(100000);
         test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
         if (test_cancelled) {
-            Log.info("Cartridge removed while test underway. Test cancelled.");
+            Serial.println("Cartridge removed while test underway. Test cancelled.");
         } else {
-            Log.info("Cartridge ok. Test continuing.");
+            Serial.println("Cartridge ok. Test continuing.");
         }
     }
 
@@ -1769,14 +1745,13 @@ void BCODE_delay(int target_duration)
     int loop_time = 0;
 
     for (int i = 0; i < cycles; i++) {
-        loop_time = BCODE_loop();
-        delay(BCODE_MAX_DELAY - loop_time);
+        delayMicroseconds(1000 * (BCODE_MAX_DELAY - BCODE_loop()));
         if (test_cancelled) return;
     }
     loop_time = BCODE_loop();
     if (test_cancelled) return;
     if (residual > loop_time) {
-      delay(residual - loop_time);
+      delayMicroseconds(1000 * (residual - loop_time));
     }
 }
 
@@ -1898,8 +1873,6 @@ int process_one_BCODE_command(int cmd, int index)
             break;
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
-
-            Log.info("Begin repeating %d times", param1);
             start_index = index + 1;
             for (int i = 0; i < param1; i += 1) {
                 if (test_cancelled) break;
@@ -1907,11 +1880,9 @@ int process_one_BCODE_command(int cmd, int index)
             }
             break;
         case 21: // Repeat end
-            Log.info("End repeating");
             return -index;
             break;
         case 99: // Finish test
-            Log.info("Finish test");
             update_progress("Finishing test", 8000);
             break;
         default:
@@ -1948,6 +1919,7 @@ int process_BCODE(int start_index)
 /////////////////////////////////////////////////////////////
 
 int start_stress_test(int limit, int led_power) {
+    stress_test_mode = true;
     eeprom.stress_test_cycles = 0;
     eeprom.stress_test_reading_count = 0;
     memset(&eeprom.stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestOpticalSensorRecord));
@@ -1956,9 +1928,8 @@ int start_stress_test(int limit, int led_power) {
     stress_test_limit = limit;
     stress_test_LED_power = led_power;
     stress_test_step = 0;
-    async_command_stress_test_running = true;
-    async_command_stress_test_stop = false;
-    async_command_running = true;
+    stress_test_in_progress = true;
+    stress_test_stop_flag = false;
     Particle.disconnect();
     return 1;
 }
@@ -1966,11 +1937,11 @@ int start_stress_test(int limit, int led_power) {
 void stop_stress_test() {
     while (!WiFi.isOn()) {
         WiFi.on();
-        delay(2000);
+        delayMicroseconds(2000000);
     }
     Particle.connect();
-    async_command_stress_test_running = false;
-    async_command_stress_test_stop = false;
+    stress_test_in_progress = false;
+    stress_test_stop_flag = false;
 }
 
 void stress_test_store_optical_readings() {
@@ -1987,7 +1958,7 @@ void stress_test_store_optical_readings() {
     if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS) {
         eeprom.stress_test_reading_count = 0;
     }
-    Log.info("count: %d", eeprom.stress_test_reading_count);
+    Serial.printlnf("count: %d", eeprom.stress_test_reading_count);
     for (i = 0; i < 3; i++) {
         base = eeprom.stress_test_reading_count + i;
         r = &(eeprom.stress_test_reading[base]);
@@ -1999,13 +1970,13 @@ void stress_test_store_optical_readings() {
         r->x = test.reading[i].x / 3;
         r->y = test.reading[i].y / 3;
         r->z = test.reading[i].z / 3;
-        // Log.info("C: %c, n: %d, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->samples, r->msec, r->temperature, r->x, r->y, r->z);
+        // Serial.printlnf("C: %c, n: %d, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->samples, r->msec, r->temperature, r->x, r->y, r->z);
     }
     eeprom.stress_test_reading_count = eeprom.stress_test_reading_count + 3;
     store_eeprom();
 }
 
-int stress_test_loop() {
+int stress_test_loop_time() {
     unsigned long total_duration = millis();
     set_heater_power(pid_controller());
     return (int) (millis() - total_duration);
@@ -2018,14 +1989,13 @@ void stress_test_delay(int target_duration)
     int loop_time = 0;
 
     for (int i = 0; i < cycles; i++) {
-        loop_time = stress_test_loop();
-        delay(BCODE_MAX_DELAY - loop_time);
-        if (test_cancelled) return;
+        delayMicroseconds(1000 * (BCODE_MAX_DELAY - stress_test_loop_time()));
+        if (stress_test_stop_flag) return;
     }
-    loop_time = BCODE_loop();
+    loop_time = stress_test_loop_time();
 
     if (residual > loop_time) {
-      delay(residual - loop_time);
+      delayMicroseconds(1000 * (residual - loop_time));
     }
 }
 
@@ -2123,10 +2093,10 @@ void do_stress_test_step(int step) {
             eeprom.stress_test_cycles++;
             eeprom.stress_test_cycles_since_reset++;
             eeprom.lifetime_stress_test_cycles++;
-            Log.info("Stress test cycles: current = %d, since reset = %d, lifetime = %d", eeprom.stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.lifetime_stress_test_cycles);
+            Serial.printlnf("Stress test cycles: current = %d, since reset = %d, lifetime = %d", eeprom.stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.lifetime_stress_test_cycles);
             store_eeprom();
             if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit) {
-                async_command_stress_test_stop = true;
+                stress_test_stop_flag = true;
             }
             break;
     }
@@ -2438,7 +2408,7 @@ int particle_command(String arg)
             result = start_stress_test(param1, param2);
             break;
         case 93: // stop stress test
-            async_command_stress_test_stop = true;
+            stress_test_stop_flag = true;
             result = 1;
             break;
         case 94: // send stress test readings to serial port
@@ -2552,9 +2522,11 @@ void run_test()
 
     SINGLE_THREADED_BLOCK()
     {
+        test.duration = millis();
         memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
         store_eeprom();
         process_BCODE(0);
+        test.duration = millis() - test.duration;
         write_test_record_to_eeprom();
     }
 
@@ -2583,8 +2555,10 @@ void clear_state() {
 
     magnetometer_inserted = false;
     optical_probe_inserted = false;
+    stress_test_cartridge_inserted = false;
 
     barcode_scan_mode = false;
+    stress_test_mode = false;
     cartridge_validation_mode = false;
     test_start_mode = false;
     test_underway = false;
@@ -2642,11 +2616,11 @@ void startup_device()
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
 
     Log.info("device id: %s", device_id.c_str());
-    Log.info("eeprom.firmware_version: %d", eeprom.firmware_version);
-    Log.info("eeprom.data_format_version: %d", eeprom.data_format_version);
-    Log.info("eeprom.lifetime_stress_test_cycles: %d", eeprom.lifetime_stress_test_cycles);
-    Log.info("eeprom.stress_test_cycles_since_reset: %d", eeprom.stress_test_cycles_since_reset);
-    Log.info("eeprom.stress_test_cycles: %d", eeprom.stress_test_cycles);
+    Log.info("Firmware version: %d", eeprom.firmware_version);
+    Log.info("Data format version: %d", eeprom.data_format_version);
+    Log.info("Lifetime stress test cycles: %d", eeprom.lifetime_stress_test_cycles);
+    Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
+    Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');    
     Log.info("Cached test ? %c", test_cached() ? 'Y' : 'N');    
 
@@ -2792,6 +2766,7 @@ void verify_device_loop()
 }
 
 void barcode_scan_loop() {
+    int max_cycles;
     if (detector_on) {
         if (barcode_scan_mode) {
             barcode_scan_in_progress = true;
@@ -2814,6 +2789,12 @@ void barcode_scan_loop() {
                     optical_validation_mode = true;
                     Log.info("Optical probe inserted");
                     break;
+                case BARCODE_TYPE_STRESS_TEST:
+                    stress_test_cartridge_inserted = true;
+                    max_cycles = atoi(&barcode_uuid[12]);
+                    start_stress_test(max_cycles, LED_DEFAULT_POWER);
+                    Log.info("Stress test started, max_cycles = %d", max_cycles);
+                    break;
                 case BARCODE_TYPE_SHIPPING:
                     // wake_motor();
                     move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
@@ -2826,6 +2807,17 @@ void barcode_scan_loop() {
             barcode_scan_in_progress = false;
             barcode_scan_mode = false;
         }
+    }
+}
+
+void stress_test_loop() {
+    if (stress_test_stop_flag) {
+        stop_stress_test();
+    } else {
+        SINGLE_THREADED_BLOCK() {
+            do_stress_test_step(stress_test_step);
+        }
+        stress_test_step++;
     }
 }
 
@@ -2897,16 +2889,7 @@ void test_upload_loop() {
 }
 
 void async_command_loop() {
-    if (async_command_stress_test_running) {
-        if (async_command_stress_test_stop) {
-            stop_stress_test();
-        } else {
-            SINGLE_THREADED_BLOCK() {
-                do_stress_test_step(stress_test_step);
-            }
-            stress_test_step++;
-        }
-    } else if (async_command_optical_running && optical_test_take_reading) {
+    if (async_command_optical_running && optical_test_take_reading) {
         optical_test_take_reading = false;
         Log.info("Stage location: %d", stage_position);
         if (enable_optical_system(true)) {
@@ -2925,7 +2908,7 @@ void async_command_loop() {
             async_command_timer.stop();
             sleep_motor();
         }
-    } else if (async_command_running && !async_command_stress_test_running) {
+    } else if (async_command_running) {
         async_command_running = false;
         async_command_timer.stop();
         sleep_motor();
@@ -2958,7 +2941,7 @@ void hardware_loop() {
                 reset_stage(true);
             }
         } else {
-            delay(50);
+            delayMicroseconds(50000);
             detector_debouncing = true;
         }
     }
@@ -3002,6 +2985,8 @@ void loop()
     
     if (async_command_running) {
         async_command_loop();
+    } else if (stress_test_mode) {
+        stress_test_loop();
     } else if (callback_complete) {
         process_callback_buffer();
     } else if (test_upload_mode) {
@@ -3012,13 +2997,13 @@ void loop()
         test_start_loop();
     } else if (cartridge_validation_mode) {
         cartridge_validation_loop();
-    } else if (barcode_scan_mode) {
-        barcode_scan_loop();
     } else if (optical_validation_mode) {
         optical_validation_loop();
     } else if (magnet_validation_mode) {
         magnet_validation_loop();
+    } else if (barcode_scan_mode) {
+        barcode_scan_loop();
     }
 
-    delay(10);
+    delayMicroseconds(1000);
 }

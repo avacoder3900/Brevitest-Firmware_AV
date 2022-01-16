@@ -6,7 +6,7 @@
 // general constants
 #define PRODUCT_NUMBER 14974
 #define FIRMWARE_VERSION 8
-#define DATA_FORMAT_VERSION 20
+#define DATA_FORMAT_VERSION 21
 
 #define TEST_DATA_FORMAT_CODE 'D'
 #define ASSAY_UUID_LENGTH 8
@@ -14,6 +14,7 @@
 #define CARTRIDGE_UUID_LENGTH 24
 #define VALIDATION_UUID_LENGTH 32
 #define OPTICAL_UUID_LENGTH 17
+#define STRESS_TEST_UUID_LENGTH 16
 #define DEVICE_UUID_LENGTH 24
 
 #define ARG_DELIM ','
@@ -30,8 +31,8 @@
 #define INVALID "INVALID"
 #define BARCODE_PREFIX_LENGTH 4
 #define MAGNETOMETER_PREFIX "MAG-"
-#define TEMPERATURE_PREFIX "TMP-"
 #define OPTICAL_PREFIX "OPT-"
+#define STRESS_TEST_PREFIX "STR-"
 #define SHIPPING_PREFIX "SHP-"
 
 // optical sensors
@@ -82,8 +83,8 @@
 #define BARCODE_READ_TIMEOUT 5000
 #define BARCODE_TYPE_CARTRIDGE 1
 #define BARCODE_TYPE_MAGNETOMETER 2
-#define BARCODE_TYPE_TEMPERATURE 3
-#define BARCODE_TYPE_OPTICAL 4
+#define BARCODE_TYPE_OPTICAL 3
+#define BARCODE_TYPE_STRESS_TEST 4
 #define BARCODE_TYPE_SHIPPING 5
 #define BARCODE_TYPE_GENERAL_ERROR -1
 #define BARCODE_TYPE_VALIDATION_ERROR -2
@@ -139,7 +140,7 @@
 #define MAGNETOMETER_INITIAL_HEATING_DELAY 60000
 
 // stress test
-#define STRESS_TEST_MAXIMUM_RECORDS 24
+#define STRESS_TEST_MAXIMUM_RECORDS 15
 
 // pin definitions
 int pinLEDControl2 = A0;
@@ -181,12 +182,20 @@ LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NOR
 // logging
 SerialLogHandler logHandler;
 
-// device state
-bool device_verified = false;
-bool device_verification_in_progress = false;
+//
+//    DEVICE STATE
+//
+
+// detector
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
+
+// verify device
+bool device_verified = false;
+bool device_verification_in_progress = false;
+
+// scan barcode
 bool barcode_scan_mode = false;
 bool barcode_scan_in_progress = false;
 bool barcode_read_cartridge = false;
@@ -194,27 +203,45 @@ bool barcode_read_validate_device = false;
 bool barcode_read_invalid = false;
 bool barcode_read_error = false;
 bool barcode_invalid = false;
+
+// validate cartridge
 bool cartridge_inserted = false;
 bool cartridge_validation_mode = false;
 bool cartridge_validation_in_progress = false;
 bool cartridge_validated = false;
+
+// start test
 bool test_start_mode = false;
 bool test_start_in_progress = false;
 bool test_underway = false;
 bool test_completed = false;
 bool test_cancelled = false;
 bool test_invalid = false;
+
+// upload test
 bool test_upload_mode = false;
 bool test_upload_in_progress = false;
-bool test_upload_finished = false;
+
+// magnet validation
 bool magnetometer_inserted = false;
 int magnetometer_initial_heating_delay = MAGNETOMETER_INITIAL_HEATING_DELAY;
 int magnetometer_heating_delay = MAGNETOMETER_HEATING_DELAY;
 bool magnet_validation_mode = false;
 bool magnet_validation_in_progress = false;
+
+// optical validation
 bool optical_probe_inserted = false;
 bool optical_validation_mode = false;
 bool optical_validation_in_progress = false;
+
+// stress test
+bool stress_test_cartridge_inserted = false;
+bool stress_test_mode = false;
+bool stress_test_in_progress = false;
+bool stress_test_stop_flag = false;
+int stress_test_step = 0;
+int stress_test_limit = 0;
+int stress_test_LED_power = 0;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
@@ -290,12 +317,6 @@ int optical_test_count = 0;
 int optical_test_readings = 0;
 int optical_test_move = 0;
 
-bool async_command_stress_test_running = false;
-bool async_command_stress_test_stop = false;
-int stress_test_step = 0;
-int stress_test_limit = 0;
-int stress_test_LED_power = 0;
-
 // buzzer
 void check_buzzer(void);
 Timer buzzer_timer(BUZZER_ALERT_PERIOD, check_buzzer);
@@ -357,6 +378,7 @@ struct BrevitestTestRecord
 { // 206 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     uint8_t number_of_readings; // 0 = cancelled
+    uint16_t duration;
     BrevitestOpticalSensorRecord reading[OPTICAL_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
 } test;
 
