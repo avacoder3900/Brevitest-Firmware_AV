@@ -2661,16 +2661,17 @@ void run_test()
     disconnect_from_cloud();
     stop_temperature_control();
 
-    memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
-    store_eeprom();
-    start_millis = millis();
-
     SINGLE_THREADED_BLOCK() {
+        memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
+        store_eeprom();
+        start_millis = millis();
+
         process_BCODE(0);
+        
+        test.duration = (millis() - start_millis) / 1000;
+        write_test_record_to_eeprom();
     }
 
-    test.duration = (millis() - start_millis) / 1000;
-    write_test_record_to_eeprom();
 
     start_temperature_control();
 
