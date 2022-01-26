@@ -5,7 +5,7 @@
 
 // general constants
 #define PRODUCT_NUMBER 14974
-#define FIRMWARE_VERSION 8
+#define FIRMWARE_VERSION 10
 #define DATA_FORMAT_VERSION 21
 
 #define TEST_DATA_FORMAT_CODE 'D'
