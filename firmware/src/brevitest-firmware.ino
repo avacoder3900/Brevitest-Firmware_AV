@@ -1268,9 +1268,9 @@ void callback_verify_device() {
     if (strncmp(callback_status, SUCCESS, 7) == 0) {
         Log.info("Device verified - starting up...");
         device_verified = true;
-        device_verification_in_progress = false;
         startup_device();
     }
+    device_verification_in_progress = false;
 }
 
 /////////////////////////////////////////////////////
@@ -2742,14 +2742,16 @@ void set_device_indicators()
 
 void verify_device_loop()
 {
-    if (device_verification_in_progress) {
-        if (millis() > callback_timeout) {
-            Log.info("Device verification timed out. Retrying.");
+    if (heater_debounced()) {
+        if (device_verification_in_progress) {
+            if (millis() > callback_timeout) {
+                Log.info("Device verification timed out. Retrying.");
+                publish_verify_device();
+            }
+        } else {
+            publish_retry_attempt = 0;
             publish_verify_device();
         }
-    } else {
-        publish_retry_attempt = 0;
-        publish_verify_device();
     }
 }
 
@@ -2980,20 +2982,18 @@ void loop()
         process_callback_buffer();
     } else if (test_upload_mode) {
         test_upload_loop();
+    } else if (!device_verified) {
+        verify_device_loop();
     } else if (test_start_mode) {
         test_start_loop();
-    } else if (heater_debounced()) {
-        if (cartridge_validation_mode) {
-            cartridge_validation_loop();
-        } else if (optical_validation_mode) {
-            optical_validation_loop();
-        } else if (magnet_validation_mode) {
-            magnet_validation_loop();
-        } else if (barcode_scan_mode) {
-            barcode_scan_loop();
-        } else if (!device_verified) {
-            verify_device_loop();
-        }
+    } else if (cartridge_validation_mode) {
+        cartridge_validation_loop();
+    } else if (optical_validation_mode) {
+        optical_validation_loop();
+    } else if (magnet_validation_mode) {
+        magnet_validation_loop();
+    } else if (barcode_scan_mode) {
+        barcode_scan_loop();
     }
 
     delayMicroseconds(1000);
