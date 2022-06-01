@@ -13,7 +13,7 @@
 
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(12430);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(4);
 
 // Return values of endTransmission in the Wire library
 #define kNOERROR 0
@@ -47,9 +47,7 @@ unsigned long nextTime;
 #define OFFSET_CONTROL_LOW 5
 #define OFFSET_CONTROL_HIGH 10
 
-#define READ_Z_MIN 1200
-#define READ_Z_MAX 1700
-#define Z_ERROR 0.05
+#define Z_ERROR 0.1
 
 bool qualified = false;
 LEDStatus blinkRed(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
@@ -61,11 +59,11 @@ bool log_readings = false;
 bool ble_connected = false;
 
 static float z_mean[5][3] = {
-    {1550, 1420, 1500},
+    {1630, 1530, 1630},
     {1370, 1360, 1470},
-    {1470, 1290, 1400},
-    {1540, 1445, 1455},
-    {1620, 1570, 1585}
+    {1390, 1290, 1400},
+    {1420, 1360, 1455},
+    {1480, 1460, 1585}
 };
 // float z_max[5][3];
 // float z_min[5][3];
