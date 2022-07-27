@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "global": "^4.4.0",
+    "particle-cli": "^3.3.3"
+  }
+}

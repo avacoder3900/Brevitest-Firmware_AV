@@ -65,7 +65,7 @@ unsigned long nextTime;
 #define OFFSET_CONTROL_LOW 5
 #define OFFSET_CONTROL_HIGH 10
 
-#define Z_ERROR 0.05
+#define Z_ERROR 0.1
 
 bool qualified = false;
 LEDStatus blinkRed(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
