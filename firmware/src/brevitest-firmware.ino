@@ -1,8 +1,8 @@
 /*
  * Project brevitest_v1_0
- * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
+ * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
  * Author: Leo Linbeck III
- * Date: April 2020-July 2021
+ * Date: April 2020-February 2023
  */
 
 #include "brevitest-firmware.h"
@@ -88,6 +88,25 @@ int raw_table_lookup(int raw)
 
     return 0;
 }
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                   CLOUD FUNCTIONS                       //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+int setWifiCredentials(String param) {
+    int index = param.indexOf('|');
+    if (index == -1) {
+        return -1;
+    }
+    Log.info(param.substring(0, index));
+    Log.info(param.substring(index + 1));
+    bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
+    return result ? 1 : 0;
+}
+
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -2648,6 +2667,8 @@ void setup() {
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
+
+    Particle.function("setWifiCred", setWifiCredentials);
 
     connect_to_cloud();
 
