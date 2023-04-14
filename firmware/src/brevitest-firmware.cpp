@@ -2481,7 +2481,7 @@ int particle_command(String arg)
             break;
         case 53: // set heater target temperature
             indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE)
+            if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
             {
                 heater.target_C_10X = param1;
                 heater.read_time = 0;
