@@ -5,9 +5,9 @@
 
 // general constants
 // PRODUCT_NUMBER to 14974 for production, 11170 for development
-#define PRODUCT_NUMBER 11170
-// FIRMWARE_VERSION to 12 for production, 40 for development
-#define FIRMWARE_VERSION 40
+#define PRODUCT_NUMBER 14974
+// FIRMWARE_VERSION to 13 for production, 40 for development
+#define FIRMWARE_VERSION 13
 #define DATA_FORMAT_VERSION 21
 
 #define TEST_DATA_FORMAT_CODE 'D'
