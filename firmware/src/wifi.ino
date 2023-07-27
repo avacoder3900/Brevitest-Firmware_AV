@@ -1,13 +1,19 @@
 #include "wifi.h"
 
-void setupWifiBLE()
+/**
+ * 
+ */
+void setup_wifi_ble()
 {
     BLE.addCharacteristic(wifiCredentialsCharacteristic);
+    BLE.addCharacteristic(wifiResponseCharacterisic);
+    wifiAdvertisingData.appendServiceUUID(wifiCredentialsService);
+    BLE.advertise(&wifiAdvertisingData);
 }
 
 /**
  * Called when the 
-*/
+ */
 void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& peer, void* context)
 {
     char* credentials = (char*) data;

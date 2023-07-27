@@ -6,6 +6,7 @@
  */
 
 #include "brevitest-firmware.h"
+#include "wifi.h"
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
@@ -2649,6 +2650,7 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
+    setup_wifi_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);
