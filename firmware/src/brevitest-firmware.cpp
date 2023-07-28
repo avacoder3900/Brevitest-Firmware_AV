@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/matthew/brevitest/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
@@ -12,6 +12,7 @@
  */
 
 #include "brevitest-firmware.h"
+#include "wifi.h"
 
 int raw_table_lookup(int raw);
 int extract_int_from_string(char *str, int pos, int len);
@@ -160,7 +161,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/matthew/brevitest/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_ID(PRODUCT_NUMBER);
@@ -2637,6 +2638,7 @@ void disconnect_from_cloud() {
 }
 
 void connect_to_cloud() {
+    start_listen_for_credentials();
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -2644,6 +2646,7 @@ void connect_to_cloud() {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
     }
+    stop_listen_for_credentials();
     Log.info("Reconnected to cloud");
 }
 
@@ -2803,6 +2806,7 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
+    setup_wifi_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);

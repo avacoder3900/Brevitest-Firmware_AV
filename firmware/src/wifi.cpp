@@ -1,8 +1,19 @@
+/******************************************************/
+//       THIS IS A GENERATED FILE - DO NOT EDIT       //
+/******************************************************/
+
+#include "Particle.h"
+#line 1 "/Users/matthew/brevitest/brevitest-device/firmware/src/wifi.ino"
 #include "wifi.h"
 
+void setup_wifi_ble();
+void start_listen_for_credentials();
+void stop_listen_for_credentials();
+void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& peer, void* context);
+#line 3 "/Users/matthew/brevitest/brevitest-device/firmware/src/wifi.ino"
 #define CREDENTIAL_DELIM ","
 
-// ---------- BLE Service ---------- // 
+// ---------- BLE Setup ---------- // 
 // Key used to authenticate the device that sends credentials.
 char bleAuthKey[] = "79b45686-f959-49b2-9d1b-fbafeaaf0293";    
 // Service and Characteristic UUIDs

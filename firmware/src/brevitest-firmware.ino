@@ -2484,6 +2484,7 @@ void disconnect_from_cloud() {
 }
 
 void connect_to_cloud() {
+    start_listen_for_credentials();
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -2491,6 +2492,7 @@ void connect_to_cloud() {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
     }
+    stop_listen_for_credentials();
     Log.info("Reconnected to cloud");
 }
 
