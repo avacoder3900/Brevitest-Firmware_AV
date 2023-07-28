@@ -4,7 +4,7 @@
 
 // ---------- BLE Service ---------- // 
 // Key used to authenticate the device that sends credentials.
-char bleAuthKey[] = "79b45686-f959-49b2-9d1b-fbafeaaf0293";    
+char bleAuthKey[] = "79b45686-f959-49b2-9d1b-fbafeaaf0293";
 // Service and Characteristic UUIDs
 BleUuid wifiCredentialsService("0a280af2-975f-4a79-a5d1-e71c986d1e9a"); 
 BleUuid wifiCredentialsUuid("d99cf743-a4b8-4ef0-b4e8-b4eb445692e1");
@@ -90,4 +90,7 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
 
     // Set WiFi Credentials
     WiFi.setCredentials(ssid, password, auth);
+
+    // Notify the device that sent the credentials that the credentials were received.
+    wifiResponseCharacterisic.setValue("Credentials Received");
 }

@@ -13,7 +13,7 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
 #line 3 "/Users/matthew/brevitest/brevitest-device/firmware/src/wifi.ino"
 #define CREDENTIAL_DELIM ","
 
-// ---------- BLE Setup ---------- // 
+// ---------- BLE Service ---------- // 
 // Key used to authenticate the device that sends credentials.
 char bleAuthKey[] = "79b45686-f959-49b2-9d1b-fbafeaaf0293";    
 // Service and Characteristic UUIDs
@@ -101,4 +101,7 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
 
     // Set WiFi Credentials
     WiFi.setCredentials(ssid, password, auth);
+
+    // Notify the device that sent the credentials that the credentials were received.
+    wifiResponseCharacterisic.setValue("Credentials Received");
 }
