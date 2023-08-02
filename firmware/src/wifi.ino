@@ -13,7 +13,7 @@ BleUuid wifiResponseUuid("2fb441e2-29a2-4142-8cc3-88d0e353d452");
 // Characteristic for receiving credentials.
 BleCharacteristic wifiCredentialsCharacteristic(
     "wifi-credentials", 
-    BleCharacteristicProperty::WRITE,
+    BleCharacteristicProperty::WRITE_WO_RSP,
     wifiCredentialsUuid,
     wifiCredentialsService,
     onReceiveCredentials,
@@ -49,6 +49,8 @@ void setup_wifi_ble()
 void start_listen_for_credentials()
 {
     BLE.advertise(&wifiAdvertisingData);
+    BLE.on();
+    WiFi.on();
 }
 
 /**
@@ -72,11 +74,14 @@ void stop_listen_for_credentials()
 void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& peer, void* context)
 {
     char* credentials = (char*) data;
+    Log.info(credentials);
+
     char* save_ptr = credentials;
 
     // Check if the device that sent the credentials has the correct auth key.
     char* ble_auth = strtok_r(credentials, CREDENTIAL_DELIM, &save_ptr);
-    if(ble_auth != bleAuthKey) 
+    Log.info("BLE Auth Key: %s", bleAuthKey);
+    if(strcmp(ble_auth, bleAuthKey) != 0)
     {
         Log.info("Invalid BLE Auth Key");
         return;
@@ -84,8 +89,11 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
 
     // Parse Credentials
     char* ssid = strtok_r(NULL, CREDENTIAL_DELIM, &save_ptr);
+    Log.info("SSID: %s", ssid);
     char* password = strtok_r(NULL, CREDENTIAL_DELIM, &save_ptr);
+    Log.info("Password: %s", password);
     char* auth_str = strtok_r(NULL, CREDENTIAL_DELIM, &save_ptr);
+    Log.info("Auth: %s", auth_str);
     int auth = atoi(auth_str);
 
     // Set WiFi Credentials
