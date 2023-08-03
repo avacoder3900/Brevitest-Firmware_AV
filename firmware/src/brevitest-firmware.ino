@@ -2484,15 +2484,21 @@ void disconnect_from_cloud() {
 }
 
 void connect_to_cloud() {
-    start_listen_for_credentials();
+
+    WiFi.clearCredentials();
+    // WiFi.setCredentials("Fannin_WIFI", "Fann!n575", WPA);
+
+    // Connect to wifi, gets credentials from the website if necessary.
+    connect_to_wifi();
+
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
+
     while (!Particle.connected()) {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
     }
-    stop_listen_for_credentials();
     Log.info("Reconnected to cloud");
 }
 
@@ -2632,6 +2638,11 @@ void startup_device()
 }
 
 void setup() {
+
+    waitFor(Serial.isConnected, 15000);
+    delay(1000);
+    Log.info("====== Serial Connected, Begin Setup ======");
+
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
 
@@ -2652,6 +2663,7 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
+    WiFi.clearCredentials();
     setup_wifi_ble();
     connect_to_cloud();
 

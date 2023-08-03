@@ -7,8 +7,8 @@
 #define WIFI_CONNECT_DELAY 1000     // Delay between WiFi connection attempts.
 
 // Response codes
-#define CRED_RECV_RESPONSE 0x00      // Sent when the SPU receives credentials.
-#define WIFI_CONNECTED_RESPONSE 0x01 // Sent when the SPU is connected to WiFi.
+#define CRED_RECV_RESPONSE "Credentials Received"   // Sent when the SPU receives credentials.
+#define WIFI_CONNECTED_RESPONSE "Connected to WiFi" // Sent when the SPU is connected to WiFi.
 
 // ---------- BLE Service ---------- // 
 // Key used to authenticate the device that sends credentials.
@@ -59,7 +59,7 @@ void send_byte(uint8_t byte)
 
 void get_credentials()
 {
-    Log.info("Getting credentials...");
+    Log.info("=== Getting credentials...");
 
     // Advertise the credentials service
     BLE.advertise(&wifiAdvertisingData);
@@ -72,7 +72,7 @@ void get_credentials()
         delay(GET_CREDENTIALS_DELAY);
     }
 
-    Log.info("Credentials received");
+    Log.info("=== Credentials received");
 }
 
 void connect_to_wifi()
@@ -81,7 +81,7 @@ void connect_to_wifi()
     get_credentials();
 
     // Try to connect to WiFi.
-    Log.info("Connecting to WiFi...");
+    Log.info("=== Connecting to WiFi...");
     WiFi.connect(WIFI_CONNECT_SKIP_LISTEN);
     delay(WIFI_CONNECT_DELAY);
 
@@ -91,14 +91,30 @@ void connect_to_wifi()
         WiFi.connect(WIFI_CONNECT_SKIP_LISTEN);
         delay(WIFI_CONNECT_DELAY);
     }
-    Log.info("Connected to WiFi");
+    Log.info("=== Connected to WiFi");
 
     // Inform the website that the SPU is connected to WiFi.
-    send_byte(CRED_RECV_RESPONSE);
+    wifiResponseCharacterisic.setValue(WIFI_CONNECTED_RESPONSE);
 
     // Stop advertising the credentials service.
     BLE.stopAdvertising();
 }
+
+void fast_connect()
+{
+    Log.info("=== Connecting to WiFi...");
+    WiFi.connect(WIFI_CONNECT_SKIP_LISTEN);
+    delay(WIFI_CONNECT_DELAY);
+
+    // Wait for WiFi to connect.
+    while(!WiFi.ready())
+    {
+        WiFi.connect(WIFI_CONNECT_SKIP_LISTEN);
+        delay(WIFI_CONNECT_DELAY);
+    }
+    Log.info("=== Connected to WiFi");
+}
+
 
 /**
  * Handler that is called whenever a bluetooth device sends credentials to the SPU.
@@ -136,8 +152,9 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
     int auth = atoi(auth_str);
 
     // Set WiFi Credentials
+    WiFi.clearCredentials();
     WiFi.setCredentials(ssid, password, auth);
 
     // Notify the device that sent the credentials that the credentials were received.
-    send_byte(WIFI_CONNECTED_RESPONSE);
+    wifiResponseCharacterisic.setValue(CRED_RECV_RESPONSE);
 }
