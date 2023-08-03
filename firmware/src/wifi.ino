@@ -1,7 +1,14 @@
 #include "wifi.h"
 
-#define CREDENTIAL_DELIM ","
-#define GET_CREDENTIALS_DELAY 1000
+// ---------- Constants ---------- // 
+#define CREDENTIAL_DELIM ","    // Delimiter used to separate sent credentials.
+
+#define GET_CREDENTIALS_DELAY 1000  // Delay between credential checks.
+#define WIFI_CONNECT_DELAY 1000     // Delay between WiFi connection attempts.
+
+// Response codes
+#define CRED_RECV_RESPONSE 0x00      // Sent when the SPU receives credentials.
+#define WIFI_CONNECTED_RESPONSE 0x01 // Sent when the SPU is connected to WiFi.
 
 // ---------- BLE Service ---------- // 
 // Key used to authenticate the device that sends credentials.
@@ -13,7 +20,7 @@ BleUuid wifiResponseUuid("2fb441e2-29a2-4142-8cc3-88d0e353d452");
 
 // Characteristic for receiving credentials.
 BleCharacteristic wifiCredentialsCharacteristic(
-    "wifi-credentials", 
+    "wifi-credentials",
     BleCharacteristicProperty::WRITE_WO_RSP,
     wifiCredentialsUuid,
     wifiCredentialsService,
@@ -23,8 +30,8 @@ BleCharacteristic wifiCredentialsCharacteristic(
 
 // Characteristic for sending a response to the device that sent credentials.
 BleCharacteristic wifiResponseCharacterisic(
-    "wifi-response", 
-    BleCharacteristicProperty::READ,
+    "wifi-response",
+    BleCharacteristicProperty::NOTIFY,
     wifiResponseUuid,
     wifiCredentialsService,
     NULL,
@@ -45,17 +52,16 @@ void setup_wifi_ble()
     wifiAdvertisingData.appendServiceUUID(wifiCredentialsService);
 }
 
-void start_listen_for_credentials()
+void send_byte(uint8_t byte)
 {
-    BLE.advertise(&wifiAdvertisingData);
-    BLE.on();
-    WiFi.on();
+    wifiResponseCharacterisic.setValue(&byte);
 }
 
 void get_credentials()
 {
     Log.info("Getting credentials...");
 
+    // Advertise the credentials service
     BLE.advertise(&wifiAdvertisingData);
     BLE.on();
     WiFi.on();
@@ -63,24 +69,35 @@ void get_credentials()
     // Wait for credentials to be received or until timoeut.
     while(!WiFi.hasCredentials())
     {
-        delay(1000);
+        delay(GET_CREDENTIALS_DELAY);
     }
 
-    BLE.stopAdvertising();
     Log.info("Credentials received");
 }
 
 void connect_to_wifi()
 {
+    // Get wifi credentials.
+    get_credentials();
+
+    // Try to connect to WiFi.
     Log.info("Connecting to WiFi...");
-    WiFi.connect();
-    delay(1000);
-    while(!WiFi.ready()) 
+    WiFi.connect(WIFI_CONNECT_SKIP_LISTEN);
+    delay(WIFI_CONNECT_DELAY);
+
+    // Wait for WiFi to connect.
+    while(!WiFi.ready())
     {
-        WiFi.connect();
-        delay(1000);
+        WiFi.connect(WIFI_CONNECT_SKIP_LISTEN);
+        delay(WIFI_CONNECT_DELAY);
     }
     Log.info("Connected to WiFi");
+
+    // Inform the website that the SPU is connected to WiFi.
+    send_byte(CRED_RECV_RESPONSE);
+
+    // Stop advertising the credentials service.
+    BLE.stopAdvertising();
 }
 
 /**
@@ -122,5 +139,5 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
     WiFi.setCredentials(ssid, password, auth);
 
     // Notify the device that sent the credentials that the credentials were received.
-    wifiResponseCharacterisic.setValue("Credentials Received");
+    send_byte(WIFI_CONNECTED_RESPONSE);
 }
