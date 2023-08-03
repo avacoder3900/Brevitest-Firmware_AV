@@ -4,3 +4,4 @@ production/brevitest_v1_0/target/1.5.0/argon/*
 production/brevitest_v1_0/.vscode/settings.json
 .DS_Store
 node_modules/*
+firmware/src/*.cpp
