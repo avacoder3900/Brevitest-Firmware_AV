@@ -1,6 +1,7 @@
 #include "wifi.h"
 
 #define CREDENTIAL_DELIM ","
+#define GET_CREDENTIALS_DELAY 1000
 
 // ---------- BLE Service ---------- // 
 // Key used to authenticate the device that sends credentials.
@@ -32,6 +33,7 @@ BleCharacteristic wifiResponseCharacterisic(
 
 BleAdvertisingData wifiAdvertisingData;
 
+
 // ---------- BLE Setup ---------- // 
 /**
  * Setup the credentials BLE service and characteristics.
@@ -43,9 +45,6 @@ void setup_wifi_ble()
     wifiAdvertisingData.appendServiceUUID(wifiCredentialsService);
 }
 
-/**
- * Start listening for credentials from a bluetooth device.
- */
 void start_listen_for_credentials()
 {
     BLE.advertise(&wifiAdvertisingData);
@@ -53,12 +52,35 @@ void start_listen_for_credentials()
     WiFi.on();
 }
 
-/**
- * Stop listening for credentials from a bluetooth device.
- */
-void stop_listen_for_credentials()
+void get_credentials()
 {
+    Log.info("Getting credentials...");
+
+    BLE.advertise(&wifiAdvertisingData);
+    BLE.on();
+    WiFi.on();
+
+    // Wait for credentials to be received or until timoeut.
+    while(!WiFi.hasCredentials())
+    {
+        delay(1000);
+    }
+
     BLE.stopAdvertising();
+    Log.info("Credentials received");
+}
+
+void connect_to_wifi()
+{
+    Log.info("Connecting to WiFi...");
+    WiFi.connect();
+    delay(1000);
+    while(!WiFi.ready()) 
+    {
+        WiFi.connect();
+        delay(1000);
+    }
+    Log.info("Connected to WiFi");
 }
 
 /**

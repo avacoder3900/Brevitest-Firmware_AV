@@ -1,11 +1,11 @@
 #ifndef WIFI_H
 #define WIFI_H
 
-extern bool flag;
+#define CREDENTIALS_NO_TIMOEUT -1
 
 void setup_wifi_ble();
 void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& peer, void* context);
-void start_listen_for_credentials();
-void stop_listen_for_credentials();
+void get_credentials();
+void connect_to_wifi();
 
 #endif // WIFI_H
