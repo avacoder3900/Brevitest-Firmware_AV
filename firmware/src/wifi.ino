@@ -10,7 +10,7 @@
 #define WIFI_CONNECTED_RESPONSE "Connected to WiFi" // Sent when the SPU is connected to WiFi.
 
 #define BLE_CONNECTION_INTERVAL 30000       // The amount of time the SPU will broadcast the credentials service when connected to WiFi.
-#define BLE_CONNECTION_CHECK_INTERVAL 1000  // 
+#define BLE_CONNECTION_CHECK_INTERVAL 1000  // The amount of time between checks for a dropped BLE connection.
 
 /////////////////////////////////////////////////////////////
 //                                                         //
