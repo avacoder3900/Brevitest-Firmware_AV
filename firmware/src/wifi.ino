@@ -12,9 +12,12 @@
 #define BLE_CONNECTION_INTERVAL 30000       // The amount of time the SPU will broadcast the credentials service when connected to WiFi.
 #define BLE_CONNECTION_CHECK_INTERVAL 1000  // 
 
-bool connection_check = false;
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                       CREDENTIALS                       //
+//                                                         //
+/////////////////////////////////////////////////////////////
 
-// ---------- BLE Service ---------- // 
 // Key used to authenticate the device that sends credentials.
 char bleAuthKey[] = "79b45686-f959-49b2-9d1b-fbafeaaf0293";
 // Service and Characteristic UUIDs
@@ -44,12 +47,30 @@ BleCharacteristic wifiResponseCharacterisic(
 
 BleAdvertisingData wifiAdvertisingData;
 
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                         TIMER                           //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
 void ble_connection_timer_callback();
 Timer ble_connection_timer(BLE_CONNECTION_INTERVAL, ble_connection_timer_callback, false);
 
+bool connection_check = false;  // Flag used to determine if the SPU should check for a dropped BLE connection.
 
-// ---------- BLE Setup ---------- // 
-
+/**
+ * Callback for the BLE connection timer.
+ * 
+ * Manages the interval allowed for BLE advertising when the SPU is connected to WiFi.
+ * 
+ * The timer is started after the SPU connects to WiFi, until the timer runs out and this 
+ * function is called, the SPU will continue to advertise. After this function is called
+ * for the first time advertising will stop if there is not a BLE connection.
+ * 
+ * If there is a BLE connection the funciton will periodically be called to check if the 
+ * connection is still active, and to stop advertising if it is not.
+ */
 void ble_connection_timer_callback() 
 {
     // Check if the connection interval is over, if so, start checking more frequently for dropped conenction.
@@ -66,7 +87,11 @@ void ble_connection_timer_callback()
     }
 }
 
-
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                     WIFI CONNECTION                     //
+//                                                         //
+/////////////////////////////////////////////////////////////
 /**
  * Setup the credentials BLE service and characteristics.
  */
