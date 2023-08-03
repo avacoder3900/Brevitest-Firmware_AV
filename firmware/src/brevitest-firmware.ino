@@ -10,7 +10,7 @@
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(PRODUCT_NUMBER);
+// PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -2485,10 +2485,6 @@ void disconnect_from_cloud() {
 
 void connect_to_cloud() {
 
-    WiFi.clearCredentials();
-    // WiFi.setCredentials("Fannin_WIFI", "Fann!n575", WPA);
-
-    // Connect to wifi, gets credentials from the website if necessary.
     connect_to_wifi();
 
     Log.info("Connecting to cloud...");
@@ -2639,6 +2635,7 @@ void startup_device()
 
 void setup() {
 
+    // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
     waitFor(Serial.isConnected, 15000);
     delay(1000);
     Log.info("====== Serial Connected, Begin Setup ======");
@@ -2663,8 +2660,8 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
-    WiFi.clearCredentials();
-    setup_wifi_ble();
+    // WiFi.clearCredentials();
+    setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);
