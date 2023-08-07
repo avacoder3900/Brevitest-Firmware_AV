@@ -6,8 +6,8 @@
 #define GET_CREDENTIALS_DELAY 1000  // Delay between credential checks.
 #define WIFI_CONNECT_DELAY 1000     // Delay between WiFi connection attempts.
 
-#define CRED_RECV_RESPONSE "Credentials Received"   // Sent when the SPU receives credentials.
-#define WIFI_CONNECTED_RESPONSE "Connected to WiFi" // Sent when the SPU is connected to WiFi.
+#define CRED_RECV_RESPONSE "RECV"       // Sent when the SPU receives credentials.
+// #define WIFI_CONNECTED_RESPONSE "CONN"  // Sent when the SPU is connected to WiFi.
 
 #define BLE_CONNECTION_INTERVAL 30000       // The amount of time the SPU will broadcast the credentials service when connected to WiFi.
 #define BLE_CONNECTION_CHECK_INTERVAL 1000  // The amount of time between checks for a dropped BLE connection.
@@ -165,7 +165,7 @@ void connect_to_wifi()
     wait_for_wifi_connect();
 
     // Inform the website that the SPU is connected to WiFi.
-    wifiResponseCharacterisic.setValue(WIFI_CONNECTED_RESPONSE);
+    // wifiResponseCharacterisic.setValue(WIFI_CONNECTED_RESPONSE);
 
     ble_connection_timer.start();
 }
@@ -202,7 +202,14 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
     Log.info("WiFi: Received Credentials: SSID: %s, PASSWORD: %s, AUTH: %d", ssid, password, auth);
 
     // Set WiFi Credentials
-    WiFi.setCredentials(ssid, password, auth);
+    if(auth == UNSEC) {
+        WiFi.setCredentials(ssid);
+    } else if (auth == WEP || auth == WPA || auth == WPA2) {
+        WiFi.setCredentials(ssid, password, auth);
+    } else {
+        Log.info("WiFi: Unsupported Auth Type: %d", auth);
+        return;
+    }
 
     // Notify the device that sent the credentials that the credentials were received.
     wifiResponseCharacterisic.setValue(CRED_RECV_RESPONSE);
