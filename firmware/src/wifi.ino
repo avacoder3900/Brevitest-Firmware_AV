@@ -19,7 +19,7 @@
 /////////////////////////////////////////////////////////////
 
 // Key used to authenticate the device that sends credentials.
-char bleAuthKey[] = "79b45686-f959-49b2-9d1b-fbafeaaf0293";
+char bleAuthKey[] = "e0a21657-4c92-4700-b3b2-035ce274312d";
 // Service and Characteristic UUIDs
 BleUuid wifiCredentialsService("0a280af2-975f-4a79-a5d1-e71c986d1e9a"); 
 BleUuid wifiCredentialsUuid("d99cf743-a4b8-4ef0-b4e8-b4eb445692e1");
