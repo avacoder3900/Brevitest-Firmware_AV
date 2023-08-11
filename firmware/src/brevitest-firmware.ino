@@ -6,10 +6,12 @@
  */
 
 #include "brevitest-firmware.h"
+#include "wifi.h"
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(PRODUCT_NUMBER);
+// TODO: Ask David about this.
+// PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -2483,9 +2485,13 @@ void disconnect_from_cloud() {
 }
 
 void connect_to_cloud() {
+
+    connect_to_wifi();
+
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
+
     while (!Particle.connected()) {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
@@ -2629,6 +2635,12 @@ void startup_device()
 }
 
 void setup() {
+
+    // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
+    waitFor(Serial.isConnected, 15000);
+    delay(1000);
+    Log.info("====== Serial Connected, Begin Setup ======");
+
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
 
@@ -2649,6 +2661,8 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
+    // WiFi.clearCredentials();
+    setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);
