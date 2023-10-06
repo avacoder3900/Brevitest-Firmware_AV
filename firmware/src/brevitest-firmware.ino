@@ -2400,6 +2400,30 @@ int particle_command(String arg)
             reset_stage(true);
             result = 1;
             break;
+        case 84: // set baseline LED power for assay channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_assay = param1;
+            break;
+        case 85: // set baseline LED power for c1 channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_c1 = param1;
+            break;
+        case 86: // set baseline LED power for c2 channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_c2 = param1;
+            break;
+        case 87: // take one set of optical readings, param1 = sensor param, param2 = assay LED power, param3 = c1 LED power, param4 = c2 LED power
+            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param3, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param4, LED_DEFAULT_POWER);
+            if (enable_optical_system(true)) {
+                get_data_from_one_optical_sensor('A', param1, param2, true);
+                get_data_from_one_optical_sensor('1', param1, param3, true);
+                get_data_from_one_optical_sensor('2', param1, param4, true);
+            }
+            disable_optical_system();
+            break;
 //
 //  STRESS TEST
 //
