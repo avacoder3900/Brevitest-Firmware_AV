@@ -2635,12 +2635,6 @@ void startup_device()
 }
 
 void setup() {
-
-    // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
-    waitFor(Serial.isConnected, 15000);
-    delay(1000);
-    Log.info("====== Serial Connected, Begin Setup ======");
-
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
 

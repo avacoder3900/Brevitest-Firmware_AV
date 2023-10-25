@@ -1,33 +1,19 @@
 #include "wifi.h"
 
-// ---------- Constants ---------- // 
-#define CREDENTIAL_DELIM ","    // Delimiter used to separate sent credentials.
-
-#define GET_CREDENTIALS_DELAY 1000  // Delay between credential checks.
-#define WIFI_CONNECT_DELAY 1000     // Delay between WiFi connection attempts.
-
-#define CRED_RECV_RESPONSE "RECV"       // Sent when the SPU receives credentials.
-// #define WIFI_CONNECTED_RESPONSE "CONN"  // Sent when the SPU is connected to WiFi.
-
-#define BLE_CONNECTION_INTERVAL 30000       // The amount of time the SPU will broadcast the credentials service when connected to WiFi.
-#define BLE_CONNECTION_CHECK_INTERVAL 1000  // The amount of time between checks for a dropped BLE connection.
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                       CREDENTIALS                       //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-// Key used to authenticate the device that sends credentials.
-char bleAuthKey[] = "e0a21657-4c92-4700-b3b2-035ce274312d";
 // Service and Characteristic UUIDs
-BleUuid wifiCredentialsService("0a280af2-975f-4a79-a5d1-e71c986d1e9a"); 
-BleUuid wifiCredentialsUuid("d99cf743-a4b8-4ef0-b4e8-b4eb445692e1");
-BleUuid wifiResponseUuid("2fb441e2-29a2-4142-8cc3-88d0e353d452");
+BleUuid wifiCredentialsService(CREDENTIALS_SERVICE_UUID);
+BleUuid wifiCredentialsUuid(CREDENTIALS_CHARACTERISTIC_UUID);
+BleUuid wifiResponseUuid(RESPONSE_CHARACTERISTIC_UUID);
 
 // Characteristic for receiving credentials.
 BleCharacteristic wifiCredentialsCharacteristic(
-    "wifi-credentials",
+    CREDENTIALS_CHARACTERISTIC_NAME,
     BleCharacteristicProperty::WRITE_WO_RSP,
     wifiCredentialsUuid,
     wifiCredentialsService,
@@ -37,7 +23,7 @@ BleCharacteristic wifiCredentialsCharacteristic(
 
 // Characteristic for sending a response to the device that sent credentials.
 BleCharacteristic wifiResponseCharacterisic(
-    "wifi-response",
+    RESPONSE_CHARACTERISTIC_NAME,
     BleCharacteristicProperty::NOTIFY,
     wifiResponseUuid,
     wifiCredentialsService,
@@ -46,7 +32,6 @@ BleCharacteristic wifiResponseCharacterisic(
 );
 
 BleAdvertisingData wifiAdvertisingData;
-
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -187,6 +172,7 @@ void onReceiveCredentials(const uint8_t* data, size_t len, const BlePeerDevice& 
 
     // Check if the device that sent the credentials has the correct auth key.
     char* ble_auth = strtok_r(credentials, CREDENTIAL_DELIM, &save_ptr);
+    const char* bleAuthKey = BLE_AUTH_KEY;
     if(strcmp(ble_auth, bleAuthKey) != 0)
     {
         Log.info("WiFi: Invalid BLE Auth Key");
