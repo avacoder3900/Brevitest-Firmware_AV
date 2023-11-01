@@ -20,8 +20,7 @@ void setup();
 void loop();
 #line 11 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(14260);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(4);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800

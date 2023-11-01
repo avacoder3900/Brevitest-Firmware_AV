@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
+#line 1 "c:/GitHub/brevitest-device/magnetometer/src/magnetometer-v2.ino"
 /*
  *    Code to validate the magnets on a Brevitest Acuity sample processing unit.
  *
@@ -28,9 +28,8 @@ void loop();
 uint16_t write(int busAddress, uint8_t address, uint32_t value);
 uint16_t read(int busAddress, uint8_t address, uint32_t& value);
 long SignExtendBitfield(uint32_t data, int width);
-#line 14 "/Users/leo3/github/brevitest-device/magnetometer/src/magnetometer-v2.ino"
+#line 14 "c:/GitHub/brevitest-device/magnetometer/src/magnetometer-v2.ino"
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(12430);
 PRODUCT_VERSION(4);
 
 // Return values of endTransmission in the Wire library
