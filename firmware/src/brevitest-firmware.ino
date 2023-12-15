@@ -2,7 +2,7 @@
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
  * Author: Leo Linbeck III
- * Date: April 2020-February 2023
+ * Date: December 2023
  */
 
 #include "brevitest-firmware.h"
@@ -10,8 +10,6 @@
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
-// TODO: Ask David about this.
-// PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -1157,21 +1155,48 @@ uint8_t find_baseline_led_power(char channel, int *error) {
 
 bool set_baselines() {
     int attempt = 0;
-    int error;
-    int max_error = OPTICAL_FAILURE_THRESHOLD;
-    while (max_error > OPTICAL_ERROR_THRESHOLD && attempt++ < 3) {
+    int error = OPTICAL_FAILURE_THRESHOLD;
+    int max_error = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
         baseline.led_assay = find_baseline_led_power('A', &error);
-        Serial.printlnf("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
-        max_error = abs(error);
+        Log.info("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
 
-        baseline.led_c1 = find_baseline_led_power('1', &error);
-        Serial.printlnf("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
-        max_error = abs(error) > max_error ? abs(error) : max_error;
-
-        baseline.led_c2 = find_baseline_led_power('2', &error);
-        Serial.printlnf("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
-        max_error = abs(error) > max_error ? abs(error) : max_error;
+        attempt++;
     }
+
+    error = OPTICAL_FAILURE_THRESHOLD;
+    attempt = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
+        baseline.led_c1 = find_baseline_led_power('1', &error);
+        Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
+
+        attempt++;
+    }
+
+    error = OPTICAL_FAILURE_THRESHOLD;
+    attempt = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
+        baseline.led_c2 = find_baseline_led_power('2', &error);
+        Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
+
+        attempt++;        
+    }
+
     test.number_of_readings = 0;
     return max_error <= OPTICAL_FAILURE_THRESHOLD;
 }
