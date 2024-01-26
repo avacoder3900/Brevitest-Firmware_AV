@@ -3,14 +3,13 @@
  *
  *    Written by Leo Linbeck III
  *
- *    Copyright 2021 by Brevitest Technologies, Inc
+ *    Copyright 2021-24 by Brevitest Technologies, Inc
  *    All rights reserved. Distribution, copying, or changes make without prior written consent is forbidden.
  * 
  */
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(14260);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(5);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
@@ -82,6 +81,9 @@ void loop() {
                 monitoringX = false;
                 monitoringY = true;
                 Particle.publish("Y-start");
+                break;
+            case 'I': // send the device ID
+                Serial.println(Particle.deviceID());
                 break;
             default: // well, you must not want to watch anything..
                 monitoringX = false;
