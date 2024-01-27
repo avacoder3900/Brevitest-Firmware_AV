@@ -1,8 +1,8 @@
 /*
  * Project brevitest_v1_0
- * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
+ * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
  * Author: Leo Linbeck III
- * Date: April 2020-July 2021
+ * Date: December 2023
  */
 
 #include "brevitest-firmware.h"
@@ -10,8 +10,6 @@
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
-// TODO: Ask David about this.
-// PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -90,6 +88,25 @@ int raw_table_lookup(int raw)
 
     return 0;
 }
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                   CLOUD FUNCTIONS                       //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+int setWifiCredentials(String param) {
+    int index = param.indexOf('|');
+    if (index == -1) {
+        return -1;
+    }
+    Log.info(param.substring(0, index));
+    Log.info(param.substring(index + 1));
+    bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
+    return result ? 1 : 0;
+}
+
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1138,21 +1155,48 @@ uint8_t find_baseline_led_power(char channel, int *error) {
 
 bool set_baselines() {
     int attempt = 0;
-    int error;
-    int max_error = OPTICAL_FAILURE_THRESHOLD;
-    while (max_error > OPTICAL_ERROR_THRESHOLD && attempt++ < 3) {
+    int error = OPTICAL_FAILURE_THRESHOLD;
+    int max_error = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
         baseline.led_assay = find_baseline_led_power('A', &error);
-        Serial.printlnf("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
-        max_error = abs(error);
+        Log.info("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
 
-        baseline.led_c1 = find_baseline_led_power('1', &error);
-        Serial.printlnf("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
-        max_error = abs(error) > max_error ? abs(error) : max_error;
-
-        baseline.led_c2 = find_baseline_led_power('2', &error);
-        Serial.printlnf("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
-        max_error = abs(error) > max_error ? abs(error) : max_error;
+        attempt++;
     }
+
+    error = OPTICAL_FAILURE_THRESHOLD;
+    attempt = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
+        baseline.led_c1 = find_baseline_led_power('1', &error);
+        Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
+
+        attempt++;
+    }
+
+    error = OPTICAL_FAILURE_THRESHOLD;
+    attempt = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
+        baseline.led_c2 = find_baseline_led_power('2', &error);
+        Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
+
+        attempt++;        
+    }
+
     test.number_of_readings = 0;
     return max_error <= OPTICAL_FAILURE_THRESHOLD;
 }
@@ -2309,7 +2353,7 @@ int particle_command(String arg)
             break;
         case 53: // set heater target temperature
             indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE)
+            if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
             {
                 heater.target_C_10X = param1;
                 heater.read_time = 0;
@@ -2380,6 +2424,30 @@ int particle_command(String arg)
             disable_optical_system();
             reset_stage(true);
             result = 1;
+            break;
+        case 84: // set baseline LED power for assay channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_assay = param1;
+            break;
+        case 85: // set baseline LED power for c1 channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_c1 = param1;
+            break;
+        case 86: // set baseline LED power for c2 channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_c2 = param1;
+            break;
+        case 87: // take one set of optical readings, param1 = sensor param, param2 = assay LED power, param3 = c1 LED power, param4 = c2 LED power
+            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param3, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param4, LED_DEFAULT_POWER);
+            if (enable_optical_system(true)) {
+                get_data_from_one_optical_sensor('A', param1, param2, true);
+                get_data_from_one_optical_sensor('1', param1, param3, true);
+                get_data_from_one_optical_sensor('2', param1, param4, true);
+            }
+            disable_optical_system();
             break;
 //
 //  STRESS TEST
@@ -2654,6 +2722,8 @@ void setup() {
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
+
+    Particle.function("setWifiCred", setWifiCredentials);
 
     // WiFi.clearCredentials();
     setup_credentials_ble();

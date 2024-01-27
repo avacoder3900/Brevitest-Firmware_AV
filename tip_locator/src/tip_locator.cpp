@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/tip_locator/src/tip_locator.ino"
 /*
  *    Code to locate and calibrate tip location on an Opentrons pipetting robot.
  *
@@ -18,9 +18,9 @@ int save_calibration(String params);
 void load_calibration_string();
 void setup();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/tip_locator/src/tip_locator.ino"
+#line 11 "/Users/leo3linbeck/github/brevitest-device/tip_locator/src/tip_locator.ino"
 SYSTEM_THREAD(ENABLED);
-PRODUCT_VERSION(4);
+PRODUCT_VERSION(5);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
@@ -77,6 +77,9 @@ void loop() {
     if (Serial.available()) { // check to see if Opentrons has requested monitoring to start
         dir = Serial.read(); // read single character
         switch(dir) {
+            case 'I': // send the particle ID
+                Serial.println(Particle.deviceID());
+                break;
             case 'C': // send the calibration string
                 monitoringX = false;
                 monitoringY = false;
