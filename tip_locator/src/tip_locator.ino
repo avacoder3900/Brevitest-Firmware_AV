@@ -9,8 +9,7 @@
  */
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(14260);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(5);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
@@ -67,6 +66,9 @@ void loop() {
     if (Serial.available()) { // check to see if Opentrons has requested monitoring to start
         dir = Serial.read(); // read single character
         switch(dir) {
+            case 'I': // send the particle ID
+                Serial.println(Particle.deviceID());
+                break;
             case 'C': // send the calibration string
                 monitoringX = false;
                 monitoringY = false;
