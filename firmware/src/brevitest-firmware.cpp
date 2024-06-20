@@ -12,6 +12,7 @@
  */
 
 #include "brevitest-firmware.h"
+#include "new_optical_driver.h"
 
 int raw_table_lookup(int raw);
 int extract_int_from_string(char *str, int pos, int len);
@@ -160,10 +161,9 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 10 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(PRODUCT_NUMBER);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -2534,13 +2534,31 @@ int particle_command(String arg)
             result = 1;
             break;
 //
+//  SPECTROPHOTOMETER
+//
+        case 85: // read spectrophotometer channel param1, frequency param2, param3 times at interval param4
+            byte spectro_buffer[MEASUREMENT_RESULTS_LENGTH];
+            indx = get_next_command_param(arg, indx, &param1, 'A');
+            indx = get_next_command_param(arg, indx, &param2, 0);
+            indx = get_next_command_param(arg, indx, &param3, OPTICAL_TEST_DEFAULT_READINGS);
+            indx = get_next_command_param(arg, indx, &param4, ASYNC_COMMAND_DEFAULT_INTERVAL);
+            for (int i = 0; i < param3; i++) {
+                get_single_spectrophotometer_reading(param1, param2, spectro_buffer);
+                Log.info("%s", spectro_buffer);
+                delay(param4);
+            }
+            break;
+//
 //  STRESS TEST
 //
         case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
             eeprom.stress_test_cycles_since_reset = 0;
             store_eeprom();
+            WiFi.off();
+            break;
         case 91: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
             WiFi.off();
+            break;
         case 92: // start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
             indx = get_next_command_param(arg, indx, &param1, 25);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
@@ -2817,6 +2835,7 @@ void setup() {
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
+    config_switch();
     start_temperature_control();
 }
 

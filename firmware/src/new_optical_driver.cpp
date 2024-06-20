@@ -1,3 +1,9 @@
+/******************************************************/
+//       THIS IS A GENERATED FILE - DO NOT EDIT       //
+/******************************************************/
+
+#include "Particle.h"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/new_optical_driver.ino"
 #include "new_optical_driver.h"
 
 // ---------- Private ---------- //
@@ -7,6 +13,24 @@
  * @param channel The channel of the sensor.
  * @return The I2C address of the sensor on the given channel.
  */
+byte sensor_addr(char channel);
+void sensor_set_reg_bank(byte chip_addr, byte reg_addr);
+byte sensor_request_bytes(byte chip_addr, byte reg_addr, size_t num_bytes);
+byte sensor_write_byte(byte chip_addr, byte reg_addr, byte data);
+bool set_ATIME(byte addr, uint8_t ATIME);
+bool set_ASTEP(byte addr, uint16_t ASTEP);
+bool enable_optical_sensor(byte addr);
+bool disable_optical_sensor(byte addr);
+bool enable_measurement_mode(byte addr);
+bool disable_measurement_mode(byte addr);
+bool disable_interrupts(byte addr);
+bool config_optical_sensor(char channel);
+bool optical_results_ready(byte addr);
+void config_switch();
+void power_off_all_spectrophotometers();
+void power_on_spectrophotometer(char channel);
+bool get_single_spectrophotometer_reading(char channel, int frequency, byte* buffer);
+#line 10 "/Users/leo3/github/brevitest-device/firmware/src/new_optical_driver.ino"
 byte sensor_addr(char channel) 
 {
     return DEFAULT_OPTICAL_ADDR;
