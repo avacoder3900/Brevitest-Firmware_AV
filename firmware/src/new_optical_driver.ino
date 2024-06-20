@@ -295,7 +295,7 @@ void power_on_spectrophotometer(char channel)
             break;
         case 'C':
             Wire.write(SWITCH_TURN_ON_C);
-            Log.info("Config optics: spectrophotometer B on");
+            Log.info("Config optics: spectrophotometer C on");
             break;
         default:
             Wire.write(SWITCH_TURN_OFF_ALL);
@@ -303,6 +303,7 @@ void power_on_spectrophotometer(char channel)
             break;
     }
     Wire.endTransmission();
+    delay(20);  // Wait for sensor to power on.
 }
 
 /**
@@ -325,6 +326,14 @@ bool get_single_spectrophotometer_reading(char channel, int frequency, byte* buf
     power_on_spectrophotometer(channel);
 
     byte addr = sensor_addr(channel);
+    Wire.beginTransmission(addr);
+    Wire.write(0x00);
+    int result = Wire.endTransmission();
+    if (result == 0) {
+        Log.info("I2C device found at address %X", addr);
+    } else {
+        Log.info("No I2C device found at address %X", addr);
+    }
 
     // Begin an optical measurement.
     enable_measurement_mode(addr);

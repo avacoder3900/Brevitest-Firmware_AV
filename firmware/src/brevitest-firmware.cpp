@@ -2538,14 +2538,18 @@ int particle_command(String arg)
 //
         case 85: // read spectrophotometer channel param1, frequency param2, param3 times at interval param4
             byte spectro_buffer[MEASUREMENT_RESULTS_LENGTH];
-            indx = get_next_command_param(arg, indx, &param1, 'A');
-            indx = get_next_command_param(arg, indx, &param2, 0);
-            indx = get_next_command_param(arg, indx, &param3, OPTICAL_TEST_DEFAULT_READINGS);
-            indx = get_next_command_param(arg, indx, &param4, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            for (int i = 0; i < param3; i++) {
-                get_single_spectrophotometer_reading(param1, param2, spectro_buffer);
-                Log.info("%s", spectro_buffer);
-                delay(param4);
+            if (startI2C()) {
+                Log.info("Starting spectrophotometer test");
+                indx = get_next_command_param(arg, indx, &param1, 'A');
+                indx = get_next_command_param(arg, indx, &param2, 0);
+                indx = get_next_command_param(arg, indx, &param3, 1);
+                indx = get_next_command_param(arg, indx, &param4, 1000);
+                for (int i = 0; i < param3; i++) {
+                    get_single_spectrophotometer_reading(param1, param2, spectro_buffer);
+                    Log.info("%s", spectro_buffer);
+                    delay(param4);
+                }
+                Wire.end();
             }
             break;
 //
