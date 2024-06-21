@@ -2148,7 +2148,6 @@ void i2c_bus_scan()
 
 #define SWITCH_ADDR 0xA0     // I2C address of MCP23008.
 #define SWITCH_IO_REGISTER 0x00     // I/O direction register address.
-#define SWITCH_IO_CONFIG 0xE6     // Value to configure the IO register to output on GP0, GP2, and GP4.
 #define SWITCH_GPIO_REGISTER 0x09     // GPIO register address.
 #define SWITCH_TURN_OFF_ALL 0x00     // Turn off all spectrophotometers.
 #define SWITCH_TURN_ON_A 0x01     // Turn on spectrophotometer A.
@@ -2158,53 +2157,66 @@ void i2c_bus_scan()
 void config_switch() 
 {
     // Configure spectrophotometer switch.
+    byte mask = ~SWITCH_TURN_OFF_ALL;
     Wire.beginTransmission(SWITCH_ADDR);
     Wire.write(SWITCH_IO_REGISTER);    
-    Wire.write(SWITCH_IO_CONFIG);
-    Wire.endTransmission();
-    Log.info("Config optics: spectrophotometer switch configured");
+    Wire.write(mask);
+    Wire.endTransmission(false);
+    Wire.requestFrom(SWITCH_IO_REGISTER, 1);
+    int io_config = Wire.read();
+    if (io_config != mask) {
+        Log.info("Switch config failed, write: %X, read: %X", mask, io_config);
+    } else {
+        Log.info("Config optics: spectrophotometer switch configured");
+    }
 }
 
+
+void set_spectrophotometer_power(byte code) 
+{
+    Wire.beginTransmission(SWITCH_ADDR);
+    Wire.write(SWITCH_IO_REGISTER);    
+    Wire.write(~code);
+    Wire.endTransmission();
+    Wire.beginTransmission(SWITCH_ADDR);
+    Wire.write(SWITCH_GPIO_REGISTER);    
+    Wire.write(code);
+    Wire.endTransmission();
+}
 
 void power_off_all_spectrophotometers() 
 {
     // Turn off all sensors.
-    Wire.beginTransmission(SWITCH_ADDR);
-    Wire.write(SWITCH_GPIO_REGISTER);    
-    Wire.write(SWITCH_TURN_OFF_ALL);
-    Wire.endTransmission();
+    set_spectrophotometer_power(SWITCH_TURN_OFF_ALL);
     Log.info("Config optics: all spectrophotometers off");
 }
 
 void power_on_spectrophotometer(char channel) 
 {
     // Turn on sensor
-    Wire.beginTransmission(SWITCH_ADDR);
-    Wire.write(SWITCH_GPIO_REGISTER);
     switch (channel) {
         case 'A':
-            Wire.write(SWITCH_TURN_ON_A);
+            set_spectrophotometer_power(SWITCH_TURN_ON_A);
             Log.info("Config optics: spectrophotometer A on");
             break;
         case 'B':
-            Wire.write(SWITCH_TURN_ON_B);
+            set_spectrophotometer_power(SWITCH_TURN_ON_B);
             Log.info("Config optics: spectrophotometer B on");
             break;
         case 'C':
-            Wire.write(SWITCH_TURN_ON_C);
+            set_spectrophotometer_power(SWITCH_TURN_ON_C);
             Log.info("Config optics: spectrophotometer C on");
             break;
         default:
-            Wire.write(SWITCH_TURN_OFF_ALL);
+            set_spectrophotometer_power(SWITCH_TURN_OFF_ALL);
             Log.info("Config optics: spectrophotometers off by default");
             break;
     }
-    int result = Wire.endTransmission();
     delay(5);  // Wait for sensor to power on.
     if (result == 0) {
-        Log.info("I2C device found at address %X", SWITCH_ADDR);
+        Log.info("I2C device found for channel %c", channel);
     } else {
-        Log.info("No I2C device found at address %X", SWITCH_ADDR);
+        Log.info("No I2C device found for channel %c", channel);
     }
 }
 
