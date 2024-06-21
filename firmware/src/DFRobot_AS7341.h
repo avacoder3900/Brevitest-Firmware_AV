@@ -13,16 +13,19 @@
  * @url https://github.com/DFRobot/DFRobot_AS7341
  */
 
+#include "application.h"
+
 #ifndef DFROBOT_AS7341_H
 #define DFROBOT_AS7341_H
 
+#define ENABLE_DBG
 #ifdef ENABLE_DBG
 #define DBG(...) {Serial.print("[");Serial.print(__FUNCTION__); Serial.print("(): "); Serial.print(__LINE__); Serial.print(" ] "); Serial.println(__VA_ARGS__);}
 #else
 #define DBG(...)
 #endif
 
-#define REG_AS7341_ASTATUS     0X60
+// #define REG_AS7341_ASTATUS     0X60
 #define REG_AS7341_CONFIG      0X70
 #define REG_AS7341_STAT        0X71
 #define REG_AS7341_EDGE        0X72
@@ -341,7 +344,5 @@ private:
   eMode_t measureMode;
 
 };
-
-DFRobot_AS7341 as7341;
 
 #endif

@@ -2635,10 +2635,15 @@ int particle_command(String arg)
 
                 delay(10);
 
-                while (as7341.begin() != 0) {
+                DFRobot_AS7341 as7341;
+                while (as7341.begin(as7341.eSpm) != 0) {
                     Serial.println("IIC init failed, please check if the wire connection is correct");
                     delay(1000);
-  }
+                }
+                delay(10);
+                as7341.setAstep(30000);
+                as7341.setAtime(100);
+                as7341.setAGAIN(7);
 
                 for (int i = 0; i < param3; i++) {
                     //Start spectrum measurement 

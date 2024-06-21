@@ -8,9 +8,8 @@
  *@date  2020-07-16
  *@url https://github.com/DFRobot/DFRobot_AS7341
 */
- 
+
 #include "DFRobot_AS7341.h"
-#include "application.h"
 
 DFRobot_AS7341::DFRobot_AS7341(TwoWire *pWire)
 {
