@@ -347,6 +347,8 @@ bool start_SMUX_measurement(char channel)
         Log.info("Config optics: addr %X, enable measurement failed, result: %X", addr, result);
 
     delay(5);
+    byte state = sensor_read_control_byte(addr, REG_ENABLE);
+    Log.info("Config optics: addr %X, start SMUX register, value: %X", addr, state);
     return result == 0;
 }
 

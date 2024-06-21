@@ -6,7 +6,7 @@
  */
 
 #include "brevitest-firmware.h"
-#include "spectrophotometer_driver.h"
+#include "DFRobot_AS7341.h"
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
@@ -2140,6 +2140,74 @@ void i2c_bus_scan()
     disable_optical_system();
 }
 
+//
+//
+//  Spectrophotometer switch
+//
+//
+
+#define SWITCH_ADDR 0xA0     // I2C address of MCP23008.
+#define SWITCH_IO_REGISTER 0x00     // I/O direction register address.
+#define SWITCH_IO_CONFIG 0xE6     // Value to configure the IO register to output on GP0, GP2, and GP4.
+#define SWITCH_GPIO_REGISTER 0x09     // GPIO register address.
+#define SWITCH_TURN_OFF_ALL 0x00     // Turn off all spectrophotometers.
+#define SWITCH_TURN_ON_A 0x01     // Turn on spectrophotometer A.
+#define SWITCH_TURN_ON_B 0x04     // Turn on spectrophotometer B.
+#define SWITCH_TURN_ON_C 0x10     // Turn on spectrophotometer C.
+
+void config_switch() 
+{
+    // Configure spectrophotometer switch.
+    Wire.beginTransmission(SWITCH_ADDR);
+    Wire.write(SWITCH_IO_REGISTER);    
+    Wire.write(SWITCH_IO_CONFIG);
+    Wire.endTransmission();
+    Log.info("Config optics: spectrophotometer switch configured");
+}
+
+
+void power_off_all_spectrophotometers() 
+{
+    // Turn off all sensors.
+    Wire.beginTransmission(SWITCH_ADDR);
+    Wire.write(SWITCH_GPIO_REGISTER);    
+    Wire.write(SWITCH_TURN_OFF_ALL);
+    Wire.endTransmission();
+    Log.info("Config optics: all spectrophotometers off");
+}
+
+void power_on_spectrophotometer(char channel) 
+{
+    // Turn on sensor
+    Wire.beginTransmission(SWITCH_ADDR);
+    Wire.write(SWITCH_GPIO_REGISTER);
+    switch (channel) {
+        case 'A':
+            Wire.write(SWITCH_TURN_ON_A);
+            Log.info("Config optics: spectrophotometer A on");
+            break;
+        case 'B':
+            Wire.write(SWITCH_TURN_ON_B);
+            Log.info("Config optics: spectrophotometer B on");
+            break;
+        case 'C':
+            Wire.write(SWITCH_TURN_ON_C);
+            Log.info("Config optics: spectrophotometer C on");
+            break;
+        default:
+            Wire.write(SWITCH_TURN_OFF_ALL);
+            Log.info("Config optics: spectrophotometers off by default");
+            break;
+    }
+    int result = Wire.endTransmission();
+    delay(5);  // Wait for sensor to power on.
+    if (result == 0) {
+        Log.info("I2C device found at address %X", SWITCH_ADDR);
+    } else {
+        Log.info("No I2C device found at address %X", SWITCH_ADDR);
+    }
+}
+
 int particle_command(String arg)
 {
     int cmd, result;
@@ -2383,7 +2451,8 @@ int particle_command(String arg)
 //  SPECTROPHOTOMETER
 //
         case 85: // read spectrophotometer channel param1, frequency param2, param3 times at interval param4
-            byte readings[13];
+            DFRobot_AS7341::sModeOneData_t data1;
+            DFRobot_AS7341::sModeTwoData_t data2;
             char channel;
 
             indx = get_next_command_param(arg, indx, &param1, 0);
@@ -2409,44 +2478,45 @@ int particle_command(String arg)
 
                 delay(10);
 
-                config_spectrophotometer(channel);
+                while (as7341.begin() != 0) {
+                    Serial.println("IIC init failed, please check if the wire connection is correct");
+                    delay(1000);
+  }
 
                 for (int i = 0; i < param3; i++) {
-                    if (!get_single_spectrophotometer_reading(channel, readings)){
-                        Serial.println("Error reading all channels!");
-                    } else {
-                        Serial.print("ADC0/F1 415nm : ");
-                        Serial.println(readings[0]);
-                        Serial.print("ADC1/F2 445nm : ");
-                        Serial.println(readings[1]);
-                        Serial.print("ADC2/F3 480nm : ");
-                        Serial.println(readings[2]);
-                        Serial.print("ADC3/F4 515nm : ");
-                        Serial.println(readings[3]);
-                        Serial.print("ADC0/F5 555nm : ");
-
-                        /* 
-                        // we skip the first set of duplicate clear/NIR readings
-                        Serial.print("ADC4/Clear-");
-                        Serial.println(readings[4]);
-                        Serial.print("ADC5/NIR-");
-                        Serial.println(readings[5]);
-                        */
-                        
-                        Serial.println(readings[6]);
-                        Serial.print("ADC1/F6 590nm : ");
-                        Serial.println(readings[7]);
-                        Serial.print("ADC2/F7 630nm : ");
-                        Serial.println(readings[8]);
-                        Serial.print("ADC3/F8 680nm : ");
-                        Serial.println(readings[9]);
-                        Serial.print("ADC4/Clear    : ");
-                        Serial.println(readings[10]);
-                        Serial.print("ADC5/NIR      : ");
-                        Serial.println(readings[11]);
-
-                        Serial.println();
-                    }
+                    //Start spectrum measurement 
+                    //Channel mapping mode: 1.eF1F4ClearNIR,2.eF5F8ClearNIR
+                    as7341.startMeasure(as7341.eF1F4ClearNIR);
+                    //Read the value of sensor data channel 0~5, under eF1F4ClearNIR
+                    data1 = as7341.readSpectralDataOne();
+                    
+                    Serial.print("F1(405-425nm):");
+                    Serial.println(data1.ADF1);
+                    Serial.print("F2(435-455nm):");
+                    Serial.println(data1.ADF2);
+                    Serial.print("F3(470-490nm):");
+                    Serial.println(data1.ADF3);
+                    Serial.print("F4(505-525nm):");   
+                    Serial.println(data1.ADF4);
+                    //Serial.print("Clear:");
+                    //Serial.println(data1.ADCLEAR);
+                    //Serial.print("NIR:");
+                    //Serial.println(data1.ADNIR);
+                    as7341.startMeasure(as7341.eF5F8ClearNIR);
+                    //Read the value of sensor data channel 0~5, under eF5F8ClearNIR
+                    data2 = as7341.readSpectralDataTwo();
+                    Serial.print("F5(545-565nm):");
+                    Serial.println(data2.ADF5);
+                    Serial.print("F6(580-600nm):");
+                    Serial.println(data2.ADF6);
+                    Serial.print("F7(620-640nm):");
+                    Serial.println(data2.ADF7);
+                    Serial.print("F8(670-690nm):");
+                    Serial.println(data2.ADF8);
+                    Serial.print("Clear:");
+                    Serial.println(data2.ADCLEAR);
+                    Serial.print("NIR:");
+                    Serial.println(data2.ADNIR);
                     delay(param4);
                 }
                 Wire.end();
