@@ -6,7 +6,7 @@
  */
 
 #include "brevitest-firmware.h"
-#include "new_optical_driver.h"
+#include "spectrophotometer_driver.h"
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
@@ -2383,17 +2383,70 @@ int particle_command(String arg)
 //  SPECTROPHOTOMETER
 //
         case 85: // read spectrophotometer channel param1, frequency param2, param3 times at interval param4
-            byte spectro_buffer[MEASUREMENT_RESULTS_LENGTH];
+            byte readings[13];
+            char channel;
+
+            indx = get_next_command_param(arg, indx, &param1, 0);
+            indx = get_next_command_param(arg, indx, &param2, 0);
+            indx = get_next_command_param(arg, indx, &param3, 1);
+            indx = get_next_command_param(arg, indx, &param4, 1000);
+            
+            switch(param1) {
+                case 1:
+                    channel = 'B';
+                    break;
+                case 2:
+                    channel = 'C';
+                    break;
+                default:
+                    channel = 'A';
+            }
+
             if (startI2C()) {
-                Log.info("Starting spectrophotometer test");
+                Log.info("Starting spectrophotometer test on channel %c", channel);
                 config_switch();
-                indx = get_next_command_param(arg, indx, &param1, 'A');
-                indx = get_next_command_param(arg, indx, &param2, 0);
-                indx = get_next_command_param(arg, indx, &param3, 1);
-                indx = get_next_command_param(arg, indx, &param4, 1000);
+                power_on_spectrophotometer(channel);
+
+                delay(10);
+
+                config_spectrophotometer(channel);
+
                 for (int i = 0; i < param3; i++) {
-                    get_single_spectrophotometer_reading(param1, param2, spectro_buffer);
-                    Log.info("%s", spectro_buffer);
+                    if (!get_single_spectrophotometer_reading(channel, readings)){
+                        Serial.println("Error reading all channels!");
+                    } else {
+                        Serial.print("ADC0/F1 415nm : ");
+                        Serial.println(readings[0]);
+                        Serial.print("ADC1/F2 445nm : ");
+                        Serial.println(readings[1]);
+                        Serial.print("ADC2/F3 480nm : ");
+                        Serial.println(readings[2]);
+                        Serial.print("ADC3/F4 515nm : ");
+                        Serial.println(readings[3]);
+                        Serial.print("ADC0/F5 555nm : ");
+
+                        /* 
+                        // we skip the first set of duplicate clear/NIR readings
+                        Serial.print("ADC4/Clear-");
+                        Serial.println(readings[4]);
+                        Serial.print("ADC5/NIR-");
+                        Serial.println(readings[5]);
+                        */
+                        
+                        Serial.println(readings[6]);
+                        Serial.print("ADC1/F6 590nm : ");
+                        Serial.println(readings[7]);
+                        Serial.print("ADC2/F7 630nm : ");
+                        Serial.println(readings[8]);
+                        Serial.print("ADC3/F8 680nm : ");
+                        Serial.println(readings[9]);
+                        Serial.print("ADC4/Clear    : ");
+                        Serial.println(readings[10]);
+                        Serial.print("ADC5/NIR      : ");
+                        Serial.println(readings[11]);
+
+                        Serial.println();
+                    }
                     delay(param4);
                 }
                 Wire.end();

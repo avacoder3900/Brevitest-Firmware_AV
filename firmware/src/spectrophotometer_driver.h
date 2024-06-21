@@ -3,38 +3,33 @@
 
 // ---------- Constants ---------- //
 // The I2C slave address as defined by the sensor's datasheet.
-#define DEFAULT_OPTICAL_ADDR 0x39
+#define DEFAULT_SPECTROPHOTOMETER_ADDR 0x39
 
-// Optical sensor register addresses.
+// Spectrophotometer register addresses.
 #define REG_ENABLE 0x80     // Sensor mode.
 #define REG_CONFIG 0x70     // Integration mode.
 #define REG_CFG0 0xA9       // Set register bank.
-#define REG_INTENAB 0xF9    // Set interrupts.
 #define REG_ATIME 0x81      // Intergration time.
 #define REG_ASTEP_1 0xCA    // Integration time.
 #define REG_ASTEP_2 0xCB    // Integration time.
 #define REG_STAT 0x71       // Sensor results status.
 #define REG_ASTATUS 0x94    // Read results.
+#define REG_SMUX_DATA 0x95  // First address of LOW register bank.
+#define REG_SMUX_CONFIG 0xAF    // First address of HIGH register bank.
 
-// Optical sensor register values.
-#define REG_BANK_LOW_BEGIN 0x60     // First address of LOW register bank.
-#define REG_BANK_LOW_END 0x74       // Last address of the LOW register bank.
-#define REG_BANK_HIGH_BEGIN 0x80    // First address of the HIGH register bank.
-#define REG_BANK_LOW 0x10           // Set LOW register bank.
-#define REG_BANK_HIGH 0x00          // Set HIGH register bank.
-
-#define ENABLE_OPTICAL_SENSOR 0x01  // Enables the sensor.
-#define DISABLE_OPTICAL_SENSOR 0x00 // Disables the sensor.
-#define ENABLE_SPM 0x03             // Enters specteral measurement mode.
-#define DISABLE_SPM 0x01            // Leaves spectraal measurement mode.
-#define DISABLE_INTR 0x00           // Disable interrupts.
+// Spectrophotometer commands.
+#define ENABLE_SPECTROPHOTOMETER 0x01      // Enables the sensor.
+#define DISABLE_SPECTROPHOTOMETER 0x00     // Disables the sensor.
+#define ENABLE_SMUX 0x13                // Enters specteral measurement mode.
+#define DISABLE_SMUX 0x01               // Leaves spectraal measurement mode.
+#define SET_SMUX_CONFIG 0x02            // Sets SMUX config mode to write.
 
 // The default ATIME and ASTEP values recommended by the sensor's datasheet.
 // Used to determine integration time
 #define DEFAULT_ATIME 29
 #define DEFAULT_ASTEP 599
 
-#define MEASUREMENT_RESULTS_LENGTH 13   // The number of bytes to read from the sensor.
+#define MEASUREMENT_RESULTS_LENGTH 12   // The number of bytes to read from the sensor.
 #define RESULTS_ARE_READY 1             // The sensor has results ready to be read.
 
 // @todo Tune these values. Make sure that the check interval is less than the 
@@ -51,14 +46,15 @@
 
 bool set_ATIME(byte addr, uint8_t ATIME);
 bool set_ASTEP(byte addr, uint16_t ASTEP);
-bool enable_optical_sensor(byte addr);
-bool disable_optical_sensor(byte addr);
-bool enable_measurement_mode(byte addr);
-bool disable_measurement_mode(byte addr);
-bool disable_interrupts(byte addr);
-bool config_optical_sensor(char channel);
-bool optical_results_ready(byte addr);
-bool get_single_spectrophotometer_reading(char channel, int frequency, byte* buffer);
+bool enable_spectrophotometer(char channel);
+bool disable_spectrophotometer(char channel);
+bool start_SMUX_measurement(char channel);
+bool disable_SMUX_measurement(char channel);
+bool config_spectrophotometer(char channel);
+bool spectrophotometer_results_ready(char channel);
 void config_switch(void);
+void power_on_spectrophotometer(char channel);
+void power_off_all_spectrophotometers();
+bool get_single_spectrophotometer_reading(char channel, byte* buffer);
 
 #endif // NEW_OPTICAL_DRIVER_H
