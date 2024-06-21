@@ -2484,8 +2484,8 @@ int particle_command(String arg)
                     delay(1000);
                 }
                 delay(10);
-                as7341.setAstep(30000);
-                as7341.setAtime(100);
+                as7341.setAstep(599);
+                as7341.setAtime(39);
                 as7341.setAGAIN(7);
 
                 for (int i = 0; i < param3; i++) {
