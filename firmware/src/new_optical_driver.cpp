@@ -70,6 +70,7 @@ byte sensor_request_bytes(byte chip_addr, byte reg_addr, size_t num_bytes)
     Wire.beginTransmission(chip_addr);
     Wire.write(reg_addr);
     byte result = Wire.endTransmission(false); // Don't drop the bus.
+    // Log.info("Config optics: addr %X, register %X, request bytes result: %X", chip_addr, reg_addr, result);
     Wire.requestFrom(chip_addr, num_bytes);
     return result;
 }
@@ -106,7 +107,7 @@ bool set_ATIME(byte addr, uint8_t ATIME)
 {
     byte result = sensor_write_byte(addr, REG_ATIME, ATIME);
     if (result != 0) 
-        Log.info("Config optics: addr %d, set atime failed, result: %d", addr, result);
+        Log.info("Config optics: addr %X, set atime failed, result: %X", addr, result);
 
     return result == 0;
 }
@@ -125,12 +126,12 @@ bool set_ASTEP(byte addr, uint16_t ASTEP)
     // Set the least significant byte of the ASTEP register.
     byte set_lsb = sensor_write_byte(addr, REG_ASTEP_1, LSB(ASTEP));
     if (set_lsb != 0) 
-        Log.info("Config optics: addr %d, set astep lsb failed, result: %d", addr, set_lsb);
+        Log.info("Config optics: addr %X, set astep lsb failed, result: %X", addr, set_lsb);
 
     // Set the most significant byte of the ASTEP register.
     byte set_msb = sensor_write_byte(addr, REG_ASTEP_2, MSB(ASTEP));
     if (set_lsb != 0) 
-        Log.info("Config optics: addr %d, set astep msb failed, result: %d", addr, set_lsb);
+        Log.info("Config optics: addr %X, set astep msb failed, result: %X", addr, set_lsb);
 
     return set_lsb == 0 && set_msb == 0;
 }
@@ -148,7 +149,7 @@ bool enable_optical_sensor(byte addr)
 {
     byte result = sensor_write_byte(addr, REG_ENABLE, ENABLE_OPTICAL_SENSOR);
     if (result != 0)
-        Log.info("Config optics: addr %d, enable sensor failed, result: %d", addr, result);
+        Log.info("Config optics: addr %X, enable sensor failed, result: %X", addr, result);
 
     return result == 0;
 }
@@ -166,7 +167,7 @@ bool disable_optical_sensor(byte addr)
 {
     byte result = sensor_write_byte(addr, REG_ENABLE, DISABLE_OPTICAL_SENSOR);
     if (result != 0)
-        Log.info("Config optics: addr %d, disable sensor failed, result: %d", addr, result);
+        Log.info("Config optics: addr %X, disable sensor failed, result: %X", addr, result);
 
     return result == 0;
 }
@@ -182,9 +183,58 @@ bool disable_optical_sensor(byte addr)
  */
 bool enable_measurement_mode(byte addr) 
 {
-    byte result = sensor_write_byte(addr, REG_ENABLE, ENABLE_SPM);
+    byte result = 0;
+    
+    // result = sensor_write_byte(addr, REG_ENABLE, ENABLE_OPTICAL_SENSOR);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, enable sensor failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // delay(2);  // Wait for sensor to enter ACTIVE mode.
+
+    // result = sensor_write_byte(addr, REG_ATIME, 0x1D);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, set ATIME failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // result = sensor_request_bytes(addr, REG_ATIME, 1);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, read ATIME failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // result = Wire.read();
+    // Log.info("Config optics: addr %X, ATIME value: %X", addr, result);
+
+    // result = sensor_write_byte(addr, REG_ASTEP_1, 0x57);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, set ASTEP_1 failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // result = sensor_request_bytes(addr, REG_ASTEP_1, 1);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, read ASTEP_1 failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // result = Wire.read();
+    // Log.info("Config optics: addr %X, ASTEP_1 value: %X", addr, result);
+
+
+    // result = sensor_write_byte(addr, REG_ASTEP_2, 0x02);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, set ASTEP_2 failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // result = sensor_request_bytes(addr, REG_ASTEP_2, 1);
+    // if (result != 0) {
+    //     Log.info("Config optics: addr %X, read ASTEP_2 failed, result: %X", addr, result);
+    //     return false;
+    // }
+    // result = Wire.read();
+    // Log.info("Config optics: addr %X, ASTEP_2 value: %X", addr, result);
+
+    result = sensor_write_byte(addr, REG_ENABLE, ENABLE_SPM);
     if (result != 0)
-        Log.info("Config optics: addr %d, enable measurement failed, result: %d", addr, result);
+        Log.info("Config optics: addr %X, enable measurement failed, result: %X", addr, result);
 
     return result == 0;
 }
@@ -202,7 +252,7 @@ bool disable_measurement_mode(byte addr)
 {
     byte result = sensor_write_byte(addr, REG_ENABLE, DISABLE_SPM);
     if (result != 0)
-        Log.info("Config optics: addr %d, disable measurement failed, result: %d", addr, result);
+        Log.info("Config optics: addr %X, disable measurement failed, result: %X", addr, result);
 
     return result == 0;
 }
@@ -216,7 +266,7 @@ bool disable_interrupts(byte addr)
 {
     byte result = sensor_write_byte(addr, REG_INTENAB, DISABLE_INTR);
     if (result != 0)
-        Log.info("Config optics: addr %d, disable interrupts failed, result: %d", addr, result);
+        Log.info("Config optics: addr %X, disable interrupts failed, result: %X", addr, result);
 
     return result == 0;
 }
@@ -258,16 +308,17 @@ bool optical_results_ready(byte addr)
     // Check if the sensor is in measurement mode.
     result = sensor_request_bytes(addr, REG_ENABLE, 1);
     if(result != 0)
-        Log.info("Ready optics: addr %d, request bytes failed, result: %d", addr, result);
+        Log.info("Ready optics: addr %X, request bytes failed, result: %X", addr, result);
     bool active = (Wire.read() >> 1) & 0x01; // If the measurement mode bit is set.
     Wire.endTransmission();
 
     // Check if the sensor results are ready.
     result = sensor_request_bytes(addr, REG_STAT, 1);
     if(result != 0)
-        Log.info("Ready optics: addr %d, request bytes failed, result: %d", addr, result);
+        Log.info("Ready optics: addr %X, request bytes failed, result: %X", addr, result);
 
     bool ready = Wire.read() & RESULTS_ARE_READY; // If the ready bit is set.
+    Serial.print(ready);
     Wire.endTransmission();
 
     return active && ready;
@@ -275,7 +326,7 @@ bool optical_results_ready(byte addr)
 
 #define SWITCH_ADDR 0xA0     // I2C address of MCP23008.
 #define SWITCH_IO_REGISTER 0x00     // I/O direction register address.
-#define SWITCH_IO_CONFIG 0x15     // Value to configure the IO register to output on GP0, GP2, and GP4.
+#define SWITCH_IO_CONFIG 0xE6     // Value to configure the IO register to output on GP0, GP2, and GP4.
 #define SWITCH_GPIO_REGISTER 0x09     // GPIO register address.
 #define SWITCH_TURN_OFF_ALL 0x00     // Turn off all spectrophotometers.
 #define SWITCH_TURN_ON_A 0x01     // Turn on spectrophotometer A.
@@ -326,8 +377,13 @@ void power_on_spectrophotometer(char channel)
             Log.info("Config optics: spectrophotometers off by default");
             break;
     }
-    Wire.endTransmission();
-    delay(20);  // Wait for sensor to power on.
+    int result = Wire.endTransmission();
+    delay(100);  // Wait for sensor to power on.
+    if (result == 0) {
+        Log.info("I2C device found at address %X", SWITCH_ADDR);
+    } else {
+        Log.info("No I2C device found at address %X", SWITCH_ADDR);
+    }
 }
 
 /**
@@ -372,7 +428,7 @@ bool get_single_spectrophotometer_reading(char channel, int frequency, byte* buf
 
     // Return early if the results are not ready within the timeout.
     if (!ready) {
-        Log.info("Config optics: addr %d, results not ready", addr);
+        Log.info("Config optics: addr %X, results not ready", addr);
         return false;
     }
 

@@ -4,6 +4,9 @@
 			"path": "."
 		}
 	],
-	"settings": {
+    "settings": {
+        "files.associations": {
+            "__locale": "cpp"
+        }
 	}
 }

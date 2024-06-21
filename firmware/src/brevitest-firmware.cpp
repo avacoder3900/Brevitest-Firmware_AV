@@ -2540,6 +2540,7 @@ int particle_command(String arg)
             byte spectro_buffer[MEASUREMENT_RESULTS_LENGTH];
             if (startI2C()) {
                 Log.info("Starting spectrophotometer test");
+                config_switch();
                 indx = get_next_command_param(arg, indx, &param1, 'A');
                 indx = get_next_command_param(arg, indx, &param2, 0);
                 indx = get_next_command_param(arg, indx, &param3, 1);
@@ -2825,13 +2826,13 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
-    connect_to_cloud();
+    // connect_to_cloud();
 
     indicatorBusy.setActive(true);
 
     device_id = System.deviceID();
-    Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
-    Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
+    // Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
+    // Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
 
     setup_eeprom();
 
@@ -2839,8 +2840,8 @@ void setup() {
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
-    config_switch();
     start_temperature_control();
+    Log.info("Setup complete");
 }
 
 /////////////////////////////////////////////////////////////
@@ -3169,8 +3170,8 @@ void loop()
             magnet_validation_loop();
         } else if (barcode_scan_mode) {
             barcode_scan_loop();
-        } else if (!device_verified) {
-            verify_device_loop();
+        // } else if (!device_verified) {
+        //     verify_device_loop();
         }
     }
 
