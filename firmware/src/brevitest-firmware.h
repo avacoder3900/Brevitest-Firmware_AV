@@ -48,6 +48,11 @@
 #define OPTICAL_ERROR_THRESHOLD 75
 #define OPTICAL_FAILURE_THRESHOLD 200
 
+// spectrophotometer
+#define SPECTRO_ASTEP_DEFAULT 2000
+#define SPECTRO_ATIME_DEFAULT 800
+#define SPECTRO_AGAIN_DEFAULT 4
+
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
@@ -105,7 +110,8 @@
 // stage
 #define STAGE_RESET_STEPS -60000
 #define STAGE_POSITION_LIMIT 45000
-#define STAGE_OPTICAL_SENSOR_READ_POSITION 20900
+// #define STAGE_OPTICAL_SENSOR_READ_POSITION 20900     old read position
+#define STAGE_OPTICAL_SENSOR_READ_POSITION 37100
 #define STAGE_MICRONS_TO_INITIAL_POSITION 250
 #define STAGE_MICRONS_TO_TEST_START_POSITION 12800
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
@@ -329,6 +335,11 @@ bool buzzer_alert_running = false;
 bool start_problem_buzzer = false;
 bool buzzer_problem_running = false;
 
+// spectrophotometer
+int spectro_astep = SPECTRO_ASTEP_DEFAULT;
+int spectro_atime = SPECTRO_ATIME_DEFAULT;
+int spectro_again = SPECTRO_AGAIN_DEFAULT;
+
 // progress
 int test_progress;
 int test_percent_complete;
@@ -446,3 +457,21 @@ int well_move[5] = { -8000, 8000, 8000, 8000, 8000 };
 BleAddress magnetometer_address;
 BlePeerDevice magnetometer;
 bool magnetometer_found = false;
+
+// spectrophotometer data structure
+
+char channels[3] = { 'A', 'B', 'C' };
+struct SpectrophotometerData {
+    char channel;
+    unsigned long msec;
+    uint16_t f1;/**<F1 diode data>*/
+    uint16_t f2;/**<F2 diode data>*/
+    uint16_t f3;/**<F3 diode data>*/
+    uint16_t f4;/**<F4 diode data>*/
+    uint16_t f5;/**<F5 diode data>*/
+    uint16_t f6;/**<F6 diode data>*/
+    uint16_t f7;/**<F7 diode data>*/
+    uint16_t f8;/**<F8 diode data>*/
+    uint16_t clear;/**<clear diode data>*/
+    uint16_t nir;/**<NIR diode data>*/
+} spectro_data;
