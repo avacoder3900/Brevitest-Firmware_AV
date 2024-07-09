@@ -384,6 +384,7 @@ void setup_eeprom()
 void detector_changed_interrupt()
 {
     detector_changed = true;
+    detector_changed = false;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2652,6 +2653,7 @@ int particle_command(String arg)
                 }
                 Wire.end();
             }
+            result = stage_position;
             break;
         case 86: // set spectrophotometer params
             indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
@@ -2660,6 +2662,7 @@ int particle_command(String arg)
             spectro_astep = param1;
             spectro_atime = param2;
             spectro_again = param3;
+            result = stage_position;
             break;
         case 87: // read spectrophotometers on all channels param1 times at interval param2 ms
             indx = get_next_command_param(arg, indx, &param1, 1);
@@ -2680,6 +2683,7 @@ int particle_command(String arg)
                 }
                 Wire.end();
             }
+            result = stage_position;
             break;
 //
 //  STRESS TEST
@@ -2954,13 +2958,13 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
-    // connect_to_cloud();
+    connect_to_cloud();
 
     indicatorBusy.setActive(true);
 
     device_id = System.deviceID();
-    // Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
-    // Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
+    Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
 
     setup_eeprom();
 
@@ -2969,6 +2973,8 @@ void setup() {
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
     start_temperature_control();
+    stop_temperature_control(); // turn off temperature control for prototyping
+    device_verified = true; // bypass verification for prototyping
     Log.info("Setup complete");
 }
 
@@ -3037,6 +3043,7 @@ void set_device_indicators()
         }
     } else {
         turn_on_ready_indicator(false);
+        turn_on_ready_indicator(true); // show green during prototyping
         turn_off_buzzer_timer();
     }
 }
