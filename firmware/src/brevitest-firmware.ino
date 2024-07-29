@@ -2259,6 +2259,20 @@ bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341)
         as7341.setAstep(spectro_astep);
         as7341.setAtime(spectro_atime);
         as7341.setAGAIN(spectro_again);
+    
+        switch (channel_number) {
+            case 1:
+                turn_on_assay_LED(255);
+                break;
+            case 2:
+                turn_on_control_1_LED(255);
+                break;
+            case 3:
+                turn_on_control_2_LED(255);
+                break;
+            default:
+                return false;
+        }
         return true;
     } else {
         return false;
@@ -2544,59 +2558,6 @@ int particle_command(String arg)
             disable_optical_system();
             break;
 //
-//  SPECTROPHOTOMETER
-//
-        case 85: // read spectrophotometer channel param1, param2 times at interval param3 ms
-            indx = get_next_command_param(arg, indx, &param1, 1);
-            indx = get_next_command_param(arg, indx, &param2, 1);
-            indx = get_next_command_param(arg, indx, &param3, 1000);
-            
-            if (startI2C()) {
-                DFRobot_AS7341 as7341;
-                SpectrophotometerData data;
-                if (init_spectrophotometer(param1, as7341)) {
-                    Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
-                    for (int i = 0; i < param2; i++) {
-                        take_spectrophotometer_reading(as7341, data);
-                        Serial.printlnf("%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
-                        delay(param3);
-                    }
-                }
-                Wire.end();
-            }
-            result = stage_position;
-            break;
-        case 86: // set spectrophotometer params
-            indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
-            indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
-            indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
-            spectro_astep = param1;
-            spectro_atime = param2;
-            spectro_again = param3;
-            result = stage_position;
-            break;
-        case 87: // read spectrophotometers on all channels param1 times at interval param2 ms
-            indx = get_next_command_param(arg, indx, &param1, 1);
-            indx = get_next_command_param(arg, indx, &param2, 1000);
-            
-            if (startI2C()) {
-                DFRobot_AS7341 as7341;
-                SpectrophotometerData data;
-                Serial.println("c\tn\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
-                for (int j = 1; j < 4; j++) {
-                    if (init_spectrophotometer(j, as7341)) {
-                        for (int i = 0; i < param1; i++) {
-                            take_spectrophotometer_reading(as7341, data);
-                            Serial.printlnf("%d\t%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", j, i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
-                            delay(param2);
-                        }
-                    }
-                }
-                Wire.end();
-            }
-            result = stage_position;
-            break;
-//
 //  STRESS TEST
 //
         case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
@@ -2646,6 +2607,61 @@ int particle_command(String arg)
             if (result > 0) {
                 Log.info("%d devices found", result);
             }
+            break;
+//
+//  SPECTROPHOTOMETER
+//
+        case 300: // read spectrophotometer channel param1, param2 times at interval param3 ms
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            indx = get_next_command_param(arg, indx, &param2, 1);
+            indx = get_next_command_param(arg, indx, &param3, 1000);
+            
+            if (startI2C()) {
+                DFRobot_AS7341 as7341;
+                SpectrophotometerData data;
+                if (init_spectrophotometer(param1, as7341)) {
+                    Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+                    for (int i = 0; i < param2; i++) {
+                        take_spectrophotometer_reading(as7341, data);
+                        Serial.printlnf("%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+                        delay(param3);
+                    }
+                }
+                turn_off_all_LEDs();
+                Wire.end();
+            }
+            result = stage_position;
+            break;
+        case 301: // set spectrophotometer params
+            indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
+            indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
+            indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
+            spectro_astep = param1;
+            spectro_atime = param2;
+            spectro_again = param3;
+            result = stage_position;
+            break;
+        case 302: // read spectrophotometers on all channels param1 times at interval param2 ms
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            indx = get_next_command_param(arg, indx, &param2, 1000);
+            
+            if (startI2C()) {
+                DFRobot_AS7341 as7341;
+                SpectrophotometerData data;
+                Serial.println("c\tn\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+                for (int j = 1; j < 4; j++) {
+                    if (init_spectrophotometer(j, as7341)) {
+                        for (int i = 0; i < param1; i++) {
+                            take_spectrophotometer_reading(as7341, data);
+                            Serial.printlnf("%d\t%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", j, i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+                            delay(param2);
+                        }
+                    }
+                    turn_off_all_LEDs();
+                }
+                Wire.end();
+            }
+            result = stage_position;
             break;
 //
 //  ASYNC COMMAND

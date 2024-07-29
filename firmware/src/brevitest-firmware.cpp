@@ -3,18 +3,20 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
- * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Diagnostic Platform
+ * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
  * Author: Leo Linbeck III
- * Date: April 2020-July 2021
+ * Date: December 2023
  */
 
 #include "brevitest-firmware.h"
+#include "wifi.h"
 #include "DFRobot_AS7341.h"
 
 int raw_table_lookup(int raw);
+int setWifiCredentials(String param);
 int extract_int_from_string(char *str, int pos, int len);
 int extract_int_from_delimited_string(char *str, int *indx, char delim);
 uint32_t checksum(char *buf, int size);
@@ -166,7 +168,7 @@ void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 12 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -247,6 +249,25 @@ int raw_table_lookup(int raw)
 
     return 0;
 }
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//                   CLOUD FUNCTIONS                       //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+int setWifiCredentials(String param) {
+    int index = param.indexOf('|');
+    if (index == -1) {
+        return -1;
+    }
+    Log.info(param.substring(0, index));
+    Log.info(param.substring(index + 1));
+    bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
+    return result ? 1 : 0;
+}
+
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1296,21 +1317,48 @@ uint8_t find_baseline_led_power(char channel, int *error) {
 
 bool set_baselines() {
     int attempt = 0;
-    int error;
-    int max_error = OPTICAL_FAILURE_THRESHOLD;
-    while (max_error > OPTICAL_ERROR_THRESHOLD && attempt++ < 3) {
+    int error = OPTICAL_FAILURE_THRESHOLD;
+    int max_error = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
         baseline.led_assay = find_baseline_led_power('A', &error);
-        Serial.printlnf("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
-        max_error = abs(error);
+        Log.info("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
 
-        baseline.led_c1 = find_baseline_led_power('1', &error);
-        Serial.printlnf("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
-        max_error = abs(error) > max_error ? abs(error) : max_error;
-
-        baseline.led_c2 = find_baseline_led_power('2', &error);
-        Serial.printlnf("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
-        max_error = abs(error) > max_error ? abs(error) : max_error;
+        attempt++;
     }
+
+    error = OPTICAL_FAILURE_THRESHOLD;
+    attempt = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
+        baseline.led_c1 = find_baseline_led_power('1', &error);
+        Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
+
+        attempt++;
+    }
+
+    error = OPTICAL_FAILURE_THRESHOLD;
+    attempt = 0;
+
+    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
+    {
+        baseline.led_c2 = find_baseline_led_power('2', &error);
+        Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
+        
+        if(abs(error) > max_error)
+            max_error = abs(error);
+
+        attempt++;        
+    }
+
     test.number_of_readings = 0;
     return max_error <= OPTICAL_FAILURE_THRESHOLD;
 }
@@ -2371,6 +2419,20 @@ bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341)
         as7341.setAstep(spectro_astep);
         as7341.setAtime(spectro_atime);
         as7341.setAGAIN(spectro_again);
+    
+        switch (channel_number) {
+            case 1:
+                turn_on_assay_LED(255);
+                break;
+            case 2:
+                turn_on_control_1_LED(255);
+                break;
+            case 3:
+                turn_on_control_2_LED(255);
+                break;
+            default:
+                return false;
+        }
         return true;
     } else {
         return false;
@@ -2560,7 +2622,7 @@ int particle_command(String arg)
             break;
         case 53: // set heater target temperature
             indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-            if (param1 > 0 && param1 < HEATER_MAX_TEMPERATURE)
+            if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
             {
                 heater.target_C_10X = param1;
                 heater.read_time = 0;
@@ -2606,7 +2668,6 @@ int particle_command(String arg)
             result = start_optical_sensor_test(0, param1, param2);
             break;
         case 81: // read optical sensors param1 times at interval param2 at current location
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_READINGS);
             indx = get_next_command_param(arg, indx, &param2, ASYNC_COMMAND_DEFAULT_INTERVAL);
             result = start_optical_sensor_test(0, param1, param2);
             break;
@@ -2632,58 +2693,29 @@ int particle_command(String arg)
             reset_stage(true);
             result = 1;
             break;
-//
-//  SPECTROPHOTOMETER
-//
-        case 85: // read spectrophotometer channel param1, param2 times at interval param3 ms
-            indx = get_next_command_param(arg, indx, &param1, 1);
-            indx = get_next_command_param(arg, indx, &param2, 1);
-            indx = get_next_command_param(arg, indx, &param3, 1000);
-            
-            if (startI2C()) {
-                DFRobot_AS7341 as7341;
-                SpectrophotometerData data;
-                if (init_spectrophotometer(param1, as7341)) {
-                    Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
-                    for (int i = 0; i < param2; i++) {
-                        take_spectrophotometer_reading(as7341, data);
-                        Serial.printlnf("%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
-                        delay(param3);
-                    }
-                }
-                Wire.end();
-            }
-            result = stage_position;
+        case 84: // set baseline LED power for assay channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_assay = param1;
             break;
-        case 86: // set spectrophotometer params
-            indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
-            indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
-            indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
-            spectro_astep = param1;
-            spectro_atime = param2;
-            spectro_again = param3;
-            result = stage_position;
+        case 85: // set baseline LED power for c1 channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_c1 = param1;
             break;
-        case 87: // read spectrophotometers on all channels param1 times at interval param2 ms
-            indx = get_next_command_param(arg, indx, &param1, 1);
-            indx = get_next_command_param(arg, indx, &param2, 1000);
-            
-            if (startI2C()) {
-                DFRobot_AS7341 as7341;
-                SpectrophotometerData data;
-                Serial.println("c\tn\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
-                for (int j = 1; j < 4; j++) {
-                    if (init_spectrophotometer(j, as7341)) {
-                        for (int i = 0; i < param1; i++) {
-                            take_spectrophotometer_reading(as7341, data);
-                            Serial.printlnf("%d\t%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", j, i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
-                            delay(param2);
-                        }
-                    }
-                }
-                Wire.end();
+        case 86: // set baseline LED power for c2 channel
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            baseline.led_c2 = param1;
+            break;
+        case 87: // take one set of optical readings, param1 = sensor param, param2 = assay LED power, param3 = c1 LED power, param4 = c2 LED power
+            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
+            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param3, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param4, LED_DEFAULT_POWER);
+            if (enable_optical_system(true)) {
+                get_data_from_one_optical_sensor('A', param1, param2, true);
+                get_data_from_one_optical_sensor('1', param1, param3, true);
+                get_data_from_one_optical_sensor('2', param1, param4, true);
             }
-            result = stage_position;
+            disable_optical_system();
             break;
 //
 //  STRESS TEST
@@ -2735,6 +2767,61 @@ int particle_command(String arg)
             if (result > 0) {
                 Log.info("%d devices found", result);
             }
+            break;
+//
+//  SPECTROPHOTOMETER
+//
+        case 300: // read spectrophotometer channel param1, param2 times at interval param3 ms
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            indx = get_next_command_param(arg, indx, &param2, 1);
+            indx = get_next_command_param(arg, indx, &param3, 1000);
+            
+            if (startI2C()) {
+                DFRobot_AS7341 as7341;
+                SpectrophotometerData data;
+                if (init_spectrophotometer(param1, as7341)) {
+                    Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+                    for (int i = 0; i < param2; i++) {
+                        take_spectrophotometer_reading(as7341, data);
+                        Serial.printlnf("%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+                        delay(param3);
+                    }
+                }
+                turn_off_all_LEDs();
+                Wire.end();
+            }
+            result = stage_position;
+            break;
+        case 301: // set spectrophotometer params
+            indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
+            indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
+            indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
+            spectro_astep = param1;
+            spectro_atime = param2;
+            spectro_again = param3;
+            result = stage_position;
+            break;
+        case 302: // read spectrophotometers on all channels param1 times at interval param2 ms
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            indx = get_next_command_param(arg, indx, &param2, 1000);
+            
+            if (startI2C()) {
+                DFRobot_AS7341 as7341;
+                SpectrophotometerData data;
+                Serial.println("c\tn\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+                for (int j = 1; j < 4; j++) {
+                    if (init_spectrophotometer(j, as7341)) {
+                        for (int i = 0; i < param1; i++) {
+                            take_spectrophotometer_reading(as7341, data);
+                            Serial.printlnf("%d\t%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", j, i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+                            delay(param2);
+                        }
+                    }
+                    turn_off_all_LEDs();
+                }
+                Wire.end();
+            }
+            result = stage_position;
             break;
 //
 //  ASYNC COMMAND
@@ -2792,9 +2879,13 @@ void disconnect_from_cloud() {
 }
 
 void connect_to_cloud() {
+
+    connect_to_wifi();
+
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
+
     while (!Particle.connected()) {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
@@ -2938,6 +3029,12 @@ void startup_device()
 }
 
 void setup() {
+
+    // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
+    waitFor(Serial.isConnected, 15000);
+    delay(1000);
+    Log.info("====== Serial Connected, Begin Setup ======");
+
     init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
 
@@ -2958,6 +3055,10 @@ void setup() {
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
+    Particle.function("setWifiCred", setWifiCredentials);
+
+    // WiFi.clearCredentials();
+    setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);
