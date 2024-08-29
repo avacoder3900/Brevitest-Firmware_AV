@@ -245,7 +245,7 @@ void setup_eeprom()
 void detector_changed_interrupt()
 {
     detector_changed = true;
-    detector_changed = false;
+    // detector_changed = false;
 }
 
 /////////////////////////////////////////////////////////////
