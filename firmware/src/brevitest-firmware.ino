@@ -245,7 +245,7 @@ void setup_eeprom()
 void detector_changed_interrupt()
 {
     detector_changed = true;
-    // detector_changed = false;
+    // detector_changed = false; // uncomment to deactive cartride detection
 }
 
 /////////////////////////////////////////////////////////////
@@ -2777,7 +2777,6 @@ void run_test()
 /////////////////////////////////////////////////////////////
 
 void clear_state() {
-    barcode_scan_mode = false;
     cartridge_validation_in_progress = false;
     test_start_in_progress = false;
     test_upload_in_progress = false;
@@ -2914,7 +2913,7 @@ void setup() {
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
     start_temperature_control();
-    stop_temperature_control(); // turn off temperature control for prototyping
+    // stop_temperature_control(); // turn off temperature control for prototyping
     device_verified = true; // bypass verification for prototyping
     Log.info("Setup complete");
 }
