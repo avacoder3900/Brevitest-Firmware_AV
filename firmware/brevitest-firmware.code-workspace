@@ -8,7 +8,12 @@
         "files.associations": {
             "__locale": "cpp",
             "ostream": "cpp",
-            "istream": "cpp"
+            "istream": "cpp",
+            "__bit_reference": "cpp",
+            "array": "cpp",
+            "initializer_list": "cpp",
+            "string": "cpp",
+            "string_view": "cpp"
         }
 	}
 }

@@ -4,9 +4,8 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define PRODUCT_NUMBER 14974
-#define FIRMWARE_VERSION 43
-#define DATA_FORMAT_VERSION 21
+#define FIRMWARE_VERSION 1
+#define DATA_FORMAT_VERSION 22
 
 #define TEST_DATA_FORMAT_CODE 'D'
 #define ASSAY_UUID_LENGTH 8
@@ -37,21 +36,11 @@
 #define STRESS_TEST_PREFIX_LENGTH 12
 #define SHIPPING_BOLT_BARCODE "SHIPPING BOLT"
 
-// optical sensors
-#define OPTICAL_SENSOR_NUMBER_OF_SAMPLES 4
-#define OPTICAL_SENSOR_DEFAULT_PARAM 0x95
-#define OPTICAL_MAXIMUM_NUMBER_OF_READINGS 21
-#define OPTICAL_TEST_DEFAULT_READINGS 5
-#define OPTICAL_TEST_DEFAULT_DISTANCE 2000
-#define OPTICAL_TARGET_L_VALUE 20000
-#define OPTICAL_SEARCH_THRESHOLD 50
-#define OPTICAL_ERROR_THRESHOLD 75
-#define OPTICAL_FAILURE_THRESHOLD 200
-
 // spectrophotometer
 #define SPECTRO_ASTEP_DEFAULT 599
 #define SPECTRO_ATIME_DEFAULT 39
 #define SPECTRO_AGAIN_DEFAULT 7
+#define SPECTRO_MAXIMUM_NUMBER_OF_READINGS 21
 
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
@@ -110,8 +99,7 @@
 // stage
 #define STAGE_RESET_STEPS -60000
 #define STAGE_POSITION_LIMIT 45000
-// #define STAGE_OPTICAL_SENSOR_READ_POSITION 20900     old read position
-#define STAGE_OPTICAL_SENSOR_READ_POSITION 31600
+#define STAGE_SPECTROPHOTOMETER_READ_POSITION 31600
 #define STAGE_MICRONS_TO_INITIAL_POSITION -300
 #define STAGE_MICRONS_TO_TEST_START_POSITION 9800
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
@@ -141,7 +129,6 @@
 #define PUBSUB_START_TEST 30
 #define PUBSUB_UPLOAD_TEST 40
 #define PUBSUB_VALIDATE_MAGNETS 50
-#define PUBSUB_VALIDATE_OPTICS 60
 
 // magnetometer
 #define MAGNETOMETER_HEATING_DELAY 3000
@@ -151,24 +138,23 @@
 #define STRESS_TEST_MAXIMUM_RECORDS 15
 
 // pin definitions
-int pinLEDControl2 = A0;
-int pinLEDControl1 = A1;
-int pinLEDAssay = A2;
-int pinHeaterThermistor = A3;
-int pinStageLimit = SCK;
-int pinMotorDir = MOSI;
-int pinCartridgeDetected = MISO;
+int pinMotorDir = D2;
+int pinCartridgeDetected = D3;
+int pinHeater = D4;
+int pinChannelA = D5;
+int pinChannelB = D6;
+int pinChannelC = D7;
+int pinPowerGood = D8;
+int pinMotorReset = D11;
+int pinMotorSleep = D12;
+int pinMotorStep = D13;
+int pinStageLimit = D22;
+int pinHeaterThermistor = D23;
 int pinRX = RX;
 int pinTX = TX;
-// int pinSDA = SDA;
-// int pinSCL = SCL;
-int pinBarcodeTrigger = D2;
-int pinBuzzer = D3;
-int pinBarcodeReady = D4;
-int pinMotorStep = D5;
-int pinMotorSleep = D6;
-int pinHeater = D7;
-int pinMotorReset = D8;
+int pinBuzzer = A0;
+int pinBarcodeReady = A1;
+int pinBarcodeTrigger = A2;
 
 // global variables
 bool new_device = true;
@@ -177,7 +163,7 @@ int microns_error = 0;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
-bool optical_read_in_progress = false;
+bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
@@ -237,11 +223,6 @@ int magnetometer_heating_delay = MAGNETOMETER_HEATING_DELAY;
 bool magnet_validation_mode = false;
 bool magnet_validation_in_progress = false;
 
-// optical validation
-bool optical_probe_inserted = false;
-bool optical_validation_mode = false;
-bool optical_validation_in_progress = false;
-
 // stress test
 bool stress_test_cartridge_inserted = false;
 bool stress_test_mode = false;
@@ -259,7 +240,7 @@ bool publish_in_progress = false;
 int publish_retry_attempt = 0;
 int publish_retry_max_index = 11;
 unsigned long publish_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
-unsigned long next_optical_sensor_reading_time = 0;
+unsigned long next_spectrophotometer_reading_time = 0;
 
 // temperature control system
 struct HeatingElement
@@ -321,12 +302,6 @@ int magnet_test_readings = 0;
 int magnet_test_move = 0;
 unsigned long magnet_test_confirmation_timeout;
 
-bool async_command_optical_running = false;
-bool optical_test_take_reading = false;
-int optical_test_count = 0;
-int optical_test_readings = 0;
-int optical_test_move = 0;
-
 // buzzer
 void check_buzzer(void);
 Timer buzzer_timer(BUZZER_ALERT_PERIOD, check_buzzer);
@@ -361,31 +336,24 @@ int current_event_code = 0;
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
 
-struct BrevitestOpticalBaselineChannel {
-    uint8_t led_power;
-    uint16_t l_value;
-    int error;
-};
+// spectrophotometer data structure
 
-struct BrevitestOpticalBaseline {
-    uint8_t led_assay;
-    uint8_t led_c1;
-    uint8_t led_c2;
-    BrevitestOpticalBaseline() {
-        led_assay = LED_DEFAULT_POWER;
-        led_c1 = LED_DEFAULT_POWER;
-        led_c2 = LED_DEFAULT_POWER;
-    }
-} baseline;
-
-struct BrevitestOpticalSensorRecord
-{ // 12 bytes
+char channels[3] = { 'A', 'B', 'C' };
+struct BrevitestSpectrophotometerRecord
+{ // 28 bytes
     char channel;
     uint8_t samples;
     unsigned long msec;
-    uint16_t x;
-    uint16_t y;
-    uint16_t z;
+    uint16_t f1;/**<F1 diode data>*/
+    uint16_t f2;/**<F2 diode data>*/
+    uint16_t f3;/**<F3 diode data>*/
+    uint16_t f4;/**<F4 diode data>*/
+    uint16_t f5;/**<F5 diode data>*/
+    uint16_t f6;/**<F6 diode data>*/
+    uint16_t f7;/**<F7 diode data>*/
+    uint16_t f8;/**<F8 diode data>*/
+    uint16_t clear;/**<clear diode data>*/
+    uint16_t nir;/**<NIR diode data>*/
     uint16_t temperature;
 };
 
@@ -394,7 +362,7 @@ struct BrevitestTestRecord
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     uint8_t number_of_readings; // 0 = cancelled
     uint16_t duration;
-    BrevitestOpticalSensorRecord reading[OPTICAL_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
+    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
 } test;
 
 struct BrevitestAssay
@@ -417,7 +385,7 @@ struct Particle_EEPROM
     char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
     BrevitestTestRecord cache;
     int stress_test_reading_count;
-    BrevitestOpticalSensorRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS];
+    BrevitestSpectrophotometerRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS];
 
     Particle_EEPROM()
     {
@@ -429,7 +397,7 @@ struct Particle_EEPROM
         memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH + 1);
         memset(&cache, 0, sizeof(BrevitestTestRecord));
         stress_test_reading_count = 0;
-        memset(&stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestOpticalSensorRecord));
+        memset(&stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestSpectrophotometerRecord));
     }
 } eeprom;
 
@@ -458,20 +426,3 @@ BleAddress magnetometer_address;
 BlePeerDevice magnetometer;
 bool magnetometer_found = false;
 
-// spectrophotometer data structure
-
-char channels[3] = { 'A', 'B', 'C' };
-struct SpectrophotometerData {
-    char channel;
-    unsigned long msec;
-    uint16_t f1;/**<F1 diode data>*/
-    uint16_t f2;/**<F2 diode data>*/
-    uint16_t f3;/**<F3 diode data>*/
-    uint16_t f4;/**<F4 diode data>*/
-    uint16_t f5;/**<F5 diode data>*/
-    uint16_t f6;/**<F6 diode data>*/
-    uint16_t f7;/**<F7 diode data>*/
-    uint16_t f8;/**<F8 diode data>*/
-    uint16_t clear;/**<clear diode data>*/
-    uint16_t nir;/**<NIR diode data>*/
-} spectro_data;
