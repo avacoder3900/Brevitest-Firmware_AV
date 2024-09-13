@@ -18,7 +18,7 @@
 #ifndef DFROBOT_AS7341_H
 #define DFROBOT_AS7341_H
 
-#define ENABLE_DBG
+// #define ENABLE_DBG
 #ifdef ENABLE_DBG
 #define DBG(...) {Serial.print("[");Serial.print(__FUNCTION__); Serial.print("(): "); Serial.print(__LINE__); Serial.print(" ] "); Serial.println(__VA_ARGS__);}
 #else

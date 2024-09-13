@@ -820,11 +820,11 @@ bool power_on_spectrophotometer(char channel)
     switch (channel) {
         case 'A':
             turn_on_channel_a();
-            // Log.info("Config optics: spectrophotometer A on");
+            Log.info("Config optics: spectrophotometer A on");
             break;
         case 'B':
             turn_on_channel_b();
-            // Log.info("Config optics: spectrophotometer B on");
+            Log.info("Config optics: spectrophotometer B on");
             break;
         case 'C':
             turn_on_channel_c();
@@ -832,7 +832,7 @@ bool power_on_spectrophotometer(char channel)
             break;
         default:
             power_off_all_spectrophotometers();
-            // Log.info("Config optics: spectrophotometers off by default");
+            Log.info("Config optics: spectrophotometers off by default");
             return false;
     }
     delay(5);  // Wait for sensor to power on.
@@ -849,23 +849,18 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341)
         }
         delay(10);
 
+        // int addr = 0x39;
+        // Wire.beginTransmission(addr);
+        // int bytes_written = Wire.write(0x00);
+        // int result = Wire.endTransmission();
+        // if (result == 0) {
+        //     Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
+        // }
+
+        Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
         as7341.setAstep(spectro_astep);
         as7341.setAtime(spectro_atime);
         as7341.setAGAIN(spectro_again);
-    
-        switch (channel) {
-            case 'A':
-                turn_on_channel_a();
-                break;
-            case 'B':
-                turn_on_channel_b();
-                break;
-            case 'C':
-                turn_on_channel_c();
-                break;
-            default:
-                return false;
-        }
         return true;
     } else {
         return false;
@@ -875,25 +870,46 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341)
 bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341) 
 {
     char channel = (channel_number - 1) + 'A';
-    init_spectrophotometer(channel, as7341);
+    return init_spectrophotometer(channel, as7341); 
 }
 
-void take_spectrophotometer_reading(DFRobot_AS7341 &sensor, BrevitestSpectrophotometerRecord &data) 
+void take_spectrophotometer_reading(DFRobot_AS7341 &as7341, BrevitestSpectrophotometerRecord &data) 
 {
     DFRobot_AS7341::sModeOneData_t data1;
     DFRobot_AS7341::sModeTwoData_t data2;
 
-    sensor.startMeasure(sensor.eF1F4ClearNIR);
-    //Read the value of sensor data channel 0~5, under eF1F4ClearNIR
-    data1 = sensor.readSpectralDataOne();
+    Log.info("Taking spectrophotometer reading");
+    as7341.startMeasure(as7341.eF1F4ClearNIR);
+    Log.info("Reading the value of sensor data channel 0~5, under eF1F4ClearNIR");
+    data1 = as7341.readSpectralDataOne();
     memcpy(&data.f1, &data1.ADF1, sizeof(data1));
 
-    sensor.startMeasure(sensor.eF5F8ClearNIR);
-    //Read the value of sensor data channel 0~5, under eF5F8ClearNIR
-    data2 = sensor.readSpectralDataTwo();
+    as7341.startMeasure(as7341.eF5F8ClearNIR);
+    Log.info("Reading the value of sensor data channel 0~5, under eF5F8ClearNIR");
+    data2 = as7341.readSpectralDataTwo();
     memcpy(&data.f5, &data2.ADF5, sizeof(data2));
 }
 
+
+void i2c_bus_scan()
+{
+    int addr = 0x39;
+    int result, bytes_written;
+
+    Log.info("Starting optical I2C bus scan");
+    for (int i = 1; i < 4; i++) {
+        Log.info("Scanning channel %d", i);
+        if (power_on_spectrophotometer((i - 1) + 'A')) {
+            Wire.beginTransmission(addr);
+            bytes_written = Wire.write(0x00);
+            result = Wire.endTransmission();
+            if (result == 0) {
+                Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
+            }
+        }
+        power_off_all_spectrophotometers();
+    }
+}
 
 bool startI2C() {
     if (Wire.isEnabled()) return true;
@@ -1339,7 +1355,7 @@ void store_test()
 
 int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%X%c%lX%c%X%c%X%c%X%c%X%cX%c%X%c%X%c%X%cX%c%X%c%X%c",
+    return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
                     reading->channel, ARG_DELIM,
                     reading->samples, ARG_DELIM,
                     reading->msec, ARG_DELIM,
@@ -1500,8 +1516,7 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, saved_position, start_index;
-    unsigned long msec;
+    int param1, param2, param3, start_index;
 
     if (test_cancelled) return index;
 
@@ -2088,6 +2103,7 @@ int particle_command(String arg)
                 BrevitestSpectrophotometerRecord data;
                 Serial.println("c\tn\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
                 for (int j = 1; j < 4; j++) {
+                    Log.info("Reading channel %d", j);
                     if (init_spectrophotometer(j, as7341)) {
                         for (int i = 0; i < param1; i++) {
                             take_spectrophotometer_reading(as7341, data);
@@ -2100,14 +2116,6 @@ int particle_command(String arg)
             }
             Wire.end();
             result = stage_position;
-            break;
-//
-//  ASYNC COMMAND
-//
-        case 999: // stop async command
-            async_command_timer.stop();
-            async_command_running = false;
-            result = 1;
             break;
         default:
             result = 0;
@@ -2158,7 +2166,7 @@ void disconnect_from_cloud() {
 
 void connect_to_cloud() {
 
-    connect_to_wifi();
+    // connect_to_wifi();
 
     Log.info("Connecting to cloud...");
     Particle.connect();
@@ -2331,7 +2339,7 @@ void setup() {
     Particle.function("setWifiCred", setWifiCredentials);
 
     // WiFi.clearCredentials();
-    setup_credentials_ble();
+    // setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);
@@ -2345,6 +2353,8 @@ void setup() {
     Serial.begin(115200); // standard serial port
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
+
+    i2c_bus_scan();
 
     start_temperature_control();
     // stop_temperature_control(); // turn off temperature control for prototyping
@@ -2390,7 +2400,7 @@ void set_device_indicators()
     } else if (test_invalid) {
         turn_on_problem_LED();
         turn_on_buzzer_problem();
-    } else if (async_command_running || stress_test_mode) {
+    } else if (stress_test_mode) {
         turn_on_async_LED();
     } else if (!device_verified) {
         if (heater_debounced()) {

@@ -289,19 +289,6 @@ unsigned long heater_debounce_time;
 bool heater_ready = false;
 bool previous_heater_ready = false;
 
-// async commands
-void async_command(void);
-Timer async_command_timer(ASYNC_COMMAND_DEFAULT_INTERVAL, async_command);
-bool async_command_running = false;
-
-bool async_command_magnet_running = false;
-bool magnet_test_take_reading = false;
-bool magnet_test_awaiting_confirmation = false;
-int magnet_test_count = 0;
-int magnet_test_readings = 0;
-int magnet_test_move = 0;
-unsigned long magnet_test_confirmation_timeout;
-
 // buzzer
 void check_buzzer(void);
 Timer buzzer_timer(BUZZER_ALERT_PERIOD, check_buzzer);

@@ -159,7 +159,7 @@ void connect_to_wifi()
     BLE.on();
     WiFi.on();
 
-    // If the SPU does not currently have WiFi credentials, it will wiat for them then restart the SPU.
+    // If the SPU does not currently have WiFi credentials, it will wait for them then restart the SPU.
     get_credentials();
     // Waits for wifi to connect, will continue to accept new credentials, if new ones are received, restarts the SPU.
     wait_for_wifi_connect();

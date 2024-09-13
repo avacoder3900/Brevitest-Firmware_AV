@@ -58,11 +58,13 @@ void DFRobot_AS7341::enableSpectralMeasure(bool on)
 {
   uint8_t data;
   readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE %c read = %X", on ? 'T' : 'F', data);
   if(on == true){
     data = data | (1<<1);
   } else {
     data = data & (~(1<<1));
   }
+  Log.info("REG_AS7341_ENABLE %c write = %X", on ? 'T' : 'F', data);
   writeReg(REG_AS7341_ENABLE,&data,1);
 }
 
@@ -199,8 +201,11 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
 {
   uint8_t data=0;
   
+  Log.info("startMeasure");
   readReg(REG_AS7341_CFG_0,&data,1);
+  Log.info("REG_AS7341_CFG_0 read = %X",data);
   data = data & (~(1<<4));
+  Log.info("REG_AS7341_CFG_0 write = %X",data);
   writeReg(REG_AS7341_CFG_0,&data,1);
   
   enableSpectralMeasure(false);
@@ -220,9 +225,10 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
   }
   enableSpectralMeasure(true);
   if(measureMode == eSpm){
-  while(!measureComplete()){
-    delay(1);
-  }
+    unsigned long startTime = millis();
+    while(!measureComplete() && (millis() - startTime) < 5000){
+        delay(1);
+    }
   }
 }
 uint8_t DFRobot_AS7341::readFlickerData(){
@@ -262,12 +268,7 @@ uint8_t DFRobot_AS7341::readFlickerData(){
 bool DFRobot_AS7341::measureComplete(){
   uint8_t status;
   readReg(REG_AS7341_STATUS_2,&status,1);
-  if((status & (1<<6))){
-    return true;
-  }
-  else{
-    return false;
-  }
+  return bool (status & (1<<6));
 }
 
 uint16_t DFRobot_AS7341::getChannelData(uint8_t channel){

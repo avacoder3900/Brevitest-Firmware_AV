@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -53,39 +53,32 @@ void turn_on_heater(int power);
 void turn_off_heater();
 int limit(int value, int max, int min);
 int set_heater_power(int power);
-void set_power_on_all_LEDs(int power);
-void turn_on_LED(char channel, int power);
-void turn_off_LED(char channel);
-void turn_on_all_LEDs(int power);
-void turn_on_assay_LED(int power);
-void turn_on_control_1_LED(int power);
-void turn_on_control_2_LED(int power);
-void turn_off_assay_LED();
-void turn_off_control_1_LED();
-void turn_off_control_2_LED();
-void turn_off_all_LEDs();
-void turn_on_assay_LED_for_duration(int duration, int power);
-void turn_on_control_1_LED_for_duration(int duration, int power);
-void turn_on_control_2_LED_for_duration(int duration, int power);
-void turn_on_all_LEDs_for_duration(int duration, int power);
+void turn_on_channel(char channel);
+void turn_off_channel(char channel);
+void turn_on_all_channels();
+void turn_on_channel_a();
+void turn_on_channel_b();
+void turn_on_channel_c();
+void turn_off_channel_a();
+void turn_off_channel_b();
+void turn_off_channel_c();
+void turn_off_all_channels();
+void turn_on_channel_a_for_duration(int duration);
+void turn_on_channel_b_for_duration(int duration);
+void turn_on_channel_c_for_duration(int duration);
+void turn_on_all_channels_for_duration(int duration);
 void scanResultCallback(const BleScanResult &scanResult, void *context);
 int BLE_scan();
 int check_magnets_in_one_well(int well, int mark);
 int validate_magnets();
-void config_optical_sensors(char channel, int param, int addr);
-bool optical_sensor_ready(uint8_t addr);
-bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y, uint16_t *z, uint16_t *tempC);
-void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log);
+void power_off_all_spectrophotometers();
+bool power_on_spectrophotometer(char channel);
+bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341);
+bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341);
+void take_spectrophotometer_reading(DFRobot_AS7341 &as7341, BrevitestSpectrophotometerRecord &data);
+void i2c_bus_scan();
 bool startI2C();
-bool enable_optical_system(bool force_read);
-void disable_optical_system();
-void read_optical_sensors(int param, bool inBCODE);
-void stress_test_read_optical_sensors(int param, int led_power);
-int start_optical_sensor_test(int distance, int readings, int period);
-void validate_optics();
-uint16_t calculate_L(int index);
-uint8_t find_baseline_led_power(char channel, int *error);
-bool set_baselines();
+void stress_test_read_spectrophotometer();
 int get_heater_temperature();
 void heater_temperature_read();
 int pid_controller();
@@ -105,8 +98,6 @@ void remove_test_from_cache(char *testToRemove);
 void callback_upload_test();
 void publish_upload_magnet_validation();
 void callback_upload_magnet_validation();
-void publish_upload_optical_validation();
-void callback_upload_optical_validation();
 void set_current_event(String event_name);
 void clear_current_event();
 void set_publish_params(String event_name);
@@ -118,7 +109,7 @@ void brevitest_callback(const char *event, const char *data);
 void erase_test_from_cache();
 void initialize_test_cache();
 void store_test();
-int append_test_reading(int start, BrevitestOpticalSensorRecord *reading);
+int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading);
 void process_test_record();
 void write_test_record_to_eeprom();
 bool test_cached();
@@ -135,14 +126,7 @@ int stress_test_loop_time();
 void stress_test_delay(int target_duration);
 void stress_test_oscillate_stage(int amplitude, int step_delay, int cycles);
 void do_stress_test_step(int step);
-void async_command();
 int get_next_command_param(String arg, int indx, int *param, int def);
-void i2c_bus_scan();
-void set_spectrophotometer_power(byte code);
-void power_off_all_spectrophotometers();
-bool power_on_spectrophotometer(char channel_number);
-bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341);
-void take_spectrophotometer_reading(DFRobot_AS7341 &sensor, SpectrophotometerData &data);
 int particle_command(String arg);
 void reset_globals();
 void disconnect_from_cloud();
@@ -160,15 +144,13 @@ void verify_device_loop();
 void barcode_scan_loop();
 void stress_test_loop();
 void magnet_validation_loop();
-void optical_validation_loop();
 void cartridge_validation_loop();
 void test_start_loop();
 void test_upload_loop();
-void async_command_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 12 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 12 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -516,7 +498,7 @@ void reset_stage(bool sleep)
 
 void move_stage_to_optical_read_position()
 {
-    move_stage_to_position(STAGE_OPTICAL_SENSOR_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
+    move_stage_to_position(STAGE_SPECTROPHOTOMETER_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
 }
 
 void move_stage_to_test_start_position()
@@ -751,7 +733,7 @@ int set_heater_power(int power)
 {
     unsigned long start = millis();
     if (power != 0) {
-        if (!optical_read_in_progress) turn_on_heater(power);
+        if (!spectrophotometer_read_in_progress) turn_on_heater(power);
     } else {
         turn_off_heater();
     }
@@ -761,122 +743,116 @@ int set_heater_power(int power)
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                     STAGE LEDS                          //
+//                  OPTICAL CHANNELS                       //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void set_power_on_all_LEDs(int power) {
-    baseline.led_assay = power;
-    baseline.led_c1 = power;
-    baseline.led_c2 = power;
-}
-
-void turn_on_LED(char channel, int power)
+void turn_on_channel(char channel)
 {
     if (channel == 'A')
     {
-        turn_on_assay_LED(power);
+        turn_on_channel_a();
     }
-    else if (channel == '1')
+    else if (channel == 'B')
     {
-        turn_on_control_1_LED(power);
+        turn_on_channel_b();
     }
-    else if (channel == '2')
+    else if (channel == 'C')
     {
-        turn_on_control_2_LED(power);
+        turn_on_channel_c();
     }
 }
 
-void turn_off_LED(char channel)
+void turn_off_channel(char channel)
 {
     if (channel == 'A')
     {
-        turn_off_assay_LED();
+        turn_off_channel_a();
     }
-    else if (channel == '1')
+    else if (channel == 'B')
     {
-        turn_off_control_1_LED();
+        turn_off_channel_b();
     }
-    else if (channel == '2')
+    else if (channel == 'C')
     {
-        turn_off_control_2_LED();
+        turn_off_channel_c();
     }
 }
 
-void turn_on_all_LEDs(int power)
+void turn_on_all_channels()
 {
-    turn_on_assay_LED(power);
-    turn_on_control_1_LED(power);
-    turn_on_control_2_LED(power);
+    turn_on_channel_a();
+    turn_on_channel_b();
+    turn_on_channel_c();
 }
 
-void turn_on_assay_LED(int power)
+void turn_on_channel_a()
 {
-    analogWrite(pinLEDAssay, power);
+    digitalWrite(pinChannelA, HIGH);
 }
 
-void turn_on_control_1_LED(int power)
+void turn_on_channel_b()
 {
-    analogWrite(pinLEDControl1, power);
+    digitalWrite(pinChannelB, HIGH);
 }
 
-void turn_on_control_2_LED(int power)
+void turn_on_channel_c()
 {
-    analogWrite(pinLEDControl2, power);
+    digitalWrite(pinChannelC, HIGH);
 }
 
-void turn_off_assay_LED()
+void turn_off_channel_a()
 {
-    analogWrite(pinLEDAssay, 0);
+    digitalWrite(pinChannelA, LOW);
 }
 
-void turn_off_control_1_LED()
+void turn_off_channel_b()
 {
-    analogWrite(pinLEDControl1, 0);
+    digitalWrite(pinChannelB, LOW);
 }
 
-void turn_off_control_2_LED()
+void turn_off_channel_c()
 {
-    analogWrite(pinLEDControl2, 0);
+    digitalWrite(pinChannelC, LOW);
 }
 
-void turn_off_all_LEDs()
+void turn_off_all_channels()
 {
-    turn_off_assay_LED();
-    turn_off_control_1_LED();
-    turn_off_control_2_LED();
+    turn_off_channel_a();
+    turn_off_channel_b();
+    turn_off_channel_c();
 }
 
-void turn_on_assay_LED_for_duration(int duration, int power)
+void turn_on_channel_a_for_duration(int duration)
 {
-    turn_on_assay_LED(power);
+    turn_on_channel_a();
     delayMicroseconds(1000 * duration);
-    turn_off_assay_LED();
+    turn_off_channel_a();
 }
 
-void turn_on_control_1_LED_for_duration(int duration, int power)
+void turn_on_channel_b_for_duration(int duration)
 {
-    turn_on_control_1_LED(power);
+    turn_on_channel_b();
     delayMicroseconds(1000 * duration);
-    turn_off_control_1_LED();
+    turn_off_channel_b();
 }
 
-void turn_on_control_2_LED_for_duration(int duration, int power)
+void turn_on_channel_c_for_duration(int duration)
 {
-    turn_on_control_2_LED(power);
+    turn_on_channel_c();
     delayMicroseconds(1000 * duration);
-    turn_off_control_2_LED();
+    turn_off_channel_c();
 }
 
-void turn_on_all_LEDs_for_duration(int duration, int power)
+void turn_on_all_channels_for_duration(int duration)
 {
-    turn_on_assay_LED(power);
-    turn_on_control_1_LED(power);
-    turn_on_control_2_LED(power);
+    turn_on_channel_a();
+    turn_on_channel_b();
+    turn_on_channel_c();
     delayMicroseconds(1000 * duration);
-    turn_off_assay_LED();
-    turn_off_control_1_LED();
-    turn_off_control_2_LED();
+    turn_off_channel_a();
+    turn_off_channel_b();
+    turn_off_channel_c();
 }
 
 /////////////////////////////////////////////////////////////
@@ -969,214 +945,111 @@ int validate_magnets() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                    OPTICAL SENSORS                      //
+//                  SPECTROPHOTOMETERS                     //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void config_optical_sensors(char channel, int param, int addr)
+void power_off_all_spectrophotometers() 
 {
-    int bytes_received, bytes_sent, reg, result;
-
-    if (serial_messaging_on)
-        Log.info("Configuring optical sensor %c", channel);
-    Wire.beginTransmission(addr);
-    bytes_sent = Wire.write(0x00);
-    bytes_sent += Wire.write(0x02); // enter configuration mode
-    result = Wire.endTransmission(true);
-    if (result != 0)
-    {
-        Log.info("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
-    }
-
-    Wire.beginTransmission(addr);
-    bytes_sent = Wire.write(0x06);
-    bytes_sent += Wire.write((uint8_t)param); // write param to CREG1
-    result = Wire.endTransmission(true);
-    if (result != 0)
-    {
-        Log.info("Config optics %c, %d bytes, result: %d", channel, bytes_sent, result);
-    }
-
-    Wire.beginTransmission(addr);
-    bytes_sent = Wire.write(0x06); // confirm register was written
-    result = Wire.endTransmission(false);
-    if (result != 0)
-    {
-        Log.info("Send error, %d bytes, result: %d", bytes_sent, result);
-    }
-    bytes_received = Wire.requestFrom(addr, 1);
-
-    reg = Wire.read();
-    if (serial_messaging_on)
-        Log.info("bytes = %d, param = %d, CREG1 = %d", bytes_received, param, reg);
+    // Turn off all sensors.
+    turn_off_all_channels();
+    Log.info("Config optics: all spectrophotometers off");
 }
 
-bool optical_sensor_ready(uint8_t addr)
+bool power_on_spectrophotometer(char channel) 
 {
-    int bytes, result;
-    uint8_t osr, status;
-
-    Wire.beginTransmission(addr);
-    bytes = Wire.write(0x00);
-    result = Wire.endTransmission(false);
-    if (result != 0)
-    {
-        Log.info("Send error, %d bytes, result: %d", bytes, result);
+    // Turn on sensor
+    switch (channel) {
+        case 'A':
+            turn_on_channel_a();
+            Log.info("Config optics: spectrophotometer A on");
+            break;
+        case 'B':
+            turn_on_channel_b();
+            Log.info("Config optics: spectrophotometer B on");
+            break;
+        case 'C':
+            turn_on_channel_c();
+            // Log.info("Config optics: spectrophotometer C on");
+            break;
+        default:
+            power_off_all_spectrophotometers();
+            Log.info("Config optics: spectrophotometers off by default");
+            return false;
     }
-    bytes = Wire.requestFrom(addr, (uint8_t) 4);
-
-    // status
-    osr = Wire.read();
-    status = Wire.read();
-    if (serial_messaging_on)
-        Log.info("Status = %d, OSR = %d", status, osr);
-
-    return ((status & 0x04) == 0 && osr == 3);
-}
-
-bool take_one_sample_from_optical_sensor(uint8_t addr, uint16_t *x, uint16_t *y, uint16_t *z, uint16_t *tempC)
-{
-    uint8_t osr, status, lsb, msb;
-    int bytes, result;
-    bool ready;
-    unsigned long timeout;
-
-    Wire.beginTransmission(addr);
-    bytes = Wire.write(0x00);
-    bytes += Wire.write(0x83);
-    result = Wire.endTransmission(true);
-    if (result != 0)
-    {
-        Log.info("Config optics: address %d, %d bytes, result: %d", addr, bytes, result);
-        return false;
-    }
-
-    timeout = millis() + 5000;
-    ready = optical_sensor_ready(addr);
-    while (!ready && millis() < timeout)
-    {
-        /*Serial.print('.');*/
-        delayMicroseconds(100000);
-        ready = optical_sensor_ready(addr);
-    }
-
-    if (!ready)
-    {
-        Log.info("Read failure: address = %d", addr);
-        return false;
-    }
-
-    if (serial_messaging_on)
-        Log.info("Starting optical sensor data addr = %d read", addr);
-
-    Wire.beginTransmission(addr);
-    bytes = Wire.write(0x00);
-    result = Wire.endTransmission(false);
-    if (result != 0)
-    {
-        Log.info("Send error, %d bytes, result: %d", bytes, result);
-    }
-    bytes = Wire.requestFrom(addr, (uint8_t) 10);
-
-    // status
-    osr = Wire.read();
-    status = Wire.read();
-    if (serial_messaging_on)
-        Log.info("Status = %d, OSR = %d", status, osr);
-
-    // temperature
-    lsb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", lsb);
-    msb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", msb);
-    *tempC = ((((msb << 8) + lsb) * 5) / 100) - 67;
-
-    // light
-    lsb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", lsb);
-    msb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", msb);
-    *x = (msb << 8) + lsb;
-
-    lsb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", lsb);
-    msb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", msb);
-    *y = (msb << 8) + lsb;
-
-    lsb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", lsb);
-    msb = Wire.read();
-    if (serial_messaging_on)
-        Serial.printf("%d ", msb);
-    *z = (msb << 8) + lsb;
-
+    delay(5);  // Wait for sensor to power on.
     return true;
 }
 
-void get_data_from_one_optical_sensor(char channel, int param, int pwr, bool log)
+bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341) 
 {
-    uint8_t addr;
-    int read_attempt, sum_x, sum_y, sum_z, sum_t;
-    uint16_t tempC, x, y, z, l_value;
-    BrevitestOpticalSensorRecord *reading;
+    // Log.info("Starting spectrophotometer test on channel number %c", channel);
+    if (power_on_spectrophotometer(channel)) {
+        while (as7341.begin(as7341.eSpm) != 0) {
+            Serial.println("IIC init failed, please check if the wire connection is correct");
+            delay(1000);
+        }
+        delay(10);
 
-    if (channel == 'A') {
-        addr = 0x74;
-    } else if (channel == '1') {
-        addr = 0x75;
-    } else if (channel == '2') {
-        addr = 0x76;
+        // int addr = 0x39;
+        // Wire.beginTransmission(addr);
+        // int bytes_written = Wire.write(0x00);
+        // int result = Wire.endTransmission();
+        // if (result == 0) {
+        //     Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
+        // }
+
+        Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
+        as7341.setAstep(spectro_astep);
+        as7341.setAtime(spectro_atime);
+        as7341.setAGAIN(spectro_again);
+        return true;
     } else {
-        Serial.printlnf("ERROR: Channel %c not found", channel);
-        return;
+        return false;
     }
+}
 
-    reading = &(test.reading[test.number_of_readings % OPTICAL_MAXIMUM_NUMBER_OF_READINGS]);
-    test.number_of_readings++;
-    
-    turn_on_LED(channel, pwr);
-    delayMicroseconds(100000);
-    
-    config_optical_sensors(channel, param, addr);
+bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341) 
+{
+    char channel = (channel_number - 1) + 'A';
+    return init_spectrophotometer(channel, as7341); 
+}
 
-    reading->channel = channel;
-    reading->samples = OPTICAL_SENSOR_NUMBER_OF_SAMPLES;
-    sum_x = sum_y = sum_z = sum_t = 0;
-    if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) { // first pancake
-        for (int i = 0; i < reading->samples; i++) {
-            read_attempt = 1;
-            while (read_attempt <= 3) {
-                if (take_one_sample_from_optical_sensor(addr, &x, &y, &z, &tempC)) {
-                    sum_x += x;
-                    sum_y += y;
-                    sum_z += z;
-                    sum_t += tempC;
-                    read_attempt = 4;
-                } else {
-                    read_attempt++;
-                }
+void take_spectrophotometer_reading(DFRobot_AS7341 &as7341, BrevitestSpectrophotometerRecord &data) 
+{
+    DFRobot_AS7341::sModeOneData_t data1;
+    DFRobot_AS7341::sModeTwoData_t data2;
+
+    Log.info("Taking spectrophotometer reading");
+    as7341.startMeasure(as7341.eF1F4ClearNIR);
+    Log.info("Reading the value of sensor data channel 0~5, under eF1F4ClearNIR");
+    data1 = as7341.readSpectralDataOne();
+    memcpy(&data.f1, &data1.ADF1, sizeof(data1));
+
+    as7341.startMeasure(as7341.eF5F8ClearNIR);
+    Log.info("Reading the value of sensor data channel 0~5, under eF5F8ClearNIR");
+    data2 = as7341.readSpectralDataTwo();
+    memcpy(&data.f5, &data2.ADF5, sizeof(data2));
+}
+
+
+void i2c_bus_scan()
+{
+    int addr = 0x39;
+    int result, bytes_written;
+
+    Log.info("Starting optical I2C bus scan");
+    for (int i = 1; i < 4; i++) {
+        Log.info("Scanning channel %d", i);
+        if (power_on_spectrophotometer((i - 1) + 'A')) {
+            Wire.beginTransmission(addr);
+            bytes_written = Wire.write(0x00);
+            result = Wire.endTransmission();
+            if (result == 0) {
+                Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
             }
         }
-    }
-    turn_off_LED(channel);
-
-    reading->msec = millis();
-    reading->x = sum_x / reading->samples;
-    reading->y = sum_y / reading->samples;
-    reading->z = sum_z / reading->samples;
-    reading->temperature = sum_t / reading->samples;
-
-    if (log) {
-        l_value = integerSqrt((reading->x * reading->x) + (reading->y * reading->y) + (reading->z * reading->z));
-        Serial.printlnf("%c\t%d\t%d\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d", channel, param, pwr, stage_position, reading->samples, reading->msec, reading->temperature, reading->x, reading->y, reading->z, l_value);
+        power_off_all_spectrophotometers();
     }
 }
 
@@ -1190,177 +1063,28 @@ bool startI2C() {
     return Wire.isEnabled();
 }
 
-bool enable_optical_system(bool force_read)
+void read_spectrophotometer(char channel, bool log = false) 
 {
-    move_stage_to_optical_read_position();
-    optical_read_in_progress = true;
-    turn_off_heater();
-    delayMicroseconds(100000);
-
-    return startI2C();
-}
-
-void disable_optical_system()
-{
+    if (startI2C()) {
+        DFRobot_AS7341 as7341;
+        BrevitestSpectrophotometerRecord data;
+        if (init_spectrophotometer(channel, as7341)) {
+            take_spectrophotometer_reading(as7341, data);
+            if (log) {
+                Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+            }
+        }
+        turn_off_all_channels();
+    }
     Wire.end();
-    optical_read_in_progress = false;
 }
 
-void read_optical_sensors(int param, bool inBCODE)
+void stress_test_read_spectrophotometer()
 {
-    get_data_from_one_optical_sensor('A', param, baseline.led_assay, true);
-    if (inBCODE) BCODE_loop();
-    get_data_from_one_optical_sensor('1', param, baseline.led_c1, true);
-    if (inBCODE) BCODE_loop();
-    get_data_from_one_optical_sensor('2', param, baseline.led_c2, true);
-    if (inBCODE) BCODE_loop();
-}
-
-void stress_test_read_optical_sensors(int param, int led_power)
-{
-    get_data_from_one_optical_sensor('A', param, led_power ? led_power : baseline.led_assay, true);
-    get_data_from_one_optical_sensor('1', param, led_power ? led_power : baseline.led_c1, true);
-    get_data_from_one_optical_sensor('2', param, led_power ? led_power : baseline.led_c2, true);
-}
-
-int start_optical_sensor_test(int distance, int readings, int period)
-{
-    test.number_of_readings = 0;
-    optical_test_readings = readings <= 0 ? 1 : (readings > OPTICAL_MAXIMUM_NUMBER_OF_READINGS ? OPTICAL_MAXIMUM_NUMBER_OF_READINGS : readings);
-    optical_test_count = 0;
-    optical_test_move = distance;
-    optical_test_take_reading = true;
-    async_command_timer.changePeriod((unsigned long) period);
-    async_command_timer.start();
-    async_command_running = true;
-    async_command_optical_running = true;
-    return readings;
-}
-
-void validate_optics() {
-    optical_validation_in_progress = true;
-    char c;
-    int len = sprintf(particle_register, "%s%c%c%c",barcode_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM);;
-
-    Log.info("Validating optics...");
-    test.number_of_readings = 0;
-    set_power_on_all_LEDs(LED_DEFAULT_POWER);
-    reset_stage(false);
-    if (enable_optical_system(true)) read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-    disable_optical_system();
-
-    if (test.number_of_readings == 3) { // test completed
-        for (int i = 0; i < 3; i++)
-        {
-            c = test.reading[i].channel;
-            if (c == 'A' || c == '1' || c == '2') {
-                len += append_test_reading(len, &(test.reading[i]));
-            }
-        }
-        particle_register[len - 1] = '\0';
-    }
-
-    Log.info("particle_register: %s", particle_register);
-    reset_stage(true);
-}
-
-uint16_t calculate_L(int index) {
-    return integerSqrt((test.reading[index].x * test.reading[index].x) + (test.reading[index].y * test.reading[index].y) + (test.reading[index].z * test.reading[index].z));
-}
-
-uint8_t find_baseline_led_power(char channel, int *error) {
-    int pwr, last_pwr;
-    int l_value, last_l_value;
-    int i, last_error, offset;
-
-    pwr = last_pwr = LED_DEFAULT_POWER;
-    l_value = OPTICAL_TARGET_L_VALUE;
-    for (i = 0; i < 20; i++) {
-        test.number_of_readings = 0;
-        get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) pwr, false);
-        last_l_value = l_value;
-        l_value = calculate_L(0);
-        *error = OPTICAL_TARGET_L_VALUE - l_value;
-        if (i <= 1) {
-            last_pwr = pwr;
-            pwr += *error > 0 ? 4 - 2 * i : -4 + 2 * i;
-            continue;
-        } else if (abs(*error) <= OPTICAL_SEARCH_THRESHOLD) {
-            break;
-        } else {
-            offset = *error * (last_pwr - pwr) / (last_l_value - l_value);
-            offset = offset > 10 ? 10 : offset < -10 ? -10 : offset;
-            if (offset == 0) { // no change, interrogate +1 or -1
-                last_pwr = pwr;
-                last_error = *error;
-                if (*error > 0) {
-                    pwr += 1;
-                } else {
-                    pwr -= 1;
-                }
-                test.number_of_readings = 0;
-                get_data_from_one_optical_sensor(channel, OPTICAL_SENSOR_DEFAULT_PARAM, (uint8_t) pwr, false);
-                *error = OPTICAL_TARGET_L_VALUE - calculate_L(0);
-                if (abs(*error) > abs(last_error)) {
-                    pwr = last_pwr;
-                    *error = last_error;
-                }
-                break;
-            } else {
-                last_pwr = pwr;
-                pwr = pwr + offset > 255 ? 255 : pwr + offset;
-            }
-        }
-    }
-    return pwr;
-}
-
-bool set_baselines() {
-    int attempt = 0;
-    int error = OPTICAL_FAILURE_THRESHOLD;
-    int max_error = 0;
-
-    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
-    {
-        baseline.led_assay = find_baseline_led_power('A', &error);
-        Log.info("baseline for assay channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_assay, error);
-        
-        if(abs(error) > max_error)
-            max_error = abs(error);
-
-        attempt++;
-    }
-
-    error = OPTICAL_FAILURE_THRESHOLD;
-    attempt = 0;
-
-    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
-    {
-        baseline.led_c1 = find_baseline_led_power('1', &error);
-        Log.info("baseline for control 1 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c1, error);
-        
-        if(abs(error) > max_error)
-            max_error = abs(error);
-
-        attempt++;
-    }
-
-    error = OPTICAL_FAILURE_THRESHOLD;
-    attempt = 0;
-
-    while ((abs(error) > OPTICAL_ERROR_THRESHOLD) && (attempt < 3))
-    {
-        baseline.led_c2 = find_baseline_led_power('2', &error);
-        Log.info("baseline for control 2 channel: attempt = %d, pwr = %d, error = %d", attempt, baseline.led_c2, error);
-        
-        if(abs(error) > max_error)
-            max_error = abs(error);
-
-        attempt++;        
-    }
-
-    test.number_of_readings = 0;
-    return max_error <= OPTICAL_FAILURE_THRESHOLD;
+    Serial.println("channel\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+    read_spectrophotometer('A', true);
+    read_spectrophotometer('B', true);
+    read_spectrophotometer('C', true);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1436,7 +1160,7 @@ int pid_controller()
 }
 
 void control_heater_temperature() {
-    control_heater_temperature_flag = !optical_read_in_progress;
+    control_heater_temperature_flag = !spectrophotometer_read_in_progress;
 }
 
 void start_temperature_control()
@@ -1627,25 +1351,6 @@ void callback_upload_magnet_validation() {
 }
 
 /////////////////////////////////////////////////////
-//                VALIDATE OPTICS                  //
-/////////////////////////////////////////////////////
-
-void publish_upload_optical_validation() {
-    brevitest_publish("validate-optics", particle_register);
-}
-
-void callback_upload_optical_validation() {
-    clear_current_event();
-    Log.info("Optical validation: status = %s, data = %s", callback_status, callback_data);
-    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
-    bool invalid = (strncmp(callback_status, INVALID, 7) == 0);
-    if (success || invalid) {
-        optical_validation_in_progress = false;
-        optical_validation_mode = false;
-    }
-}
-
-/////////////////////////////////////////////////////
 //               PUBSUB FUNCTIONS                  //
 /////////////////////////////////////////////////////
 
@@ -1661,8 +1366,6 @@ void set_current_event(String event_name) {
         current_event_code = PUBSUB_UPLOAD_TEST;
     } else if (strcmp(current_event, "validate-magnets") == 0) {
         current_event_code = PUBSUB_VALIDATE_MAGNETS;
-    } else if (strcmp(current_event, "validate-optics") == 0) {
-        current_event_code = PUBSUB_VALIDATE_OPTICS;
     } else {
         current_event_code = 0;
     }
@@ -1746,9 +1449,6 @@ void process_callback_buffer()
             case PUBSUB_VALIDATE_MAGNETS:
                 callback_upload_magnet_validation();
                 break;
-            case PUBSUB_VALIDATE_OPTICS:
-                callback_upload_optical_validation();
-                break;
             default:
                 Log.info("Unknown event code %d", current_event_code);
                 clear_current_event();
@@ -1795,16 +1495,23 @@ void store_test()
     store_eeprom();
 }
 
-int append_test_reading(int start, BrevitestOpticalSensorRecord *reading)
+int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%X%c%lX%c%X%c%X%c%X%c%X%c",
-                   reading->channel, ARG_DELIM,
-                   reading->samples, ARG_DELIM,
-                   reading->msec, ARG_DELIM,
-                   reading->x, ARG_DELIM,
-                   reading->y, ARG_DELIM,
-                   reading->z, ARG_DELIM,
-                   reading->temperature, ATTR_DELIM);
+    return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
+                    reading->channel, ARG_DELIM,
+                    reading->samples, ARG_DELIM,
+                    reading->msec, ARG_DELIM,
+                    reading->f1, ARG_DELIM,
+                    reading->f2, ARG_DELIM,
+                    reading->f3, ARG_DELIM,
+                    reading->f4, ARG_DELIM,
+                    reading->f5, ARG_DELIM,
+                    reading->f6, ARG_DELIM,
+                    reading->f7, ARG_DELIM,
+                    reading->f8, ARG_DELIM,
+                    reading->clear, ARG_DELIM,
+                    reading->nir, ITEM_DELIM,
+                    reading->temperature, ATTR_DELIM);
 }
 
 void process_test_record()
@@ -1814,7 +1521,7 @@ void process_test_record()
     int len = sprintf(particle_register, "%.24s%c%c%c%d%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM);;
 
     if (t->number_of_readings) { // test completed
-        for (int i = 0; i < OPTICAL_MAXIMUM_NUMBER_OF_READINGS; i++)
+        for (int i = 0; i < SPECTRO_MAXIMUM_NUMBER_OF_READINGS; i++)
         {
             c = t->reading[i].channel;
             if (c == 'A' || c == '1' || c == '2') {
@@ -1951,8 +1658,7 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, saved_position, start_index;
-    unsigned long msec;
+    int param1, param2, param3, start_index;
 
     if (test_cancelled) return index;
 
@@ -1988,81 +1694,12 @@ int process_one_BCODE_command(int cmd, int index)
             turn_on_buzzer_for_duration(param1, param2);
             BCODE_loop();
             break;
-        case 10: // Read optical sensors with default param and LED power
+        case 30: // Read spectrophotometers
             // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
             update_progress("Reading", 2000);
-            set_power_on_all_LEDs(LED_DEFAULT_POWER);
-            if (enable_optical_system(true)) read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-            disable_optical_system();
-            break;
-        case 11: // Read optical sensors with param1 = sensor parameters and param2 = LED power
-            index = get_BCODE_token(index, &param1); // params
-            index = get_BCODE_token(index, &param2); // LED power
-            update_progress("Reading", 2000);
-            set_power_on_all_LEDs(param2);
-            if (enable_optical_system(true)) read_optical_sensors(param1, false);
-            disable_optical_system();
-            break;
-        case 12: // Find baseline LED power and take param1 baseline readings - stage returns back to position prior to reading
-            index = get_BCODE_token(index, &param1); // number of readings
-            saved_position = stage_position;
-            update_progress("Setting baselines", 10000);
-            if (enable_optical_system(true) && set_baselines())
-            {
-                for (int i = 0; i < param1; i++) {
-                    if (i > 0) {
-                        update_progress("Pausing", 1000);
-                        BCODE_delay(1000);
-                    }
-                    update_progress("Reading", 5000);
-                    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-                }
-                move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
-            } else {
-                test_cancelled = true;
-            }
-            disable_optical_system();
-            break;
-        case 13: // Take param1 readings - stage returns back to position prior to reading
-            index = get_BCODE_token(index, &param1); // number of readings
-            saved_position = stage_position;
-            if (enable_optical_system(true))
-            {
-                for (int i = 0; i < param1; i++) {
-                    update_progress("Reading", 5000);
-                    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-                }
-            }
-            disable_optical_system();
-            move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
-            break;
-        case 14: // Take param1 readings with pause of param2 ms between reads - stage returns back to position prior to reading
-            index = get_BCODE_token(index, &param1); // number of readings
-            index = get_BCODE_token(index, &param2); // pause between readings
-            saved_position = stage_position;
-            if (enable_optical_system(true))
-            {
-                for (int i = 0; i < param1; i++) {
-                    if (i > 0) {
-                        update_progress("Pausing", param2);
-                        BCODE_delay(param2);
-                    }
-                    update_progress("Reading", 5000);
-                    read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-                }
-            }
-
-            disable_optical_system();
-            move_stage_to_position(saved_position, MOTOR_SLOW_STEP_DELAY);
-            break;
-        case 15: // Set baseline time for param1 number of readings
-            index = get_BCODE_token(index, &param1); // number of readings
-            param1 *= 3; // three channels per reading
-            msec = millis();
-            update_progress("Timestamping", 10);
-            for (int i = 0; i < param1; i++) {
-                test.reading[i].msec = msec;
-            }
+            read_spectrophotometer('A');
+            read_spectrophotometer('B');
+            read_spectrophotometer('C');
             break;
         case 20: // Repeat begin(number of iterations)
             index = get_BCODE_token(index, &param1);
@@ -2115,7 +1752,7 @@ int start_stress_test(int limit, int led_power) {
     stress_test_mode = true;
     eeprom.stress_test_cycles = 0;
     eeprom.stress_test_reading_count = 0;
-    memset(&eeprom.stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestOpticalSensorRecord));
+    memset(&eeprom.stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestSpectrophotometerRecord));
     store_eeprom();
     test.number_of_readings = 0;
     stress_test_limit = limit;
@@ -2138,13 +1775,20 @@ void stop_stress_test() {
 
 void stress_test_store_optical_readings() {
     int base, i;
-    BrevitestOpticalSensorRecord *r, *s;
+    BrevitestSpectrophotometerRecord *r, *s;
     for (i = 3; i < 9; i++) {
         base = i % 3;
         test.reading[base].temperature += test.reading[i].temperature;
-        test.reading[base].x += test.reading[i].x;
-        test.reading[base].y += test.reading[i].y;
-        test.reading[base].z += test.reading[i].z;
+        test.reading[base].f1 += test.reading[i].f1;
+        test.reading[base].f2 += test.reading[i].f2;
+        test.reading[base].f3 += test.reading[i].f3;
+        test.reading[base].f4 += test.reading[i].f4;
+        test.reading[base].f5 += test.reading[i].f5;
+        test.reading[base].f6 += test.reading[i].f6;
+        test.reading[base].f7 += test.reading[i].f7;
+        test.reading[base].f8 += test.reading[i].f8;
+        test.reading[base].clear += test.reading[i].clear;
+        test.reading[base].nir += test.reading[i].nir;
     }
     
     if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS) {
@@ -2159,9 +1803,16 @@ void stress_test_store_optical_readings() {
         r->samples = s-> samples;
         r->msec = s->msec;
         r->temperature = s->temperature / 3;
-        r->x = test.reading[i].x / 3;
-        r->y = test.reading[i].y / 3;
-        r->z = test.reading[i].z / 3;
+        r->f1 = test.reading[i].f1 / 3;
+        r->f2 = test.reading[i].f2 / 3;
+        r->f3 = test.reading[i].f3 / 3;
+        r->f4 = test.reading[i].f4 / 3;
+        r->f5 = test.reading[i].f5 / 3;
+        r->f6 = test.reading[i].f6 / 3;
+        r->f7 = test.reading[i].f7 / 3;
+        r->f8 = test.reading[i].f8 / 3;
+        r->clear = test.reading[i].clear / 3;
+        r->nir = test.reading[i].nir / 3;
         // Serial.printlnf("C: %c, n: %d, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->samples, r->msec, r->temperature, r->x, r->y, r->z);
     }
     eeprom.stress_test_reading_count = eeprom.stress_test_reading_count + 3;
@@ -2242,12 +1893,6 @@ void do_stress_test_step(int step) {
             stress_test_oscillate_stage(-4500, 350, 100);
             break;
         case 9: // read baseline sensors
-            if (enable_optical_system(true)) {
-                Serial.println();
-                set_baselines();
-                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
-            }
-            disable_optical_system();
             stress_test_delay(1500);
             break;
         case 10: // move to well 4
@@ -2270,16 +1915,7 @@ void do_stress_test_step(int step) {
             stress_test_delay(300);
             break;
         case 14: // read sensors
-            if (enable_optical_system(true)) {
-                Serial.println();
-                test.number_of_readings = 0;
-                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
-                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
-                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
-                stress_test_read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, stress_test_LED_power);
-                stress_test_store_optical_readings();
-            }
-            disable_optical_system();
+            stress_test_read_spectrophotometer();
             break;
         case 15: // save cycle number
             eeprom.stress_test_cycles++;
@@ -2301,15 +1937,6 @@ void do_stress_test_step(int step) {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void async_command()
-{
-    if (async_command_magnet_running) {
-        magnet_test_take_reading = true;
-    } else if (async_command_optical_running) {
-        optical_test_take_reading = true;
-    }
-}
-
 int get_next_command_param(String arg, int indx, int *param, int def)
 {
     int next;
@@ -2328,131 +1955,6 @@ int get_next_command_param(String arg, int indx, int *param, int def)
     }
 
     return next;
-}
-
-void i2c_bus_scan()
-{
-    int addr, result;
-
-    if (enable_optical_system(true)) {
-        Log.info("Starting optical I2C bus scan");
-        for (addr = 110; addr < 120; addr++) {
-            Wire.beginTransmission(addr);
-            Wire.write(0x00);
-            result = Wire.endTransmission();
-            if (result == 0) {
-                Log.info("I2C device found at address %X", addr);
-            }
-        }
-    }
-    disable_optical_system();
-}
-
-//
-//
-//  Spectrophotometer switch
-//
-//
-
-#define SWITCH_ADDR 0xA0     // I2C address of MCP23008.
-#define SWITCH_IO_REGISTER 0x00     // I/O direction register address.
-#define SWITCH_GPIO_REGISTER 0x09     // GPIO register address.
-#define SWITCH_TURN_OFF_ALL 0x00     // Turn off all spectrophotometers.
-#define SWITCH_TURN_ON_A 0x10     // Turn on spectrophotometer A.
-#define SWITCH_TURN_ON_B 0x04     // Turn on spectrophotometer B.
-#define SWITCH_TURN_ON_C 0x01     // Turn on spectrophotometer C.
-
-void set_spectrophotometer_power(byte code) 
-{
-    Wire.beginTransmission(SWITCH_ADDR);
-    Wire.write(SWITCH_IO_REGISTER);    
-    Wire.write(~code);
-    Wire.endTransmission();
-    Wire.beginTransmission(SWITCH_ADDR);
-    Wire.write(SWITCH_GPIO_REGISTER);    
-    Wire.write(code);
-    Wire.endTransmission();
-}
-
-void power_off_all_spectrophotometers() 
-{
-    // Turn off all sensors.
-    set_spectrophotometer_power(SWITCH_TURN_OFF_ALL);
-    Log.info("Config optics: all spectrophotometers off");
-}
-
-bool power_on_spectrophotometer(char channel_number) 
-{
-    // Turn on sensor
-    switch (channel_number) {
-        case 1:
-            set_spectrophotometer_power(SWITCH_TURN_ON_A);
-            // Log.info("Config optics: spectrophotometer A on");
-            break;
-        case 2:
-            set_spectrophotometer_power(SWITCH_TURN_ON_B);
-            // Log.info("Config optics: spectrophotometer B on");
-            break;
-        case 3:
-            set_spectrophotometer_power(SWITCH_TURN_ON_C);
-            // Log.info("Config optics: spectrophotometer C on");
-            break;
-        default:
-            set_spectrophotometer_power(SWITCH_TURN_OFF_ALL);
-            // Log.info("Config optics: spectrophotometers off by default");
-            return false;
-    }
-    delay(5);  // Wait for sensor to power on.
-    return true;
-}
-
-bool init_spectrophotometer(int channel_number, DFRobot_AS7341 &as7341) 
-{
-    // Log.info("Starting spectrophotometer test on channel number %d", channel_number);
-    if (power_on_spectrophotometer(channel_number)) {
-        while (as7341.begin(as7341.eSpm) != 0) {
-            Serial.println("IIC init failed, please check if the wire connection is correct");
-            delay(1000);
-        }
-        delay(10);
-
-        as7341.setAstep(spectro_astep);
-        as7341.setAtime(spectro_atime);
-        as7341.setAGAIN(spectro_again);
-    
-        switch (channel_number) {
-            case 1:
-                turn_on_assay_LED(255);
-                break;
-            case 2:
-                turn_on_control_1_LED(255);
-                break;
-            case 3:
-                turn_on_control_2_LED(255);
-                break;
-            default:
-                return false;
-        }
-        return true;
-    } else {
-        return false;
-    }
-}
-
-void take_spectrophotometer_reading(DFRobot_AS7341 &sensor, SpectrophotometerData &data) 
-{
-    DFRobot_AS7341::sModeOneData_t data1;
-    DFRobot_AS7341::sModeTwoData_t data2;
-
-    sensor.startMeasure(sensor.eF1F4ClearNIR);
-    //Read the value of sensor data channel 0~5, under eF1F4ClearNIR
-    data1 = sensor.readSpectralDataOne();
-    memcpy(&data.f1, &data1.ADF1, sizeof(data1));
-
-    sensor.startMeasure(sensor.eF5F8ClearNIR);
-    //Read the value of sensor data channel 0~5, under eF5F8ClearNIR
-    data2 = sensor.readSpectralDataTwo();
-    memcpy(&data.f5, &data2.ADF5, sizeof(data2));
 }
 
 int particle_command(String arg)
@@ -2480,10 +1982,6 @@ int particle_command(String arg)
         case 3: // clear test cache
             initialize_test_cache();
             result = eeprom.cache.cartridge_uuid[ 0] == '\0' ? 1 : 0;
-            break;
-        case 4: // scan i2c bus
-            i2c_bus_scan();
-            result = 1;
             break;
 //
 //  SERIAL PORT MESSAGING
@@ -2562,25 +2060,25 @@ int particle_command(String arg)
         case 30: // turn on assay LED for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_assay_LED_for_duration(param1, param2);
+            turn_on_channel_a_for_duration(param1);
             result = param1;
             break;
         case 31: // turn on control 1 LED for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_control_1_LED_for_duration(param1, param2);
+            turn_on_channel_b_for_duration(param1);
             result = param1;
             break;
         case 32: // turn on control 2 LED for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_control_2_LED_for_duration(param1, param2);
+            turn_on_channel_c_for_duration(param1);
             result = param1;
             break;
         case 33: // turn on all LEDs for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_all_LEDs_for_duration(param1, param2);
+            turn_on_all_channels_for_duration(param1);
             result = param1;
             break;
 //
@@ -2658,66 +2156,6 @@ int particle_command(String arg)
             magnetometer_heating_delay = param1;
             break;
 //
-//  OPTICAL SENSORS
-//
-        case 80: // read optical sensors param1 times at interval param2 after moving to read position
-            reset_stage(false);
-            move_stage_to_optical_read_position();
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_TEST_DEFAULT_READINGS);
-            indx = get_next_command_param(arg, indx, &param2, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            result = start_optical_sensor_test(0, param1, param2);
-            break;
-        case 81: // read optical sensors param1 times at interval param2 at current location
-            indx = get_next_command_param(arg, indx, &param2, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            result = start_optical_sensor_test(0, param1, param2);
-            break;
-        case 82: // start optical sensor sweep test, param1 = distance, param2 = readings, param3 = delay between readings
-            test.number_of_readings = 0;
-            indx = get_next_command_param(arg, indx, &param1, STAGE_OPTICAL_SENSOR_READ_POSITION);
-            indx = get_next_command_param(arg, indx, &param2, OPTICAL_TEST_DEFAULT_DISTANCE);
-            indx = get_next_command_param(arg, indx, &param3, OPTICAL_TEST_DEFAULT_READINGS);
-            indx = get_next_command_param(arg, indx, &param4, ASYNC_COMMAND_DEFAULT_INTERVAL);
-            reset_stage(false);
-            move_stage_to_position(param1 - (param2 * param3), MOTOR_SLOW_STEP_DELAY);
-            param3 *= 2;
-            result = start_optical_sensor_test(param2, param3, param4);
-            break;
-        case 83: // find optical baseline LED power for each channel
-            reset_stage(false);
-            if (enable_optical_system(true))
-            {
-                set_baselines();
-                read_optical_sensors(OPTICAL_SENSOR_DEFAULT_PARAM, false);
-            }
-            disable_optical_system();
-            reset_stage(true);
-            result = 1;
-            break;
-        case 84: // set baseline LED power for assay channel
-            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
-            baseline.led_assay = param1;
-            break;
-        case 85: // set baseline LED power for c1 channel
-            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
-            baseline.led_c1 = param1;
-            break;
-        case 86: // set baseline LED power for c2 channel
-            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
-            baseline.led_c2 = param1;
-            break;
-        case 87: // take one set of optical readings, param1 = sensor param, param2 = assay LED power, param3 = c1 LED power, param4 = c2 LED power
-            indx = get_next_command_param(arg, indx, &param1, OPTICAL_SENSOR_DEFAULT_PARAM);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            indx = get_next_command_param(arg, indx, &param3, LED_DEFAULT_POWER);
-            indx = get_next_command_param(arg, indx, &param4, LED_DEFAULT_POWER);
-            if (enable_optical_system(true)) {
-                get_data_from_one_optical_sensor('A', param1, param2, true);
-                get_data_from_one_optical_sensor('1', param1, param3, true);
-                get_data_from_one_optical_sensor('2', param1, param4, true);
-            }
-            disable_optical_system();
-            break;
-//
 //  STRESS TEST
 //
         case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
@@ -2738,11 +2176,11 @@ int particle_command(String arg)
             result = 1;
             break;
         case 94: // send stress test readings to serial port
-            BrevitestOpticalSensorRecord *r;
+            BrevitestSpectrophotometerRecord *r;
             Log.info("lifetime cycles: %d, cycles since reset: %d, cycles: %d, readings: %d", eeprom.lifetime_stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.stress_test_cycles, eeprom.stress_test_reading_count);
             for (int i = 0; i < STRESS_TEST_MAXIMUM_RECORDS; i++) {
                 r = &(eeprom.stress_test_reading[i]);
-                Log.info("C: %c, t: %lu, T: %d, x: %d, y: %d, z: %d", r->channel, r->msec, r->temperature, r->x, r->y, r->z);
+                Log.info("C: %c, t: %lu, T: %d, f1: %d, f2: %d, f3: %d, f4: %d, f5: %d, f6: %d, f7: %d, f8: %d, clear: %d, nir: %d", r->channel, r->msec, r->temperature, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
             }
             result = eeprom.stress_test_reading_count;
             break;
@@ -2754,10 +2192,6 @@ int particle_command(String arg)
             if (result == 1) {
                 publish_upload_magnet_validation();
             }
-            break;
-        case 120: // validate optics
-            validate_optics();
-            result = 1;
             break;
 //
 //  BLUETOOTH LE
@@ -2778,18 +2212,19 @@ int particle_command(String arg)
             
             if (startI2C()) {
                 DFRobot_AS7341 as7341;
-                SpectrophotometerData data;
+                BrevitestSpectrophotometerRecord data;
                 if (init_spectrophotometer(param1, as7341)) {
                     Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
                     for (int i = 0; i < param2; i++) {
                         take_spectrophotometer_reading(as7341, data);
-                        Serial.printlnf("%d\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", i + 1, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+                        char channel = param1 + 'A';
+                        Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
                         delay(param3);
                     }
                 }
-                turn_off_all_LEDs();
-                Wire.end();
+                turn_off_all_channels();
             }
+            Wire.end();
             result = stage_position;
             break;
         case 301: // set spectrophotometer params
@@ -2807,9 +2242,10 @@ int particle_command(String arg)
             
             if (startI2C()) {
                 DFRobot_AS7341 as7341;
-                SpectrophotometerData data;
+                BrevitestSpectrophotometerRecord data;
                 Serial.println("c\tn\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
                 for (int j = 1; j < 4; j++) {
+                    Log.info("Reading channel %d", j);
                     if (init_spectrophotometer(j, as7341)) {
                         for (int i = 0; i < param1; i++) {
                             take_spectrophotometer_reading(as7341, data);
@@ -2817,19 +2253,11 @@ int particle_command(String arg)
                             delay(param2);
                         }
                     }
-                    turn_off_all_LEDs();
+                    turn_off_all_channels();
                 }
-                Wire.end();
             }
+            Wire.end();
             result = stage_position;
-            break;
-//
-//  ASYNC COMMAND
-//
-        case 999: // stop async command
-            async_command_timer.stop();
-            async_command_running = false;
-            result = 1;
             break;
         default:
             result = 0;
@@ -2852,7 +2280,7 @@ void reset_globals()
     test_underway = false;
     cartridge_validated = false;
     callback_complete = false;
-    optical_read_in_progress = false;
+    spectrophotometer_read_in_progress = false;
 
     test_progress = 0;
     test_percent_complete = 0;
@@ -2880,7 +2308,7 @@ void disconnect_from_cloud() {
 
 void connect_to_cloud() {
 
-    connect_to_wifi();
+    // connect_to_wifi();
 
     Log.info("Connecting to cloud...");
     Particle.connect();
@@ -2942,7 +2370,6 @@ void clear_state() {
     test_upload_in_progress = false;
 
     magnetometer_inserted = false;
-    optical_probe_inserted = false;
     stress_test_cartridge_inserted = false;
     shipping_bolt_cartridge_inserted = false;
 
@@ -2953,7 +2380,6 @@ void clear_state() {
     test_underway = false;
     test_upload_mode = test_in_cache();
     magnet_validation_mode = false;
-    optical_validation_mode = false;
     
     test_invalid = false;
     barcode_invalid = false;
@@ -2979,8 +2405,6 @@ void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 
 void startup_device()
 {
-    i2c_bus_scan();
-
     Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
 
     Log.info("Resetting stage");
@@ -2988,11 +2412,11 @@ void startup_device()
 
     Log.info("Testing LEDs");
     // turn_on_all_LEDs(LED_DEFAULT_POWER);
-    turn_on_assay_LED_for_duration(500, LED_DEFAULT_POWER);
+    turn_on_channel_a_for_duration(500);
     delay(500);
-    turn_on_control_1_LED_for_duration(500, LED_DEFAULT_POWER);
+    turn_on_channel_b_for_duration(500);
     delay(500);
-    turn_on_control_2_LED_for_duration(500, LED_DEFAULT_POWER);
+    turn_on_channel_c_for_duration(500);
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
@@ -3040,9 +2464,9 @@ void setup() {
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT, 0);
 
-    init_analog_pin(pinLEDAssay, OUTPUT, 0);
-    init_analog_pin(pinLEDControl1, OUTPUT, 0);
-    init_analog_pin(pinLEDControl2, OUTPUT, 0);
+    init_digital_pin(pinChannelA, OUTPUT, LOW);
+    init_digital_pin(pinChannelB, OUTPUT, LOW);
+    init_digital_pin(pinChannelC, OUTPUT, LOW);
 
     init_analog_pin(pinHeaterThermistor, INPUT, 0);
     init_analog_pin(pinHeater, OUTPUT, 0);
@@ -3057,7 +2481,7 @@ void setup() {
     Particle.function("setWifiCred", setWifiCredentials);
 
     // WiFi.clearCredentials();
-    setup_credentials_ble();
+    // setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);
@@ -3071,6 +2495,8 @@ void setup() {
     Serial.begin(115200); // standard serial port
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
+
+    i2c_bus_scan();
 
     start_temperature_control();
     // stop_temperature_control(); // turn off temperature control for prototyping
@@ -3116,7 +2542,7 @@ void set_device_indicators()
     } else if (test_invalid) {
         turn_on_problem_LED();
         turn_on_buzzer_problem();
-    } else if (async_command_running || stress_test_mode) {
+    } else if (stress_test_mode) {
         turn_on_async_LED();
     } else if (!device_verified) {
         if (heater_debounced()) {
@@ -3126,12 +2552,12 @@ void set_device_indicators()
         }
     } else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode) {
         turn_on_busy_LED();
-    } else if (!device_verified || magnet_validation_mode || optical_validation_mode) {
+    } else if (!device_verified || magnet_validation_mode) {
         turn_on_validation_LED();
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
         turn_on_buzzer_alert();
-    } else if (cartridge_inserted || magnetometer_inserted || optical_probe_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted) {
+    } else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted) {
         if (cartridge_validated) {
             turn_on_busy_LED();
             if (test_completed || test_cancelled) {
@@ -3174,7 +2600,6 @@ void barcode_scan_loop() {
             barcode_scan_in_progress = true;
             cartridge_inserted = cartridge_validation_mode = false;
             magnetometer_inserted = magnet_validation_mode = false;
-            optical_probe_inserted = optical_validation_mode = false;
             switch (scan_barcode()) {
                 case BARCODE_TYPE_CARTRIDGE:
                     cartridge_inserted = true;
@@ -3185,11 +2610,6 @@ void barcode_scan_loop() {
                     magnetometer_inserted = true;
                     magnet_validation_mode = true;
                     Log.info("Magnetometer inserted");
-                    break;
-                case BARCODE_TYPE_OPTICAL:
-                    optical_probe_inserted = true;
-                    optical_validation_mode = true;
-                    Log.info("Optical probe inserted");
                     break;
                 case BARCODE_TYPE_STRESS_TEST:
                     stress_test_cartridge_inserted = true;
@@ -3241,19 +2661,6 @@ void magnet_validation_loop() {
     }
 }
 
-void optical_validation_loop() {
-    if (optical_validation_in_progress) {
-        if (millis() > callback_timeout) {
-            Log.info("Uploading optical validation data timed out. Retrying.");
-            publish_upload_optical_validation();
-        }
-    } else {
-        validate_optics();
-        publish_retry_attempt = 0;
-        publish_upload_optical_validation();
-    }
-}
-
 void cartridge_validation_loop() {
     if (cartridge_validation_in_progress) {
         if (millis() > callback_timeout) {
@@ -3288,33 +2695,6 @@ void test_upload_loop() {
     } else {
         publish_retry_attempt = 0;
         publish_upload_test();
-    }
-}
-
-void async_command_loop() {
-    if (async_command_optical_running && optical_test_take_reading) {
-        optical_test_take_reading = false;
-        Log.info("Stage location: %d", stage_position);
-        if (enable_optical_system(true)) {
-            get_data_from_one_optical_sensor('A', OPTICAL_SENSOR_DEFAULT_PARAM, baseline.led_assay, true);
-            get_data_from_one_optical_sensor('1', OPTICAL_SENSOR_DEFAULT_PARAM, baseline.led_c1, true);
-            get_data_from_one_optical_sensor('2', OPTICAL_SENSOR_DEFAULT_PARAM, baseline.led_c2, true);
-        }
-        disable_optical_system();
-        if (optical_test_move) {
-            move_stage(optical_test_move, MOTOR_SLOW_STEP_DELAY);
-        }
-        optical_test_count++;
-        if (optical_test_count >= optical_test_readings) {
-            async_command_optical_running = false;
-            async_command_running = false;
-            async_command_timer.stop();
-            sleep_motor();
-        }
-    } else if (async_command_running) {
-        async_command_running = false;
-        async_command_timer.stop();
-        sleep_motor();
     }
 }
 
@@ -3386,9 +2766,7 @@ void loop()
     process_serial_port();
     hardware_loop();
     
-    if (async_command_running) {
-        async_command_loop();
-    } else if (stress_test_mode) {
+    if (stress_test_mode) {
         stress_test_loop();
     } else if (callback_complete) {
         process_callback_buffer();
@@ -3399,8 +2777,6 @@ void loop()
     } else if (heater_debounced()) {
         if (cartridge_validation_mode) {
             cartridge_validation_loop();
-        } else if (optical_validation_mode) {
-            optical_validation_loop();
         } else if (magnet_validation_mode) {
             magnet_validation_loop();
         } else if (barcode_scan_mode) {

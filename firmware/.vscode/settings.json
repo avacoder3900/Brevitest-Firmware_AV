@@ -1,4 +1,5 @@
 {
     "particle.targetPlatform": "msom",
-    "particle.firmwareVersion": "5.8.0"
+    "particle.firmwareVersion": "5.8.0",
+    "particle.targetDevice": "0a10aced202194944a0521dc"
 }
