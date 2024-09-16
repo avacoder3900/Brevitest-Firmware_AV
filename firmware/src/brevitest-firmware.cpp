@@ -12,7 +12,6 @@
  */
 
 #include "brevitest-firmware.h"
-#include "wifi.h"
 #include "DFRobot_AS7341.h"
 
 int raw_table_lookup(int raw);
@@ -152,7 +151,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 12 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -2505,8 +2504,6 @@ void setup() {
 
     Particle.function("setWifiCred", setWifiCredentials);
 
-    // WiFi.clearCredentials();
-    // setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);

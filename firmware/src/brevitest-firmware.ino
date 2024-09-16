@@ -6,7 +6,6 @@
  */
 
 #include "brevitest-firmware.h"
-#include "wifi.h"
 #include "DFRobot_AS7341.h"
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
@@ -2360,8 +2359,6 @@ void setup() {
 
     Particle.function("setWifiCred", setWifiCredentials);
 
-    // WiFi.clearCredentials();
-    // setup_credentials_ble();
     connect_to_cloud();
 
     indicatorBusy.setActive(true);

@@ -66,6 +66,8 @@ void DFRobot_AS7341::enableSpectralMeasure(bool on)
   }
   Log.info("REG_AS7341_ENABLE %c write = %X", on ? 'T' : 'F', data);
   writeReg(REG_AS7341_ENABLE,&data,1);
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE %c confirm = %X", on ? 'T' : 'F', data);
 }
 
 void DFRobot_AS7341::enableWait(bool on){
@@ -227,7 +229,7 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
   if(measureMode == eSpm){
     unsigned long startTime = millis();
     while(!measureComplete() && (millis() - startTime) < 5000){
-        delay(1);
+        delay(10);
     }
   }
 }
