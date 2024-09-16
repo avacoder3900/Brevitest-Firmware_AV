@@ -1841,6 +1841,12 @@ int particle_command(String arg)
             initialize_test_cache();
             result = eeprom.cache.cartridge_uuid[ 0] == '\0' ? 1 : 0;
             break;
+        case 4: // check power good
+            result = digitalRead(pinPowerGood);
+            break;
+        case 5: // limit switch state
+            result = digitalRead(pinStageLimit);
+            break;
 //
 //  SERIAL PORT MESSAGING
 //
@@ -2253,11 +2259,25 @@ void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
     }
 }
 
+void init_analog_pin(uint16_t pin, PinMode mode)
+{
+    if (mode == INPUT || mode == INPUT_PULLUP) {
+        pinMode(pin, mode);
+    }
+}
+
 void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
     pinMode(pin, mode);
     if (mode == OUTPUT) {
         digitalWrite(pin, value);
+    }
+}
+
+void init_digital_pin(uint16_t pin, PinMode mode)
+{
+    if (mode == INPUT || mode == INPUT_PULLUP) {
+        pinMode(pin, mode);
     }
 }
 
@@ -2316,17 +2336,17 @@ void setup() {
     delay(1000);
     Log.info("====== Serial Connected, Begin Setup ======");
 
-    init_digital_pin(pinStageLimit, INPUT_PULLUP, 0);
-    init_digital_pin(pinCartridgeDetected, INPUT_PULLUP, 0);
+    init_digital_pin(pinStageLimit, INPUT_PULLUP);
+    init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
-    init_digital_pin(pinBarcodeReady, INPUT, 0);
+    init_digital_pin(pinBarcodeReady, INPUT);
 
     init_digital_pin(pinChannelA, OUTPUT, LOW);
     init_digital_pin(pinChannelB, OUTPUT, LOW);
     init_digital_pin(pinChannelC, OUTPUT, LOW);
 
-    init_analog_pin(pinHeaterThermistor, INPUT, 0);
+    init_analog_pin(pinHeaterThermistor, INPUT);
     init_analog_pin(pinHeater, OUTPUT, 0);
 
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
@@ -2335,6 +2355,8 @@ void setup() {
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
+
+    init_analog_pin(pinPowerGood, INPUT);
 
     Particle.function("setWifiCred", setWifiCredentials);
 
