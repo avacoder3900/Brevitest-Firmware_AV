@@ -856,10 +856,10 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341)
         //     Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
         // }
 
-        Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
-        as7341.setAstep(spectro_astep);
-        as7341.setAtime(spectro_atime);
-        as7341.setAGAIN(spectro_again);
+        // Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
+        // as7341.setAstep(spectro_astep);
+        // as7341.setAtime(spectro_atime);
+        // as7341.setAGAIN(spectro_again);
         return true;
     } else {
         return false;
@@ -879,13 +879,13 @@ void take_spectrophotometer_reading(DFRobot_AS7341 &as7341, BrevitestSpectrophot
 
     Log.info("Taking spectrophotometer reading");
     as7341.startMeasure(as7341.eF1F4ClearNIR);
-    Log.info("Reading the value of sensor data channel 0~5, under eF1F4ClearNIR");
     data1 = as7341.readSpectralDataOne();
+    Log.info("Reading the value of sensor data channel 0~4, under eF1F4ClearNIR, %d %d %d %d %d %d", data1.ADF1, data1.ADF2, data1.ADF3, data1.ADF4, data1.ADCLEAR, data1.ADNIR);
     memcpy(&data.f1, &data1.ADF1, sizeof(data1));
 
     as7341.startMeasure(as7341.eF5F8ClearNIR);
-    Log.info("Reading the value of sensor data channel 0~5, under eF5F8ClearNIR");
     data2 = as7341.readSpectralDataTwo();
+    Log.info("Reading the value of sensor data channel 5~8, under eF5F8ClearNIR, %d %d %d %d %d %d", data2.ADF5, data2.ADF6, data2.ADF7, data2.ADF8, data2.ADCLEAR, data2.ADNIR);
     memcpy(&data.f5, &data2.ADF5, sizeof(data2));
 }
 
@@ -1840,8 +1840,9 @@ int particle_command(String arg)
             initialize_test_cache();
             result = eeprom.cache.cartridge_uuid[ 0] == '\0' ? 1 : 0;
             break;
-        case 4: // check power good
-            result = digitalRead(pinPowerGood);
+        case 4: // check pin state
+            indx = get_next_command_param(arg, indx, &param1, 0);
+            result = digitalRead(param1);
             break;
         case 5: // limit switch state
             result = digitalRead(pinStageLimit);
@@ -1920,25 +1921,25 @@ int particle_command(String arg)
 //
 //  STAGE LEDs
 //
-        case 30: // turn on assay LED for param1 milliseconds at power param2
+        case 30: // turn on channel A for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_channel_a_for_duration(param1);
             result = param1;
             break;
-        case 31: // turn on control 1 LED for param1 milliseconds at power param2
+        case 31: // turn on channel B for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_channel_b_for_duration(param1);
             result = param1;
             break;
-        case 32: // turn on control 2 LED for param1 milliseconds at power param2
+        case 32: // turn on channel C for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_channel_c_for_duration(param1);
             result = param1;
             break;
-        case 33: // turn on all LEDs for param1 milliseconds at power param2
+        case 33: // turn on all channels for param1 milliseconds at power param2
             indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
             indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
             turn_on_all_channels_for_duration(param1);
@@ -2354,8 +2355,6 @@ void setup() {
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
-
-    init_analog_pin(pinPowerGood, INPUT);
 
     Particle.function("setWifiCred", setWifiCredentials);
 

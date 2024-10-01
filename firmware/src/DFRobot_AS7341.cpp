@@ -18,6 +18,7 @@ DFRobot_AS7341::DFRobot_AS7341(TwoWire *pWire)
 } 
 int DFRobot_AS7341::begin(eMode_t mode) 
 {
+  _pWire->setSpeed(CLOCK_SPEED_400KHZ);
   _pWire->begin();
   _pWire->beginTransmission(_address);
   if(_pWire->endTransmission() != 0){
@@ -46,28 +47,32 @@ void DFRobot_AS7341::enableAS7341(bool on)
 {
   uint8_t data;
   readReg(REG_AS7341_ENABLE,&data,1);
+//   Log.info("REG_AS7341_ENABLE %c read = %X", on ? 'T' : 'F', data);
   if(on == true){
     data = data | (1<<0);
   } else {
     data = data & (~1);
   }
   writeReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE %c write = %X", on ? 'T' : 'F', data);
+  readReg(REG_AS7341_ENABLE,&data,1);
+//   Log.info("REG_AS7341_ENABLE %c confirm = %X", on ? 'T' : 'F', data);
 }
 
 void DFRobot_AS7341::enableSpectralMeasure(bool on)
 {
   uint8_t data;
   readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE %c read = %X", on ? 'T' : 'F', data);
+//   Log.info("REG_AS7341_ENABLE SPECMEAS %c read = %X", on ? 'T' : 'F', data);
   if(on == true){
     data = data | (1<<1);
   } else {
     data = data & (~(1<<1));
   }
-  Log.info("REG_AS7341_ENABLE %c write = %X", on ? 'T' : 'F', data);
+  Log.info("REG_AS7341_ENABLE SPECMEAS %c write = %X", on ? 'T' : 'F', data);
   writeReg(REG_AS7341_ENABLE,&data,1);
   readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE %c confirm = %X", on ? 'T' : 'F', data);
+//   Log.info("REG_AS7341_ENABLE SPECMEAS %c confirm = %X", on ? 'T' : 'F', data);
 }
 
 void DFRobot_AS7341::enableWait(bool on){
@@ -113,19 +118,23 @@ void DFRobot_AS7341::config(eMode_t mode)
   switch(mode){
     case eSpm : {
       data = (data & (~3)) | eSpm;
+      Log.info("CONFIG mode eSpm");
     };
 	break;
     case eSyns : {
       data = (data & (~3)) | eSyns;
+      Log.info("CONFIG mode eSyns");
     };
 	break;
     case eSynd : {
       data = (data & (~3)) | eSynd;
+      Log.info("CONFIG mode eSynd");
     };
 	break;
     default : break;
   }
   writeReg(REG_AS7341_CONFIG,&data,1);
+  Log.info("REG_AS7341_ENABLE CONFIG write = %X", data);
   setBank(0);
 }
 
@@ -209,6 +218,8 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
   data = data & (~(1<<4));
   Log.info("REG_AS7341_CFG_0 write = %X",data);
   writeReg(REG_AS7341_CFG_0,&data,1);
+  readReg(REG_AS7341_CFG_0,&data,1);
+  Log.info("REG_AS7341_CFG_0 confirm = %X",data);
   
   enableSpectralMeasure(false);
   writeReg(0xAF,0x10);
@@ -220,7 +231,7 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
   if(measureMode == eSyns){
     setGpioMode(INPUT);
     config(eSyns);
-    //writeReg(byte(0xA9), byte(0)); 
+    writeReg(byte(0xA9), byte(0)); 
   }
   else if(measureMode == eSpm){
     config(eSpm);
@@ -230,6 +241,9 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
     unsigned long startTime = millis();
     while(!measureComplete() && (millis() - startTime) < 5000){
         delay(10);
+    }
+    if (!measureComplete()) {
+        Log.info("Spectral measurement timed out");
     }
   }
 }
@@ -270,7 +284,7 @@ uint8_t DFRobot_AS7341::readFlickerData(){
 bool DFRobot_AS7341::measureComplete(){
   uint8_t status;
   readReg(REG_AS7341_STATUS_2,&status,1);
-  return bool (status & (1<<6));
+  return bool (status & (1<< 6));
 }
 
 uint16_t DFRobot_AS7341::getChannelData(uint8_t channel){
@@ -280,7 +294,7 @@ uint16_t DFRobot_AS7341::getChannelData(uint8_t channel){
   readReg(REG_AS7341_CH0_DATA_H + channel*2,data+1,1);
   channelData = data[1];
   channelData = (channelData<<8) | data[0];
-  delay(50);
+  delay(5);
   return channelData;
 }
 
@@ -338,7 +352,7 @@ void DFRobot_AS7341::setGpioMode(uint8_t mode)
 void DFRobot_AS7341::enableLed(bool on){
   uint8_t data=0;
   uint8_t data1=0;
-setBank(1);
+  setBank(1);
   
   readReg(REG_AS7341_CONFIG,&data,1);
   readReg(REG_AS7341_LED,&data1,1);
@@ -375,14 +389,14 @@ void DFRobot_AS7341::controlLed(uint8_t current){
   if(current > 19) current = 19;
   
 
-setBank(1);
+  setBank(1);
   
   data = 0;
  // readReg(REG_AS7341_LED,&data,1);
   data = data | (1<<7);
   data = data | (current & 0x7f);
   writeReg(REG_AS7341_LED,&data,1);
-  delay(100);
+  delay(10);
   //readReg(REG_AS7341_CFG_0,&data,1);
   //data = data & (~(1<<4));
   //writeReg(REG_AS7341_CFG_0,&data,1);
@@ -549,11 +563,6 @@ void DFRobot_AS7341::setThreshold(uint16_t lowTh,uint16_t highTh){
   writeReg(REG_AS7341_SP_TH_L_MSB,lowTh>>8);
   writeReg(REG_AS7341_SP_TH_L_LSB,lowTh);
 
-
-  
-delay(10);
-
-  
   delay(10);
 }
 uint16_t DFRobot_AS7341::getLowThreshold(){
@@ -652,6 +661,7 @@ void DFRobot_AS7341::writeReg(uint8_t reg, void* pBuf, size_t size)
     _pWire->write(_pBuf[i]);
   }
   _pWire->endTransmission();
+  delay(1);
 }
 uint8_t DFRobot_AS7341::readReg(uint8_t reg){
   
@@ -670,7 +680,7 @@ uint8_t DFRobot_AS7341::readReg(uint8_t reg, void* pBuf, size_t size)
   if ( _pWire->endTransmission() != 0) {
     return 0;
   }
-  delay(10);
+  delay(1);
   _pWire->requestFrom(_address, size);
   for (uint16_t i = 0; i < size; i++) {
     _pBuf[i] = _pWire->read();

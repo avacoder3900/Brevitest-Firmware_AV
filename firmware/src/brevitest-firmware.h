@@ -138,13 +138,11 @@
 #define STRESS_TEST_MAXIMUM_RECORDS 15
 
 // pin definitions
-int pinMotorDir = D2;
-int pinCartridgeDetected = D3;
 int pinHeater = D4;
 int pinChannelA = D5;
 int pinChannelB = D6;
 int pinChannelC = D7;
-int pinPowerGood = D8;
+int pinMotorDir = D8;
 int pinMotorReset = D11;
 int pinMotorSleep = D12;
 int pinMotorStep = D13;
@@ -153,8 +151,9 @@ int pinHeaterThermistor = D23;
 int pinRX = RX;
 int pinTX = TX;
 int pinBuzzer = A0;
-int pinBarcodeReady = A1;
-int pinBarcodeTrigger = A2;
+int pinCartridgeDetected = A1;
+int pinBarcodeReady = A2;
+int pinBarcodeTrigger = A3;
 
 // global variables
 bool new_device = true;
