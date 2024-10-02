@@ -287,6 +287,8 @@ bool move_one_eighth_step(int dir, int step_delay)
         return false;
     }
 
+    // Log.info("move_one_eighth_step, dir = %d, step_delay = %d, limit = %ld, position = %d", dir, step_delay, digitalRead(pinStageLimit), stage_position);
+
     digitalWrite(pinMotorStep, HIGH);
     delayMicroseconds(step_delay);
     digitalWrite(pinMotorStep, LOW);
@@ -2343,8 +2345,11 @@ void setup() {
     init_digital_pin(pinBarcodeReady, INPUT);
 
     init_digital_pin(pinChannelA, OUTPUT, LOW);
+    pinSetDriveStrength(pinChannelA, DriveStrength::HIGH);
     init_digital_pin(pinChannelB, OUTPUT, LOW);
+    pinSetDriveStrength(pinChannelB, DriveStrength::HIGH);
     init_digital_pin(pinChannelC, OUTPUT, LOW);
+    pinSetDriveStrength(pinChannelC, DriveStrength::HIGH);
 
     init_analog_pin(pinHeaterThermistor, INPUT);
     init_analog_pin(pinHeater, OUTPUT, 0);
@@ -2432,7 +2437,7 @@ void set_device_indicators()
         turn_on_validation_LED();
     } else if (barcode_invalid) {
         turn_on_ready_indicator(true);
-        turn_on_buzzer_alert();
+        // turn_on_buzzer_alert();
     } else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted) {
         if (cartridge_validated) {
             turn_on_busy_LED();

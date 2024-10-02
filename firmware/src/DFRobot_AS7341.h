@@ -285,6 +285,7 @@ public:
 private:
   float getWtime();
   void config(eMode_t mode);
+  void getStatus(int index);
   void clearInterrupt();
   float getIntegrationTime();
   uint16_t getChannelData(uint8_t channel);
