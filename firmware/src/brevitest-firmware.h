@@ -142,7 +142,7 @@ int pinHeater = D4;
 int pinChannelA = D5;
 int pinChannelB = D6;
 int pinChannelC = D7;
-int pinMotorDir = D8;
+int pinMotorDir = D2;
 int pinMotorReset = D11;
 int pinMotorSleep = D12;
 int pinMotorStep = D13;
@@ -151,9 +151,9 @@ int pinHeaterThermistor = D23;
 int pinRX = RX;
 int pinTX = TX;
 int pinBuzzer = A0;
-int pinCartridgeDetected = A1;
-int pinBarcodeReady = A2;
-int pinBarcodeTrigger = A3;
+int pinCartridgeDetected = D3;
+int pinBarcodeReady = A1;
+int pinBarcodeTrigger = A2;
 
 // global variables
 bool new_device = true;

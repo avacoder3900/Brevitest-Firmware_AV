@@ -320,6 +320,7 @@ void move_stage(int microns, int step_delay)
     microns_error = abs_microns % MOTOR_MICRONS_PER_EIGHTH_STEP;
     floored_step_delay = step_delay < MOTOR_MINIMUM_STEP_DELAY ? MOTOR_MINIMUM_STEP_DELAY : step_delay;
 
+    Log.info("move_stage, microns = %d, step_delay = %d, floored_step_delay = %d, abs_microns = %d, eighth_steps = %d, microns_error = %d, dir = %d", microns, step_delay, floored_step_delay, abs_microns, eighth_steps, microns_error, dir);
     for (i = 0; i < eighth_steps; i++) {
         if (!move_one_eighth_step(dir, floored_step_delay)) {
             break;
@@ -2345,19 +2346,16 @@ void setup() {
     init_digital_pin(pinBarcodeReady, INPUT);
 
     init_digital_pin(pinChannelA, OUTPUT, LOW);
-    pinSetDriveStrength(pinChannelA, DriveStrength::HIGH);
     init_digital_pin(pinChannelB, OUTPUT, LOW);
-    pinSetDriveStrength(pinChannelB, DriveStrength::HIGH);
     init_digital_pin(pinChannelC, OUTPUT, LOW);
-    pinSetDriveStrength(pinChannelC, DriveStrength::HIGH);
 
     init_analog_pin(pinHeaterThermistor, INPUT);
     init_analog_pin(pinHeater, OUTPUT, 0);
 
+    init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
-    init_digital_pin(pinMotorReset, OUTPUT, HIGH);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
