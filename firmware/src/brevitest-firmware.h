@@ -119,6 +119,17 @@
 #define THERMISTOR_SCALE 10000
 #define TERMISTOR_TABLE_LENGTH 21
 
+// PID controller
+#define PHOTO_SCALE 10000
+#define PID_MAX_POWER 255
+#define PID_DEFAULT_POWER 128
+#define PID_PWM_FREQUENCY 50
+#define PID_MAX_VALUE 600
+#define PID_CONTROL_INTERVAL 1000
+#define PID_DEFAULT_PULSE_DURATION 800
+#define PID_DEFAULT_TARGET_VALUE 450
+#define PID_STABLE_VALUE_DELTA 10
+
 // pubsub
 #define PUBSUB_EVENT_NAME "brevitest-production"
 #define PUBSUB_EVENT_MAX_LENGTH 32
@@ -153,7 +164,6 @@ int pinMotorDir = D8;
 int pinMotorReset = D11;
 int pinMotorSleep = D12;
 int pinMotorStep = D13;
-int pinHeaterThermistor = D23;
 int pinBarcodeReady = D22;
 int pinBarcodeTrigger = D23;
 
@@ -243,36 +253,35 @@ int publish_retry_max_index = 11;
 unsigned long publish_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
 unsigned long next_spectrophotometer_reading_time = 0;
 
-// temperature control system
-struct HeatingElement
+// PID controller system
+struct PIDController
 {
-    int heater_pin;
-    int thermistor_pin;
-    bool heater_on;
+    int power_pin;
+    int value_pin;
+    bool power_on;
     int power;
     int pulse_duration;
     int previous_error;
     int integral;
     unsigned long read_time;
-    int temp_C_10X;
-    int target_C_10X;
-    int temp_F_10X;
+    int value;
+    int target;
     int k_p_num;
     int k_p_den;
     int k_i_num;
     int k_i_den;
     int k_d_num;
     int k_d_den;
-    HeatingElement()
+    PIDController()
     {
-        heater_pin = pinHeater;
-        thermistor_pin = pinHeaterThermistor;
         power = 0;
-        heater_on = false;
-        pulse_duration = HEATER_PULSE_DURATION;
+        power_on = false;
+        pulse_duration = PID_DEFAULT_PULSE_DURATION;
         previous_error = 0;
         integral = 0;
-        target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
+        read_time = 0;
+        value = 0;
+        target = 0;
         k_p_num = 100;
         k_p_den = 1;
         k_i_num = 1;
@@ -280,7 +289,7 @@ struct HeatingElement
         k_d_num = 1;
         k_d_den = 1;
     }
-} heater;
+} heater, laserA, laserB, laserC;
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
@@ -289,6 +298,7 @@ bool heater_debouncing_in_progress = false;
 unsigned long heater_debounce_time;
 bool heater_ready = false;
 bool previous_heater_ready = false;
+
 
 // buzzer
 void check_buzzer(void);

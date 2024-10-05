@@ -15,7 +15,6 @@
 #include "DFRobot_AS7341.h"
 
 int raw_table_lookup(int raw);
-int setWifiCredentials(String param);
 int extract_int_from_string(char *str, int pos, int len);
 int extract_int_from_delimited_string(char *str, int *indx, char delim);
 uint32_t checksum(char *buf, int size);
@@ -52,24 +51,16 @@ void turn_on_heater(int power);
 void turn_off_heater();
 int limit(int value, int max, int min);
 int set_heater_power(int power);
-void turn_on_channel(char channel);
-void turn_off_channel(char channel);
-void turn_on_all_channels();
-void turn_on_channel_a();
-void turn_on_channel_b();
-void turn_on_channel_c();
-void turn_off_channel_a();
-void turn_off_channel_b();
-void turn_off_channel_c();
-void turn_off_all_channels();
-void turn_on_channel_a_for_duration(int duration);
-void turn_on_channel_b_for_duration(int duration);
-void turn_on_channel_c_for_duration(int duration);
-void turn_on_all_channels_for_duration(int duration);
 void scanResultCallback(const BleScanResult &scanResult, void *context);
 int BLE_scan();
 int check_magnets_in_one_well(int well, int mark);
 int validate_magnets();
+void set_laser_power(char channel, int power);
+void turn_off_laser(char channel);
+void turn_off_all_lasers();
+void turn_on_laser_for_duration(char channel, int power, int duration);
+void turn_on_all_lasers_for_duration(int power, int duration);
+void power_off_spectrophotometer(char channel);
 void power_off_all_spectrophotometers();
 bool power_on_spectrophotometer(char channel);
 bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341);
@@ -239,16 +230,16 @@ int raw_table_lookup(int raw)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int setWifiCredentials(String param) {
-    int index = param.indexOf('|');
-    if (index == -1) {
-        return -1;
-    }
-    Log.info(param.substring(0, index));
-    Log.info(param.substring(index + 1));
-    bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
-    return result ? 1 : 0;
-}
+// int setWifiCredentials(String param) {
+//     int index = param.indexOf('|');
+//     if (index == -1) {
+//         return -1;
+//     }
+//     Log.info(param.substring(0, index));
+//     Log.info(param.substring(index + 1));
+//     bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
+//     return result ? 1 : 0;
+// }
 
 
 
@@ -714,16 +705,16 @@ void turn_on_validation_LED() {
 void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
-    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+    analogWrite(heater.power_pin, power, HEATER_PWM_FREQUENCY);
     heater.power = power;
-    heater.heater_on = true;
+    heater.power_on = true;
     if (serial_messaging_on) Log.info("Heater set to power %d", power);
 }
 
 void turn_off_heater()
 {
-    analogWrite(heater.heater_pin, 0);
-    heater.heater_on = false;
+    analogWrite(heater.power_pin, 0);
+    heater.power_on = false;
     heater.power = 0;
     if (serial_messaging_on) Log.info("Heater turned off");
 }
@@ -743,120 +734,6 @@ int set_heater_power(int power)
     }
 
     return (int)(millis() - start);
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//                  OPTICAL CHANNELS                       //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void turn_on_channel(char channel)
-{
-    if (channel == 'A')
-    {
-        turn_on_channel_a();
-    }
-    else if (channel == 'B')
-    {
-        turn_on_channel_b();
-    }
-    else if (channel == 'C')
-    {
-        turn_on_channel_c();
-    }
-}
-
-void turn_off_channel(char channel)
-{
-    if (channel == 'A')
-    {
-        turn_off_channel_a();
-    }
-    else if (channel == 'B')
-    {
-        turn_off_channel_b();
-    }
-    else if (channel == 'C')
-    {
-        turn_off_channel_c();
-    }
-}
-
-void turn_on_all_channels()
-{
-    turn_on_channel_a();
-    turn_on_channel_b();
-    turn_on_channel_c();
-}
-
-void turn_on_channel_a()
-{
-    digitalWrite(pinChannelA, HIGH);
-}
-
-void turn_on_channel_b()
-{
-    digitalWrite(pinChannelB, HIGH);
-}
-
-void turn_on_channel_c()
-{
-    digitalWrite(pinChannelC, HIGH);
-}
-
-void turn_off_channel_a()
-{
-    digitalWrite(pinChannelA, LOW);
-}
-
-void turn_off_channel_b()
-{
-    digitalWrite(pinChannelB, LOW);
-}
-
-void turn_off_channel_c()
-{
-    digitalWrite(pinChannelC, LOW);
-}
-
-void turn_off_all_channels()
-{
-    turn_off_channel_a();
-    turn_off_channel_b();
-    turn_off_channel_c();
-}
-
-void turn_on_channel_a_for_duration(int duration)
-{
-    turn_on_channel_a();
-    delayMicroseconds(1000 * duration);
-    turn_off_channel_a();
-}
-
-void turn_on_channel_b_for_duration(int duration)
-{
-    turn_on_channel_b();
-    delayMicroseconds(1000 * duration);
-    turn_off_channel_b();
-}
-
-void turn_on_channel_c_for_duration(int duration)
-{
-    turn_on_channel_c();
-    delayMicroseconds(1000 * duration);
-    turn_off_channel_c();
-}
-
-void turn_on_all_channels_for_duration(int duration)
-{
-    turn_on_channel_a();
-    turn_on_channel_b();
-    turn_on_channel_c();
-    delayMicroseconds(1000 * duration);
-    turn_off_channel_a();
-    turn_off_channel_b();
-    turn_off_channel_c();
 }
 
 /////////////////////////////////////////////////////////////
@@ -949,14 +826,81 @@ int validate_magnets() {
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                    LASER DIODES                         //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void set_laser_power(char channel, int power)
+{
+    if (channel == 'A')
+    {
+        analogWrite(pinLaserA, power);
+    }
+    else if (channel == 'B')
+    {
+        analogWrite(pinLaserB, power);
+    }
+    else if (channel == 'C')
+    {
+        analogWrite(pinLaserC, power);
+    }
+}
+
+void turn_off_laser(char channel)
+{
+    set_laser_power(channel, 0);
+}
+
+void turn_off_all_lasers()
+{
+    turn_off_laser('A');
+    turn_off_laser('B');
+    turn_off_laser('C');
+}
+
+void turn_on_laser_for_duration(char channel, int power, int duration)
+{
+    set_laser_power(channel, power);
+    delayMicroseconds(1000 * duration);
+    turn_off_laser(channel);
+}
+
+void turn_on_all_lasers_for_duration(int power, int duration)
+{
+    set_laser_power('A', power);
+    set_laser_power('B', power);
+    set_laser_power('C', power);
+    delayMicroseconds(1000 * duration);
+    turn_off_all_lasers();
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                  SPECTROPHOTOMETERS                     //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void power_off_spectrophotometer(char channel) 
+{
+    switch (channel) {
+        case 'A':
+            // turn_off_channel_a();
+            break;
+        case 'B':
+            // turn_off_channel_b();
+            break;
+        case 'C':
+            // turn_off_channel_c();
+            break;
+    }
+}   
+
 void power_off_all_spectrophotometers() 
 {
     // Turn off all sensors.
-    turn_off_all_channels();
+    power_off_spectrophotometer('A');
+    power_off_spectrophotometer('B');
+    power_off_spectrophotometer('C');
     Log.info("Config optics: all spectrophotometers off");
 }
 
@@ -965,15 +909,15 @@ bool power_on_spectrophotometer(char channel)
     // Turn on sensor
     switch (channel) {
         case 'A':
-            turn_on_channel_a();
+            // turn_on_channel_a();
             Log.info("Config optics: spectrophotometer A on");
             break;
         case 'B':
-            turn_on_channel_b();
+            // turn_on_channel_b();
             Log.info("Config optics: spectrophotometer B on");
             break;
         case 'C':
-            turn_on_channel_c();
+            // turn_on_channel_c();
             // Log.info("Config optics: spectrophotometer C on");
             break;
         default:
@@ -1060,7 +1004,7 @@ void i2c_bus_scan()
 bool startI2C() {
     if (Wire.isEnabled()) return true;
 
-    Wire.setSpeed(CLOCK_SPEED_100KHZ);
+    Wire.setSpeed(CLOCK_SPEED_400KHZ);
     Wire.begin();
     delayMicroseconds(100000);
 
@@ -1078,7 +1022,7 @@ void read_spectrophotometer(char channel, bool log = false)
                 Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
             }
         }
-        turn_off_all_channels();
+        power_off_all_spectrophotometers();
     }
     Wire.end();
 }
@@ -1099,19 +1043,17 @@ void stress_test_read_spectrophotometer()
 
 int get_heater_temperature()
 {
-    analogWrite(heater.heater_pin, 0);
+    analogWrite(heater.power_pin, 0);
     delayMicroseconds(10000);
-    int raw = analogRead(heater.thermistor_pin);
-    analogWrite(heater.heater_pin, heater.power);
+    int raw = analogRead(heater.value_pin);
+    analogWrite(heater.power_pin, heater.power);
     
     if (raw == 0) {
         stop_temperature_control();
-        heater.temp_C_10X = 0;
-        heater.temp_F_10X = 0;
+        heater.value = 0;
     } else {
-        heater.temp_C_10X = raw_table_lookup(raw);
-        heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
-        if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE) {
+        heater.value = raw_table_lookup(raw);
+        if (heater.value > HEATER_MAX_TEMPERATURE) {
             stop_temperature_control();
             raw = 0;
         }
@@ -1122,8 +1064,10 @@ int get_heater_temperature()
 void heater_temperature_read()
 {
     get_heater_temperature();
-    if (serial_messaging_on)
-        Log.info("Temperature: %d.%d˚C, %d.%d˚F", heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.temp_F_10X / 10, heater.temp_F_10X % 10);
+    if (serial_messaging_on) {
+        int temp_F_10X = ((heater.value * 9) / 5) + 320;
+        Log.info("Temperature: %d.%d˚C, %d.%d˚F", heater.value / 10, heater.value % 10, temp_F_10X / 10, temp_F_10X % 10);
+    }
 }
 
 int pid_controller()
@@ -1143,7 +1087,7 @@ int pid_controller()
                 heater.integral = 0;
             } else {
                 dt = heater.read_time - prev_read_time;
-                error = heater.target_C_10X - heater.temp_C_10X;
+                error = heater.target - heater.value;
                 heater.integral += (error * dt) / 1000;
                 derivative = (1000 * (error - heater.previous_error)) / dt;
                 output = (heater.k_p_num * error) / heater.k_p_den;
@@ -1152,7 +1096,7 @@ int pid_controller()
 
                 if (serial_messaging_on) {
                     Log.info("raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d",
-                        raw, heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.target_C_10X / 10, heater.target_C_10X % 10,
+                        raw, heater.value / 10, heater.value % 10, heater.target / 10, heater.target % 10,
                         dt, error, heater.integral, derivative, output);
                 }
                 heater.previous_error = error;
@@ -2066,30 +2010,30 @@ int particle_command(String arg)
             break;
 
 //
-//  STAGE LEDs
+//  LASER DIODES
 //
-        case 30: // turn on channel A for param1 milliseconds at power param2
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_channel_a_for_duration(param1);
+        case 30: // turn on laser A at power param1 for param2 milliseconds 
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param2, LED_DURATION);
+            turn_on_laser_for_duration('A', param1, param2);
             result = param1;
             break;
-        case 31: // turn on channel B for param1 milliseconds at power param2
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_channel_b_for_duration(param1);
+        case 31: // turn on laser B at power param1 for param2 milliseconds
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param2, LED_DURATION);
+            turn_on_laser_for_duration('B', param1, param2);
             result = param1;
             break;
-        case 32: // turn on channel C for param1 milliseconds at power param2
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_channel_c_for_duration(param1);
+        case 32: // turn on laser C at power param1 for param2 milliseconds
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param2, LED_DURATION);
+            turn_on_laser_for_duration('C', param1, param2);
             result = param1;
             break;
-        case 33: // turn on all channels for param1 milliseconds at power param2
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            turn_on_all_channels_for_duration(param1);
+        case 33: // turn on all lasers at power param1 for param2 milliseconds
+            indx = get_next_command_param(arg, indx, &param1, LED_DEFAULT_POWER);
+            indx = get_next_command_param(arg, indx, &param2, LED_DURATION);
+            turn_on_all_lasers_for_duration(param1, param2);
             result = param1;
             break;
 //
@@ -2117,8 +2061,8 @@ int particle_command(String arg)
 //  HEATER
 //
         case 50: // read heater temperature
-            Log.info("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
-            result = heater.temp_C_10X;
+            Log.info("Heater: T = %d.%d˚C", heater.value / 10, heater.value % 10);
+            result = heater.value;
             break;
         case 51: // turn on heater at power param1
             indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
@@ -2133,7 +2077,7 @@ int particle_command(String arg)
             indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
             if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
             {
-                heater.target_C_10X = param1;
+                heater.target = param1;
                 heater.read_time = 0;
             }
             result = param1;
@@ -2233,7 +2177,7 @@ int particle_command(String arg)
                         delay(param3);
                     }
                 }
-                turn_off_all_channels();
+                power_off_all_spectrophotometers();
             }
             Wire.end();
             result = stage_position;
@@ -2264,7 +2208,7 @@ int particle_command(String arg)
                             delay(param2);
                         }
                     }
-                    turn_off_all_channels();
+                    power_off_all_spectrophotometers();
                 }
             }
             Wire.end();
@@ -2437,11 +2381,11 @@ void startup_device()
 
     Log.info("Testing LEDs");
     // turn_on_all_LEDs(LED_DEFAULT_POWER);
-    turn_on_channel_a_for_duration(500);
+    turn_on_laser_for_duration('A', 128, 500);
     delay(500);
-    turn_on_channel_b_for_duration(500);
+    turn_on_laser_for_duration('B', 128, 500);
     delay(500);
-    turn_on_channel_c_for_duration(500);
+    turn_on_laser_for_duration('C', 128, 500);
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
@@ -2483,27 +2427,39 @@ void setup() {
     delay(1000);
     Log.info("====== Serial Connected, Begin Setup ======");
 
+    init_analog_pin(pinBuzzer, OUTPUT, 0);
+    
     init_digital_pin(pinStageLimit, INPUT_PULLUP);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT);
 
-    init_digital_pin(pinChannelA, OUTPUT, LOW);
-    init_digital_pin(pinChannelB, OUTPUT, LOW);
-    init_digital_pin(pinChannelC, OUTPUT, LOW);
+    init_analog_pin(pinLaserA, OUTPUT, 0);
+    init_analog_pin(pinLaserB, OUTPUT, 0);
+    init_analog_pin(pinLaserC, OUTPUT, 0);
+    init_analog_pin(pinPhotoA, INPUT, 0);
+    init_analog_pin(pinPhotoB, INPUT, 0);
+    init_analog_pin(pinPhotoC, INPUT, 0);
+    laserA.power_pin = pinLaserA;
+    laserA.value_pin = pinPhotoA;
+    laserB.power_pin = pinLaserB;
+    laserB.value_pin = pinPhotoB;
+    laserC.power_pin = pinLaserC;
+    laserC.value_pin = pinPhotoC;
 
     init_analog_pin(pinHeaterThermistor, INPUT);
     init_analog_pin(pinHeater, OUTPUT, 0);
+    heater.power_pin = pinHeater;
+    heater.value_pin = pinHeaterThermistor;
+    heater.pulse_duration = HEATER_PULSE_DURATION;
 
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
-    init_analog_pin(pinBuzzer, OUTPUT, 0);
-
-    Particle.function("setWifiCred", setWifiCredentials);
+    // Particle.function("setWifiCred", setWifiCredentials);
 
     connect_to_cloud();
 
@@ -2558,7 +2514,7 @@ void turn_on_ready_indicator(bool force) {
 void set_device_indicators()
 {
     previous_heater_ready = heater_ready;
-    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
+    heater_ready = (heater.target - heater.value) < HEATER_READY_TEMP_DELTA;
 
     if (!Particle.connected()) {
         turn_off_indicator_LEDs();
