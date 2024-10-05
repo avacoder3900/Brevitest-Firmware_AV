@@ -42,13 +42,14 @@
 #define SPECTRO_AGAIN_DEFAULT 7
 #define SPECTRO_MAXIMUM_NUMBER_OF_READINGS 21
 
-#define SPECTRO_SWITCH_ADDR 0xA0     // I2C address of MCP23008.
-#define SPECTRO_SWITCH_IO_REGISTER 0x00     // I/O direction register address.
-#define SPECTRO_SWITCH_GPIO_REGISTER 0x09     // GPIO register address.
-#define SPECTRO_SWITCH_TURN_OFF_ALL 0x00     // Turn off all spectrophotometers.
-#define SPECTRO_SWITCH_TURN_ON_A 0x10     // Turn on spectrophotometer A.
-#define SPECTRO_SWITCH_TURN_ON_B 0x04     // Turn on spectrophotometer B.
-#define SPECTRO_SWITCH_TURN_ON_C 0x01     // Turn on spectrophotometer C.
+#define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
+#define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
+#define SPECTRO_SWITCH_SET_PORTS 0x00           // Set all ports to output.
+#define SPECTRO_SWITCH_OUTPUT_COMMAND 0x01      // Output command.
+#define SPECTRO_SWITCH_TURN_OFF_ALL 0x00        // Turn off all spectrophotometers.
+#define SPECTRO_SWITCH_TURN_ON_A 0x01           // Turn on spectrophotometer A.
+#define SPECTRO_SWITCH_TURN_ON_B 0x02           // Turn on spectrophotometer B.
+#define SPECTRO_SWITCH_TURN_ON_C 0x04           // Turn on spectrophotometer C.
 
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000

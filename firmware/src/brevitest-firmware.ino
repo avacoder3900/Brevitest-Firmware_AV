@@ -91,25 +91,6 @@ int raw_table_lookup(int raw)
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                   CLOUD FUNCTIONS                       //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-// int setWifiCredentials(String param) {
-//     int index = param.indexOf('|');
-//     if (index == -1) {
-//         return -1;
-//     }
-//     Log.info(param.substring(0, index));
-//     Log.info(param.substring(index + 1));
-//     bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
-//     return result ? 1 : 0;
-// }
-
-
-
-/////////////////////////////////////////////////////////////
-//                                                         //
 //                        UTLITY                           //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -745,14 +726,18 @@ void turn_on_all_lasers_for_duration(int power, int duration)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+void init_spectrophotometer_switch() 
+{
+    Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
+    Wire.write(SPECTRO_SWITCH_CONFIG_COMMAND);    
+    Wire.write(SPECTRO_SWITCH_SET_PORTS);
+    Wire.endTransmission();
+}
+
 void set_spectrophotometer_power(byte code) 
 {
     Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
-    Wire.write(SPECTRO_SWITCH_IO_REGISTER);    
-    Wire.write(~code);
-    Wire.endTransmission();
-    Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
-    Wire.write(SPECTRO_SWITCH_GPIO_REGISTER);    
+    Wire.write(SPECTRO_SWITCH_OUTPUT_COMMAND);    
     Wire.write(code);
     Wire.endTransmission();
 }
@@ -763,19 +748,19 @@ bool power_on_spectrophotometer(char channel_number)
     switch (channel_number) {
         case 1:
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_A);
-            // Log.info("Config optics: spectrophotometer A on");
+            Log.info("Config optics: spectrophotometer A on");
             break;
         case 2:
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_B);
-            // Log.info("Config optics: spectrophotometer B on");
+            Log.info("Config optics: spectrophotometer B on");
             break;
         case 3:
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_C);
-            // Log.info("Config optics: spectrophotometer C on");
+            Log.info("Config optics: spectrophotometer C on");
             break;
         default:
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
-            // Log.info("Config optics: spectrophotometers off by default");
+            Log.info("Config optics: spectrophotometers off by default");
             return false;
     }
     delay(5);  // Wait for sensor to power on.
@@ -2319,7 +2304,7 @@ void setup() {
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
-    // Particle.function("setWifiCred", setWifiCredentials);
+    init_spectrophotometer_switch();
 
     connect_to_cloud();
 
