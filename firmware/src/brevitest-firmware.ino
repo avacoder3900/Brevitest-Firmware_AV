@@ -95,16 +95,16 @@ int raw_table_lookup(int raw)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int setWifiCredentials(String param) {
-    int index = param.indexOf('|');
-    if (index == -1) {
-        return -1;
-    }
-    Log.info(param.substring(0, index));
-    Log.info(param.substring(index + 1));
-    bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
-    return result ? 1 : 0;
-}
+// int setWifiCredentials(String param) {
+//     int index = param.indexOf('|');
+//     if (index == -1) {
+//         return -1;
+//     }
+//     Log.info(param.substring(0, index));
+//     Log.info(param.substring(index + 1));
+//     bool result = WiFi.setCredentials(param.substring(0, index).c_str(), param.substring(index + 1).c_str());
+//     return result ? 1 : 0;
+// }
 
 
 
@@ -2339,15 +2339,20 @@ void setup() {
     delay(1000);
     Log.info("====== Serial Connected, Begin Setup ======");
 
+    init_analog_pin(pinBuzzer, OUTPUT, 0);
+    
     init_digital_pin(pinStageLimit, INPUT_PULLUP);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT);
 
-    init_digital_pin(pinChannelA, OUTPUT, LOW);
-    init_digital_pin(pinChannelB, OUTPUT, LOW);
-    init_digital_pin(pinChannelC, OUTPUT, LOW);
+    init_analog_pin(pinLaserA, OUTPUT, 0);
+    init_analog_pin(pinLaserB, OUTPUT, 0);
+    init_analog_pin(pinLaserC, OUTPUT, 0);
+    init_analog_pin(pinPhotoA, INPUT, 0);
+    init_analog_pin(pinPhotoB, INPUT, 0);
+    init_analog_pin(pinPhotoC, INPUT, 0);
 
     init_analog_pin(pinHeaterThermistor, INPUT);
     init_analog_pin(pinHeater, OUTPUT, 0);
@@ -2357,9 +2362,7 @@ void setup() {
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
-    init_analog_pin(pinBuzzer, OUTPUT, 0);
-
-    Particle.function("setWifiCred", setWifiCredentials);
+    // Particle.function("setWifiCred", setWifiCredentials);
 
     connect_to_cloud();
 
