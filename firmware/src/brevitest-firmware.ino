@@ -745,53 +745,48 @@ void turn_on_all_lasers_for_duration(int power, int duration)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void power_off_spectrophotometer(char channel) 
+void set_spectrophotometer_power(byte code) 
 {
-    switch (channel) {
-        case 'A':
-            // turn_off_channel_a();
-            break;
-        case 'B':
-            // turn_off_channel_b();
-            break;
-        case 'C':
-            // turn_off_channel_c();
-            break;
-    }
-}   
-
-void power_off_all_spectrophotometers() 
-{
-    // Turn off all sensors.
-    power_off_spectrophotometer('A');
-    power_off_spectrophotometer('B');
-    power_off_spectrophotometer('C');
-    Log.info("Config optics: all spectrophotometers off");
+    Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
+    Wire.write(SPECTRO_SWITCH_IO_REGISTER);    
+    Wire.write(~code);
+    Wire.endTransmission();
+    Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
+    Wire.write(SPECTRO_SWITCH_GPIO_REGISTER);    
+    Wire.write(code);
+    Wire.endTransmission();
 }
 
-bool power_on_spectrophotometer(char channel) 
+bool power_on_spectrophotometer(char channel_number) 
 {
     // Turn on sensor
-    switch (channel) {
-        case 'A':
-            // turn_on_channel_a();
-            Log.info("Config optics: spectrophotometer A on");
+    switch (channel_number) {
+        case 1:
+            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_A);
+            // Log.info("Config optics: spectrophotometer A on");
             break;
-        case 'B':
-            // turn_on_channel_b();
-            Log.info("Config optics: spectrophotometer B on");
+        case 2:
+            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_B);
+            // Log.info("Config optics: spectrophotometer B on");
             break;
-        case 'C':
-            // turn_on_channel_c();
+        case 3:
+            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_C);
             // Log.info("Config optics: spectrophotometer C on");
             break;
         default:
-            power_off_all_spectrophotometers();
-            Log.info("Config optics: spectrophotometers off by default");
+            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
+            // Log.info("Config optics: spectrophotometers off by default");
             return false;
     }
     delay(5);  // Wait for sensor to power on.
     return true;
+}
+
+void power_off_all_spectrophotometers() 
+{
+    // Turn off all sensors.
+    set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
+    Log.info("Config optics: all spectrophotometers off");
 }
 
 bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341) 
@@ -804,18 +799,18 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 &as7341)
         }
         delay(10);
 
-        // int addr = 0x39;
-        // Wire.beginTransmission(addr);
-        // int bytes_written = Wire.write(0x00);
-        // int result = Wire.endTransmission();
-        // if (result == 0) {
-        //     Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
-        // }
+        int addr = 0x39;
+        Wire.beginTransmission(addr);
+        int bytes_written = Wire.write(0x00);
+        int result = Wire.endTransmission();
+        if (result == 0) {
+            Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
+        }
 
-        // Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
-        // as7341.setAstep(spectro_astep);
-        // as7341.setAtime(spectro_atime);
-        // as7341.setAGAIN(spectro_again);
+        Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
+        as7341.setAstep(spectro_astep);
+        as7341.setAtime(spectro_atime);
+        as7341.setAGAIN(spectro_again);
         return true;
     } else {
         return false;
