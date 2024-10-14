@@ -140,7 +140,7 @@
 #define PID_STABLE_VALUE_DELTA 10
 
 // pubsub
-#define PUBSUB_EVENT_NAME "brevitest-production"
+#define PUBSUB_EVENT_NAME "brevitest-multiplex"
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_STATUS_MAX_LENGTH 16
 #define PUBSUB_CALLBACK_BUFFER_SIZE 5000
