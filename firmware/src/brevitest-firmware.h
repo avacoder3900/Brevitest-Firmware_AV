@@ -124,6 +124,11 @@
 #define HEATER_READY_TEMP_DELTA 10
 #define HEATER_READY_DEBOUNCE_DELAY 5000
 
+// laser
+#define LASER_MAX_POWER 255
+#define LASER_DEFAULT_POWER 128
+#define LASER_PWM_FREQUENCY 500
+
 // thermistors
 #define THERMISTOR_SCALE 10000
 #define TERMISTOR_TABLE_LENGTH 21
@@ -270,6 +275,7 @@ struct PIDController
     bool power_on;
     int power;
     int pulse_duration;
+    unsigned long control_interval;
     int previous_error;
     int integral;
     unsigned long read_time;
@@ -286,6 +292,7 @@ struct PIDController
         power = 0;
         power_on = false;
         pulse_duration = PID_DEFAULT_PULSE_DURATION;
+        control_interval = 0;
         previous_error = 0;
         integral = 0;
         read_time = 0;

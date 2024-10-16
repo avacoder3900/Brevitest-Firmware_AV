@@ -17,7 +17,11 @@
             "__hash_table": "cpp",
             "__split_buffer": "cpp",
             "unordered_map": "cpp",
-            "vector": "cpp"
+            "vector": "cpp",
+            "limits": "cpp",
+            "ratio": "cpp",
+            "algorithm": "cpp",
+            "print": "cpp"
         }
 	}
 }
