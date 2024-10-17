@@ -21,7 +21,11 @@
             "limits": "cpp",
             "ratio": "cpp",
             "algorithm": "cpp",
-            "print": "cpp"
+            "print": "cpp",
+            "bitset": "cpp",
+            "deque": "cpp",
+            "queue": "cpp",
+            "stack": "cpp"
         }
 	}
 }

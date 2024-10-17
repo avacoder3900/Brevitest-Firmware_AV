@@ -19,8 +19,8 @@ DFRobot_AS7341::DFRobot_AS7341(TwoWire *pWire)
 int DFRobot_AS7341::begin(eMode_t mode) 
 {
     uint8_t data;
-  _pWire->setSpeed(CLOCK_SPEED_400KHZ);
-  _pWire->begin();
+//   _pWire->setSpeed(CLOCK_SPEED_400KHZ);
+//   _pWire->begin();
   _pWire->beginTransmission(_address);
   if(_pWire->endTransmission() != 0){
     DBG("");
@@ -65,9 +65,9 @@ void DFRobot_AS7341::enableAS7341(bool on)
   }
   Log.info("REG_AS7341_ENABLE enableAS7341 write = %X", data);
   writeReg(REG_AS7341_ENABLE,&data,1);
-  data = 0;
-  readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE enableAS7341 confirm = %X", data);
+//   data = 0;
+//   readReg(REG_AS7341_ENABLE,&data,1);
+//   Log.info("REG_AS7341_ENABLE enableAS7341 confirm = %X", data);
 //   delay(100);
 }
 
@@ -75,16 +75,12 @@ void DFRobot_AS7341::enableSpectralMeasure(bool on)
 {
   uint8_t data;
   readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE EN_SPEC read = %X", data);
   if(on == true){
     data = data | (1<<1);
   } else {
     data = data & (~(1<<1));
   }
-  Log.info("REG_AS7341_ENABLE EN_SPEC write = %X", data);
   writeReg(REG_AS7341_ENABLE,&data,1);
-  readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE EN_SPEC confirm = %X", data);
 }
 
 void DFRobot_AS7341::enableWait(bool on){
@@ -229,21 +225,11 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
 {
   uint8_t data=0;
   
-  readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE check 1 = %X", data);
-
   readReg(REG_AS7341_CFG_0,&data,1);
   data = data & (~(1<<4));
   writeReg(REG_AS7341_CFG_0,&data,1);
 
-  readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE check 2 = %X", data);
-
   enableSpectralMeasure(false);
-
-  readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE check 3 = %X", data);
-
   writeReg(0xAF,0x10);
   if(mode  == eF1F4ClearNIR)
     F1F4_Clear_NIR();
@@ -259,19 +245,13 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
     config(eSpm);
   }
   enableSpectralMeasure(true);
-  readReg(REG_AS7341_CONTROL,&data,1);
-  Log.info("REG_AS7341_CONTROL = %X", data);
-  readReg(REG_AS7341_ENABLE,&data,1);
-  Log.info("REG_AS7341_ENABLE = %X", data);
   if(measureMode == eSpm){
     unsigned long startTime = millis();
     while(!measureComplete() && (millis() - startTime) < 5000){
-        getStatus(6);
         delay(500);
     }
     if (!measureComplete()) {
         Log.info("Spectral measurement timed out");
-        getStatus(7);
     }
   }
 }
@@ -313,7 +293,12 @@ uint8_t DFRobot_AS7341::readFlickerData(){
 bool DFRobot_AS7341::measureComplete(){
   uint8_t status;
   readReg(REG_AS7341_STATUS_2,&status,1);
-  return bool (status & (1<< 6));
+  if((status & (1<<6))){
+    return true;
+  }
+  else{
+    return false;
+  }
 }
 
 uint16_t DFRobot_AS7341::getChannelData(uint8_t channel){

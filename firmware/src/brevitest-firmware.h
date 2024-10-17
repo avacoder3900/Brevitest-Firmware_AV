@@ -44,8 +44,10 @@
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
-#define SPECTRO_SWITCH_SET_PORTS 0x00           // Set all ports to output.
+#define SPECTRO_SWITCH_SET_PORTS 0xF0           // Set all ports to output.
+#define SPECTRO_SWITCH_INPUT_COMMAND 0x00      // Input command.
 #define SPECTRO_SWITCH_OUTPUT_COMMAND 0x01      // Output command.
+#define SPECTRO_SWITCH_FLIP_COMMAND 0x02      // Polarity inversion command.
 #define SPECTRO_SWITCH_TURN_OFF_ALL 0x00        // Turn off all spectrophotometers.
 #define SPECTRO_SWITCH_TURN_ON_A 0x01           // Turn on spectrophotometer A.
 #define SPECTRO_SWITCH_TURN_ON_B 0x02           // Turn on spectrophotometer B.

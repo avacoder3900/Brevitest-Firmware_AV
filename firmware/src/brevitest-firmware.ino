@@ -751,7 +751,11 @@ void init_spectrophotometer_switch()
     Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
     Wire.write(SPECTRO_SWITCH_CONFIG_COMMAND);    
     Wire.write(SPECTRO_SWITCH_SET_PORTS);
-    Wire.endTransmission();
+    byte result = Wire.endTransmission();
+    if (result != 0) {
+        Log.info("Error initializing spectrophotometer power: %d", result);
+    }
+    delay(1);
 }
 
 void set_spectrophotometer_power(byte code) 
@@ -759,13 +763,16 @@ void set_spectrophotometer_power(byte code)
     Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
     Wire.write(SPECTRO_SWITCH_OUTPUT_COMMAND);    
     Wire.write(code);
-    Wire.endTransmission();
+    byte result = Wire.endTransmission();
+    if (result != 0) {
+        Log.info("Error setting spectrophotometer power: %d", result);
+    }
 }
 
-bool power_on_spectrophotometer(char channel_number) 
+bool power_on_spectrophotometer(char channel) 
 {
     // Turn on sensor
-    switch (channel_number) {
+    switch (channel) {
         case 'A':
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_A);
             Log.info("Config optics: spectrophotometer A on");
@@ -839,64 +846,27 @@ void take_spectrophotometer_reading(DFRobot_AS7341 *as7341, BrevitestSpectrophot
 }
 
 
-void i2c_bus_scan()
-{
-    int addr = 0x39;
-    int result, bytes_written;
-
-    Log.info("Starting optical I2C bus scan");
-    for (int i = 1; i < 4; i++) {
-        Log.info("Scanning channel %d", i);
-        if (power_on_spectrophotometer((i - 1) + 'A')) {
-            Wire.beginTransmission(addr);
-            bytes_written = Wire.write(0x00);
-            result = Wire.endTransmission();
-            if (result == 0) {
-                Log.info("I2C device found at address %X, %d bytes written", addr, bytes_written);
-            }
-        }
-        power_off_all_spectrophotometers();
-    }
-}
-
-bool startI2C() {
-    if (Wire.isEnabled()) return true;
-
-    Wire.setSpeed(CLOCK_SPEED_400KHZ);
-    Wire.begin();
-    delay(10);
-
-    return Wire.isEnabled();
-}
-
 void read_spectrophotometer(char channel, bool log = false) {
-    DFRobot_AS7341 as7341;
-    BrevitestSpectrophotometerRecord data;
+    // BrevitestSpectrophotometerRecord data;
 
     Log.info("Reading spectrophotometer %c", channel);
-    if (startI2C()) {
-        Log.info("I2C bus started");
-        if (power_on_spectrophotometer(channel)) {
-            Log.info("Spectrophotometer %c powered on", channel);
-            if (init_spectrophotometer(channel, &as7341)) {
-                Log.info("Spectrophotometer %c initialized", channel);
-                // Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
-                as7341.printStatus(-1);
-                take_spectrophotometer_reading(&as7341, &data);
-                if (log) {
-                    Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
-                }
-            } else {
-                Log.info("Could not initialize spectrophotometer %c", channel);
-            }
+    if (power_on_spectrophotometer(channel)) {
+        Log.info("Spectrophotometer %c powered on", channel);
+        DFRobot_AS7341 as7341(&Wire);
+        if (init_spectrophotometer(channel, &as7341)) {
+            Log.info("Spectrophotometer %c initialized", channel);
+            // Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+            // take_spectrophotometer_reading(&as7341, &data);
+            // if (log) {
+            //     Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
+            // }
         } else {
-            Log.info("Could not power on spectrophotometer %c", channel);
+            Log.info("Could not initialize spectrophotometer %c", channel);
         }
-        power_off_all_spectrophotometers();
-    }  else {
-        Log.info("Could not start I2C bus");
+    } else {
+        Log.info("Could not power on spectrophotometer %c", channel);
     }
-    Wire.end();
+    // power_off_all_spectrophotometers();
 }
 
 void read_spectrophotometer_number(int channel_number, bool log = false) 
@@ -2025,6 +1995,15 @@ int particle_command(String arg)
             read_spectrophotometer('C');
             result = stage_position;
             break;
+        case 303: // power on channel param1
+            indx = get_next_command_param(arg, indx, &param1, 1);
+            power_on_spectrophotometer((param1 - 1) + 'A');
+            result = stage_position;
+            break;
+        case 304: // power off all spectrophotometers
+            power_off_all_spectrophotometers();
+            result = stage_position;
+            break;
         default:
             result = 0;
     }
@@ -2183,6 +2162,16 @@ void init_digital_pin(uint16_t pin, PinMode mode)
     }
 }
 
+bool startI2C() {
+    if (Wire.isEnabled()) return true;
+
+    Wire.setSpeed(CLOCK_SPEED_400KHZ);
+    Wire.begin();
+    delay(10);
+
+    return Wire.isEnabled();
+}
+
 void startup_device()
 {
     Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
@@ -2272,6 +2261,7 @@ void setup() {
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
     init_spectrophotometer_switch();
+    power_off_all_spectrophotometers();
 
     connect_to_cloud();
 
@@ -2287,7 +2277,11 @@ void setup() {
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
-    i2c_bus_scan();
+    if (startI2C()) {
+        Log.info("I2C bus started");
+    }  else {
+        Log.info("Could not start I2C bus");
+    }
 
     start_temperature_control();
     stop_temperature_control(); // turn off temperature control for prototyping
