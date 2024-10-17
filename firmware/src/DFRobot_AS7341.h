@@ -281,6 +281,13 @@ public:
    */
   void controlLed(uint8_t current);
 
+  /**
+   * @fn printStatus
+   * @brief Read status register and output to log  
+   * @param index for log output
+   */
+  void printStatus(int index);
+
 
 private:
   float getWtime();

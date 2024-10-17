@@ -18,7 +18,8 @@ DFRobot_AS7341::DFRobot_AS7341(TwoWire *pWire)
 } 
 int DFRobot_AS7341::begin(eMode_t mode) 
 {
-  _pWire->setSpeed(CLOCK_SPEED_100KHZ);
+    uint8_t data;
+  _pWire->setSpeed(CLOCK_SPEED_400KHZ);
   _pWire->begin();
   _pWire->beginTransmission(_address);
   if(_pWire->endTransmission() != 0){
@@ -27,9 +28,17 @@ int DFRobot_AS7341::begin(eMode_t mode)
     return ERR_DATA_BUS;
   }
   enableAS7341(true);
-  delay(100);
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE enableAS7341 reconfirm = %X", data);
   measureMode = mode;
   return ERR_OK;
+}
+
+void DFRobot_AS7341::printStatus(int index = 0)
+{
+  uint8_t data;
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("%d: REG_AS7341_ENABLE = %X",index, data);
 }
 
 uint8_t DFRobot_AS7341::readID()
@@ -48,13 +57,18 @@ void DFRobot_AS7341::enableAS7341(bool on)
 {
   uint8_t data;
   readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE enableAS7341 read = %X", data);
   if(on == true){
-    data = data | (1<<0);
+    data = data | 1;
   } else {
     data = data & (~1);
   }
+  Log.info("REG_AS7341_ENABLE enableAS7341 write = %X", data);
   writeReg(REG_AS7341_ENABLE,&data,1);
-  delay(100);
+  data = 0;
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE enableAS7341 confirm = %X", data);
+//   delay(100);
 }
 
 void DFRobot_AS7341::enableSpectralMeasure(bool on)
@@ -215,11 +229,21 @@ void DFRobot_AS7341::startMeasure(eChChoose_t mode)
 {
   uint8_t data=0;
   
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE check 1 = %X", data);
+
   readReg(REG_AS7341_CFG_0,&data,1);
   data = data & (~(1<<4));
   writeReg(REG_AS7341_CFG_0,&data,1);
-  
+
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE check 2 = %X", data);
+
   enableSpectralMeasure(false);
+
+  readReg(REG_AS7341_ENABLE,&data,1);
+  Log.info("REG_AS7341_ENABLE check 3 = %X", data);
+
   writeReg(0xAF,0x10);
   if(mode  == eF1F4ClearNIR)
     F1F4_Clear_NIR();
