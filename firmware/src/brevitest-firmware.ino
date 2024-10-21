@@ -243,6 +243,7 @@ void sleep_motor()
 {
     digitalWrite(pinMotorSleep, LOW);
     motor_awake = false;
+    Log.info("Motor asleep");
 }
 
 void wake_motor()
@@ -250,6 +251,7 @@ void wake_motor()
     digitalWrite(pinMotorSleep, HIGH);
     delayMicroseconds(10000);
     motor_awake = true;
+    Log.info("Motor awake");
 }
 
 bool move_one_eighth_step(int dir, int step_delay)
@@ -273,7 +275,7 @@ bool move_one_eighth_step(int dir, int step_delay)
         return false;
     }
 
-    // Log.info("move_one_eighth_step, dir = %d, step_delay = %d, limit = %ld, position = %d", dir, step_delay, digitalRead(pinStageLimit), stage_position);
+    Log.info("move_one_eighth_step, dir = %d, step_delay = %d, limit = %ld, position = %d", dir, step_delay, digitalRead(pinStageLimit), stage_position);
 
     digitalWrite(pinMotorStep, HIGH);
     delayMicroseconds(step_delay);
@@ -702,9 +704,10 @@ void turn_on_laser(char channel)
     analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
     laser->power_on = true;
     delayMicroseconds(500);
-    int value = analogRead(laser->value_pin);
-    Log.info("Laser %c set to power %d, read value %d", channel, laser->power, value);
-    if (serial_messaging_on) Log.info("Laser %c set to power %d", channel, laser->power);
+    if (serial_messaging_on) {
+        int value = analogRead(laser->value_pin);
+        Log.info("Laser %c set to power %d, value %d", channel, laser->power, value);
+    }
 }
 
 void turn_off_laser(char channel)
@@ -775,19 +778,19 @@ bool power_on_spectrophotometer(char channel)
     switch (channel) {
         case 'A':
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_A);
-            Log.info("Config optics: spectrophotometer A on");
+            turn_on_laser('A');
             break;
         case 'B':
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_B);
-            Log.info("Config optics: spectrophotometer B on");
+            turn_on_laser('B');
             break;
         case 'C':
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_C);
-            Log.info("Config optics: spectrophotometer C on");
+            turn_on_laser('C');
             break;
         default:
             set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
-            Log.info("Config optics: spectrophotometers off by default");
+            turn_off_all_lasers();
             return false;
     }
     delay(5);  // Wait for sensor to power on.
@@ -798,12 +801,10 @@ void power_off_all_spectrophotometers()
 {
     // Turn off all sensors.
     set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
-    Log.info("Config optics: all spectrophotometers off");
 }
 
 bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341) 
 {
-    // Log.info("Starting spectrophotometer test on channel number %c", channel);
     int count = 5;
     while (as7341->begin() != 0) {
         if (count-- < 0) {
@@ -812,13 +813,11 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
         Serial.println("IIC init failed, please check if the wire connection is correct");
         delay(1000);
     }
-    // as7341.printStatus(0);
     delay(10);
 
-    Log.info("Config optics: spectrophotometer initialized, setting parameters (%d, %d, %d) on channel %c", spectro_astep, spectro_atime, spectro_again, channel);
-    // as7341.setAstep(spectro_astep);
-    // as7341.setAtime(spectro_atime);
-    // as7341.setAGAIN(spectro_again);
+    as7341->setAstep(spectro_astep);
+    as7341->setAtime(spectro_atime);
+    as7341->setAGAIN(spectro_again);
     return true;
 }
 
@@ -828,45 +827,41 @@ bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341)
     return init_spectrophotometer(channel, as7341); 
 }
 
-void take_spectrophotometer_reading(DFRobot_AS7341 *as7341, BrevitestSpectrophotometerRecord *data) 
+void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerRecord *data) 
 {
     DFRobot_AS7341::sModeOneData_t data1;
     DFRobot_AS7341::sModeTwoData_t data2;
 
-    Log.info("Taking spectrophotometer reading");
     as7341->startMeasure(as7341->eF1F4ClearNIR);
     data1 = as7341->readSpectralDataOne();
-    Log.info("Reading the value of sensor data channel 0~4, under eF1F4ClearNIR, %d %d %d %d %d %d", data1.ADF1, data1.ADF2, data1.ADF3, data1.ADF4, data1.ADCLEAR, data1.ADNIR);
     memcpy(&data->f1, &data1.ADF1, sizeof(data1));
 
     as7341->startMeasure(as7341->eF5F8ClearNIR);
     data2 = as7341->readSpectralDataTwo();
-    Log.info("Reading the value of sensor data channel 5~8, under eF5F8ClearNIR, %d %d %d %d %d %d", data2.ADF5, data2.ADF6, data2.ADF7, data2.ADF8, data2.ADCLEAR, data2.ADNIR);
     memcpy(&data->f5, &data2.ADF5, sizeof(data2));
+    Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
 }
 
+void print_spectrophotometer_heading() 
+{
+    Serial.println("channel\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+}
 
 void read_spectrophotometer(char channel, bool log = false) {
-    // BrevitestSpectrophotometerRecord data;
+    BrevitestSpectrophotometerRecord data;
 
-    Log.info("Reading spectrophotometer %c", channel);
     if (power_on_spectrophotometer(channel)) {
-        Log.info("Spectrophotometer %c powered on", channel);
         DFRobot_AS7341 as7341(&Wire);
         if (init_spectrophotometer(channel, &as7341)) {
-            Log.info("Spectrophotometer %c initialized", channel);
-            // Serial.println("n\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
-            // take_spectrophotometer_reading(&as7341, &data);
-            // if (log) {
-            //     Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data.f1, data.f2, data.f3, data.f4, data.f5, data.f6, data.f7, data.f8, data.clear, data.nir);
-            // }
+            take_spectrophotometer_reading(channel, &as7341, &data);
         } else {
             Log.info("Could not initialize spectrophotometer %c", channel);
         }
     } else {
         Log.info("Could not power on spectrophotometer %c", channel);
     }
-    // power_off_all_spectrophotometers();
+    turn_off_all_lasers();
+    power_off_all_spectrophotometers();
 }
 
 void read_spectrophotometer_number(int channel_number, bool log = false) 
@@ -878,6 +873,7 @@ void read_spectrophotometer_number(int channel_number, bool log = false)
 
 void stress_test_read_spectrophotometer()
 {
+    print_spectrophotometer_heading();
     read_spectrophotometer('A', true);
     read_spectrophotometer('B', true);
     read_spectrophotometer('C', true);
@@ -1733,6 +1729,7 @@ int particle_command(String arg)
     int param3 = 0;
     int param4 = 0;
     int param5 = 0;
+    bool pinState = false;
 
     indx = get_next_command_param(arg, indx, &cmd, 0);
     switch (cmd) {
@@ -1756,6 +1753,27 @@ int particle_command(String arg)
             break;
         case 5: // limit switch state
             result = digitalRead(pinStageLimit);
+            break;
+        case 6: // set pin state, param1 = pin, param2 = state
+            indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
+            indx = get_next_command_param(arg, indx, &param2, 0);
+            digitalWrite((uint16_t) param1, (u_int8_t) param2);
+            result = digitalRead((uint16_t) param1);
+            break;
+        case 7: // repeatedly toggle pin state, param1 = pin, param2 = number of iterations, param3 = delay
+            indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
+            indx = get_next_command_param(arg, indx, &param2, 1);
+            indx = get_next_command_param(arg, indx, &param3, 1000);
+            pinState = digitalRead((uint16_t) param1) == HIGH ? true : false;
+            for (int i = 0; i < param2; i++) {
+                Log.info("Toggle pin %d, cycle = %d, state = %d", param1, i, pinState);
+                digitalWrite((uint16_t) param1, pinState ? LOW : HIGH);
+                delay(param3);
+                digitalWrite((uint16_t) param1, pinState? HIGH : LOW);
+                delay(param3);
+            }
+            digitalWrite((uint16_t) param1, (u_int8_t) param2);
+            result = param2;
             break;
 //
 //  SERIAL PORT MESSAGING
@@ -1977,6 +1995,7 @@ int particle_command(String arg)
 //
         case 300: // read spectrophotometer channel param1
             indx = get_next_command_param(arg, indx, &param1, 1);
+            print_spectrophotometer_heading();
             read_spectrophotometer_number(param1);
             result = stage_position;
             break;
@@ -1990,6 +2009,7 @@ int particle_command(String arg)
             result = stage_position;
             break;
         case 302: // read spectrophotometers on all channels
+            print_spectrophotometer_heading();
             read_spectrophotometer('A');
             read_spectrophotometer('B');
             read_spectrophotometer('C');
