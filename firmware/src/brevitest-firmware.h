@@ -269,37 +269,36 @@ int publish_retry_max_index = 11;
 unsigned long publish_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
 unsigned long next_spectrophotometer_reading_time = 0;
 
-// PID controller system
-struct PIDController
+// temperature control system
+struct HeatingElement
 {
-    int power_pin;
-    int value_pin;
-    bool power_on;
+    int heater_pin;
+    int thermistor_pin;
+    bool heater_on;
     int power;
     int pulse_duration;
-    unsigned long control_interval;
     int previous_error;
     int integral;
     unsigned long read_time;
-    int value;
-    int target;
+    int temp_C_10X;
+    int target_C_10X;
+    int temp_F_10X;
     int k_p_num;
     int k_p_den;
     int k_i_num;
     int k_i_den;
     int k_d_num;
     int k_d_den;
-    PIDController()
+    HeatingElement()
     {
+        heater_pin = pinHeater;
+        thermistor_pin = pinHeaterThermistor;
         power = 0;
-        power_on = false;
-        pulse_duration = PID_DEFAULT_PULSE_DURATION;
-        control_interval = 0;
+        heater_on = false;
+        pulse_duration = HEATER_PULSE_DURATION;
         previous_error = 0;
         integral = 0;
-        read_time = 0;
-        value = 0;
-        target = 0;
+        target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
         k_p_num = 100;
         k_p_den = 1;
         k_i_num = 1;
@@ -307,7 +306,7 @@ struct PIDController
         k_d_num = 1;
         k_d_den = 1;
     }
-} heater, laserA, laserB, laserC;
+} heater;
 
 void control_heater_temperature(void);
 Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
@@ -317,6 +316,19 @@ unsigned long heater_debounce_time;
 bool heater_ready = false;
 bool previous_heater_ready = false;
 
+// lasers
+struct Laser
+{
+    int power_pin;
+    int value_pin;
+    bool power_on;
+    int power;
+    Laser()
+    {
+        power = 0;
+        power_on = false;
+    }
+} laserA, laserB, laserC;
 
 // buzzer
 void check_buzzer(void);

@@ -115,11 +115,13 @@ int extract_int_from_delimited_string(char *str, int *indx, char delim)
     char buf[14];
     bool stop = false;
 
-    for (int i = 0; i < 14 ; i++) {
+    for (int i = 0; i < 14; i++)
+    {
         stop = str[*indx] == delim;
         buf[i] = stop ? '\0' : str[*indx];
         (*indx)++;
-        if (stop) break;
+        if (stop)
+            break;
     }
     return atoi(buf);
 }
@@ -196,7 +198,8 @@ void reset_eeprom()
     Particle_EEPROM e;
 
     int lifetime = eeprom.lifetime_stress_test_cycles;
-    if (lifetime == -1) {
+    if (lifetime == -1)
+    {
         lifetime = 0;
     }
     erase_eeprom();
@@ -211,11 +214,15 @@ void setup_eeprom()
     uint8_t value;
 
     EEPROM.get(addr, value);
-    if (value == 0xFF) {
+    if (value == 0xFF)
+    {
         reset_eeprom();
-    } else {
+    }
+    else
+    {
         load_eeprom();
-        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION) {
+        if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION)
+        {
             reset_eeprom();
         }
     }
@@ -256,22 +263,27 @@ void wake_motor()
 
 bool move_one_eighth_step(int dir, int step_delay)
 {
-    if (dir == HIGH) {
-        if (digitalRead(pinStageLimit) == LOW) {
+    if (dir == HIGH)
+    {
+        if (digitalRead(pinStageLimit) == LOW)
+        {
             delayMicroseconds(10000);
-            if (digitalRead(pinStageLimit) == LOW) {
+            if (digitalRead(pinStageLimit) == LOW)
+            {
                 stage_position = 0;
                 microns_error = 0;
                 return false;
             }
         }
-        if (stage_position <= 0) {
+        if (stage_position <= 0)
+        {
             stage_position = 0;
             microns_error = 0;
             return false;
         }
     }
-    else if (stage_position >= STAGE_POSITION_LIMIT) {
+    else if (stage_position >= STAGE_POSITION_LIMIT)
+    {
         return false;
     }
 
@@ -282,7 +294,8 @@ bool move_one_eighth_step(int dir, int step_delay)
     digitalWrite(pinMotorStep, LOW);
     delayMicroseconds(step_delay);
     stage_position += dir == HIGH ? -MOTOR_MICRONS_PER_EIGHTH_STEP : MOTOR_MICRONS_PER_EIGHTH_STEP;
-    if (stage_position <= 0) {
+    if (stage_position <= 0)
+    {
         stage_position = 0;
         microns_error = 0;
     }
@@ -297,7 +310,8 @@ void move_stage(int microns, int step_delay)
 
     int eighth_steps, abs_microns, dir, i, floored_step_delay;
 
-    if (!motor_awake) {
+    if (!motor_awake)
+    {
         wake_motor();
     }
     dir = (microns < 0) ? HIGH : LOW;
@@ -309,23 +323,27 @@ void move_stage(int microns, int step_delay)
     floored_step_delay = step_delay < MOTOR_MINIMUM_STEP_DELAY ? MOTOR_MINIMUM_STEP_DELAY : step_delay;
 
     // Log.info("move_stage, microns = %d, step_delay = %d, floored_step_delay = %d, abs_microns = %d, eighth_steps = %d, microns_error = %d, dir = %d", microns, step_delay, floored_step_delay, abs_microns, eighth_steps, microns_error, dir);
-    for (i = 0; i < eighth_steps; i++) {
-        if (!move_one_eighth_step(dir, floored_step_delay)) {
+    for (i = 0; i < eighth_steps; i++)
+    {
+        if (!move_one_eighth_step(dir, floored_step_delay))
+        {
             break;
         }
     }
 }
 
-void move_stage_until_proximal_limit(int step_delay) {
+void move_stage_until_proximal_limit(int step_delay)
+{
     int count = STAGE_POSITION_LIMIT / MOTOR_MICRONS_PER_EIGHTH_STEP + 40;
     digitalWrite(pinMotorDir, HIGH);
-    while (digitalRead(pinStageLimit) == HIGH && count-- > 0) {
+    while (digitalRead(pinStageLimit) == HIGH && count-- > 0)
+    {
         digitalWrite(pinMotorStep, HIGH);
         delayMicroseconds(step_delay);
 
         digitalWrite(pinMotorStep, LOW);
         delayMicroseconds(step_delay);
-        
+
         stage_position -= MOTOR_MICRONS_PER_EIGHTH_STEP;
     }
     stage_position = 0;
@@ -334,12 +352,14 @@ void move_stage_until_proximal_limit(int step_delay) {
 
 void reset_stage(bool sleep)
 {
-    if (!motor_awake) {
+    if (!motor_awake)
+    {
         wake_motor();
     }
     move_stage_until_proximal_limit(MOTOR_RESET_STEP_DELAY);
     move_stage(STAGE_MICRONS_TO_INITIAL_POSITION, MOTOR_RESET_STEP_DELAY);
-    if (sleep) {
+    if (sleep)
+    {
         sleep_motor();
     }
 }
@@ -357,7 +377,8 @@ void move_stage_to_test_start_position()
 void move_stage_to_position(int position, int step_delay)
 {
     int move_distance = position - stage_position;
-    if (move_distance != 0) {
+    if (move_distance != 0)
+    {
         move_stage(move_distance, step_delay);
     }
 }
@@ -370,10 +391,13 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
     for (i = 0; i < cycles; i++)
     {
         move_stage(amplitude, step_delay);
-        if (inBCODE) BCODE_loop();
+        if (inBCODE)
+            BCODE_loop();
         move_stage(-amplitude, step_delay);
-        if (inBCODE) BCODE_loop();
-        if (test_cancelled) return;
+        if (inBCODE)
+            BCODE_loop();
+        if (test_cancelled)
+            return;
     }
 }
 
@@ -385,65 +409,77 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 
 int scan_barcode()
 {
-    int buf; // a little buffer for reading barcode (we will coerce into character)
-    int i = 0; // index for reading barcode from serial port into barcode_uuid
-    bool success; // set to true if barcode read is successful
+    int buf;               // a little buffer for reading barcode (we will coerce into character)
+    int i = 0;             // index for reading barcode from serial port into barcode_uuid
+    bool success;          // set to true if barcode read is successful
     unsigned long timeout; // keep this from taking too long
 
-    Serial1.begin(9600); // barcode scanner interface through RX/TX pins
-    barcode_uuid[0] = '\0'; // reset barcode_uuid
+    Serial1.begin(9600);                       // barcode scanner interface through RX/TX pins
+    barcode_uuid[0] = '\0';                    // reset barcode_uuid
     timeout = millis() + BARCODE_READ_TIMEOUT; // set timeout for overall process
 
     digitalWrite(pinBarcodeTrigger, LOW); // start read by pulling trigger pin low
 
-    while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout) { // if read is not complete or timed out, wait and check again
+    while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout)
+    { // if read is not complete or timed out, wait and check again
         delay(100);
     };
     success = digitalRead(pinBarcodeReady) == HIGH; // successful if read is completed before timeout
-    digitalWrite(pinBarcodeTrigger, HIGH); // stop read by setting trigger pin back to high
+    digitalWrite(pinBarcodeTrigger, HIGH);          // stop read by setting trigger pin back to high
 
-    if (success) {
-        while (!Serial1.available() && millis() < timeout) { // if data buffer is empty, wait and check again
+    if (success)
+    {
+        while (!Serial1.available() && millis() < timeout)
+        { // if data buffer is empty, wait and check again
             delay(100);
         };
         delay(100); // allow barcode buffer to fill before reading
-        do {
+        do
+        {
             buf = Serial1.read(); // read a byte of data (returns -1 if no data is available)
-            if (buf != -1) {
+            if (buf != -1)
+            {
                 barcode_uuid[i++] = (char)buf; // coerce byte to character and append to barcode_uuid
             }
         } while (Serial1.available() && i <= BARCODE_UUID_LENGTH); // continue while data is available and there's no overflow
-        barcode_uuid[--i] = '\0'; // 
-    } else {
+        barcode_uuid[--i] = '\0'; //
+    }
+    else
+    {
         Serial.println("Timeout - read failure");
     }
 
     Serial1.end(); // close serial port to barcode scanner
 
-    switch (i) { // find out what this barcode is
-        case BARCODE_UUID_LENGTH: // is the barcode a test cartridge?
-            return BARCODE_TYPE_CARTRIDGE;
-            break;
-        case MAGNETOMETER_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
-            if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it a magnetometer?
-                return BARCODE_TYPE_MAGNETOMETER;
-            }
-            break;
-        case OPTICAL_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
-            if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0) { // is it an optical probe?
-                return BARCODE_TYPE_OPTICAL;
-            }
-            break;
-        case SHIPPING_BOLT_UUID_LENGTH:
-            if (strncmp(barcode_uuid, SHIPPING_BOLT_BARCODE, SHIPPING_BOLT_UUID_LENGTH) == 0) { // is it a shipping bolt cartridge?
-                return BARCODE_TYPE_SHIPPING;
-            }
-            break;
-        case STRESS_TEST_UUID_LENGTH:
-            if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, STRESS_TEST_PREFIX_LENGTH) == 0) { // is it a stress test cartridge?
-                return BARCODE_TYPE_STRESS_TEST;
-            }
-            break;
+    switch (i)
+    {                         // find out what this barcode is
+    case BARCODE_UUID_LENGTH: // is the barcode a test cartridge?
+        return BARCODE_TYPE_CARTRIDGE;
+        break;
+    case MAGNETOMETER_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
+        if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, BARCODE_PREFIX_LENGTH) == 0)
+        { // is it a magnetometer?
+            return BARCODE_TYPE_MAGNETOMETER;
+        }
+        break;
+    case OPTICAL_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
+        if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0)
+        { // is it an optical probe?
+            return BARCODE_TYPE_OPTICAL;
+        }
+        break;
+    case SHIPPING_BOLT_UUID_LENGTH:
+        if (strncmp(barcode_uuid, SHIPPING_BOLT_BARCODE, SHIPPING_BOLT_UUID_LENGTH) == 0)
+        { // is it a shipping bolt cartridge?
+            return BARCODE_TYPE_SHIPPING;
+        }
+        break;
+    case STRESS_TEST_UUID_LENGTH:
+        if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, STRESS_TEST_PREFIX_LENGTH) == 0)
+        { // is it a stress test cartridge?
+            return BARCODE_TYPE_STRESS_TEST;
+        }
+        break;
     }
     Log.info("Barcode error read: %s, length: %d", barcode_uuid, i);
     strcpy(barcode_uuid, BARCODE_ERROR_MESSAGE); // replace whatever is there with an error message
@@ -462,16 +498,22 @@ void turn_on_buzzer_for_duration(int duration, int frequency)
     tone(pinBuzzer, frequency, duration);
 }
 
-void check_buzzer() {
-    if (buzzer_problem_running) {
+void check_buzzer()
+{
+    if (buzzer_problem_running)
+    {
         start_problem_buzzer = true;
-    } else if (buzzer_alert_running) {
+    }
+    else if (buzzer_alert_running)
+    {
         start_alert_buzzer = true;
     }
 }
 
-void turn_on_buzzer_alert() {
-    if (!buzzer_alert_running) {
+void turn_on_buzzer_alert()
+{
+    if (!buzzer_alert_running)
+    {
         buzzer_problem_running = false;
         start_problem_buzzer = false;
         buzzer_alert_running = true;
@@ -481,8 +523,10 @@ void turn_on_buzzer_alert() {
     }
 }
 
-void turn_on_buzzer_problem() {
-    if (!buzzer_problem_running) {
+void turn_on_buzzer_problem()
+{
+    if (!buzzer_problem_running)
+    {
         buzzer_problem_running = true;
         start_problem_buzzer = true;
         buzzer_alert_running = false;
@@ -492,7 +536,8 @@ void turn_on_buzzer_problem() {
     }
 }
 
-void turn_off_buzzer_timer() {
+void turn_off_buzzer_timer()
+{
     buzzer_alert_running = false;
     start_alert_buzzer = false;
     buzzer_problem_running = false;
@@ -506,44 +551,60 @@ void turn_off_buzzer_timer() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_off_indicator_LEDs() {
-    if (indicatorProblem.isActive()) indicatorProblem.setActive(false);
-    if (indicatorBusy.isActive()) indicatorBusy.setActive(false);
-    if (indicatorAvailable.isActive()) indicatorAvailable.setActive(false);
-    if (indicatorAsync.isActive()) indicatorAsync.setActive(false);
-    if (indicatorValidation.isActive()) indicatorValidation.setActive(false);
+void turn_off_indicator_LEDs()
+{
+    if (indicatorProblem.isActive())
+        indicatorProblem.setActive(false);
+    if (indicatorBusy.isActive())
+        indicatorBusy.setActive(false);
+    if (indicatorAvailable.isActive())
+        indicatorAvailable.setActive(false);
+    if (indicatorAsync.isActive())
+        indicatorAsync.setActive(false);
+    if (indicatorValidation.isActive())
+        indicatorValidation.setActive(false);
 }
 
-void turn_on_problem_LED() {
-    if (!indicatorProblem.isActive()) {
+void turn_on_problem_LED()
+{
+    if (!indicatorProblem.isActive())
+    {
         turn_off_indicator_LEDs();
         indicatorProblem.setActive(true);
     }
 }
 
-void turn_on_busy_LED() {
-    if (!indicatorBusy.isActive()) {
+void turn_on_busy_LED()
+{
+    if (!indicatorBusy.isActive())
+    {
         turn_off_indicator_LEDs();
         indicatorBusy.setActive(true);
     }
 }
 
-void turn_on_available_LED() {
-    if (!indicatorAvailable.isActive()) {
+void turn_on_available_LED()
+{
+    if (!indicatorAvailable.isActive())
+    {
         turn_off_indicator_LEDs();
         indicatorAvailable.setActive(true);
     }
 }
 
-void turn_on_async_LED() {
-    if (!indicatorAsync.isActive()) {
+void turn_on_async_LED()
+{
+    if (!indicatorAsync.isActive())
+    {
         turn_off_indicator_LEDs();
         indicatorAsync.setActive(true);
     }
 }
 
-void turn_on_validation_LED() {
-    if (!indicatorValidation.isActive()) {
+void turn_on_validation_LED()
+{
+    if (!indicatorValidation.isActive())
+    {
         turn_off_indicator_LEDs();
         indicatorValidation.setActive(true);
     }
@@ -558,28 +619,36 @@ void turn_on_validation_LED() {
 void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
-    analogWrite(heater.power_pin, power, HEATER_PWM_FREQUENCY);
+    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
     heater.power = power;
-    heater.power_on = true;
-    if (serial_messaging_on) Log.info("Heater set to power %d", power);
+    heater.heater_on = true;
+    if (serial_messaging_on)
+        Log.info("Heater set to power %d", power);
 }
 
 void turn_off_heater()
 {
-    analogWrite(heater.power_pin, 0);
-    heater.power_on = false;
+    analogWrite(heater.heater_pin, 0);
+    heater.heater_on = false;
     heater.power = 0;
-    if (serial_messaging_on) Log.info("Heater turned off");
+    if (serial_messaging_on)
+        Log.info("Heater turned off");
 }
 
 int set_heater_power(int power)
 {
     unsigned long start = millis();
-    if (power == -1) {
+    if (power == -1)
+    {
         stop_temperature_control();
-    } else if (power != 0) {
-        if (!spectrophotometer_read_in_progress) turn_on_heater(power);
-    } else {
+    }
+    else if (power != 0)
+    {
+        if (!spectrophotometer_read_in_progress)
+            turn_on_heater(power);
+    }
+    else
+    {
         turn_off_heater();
     }
 
@@ -592,61 +661,74 @@ int set_heater_power(int power)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void scanResultCallback(const BleScanResult &scanResult, void *context) {
+void scanResultCallback(const BleScanResult &scanResult, void *context)
+{
 
     String name = scanResult.advertisingData().deviceName();
-    if (name.length() > 0) {
+    if (name.length() > 0)
+    {
         Log.info("Advertising name: %s", name.c_str());
     }
 
     uint8_t data[27];
-    char *id = (char *) &data[2];
-    if (scanResult.scanResponse().customData(data, 26)) {
+    char *id = (char *)&data[2];
+    if (scanResult.scanResponse().customData(data, 26))
+    {
         *(id + 24) = '\0';
         Log.info("Device ID: %s", id);
-        if (strncmp(id, &barcode_uuid[8], 24) == 0 && strncmp(name, "Magnetometer", 12) == 0) {
+        if (strncmp(id, &barcode_uuid[8], 24) == 0 && strncmp(name, "Magnetometer", 12) == 0)
+        {
             magnetometer_found = true;
             magnetometer_address = scanResult.address();
             Log.info("Barcode matched. MAC: %02X:%02X:%02X:%02X:%02X:%02X | RSSI: %ddBm",
-                    magnetometer_address[0], magnetometer_address[1], magnetometer_address[2],
-                    magnetometer_address[3], magnetometer_address[4], magnetometer_address[5], scanResult.rssi());
+                     magnetometer_address[0], magnetometer_address[1], magnetometer_address[2],
+                     magnetometer_address[3], magnetometer_address[4], magnetometer_address[5], scanResult.rssi());
             BLE.stopScanning();
         }
     }
 }
 
-int BLE_scan() {
+int BLE_scan()
+{
     int count = BLE.scan(scanResultCallback);
-    if (count > 0) {
+    if (count > 0)
+    {
         Log.info("%d devices found", count);
     }
     return count;
 }
 
-int check_magnets_in_one_well(int well, int mark) {
+int check_magnets_in_one_well(int well, int mark)
+{
     BleCharacteristic characteristic;
 
     move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
     delay(magnetometer_heating_delay);
-    if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well])) {
+    if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well]))
+    {
         String result;
         characteristic.getValue(result);
         int len = sprintf(&particle_register[mark], "%d\t%s\n", well + 1, result.c_str());
         return len + mark;
-    } else {
+    }
+    else
+    {
         Log.info("Could not find magnetometer data for well %d", well + 1);
         return -1;
     }
 }
 
-int validate_magnets() {
+int validate_magnets()
+{
     magnet_validation_in_progress = true;
     magnetometer_found = false;
     BLE_scan();
-    if (magnetometer_found) {
+    if (magnetometer_found)
+    {
         Log.info("Magnetometer found, connecting...");
         magnetometer = BLE.connect(magnetometer_address);
-        if (magnetometer.connected()) {
+        if (magnetometer.connected())
+        {
             delay(magnetometer_initial_heating_delay);
             int mark = 32;
             Log.info("Connected to magnetometer");
@@ -654,9 +736,11 @@ int validate_magnets() {
             particle_register[mark++] = '\n';
             reset_stage(false);
             move_stage_to_test_start_position();
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 5; i++)
+            {
                 mark = check_magnets_in_one_well(i, mark);
-                if (mark > PARTICLE_REGISTER_SIZE || mark == -1) {
+                if (mark > PARTICLE_REGISTER_SIZE || mark == -1)
+                {
                     return 0;
                 }
             }
@@ -664,11 +748,15 @@ int validate_magnets() {
             reset_stage(true);
             particle_register[mark] = '\0';
             return 1;
-        } else {
+        }
+        else
+        {
             Log.info("Could not connect to magnetometer %s", barcode_uuid);
             return 0;
         }
-    } else {
+    }
+    else
+    {
         Log.info("Magnetometer not found");
         return 0;
     }
@@ -680,7 +768,7 @@ int validate_magnets() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-PIDController* get_laser(char channel)
+Laser *get_laser(char channel)
 {
     if (channel == 'C')
     {
@@ -698,13 +786,14 @@ PIDController* get_laser(char channel)
 
 void turn_on_laser(char channel)
 {
-    PIDController* laser = get_laser(channel);
+    Laser *laser = get_laser(channel);
 
     laser->power = 255;
     analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
     laser->power_on = true;
     delayMicroseconds(500);
-    if (serial_messaging_on) {
+    if (serial_messaging_on)
+    {
         int value = analogRead(laser->value_pin);
         Log.info("Laser %c set to power %d, value %d", channel, laser->power, value);
     }
@@ -712,12 +801,13 @@ void turn_on_laser(char channel)
 
 void turn_off_laser(char channel)
 {
-    PIDController* laser = get_laser(channel);
+    Laser *laser = get_laser(channel);
 
     analogWrite(laser->power_pin, 0);
     laser->power_on = false;
     laser->power = 0;
-    if (serial_messaging_on) Log.info("Laser %c turned off", channel);
+    if (serial_messaging_on)
+        Log.info("Laser %c turned off", channel);
 }
 
 void turn_off_all_lasers()
@@ -749,65 +839,70 @@ void turn_on_all_lasers_for_duration(int duration)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void init_spectrophotometer_switch() 
+void init_spectrophotometer_switch()
 {
     Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
-    Wire.write(SPECTRO_SWITCH_CONFIG_COMMAND);    
+    Wire.write(SPECTRO_SWITCH_CONFIG_COMMAND);
     Wire.write(SPECTRO_SWITCH_SET_PORTS);
     byte result = Wire.endTransmission();
-    if (result != 0) {
+    if (result != 0)
+    {
         Log.info("Error initializing spectrophotometer power: %d", result);
     }
     delay(1);
 }
 
-void set_spectrophotometer_power(byte code) 
+void set_spectrophotometer_power(byte code)
 {
     Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
-    Wire.write(SPECTRO_SWITCH_OUTPUT_COMMAND);    
+    Wire.write(SPECTRO_SWITCH_OUTPUT_COMMAND);
     Wire.write(code);
     byte result = Wire.endTransmission();
-    if (result != 0) {
+    if (result != 0)
+    {
         Log.info("Error setting spectrophotometer power: %d", result);
     }
 }
 
-bool power_on_spectrophotometer(char channel) 
+bool power_on_spectrophotometer(char channel)
 {
     // Turn on sensor
-    switch (channel) {
-        case 'A':
-            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_A);
-            turn_on_laser('A');
-            break;
-        case 'B':
-            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_B);
-            turn_on_laser('B');
-            break;
-        case 'C':
-            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_C);
-            turn_on_laser('C');
-            break;
-        default:
-            set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
-            turn_off_all_lasers();
-            return false;
+    switch (channel)
+    {
+    case 'A':
+        set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_A);
+        turn_on_laser('A');
+        break;
+    case 'B':
+        set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_B);
+        turn_on_laser('B');
+        break;
+    case 'C':
+        set_spectrophotometer_power(SPECTRO_SWITCH_TURN_ON_C);
+        turn_on_laser('C');
+        break;
+    default:
+        set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
+        turn_off_all_lasers();
+        return false;
     }
-    delay(5);  // Wait for sensor to power on.
+    delay(5); // Wait for sensor to power on.
     return true;
 }
 
-void power_off_all_spectrophotometers() 
+void power_off_all_spectrophotometers()
 {
     // Turn off all sensors.
     set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
 }
 
-bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341) 
+bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
 {
     int count = 5;
-    while (as7341->begin() != 0) {
-        if (count-- < 0) {
+    while (as7341->begin() != 0)
+    {
+        if (count-- < 0)
+        {
             return false;
         }
         Serial.println("IIC init failed, please check if the wire connection is correct");
@@ -821,13 +916,13 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
     return true;
 }
 
-bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341) 
+bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341)
 {
     char channel = (channel_number - 1) + 'A';
-    return init_spectrophotometer(channel, as7341); 
+    return init_spectrophotometer(channel, as7341);
 }
 
-void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerRecord *data) 
+void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerRecord *data)
 {
     DFRobot_AS7341::sModeOneData_t data1;
     DFRobot_AS7341::sModeTwoData_t data2;
@@ -842,29 +937,36 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
     Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
 }
 
-void print_spectrophotometer_heading() 
+void print_spectrophotometer_heading()
 {
     Serial.println("channel\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
 }
 
-void read_spectrophotometer(char channel, bool log = false) {
+void read_spectrophotometer(char channel, bool log = false)
+{
     BrevitestSpectrophotometerRecord data;
 
-    if (power_on_spectrophotometer(channel)) {
+    if (power_on_spectrophotometer(channel))
+    {
         DFRobot_AS7341 as7341(&Wire);
-        if (init_spectrophotometer(channel, &as7341)) {
+        if (init_spectrophotometer(channel, &as7341))
+        {
             take_spectrophotometer_reading(channel, &as7341, &data);
-        } else {
+        }
+        else
+        {
             Log.info("Could not initialize spectrophotometer %c", channel);
         }
-    } else {
+    }
+    else
+    {
         Log.info("Could not power on spectrophotometer %c", channel);
     }
     turn_off_all_lasers();
     power_off_all_spectrophotometers();
 }
 
-void read_spectrophotometer_number(int channel_number, bool log = false) 
+void read_spectrophotometer_number(int channel_number, bool log = false)
 {
     char channel = (channel_number - 1) + 'A';
     Log.info("Reading spectrophotometer %c (%d)", channel, channel_number);
@@ -881,48 +983,88 @@ void stress_test_read_spectrophotometer()
 
 /////////////////////////////////////////////////////////////
 //                                                         //
-//                  PID CONTROL SYSTEM                     //
+//               TEMPERATURE CONTROL SYSTEM                //
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int pid_control_value(PIDController *element)
+int get_heater_temperature()
+{
+    analogWrite(heater.heater_pin, 0);
+    delayMicroseconds(10000);
+    int raw = analogRead(heater.thermistor_pin);
+    analogWrite(heater.heater_pin, heater.power);
+
+    if (raw == 0)
+    {
+        stop_temperature_control();
+        heater.temp_C_10X = 0;
+        heater.temp_F_10X = 0;
+    }
+    else
+    {
+        heater.temp_C_10X = raw_table_lookup(raw);
+        heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
+        if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
+        {
+            stop_temperature_control();
+            raw = 0;
+        }
+    }
+    return raw;
+}
+
+void heater_temperature_read()
+{
+    get_heater_temperature();
+    if (serial_messaging_on)
+        Log.info("Temperature: %d.%d˚C, %d.%d˚F", heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.temp_F_10X / 10, heater.temp_F_10X % 10);
+}
+
+int pid_controller()
 {
     int dt, error, derivative, raw;
-    int output = element->power;
+    int output = heater.power;
     unsigned long current_read_time, prev_read_time;
 
     current_read_time = millis();
-    prev_read_time = element->read_time;
-    if ((current_read_time - prev_read_time) >= element->control_interval) {
-        raw = analogRead(element->value_pin);
-        element->read_time = current_read_time;
-        if (raw == 0) {
-            return -1;
-        }
-        if (prev_read_time == 0) {
-            element->previous_error = 0;
-            element->integral = 0;
-        } else {
-            dt = element->read_time - prev_read_time;
-            error = element->target - element->value;
-            element->integral += (error * dt) / 1000;
-            derivative = (1000 * (error - element->previous_error)) / dt;
-            output = (element->k_p_num * error) / element->k_p_den;
-            output += (element->k_i_num * element->integral) / element->k_i_den;
-            output += (element->k_d_num * derivative) / element->k_d_den;
-
-            if (serial_messaging_on) {
-                Log.info("raw = %d, T = %d˚C*10, target = %d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d",
-                    raw, element->value, element->target, dt, error, element->integral, derivative, output);
+    prev_read_time = heater.read_time;
+    if ((current_read_time - prev_read_time) >= HEATER_CONTROL_INTERVAL)
+    {
+        raw = get_heater_temperature();
+        heater.read_time = current_read_time;
+        if (raw != 0)
+        {
+            if (prev_read_time == 0)
+            {
+                heater.previous_error = 0;
+                heater.integral = 0;
             }
-            element->previous_error = error;
+            else
+            {
+                dt = heater.read_time - prev_read_time;
+                error = heater.target_C_10X - heater.temp_C_10X;
+                heater.integral += (error * dt) / 1000;
+                derivative = (1000 * (error - heater.previous_error)) / dt;
+                output = (heater.k_p_num * error) / heater.k_p_den;
+                output += (heater.k_i_num * heater.integral) / heater.k_i_den;
+                output += (heater.k_d_num * derivative) / heater.k_d_den;
+
+                if (serial_messaging_on)
+                {
+                    Log.info("raw = %d, T = %d.%d˚C, target = %d.%d, dt = %d, error = %d, integral = %d, derivative = %d, output = %d",
+                             raw, heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.target_C_10X / 10, heater.target_C_10X % 10,
+                             dt, error, heater.integral, derivative, output);
+                }
+                heater.previous_error = error;
+            }
         }
     }
 
     return output;
 }
 
-void control_heater_temperature() {
+void control_heater_temperature()
+{
     control_heater_temperature_flag = !spectrophotometer_read_in_progress;
 }
 
@@ -958,9 +1100,11 @@ void publish_verify_device()
 }
 
 void startup_device(void);
-void callback_verify_device() {
+void callback_verify_device()
+{
     clear_current_event();
-    if (strncmp(callback_status, SUCCESS, 7) == 0) {
+    if (strncmp(callback_status, SUCCESS, 7) == 0)
+    {
         Log.info("Device verified - starting up...");
         device_verified = true;
         device_verification_in_progress = false;
@@ -976,7 +1120,8 @@ void publish_validate_cartridge()
 {
     cartridge_validation_in_progress = true;
     cartridge_validated = false;
-    if (!brevitest_publish("validate-cartridge", barcode_uuid)) {
+    if (!brevitest_publish("validate-cartridge", barcode_uuid))
+    {
         Log.info("Not connected to the cloud. Remove cartridge.");
         cartridge_validation_in_progress = false;
         cartridge_validation_mode = false;
@@ -1004,28 +1149,38 @@ bool load_assay_record(char *responseString)
     strncpy(assay.BCODE, &responseString[indx], assay.BCODE_length);
     assay.BCODE[assay.BCODE_length] = '\0';
 
-    crc_calculated = abs((int) checksum(assay.BCODE, assay.BCODE_length));
+    crc_calculated = abs((int)checksum(assay.BCODE, assay.BCODE_length));
     Log.info("crc_loaded: %d, crc_calculated: %d", crc_loaded, crc_calculated);
     return (crc_loaded == crc_calculated); // bcode loaded if checksums match
 }
 
-void callback_validate_cartridge() {
+void callback_validate_cartridge()
+{
     clear_current_event();
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
-    if (!detector_on) {
+    if (!detector_on)
+    {
         cartridge_validated = false;
-    } else {
+    }
+    else
+    {
         cartridge_validated = (strncmp(callback_status, SUCCESS, 7) == 0);
         Log.info("Cartridge %s %s", barcode_uuid, cartridge_validated ? "validated" : "invalid");
-        if (cartridge_validated) { // valid cartridge found
-            if (load_assay_record(callback_data)) {
+        if (cartridge_validated)
+        { // valid cartridge found
+            if (load_assay_record(callback_data))
+            {
                 Log.info("Assay information loaded. Test ready to start.");
                 test_start_mode = true;
-            } else {
+            }
+            else
+            {
                 Log.info("Failed to load assay record. Please remove cartridge.");
             }
-        } else {
+        }
+        else
+        {
             Log.info("Invalid cartridge: %s", callback_data);
         }
     }
@@ -1035,24 +1190,29 @@ void callback_validate_cartridge() {
 //                   START TEST                    //
 /////////////////////////////////////////////////////
 
-void publish_start_test() {
+void publish_start_test()
+{
     test_start_in_progress = true;
     test_underway = false;
     brevitest_publish("start-test", test.cartridge_uuid);
 }
 
-void callback_start_test() {
+void callback_start_test()
+{
     clear_current_event();
     test_underway = (strncmp(callback_status, SUCCESS, 7) == 0);
     Log.info("Test %s %s", callback_data, test_underway ? "underway" : "failed to start");
-    if (!detector_on) {
+    if (!detector_on)
+    {
         test_start_in_progress = false;
         test_start_mode = false;
         test_underway = false;
         test_cancelled = true;
         write_test_record_to_eeprom();
         test_upload_mode = true;
-    } else if (test_underway) {
+    }
+    else if (test_underway)
+    {
         test_start_in_progress = false;
         test_start_mode = false;
         run_test();
@@ -1063,15 +1223,20 @@ void callback_start_test() {
 //                  UPLOAD TEST                    //
 /////////////////////////////////////////////////////
 
-bool test_in_cache() {
+bool test_in_cache()
+{
     return eeprom.cache.cartridge_uuid[0] != '\0';
 }
-void publish_upload_test() {
-    if (test_in_cache()) {
+void publish_upload_test()
+{
+    if (test_in_cache())
+    {
         test_upload_in_progress = true;
         process_test_record();
         brevitest_publish("upload-test", particle_register);
-    } else {
+    }
+    else
+    {
         test_upload_in_progress = false;
         test_upload_mode = false;
     }
@@ -1079,18 +1244,21 @@ void publish_upload_test() {
 
 void remove_test_from_cache(char *testToRemove)
 {
-    if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0) {
+    if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0)
+    {
         memset(&eeprom.cache, 0, sizeof(BrevitestTestRecord));
         store_eeprom();
         return;
     }
 }
 
-void callback_upload_test() {
+void callback_upload_test()
+{
     clear_current_event();
     bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
     bool invalid = (strncmp(callback_status, INVALID, 7) == 0);
-    if (success || invalid) {
+    if (success || invalid)
+    {
         test_upload_in_progress = false;
         test_upload_mode = false;
         test_invalid = invalid;
@@ -1102,11 +1270,13 @@ void callback_upload_test() {
 //                VALIDATE MAGNETS                 //
 /////////////////////////////////////////////////////
 
-void publish_upload_magnet_validation() {
+void publish_upload_magnet_validation()
+{
     brevitest_publish("validate-magnets", particle_register);
 }
 
-void callback_upload_magnet_validation() {
+void callback_upload_magnet_validation()
+{
     clear_current_event();
     Log.info("Magnet validation: status = %s, data = %s", callback_status, callback_data);
     delay(2000);
@@ -1117,29 +1287,43 @@ void callback_upload_magnet_validation() {
 //               PUBSUB FUNCTIONS                  //
 /////////////////////////////////////////////////////
 
-void set_current_event(String event_name) {
+void set_current_event(String event_name)
+{
     strcpy(current_event, event_name.c_str());
-    if (strcmp(current_event, "verify-device") == 0) {
+    if (strcmp(current_event, "verify-device") == 0)
+    {
         current_event_code = PUBSUB_VERIFY_DEVICE;
-    } else if (strcmp(current_event, "validate-cartridge") == 0) {
+    }
+    else if (strcmp(current_event, "validate-cartridge") == 0)
+    {
         current_event_code = PUBSUB_VALIDATE_CARTRIDGE;
-    } else if (strcmp(current_event, "start-test") == 0) {
+    }
+    else if (strcmp(current_event, "start-test") == 0)
+    {
         current_event_code = PUBSUB_START_TEST;
-    } else if (strcmp(current_event, "upload-test") == 0) {
+    }
+    else if (strcmp(current_event, "upload-test") == 0)
+    {
         current_event_code = PUBSUB_UPLOAD_TEST;
-    } else if (strcmp(current_event, "validate-magnets") == 0) {
+    }
+    else if (strcmp(current_event, "validate-magnets") == 0)
+    {
         current_event_code = PUBSUB_VALIDATE_MAGNETS;
-    } else {
+    }
+    else
+    {
         current_event_code = 0;
     }
 }
 
-void clear_current_event() {
+void clear_current_event()
+{
     current_event[0] = '\0';
     current_event_code = 0;
 }
 
-void set_publish_params(String event_name) {
+void set_publish_params(String event_name)
+{
     set_current_event(event_name);
     callback_complete = false;
     callback_buffer[0] = '\0';
@@ -1152,12 +1336,15 @@ bool brevitest_publish(String event_name, char *payload)
     callback_timeout = millis() + retry_delay;
     retry_delay /= 1000;
     publish_retry_attempt++;
-    if (Particle.connected()) {
+    if (Particle.connected())
+    {
         set_publish_params(event_name);
         Particle.publish(String(PUBSUB_EVENT_NAME), event_name + String(ITEM_DELIM) + String(payload), PRIVATE, NO_ACK);
         Log.info("PUBLISH: event = %s, retry in %lus, payload = %s", event_name.c_str(), retry_delay, payload);
         return true;
-    } else {
+    }
+    else
+    {
         Log.info("Particle not connected. Will retry in %lu seconds.", retry_delay);
         return false;
     }
@@ -1169,10 +1356,12 @@ int extract_callback_params(char *param, int paramLen, int indx, char delim)
     bool stop = false;
 
     param[paramLen] = '\0';
-    for (i = 0; i < paramLen ; i++, indx++) {
+    for (i = 0; i < paramLen; i++, indx++)
+    {
         stop = callback_buffer[indx] == delim;
         param[i] = stop ? '\0' : callback_buffer[indx];
-        if (stop) break;
+        if (stop)
+            break;
     }
 
     return indx + 1;
@@ -1186,35 +1375,41 @@ void process_callback_buffer()
     indx = extract_callback_params(callback_event, PUBSUB_EVENT_MAX_LENGTH, indx, ITEM_DELIM);
     indx = extract_callback_params(callback_status, PUBSUB_STATUS_MAX_LENGTH, indx, ITEM_DELIM);
     callback_data = callback_buffer + indx;
-    for (int i = indx; i < PUBSUB_CALLBACK_BUFFER_SIZE; i++) {
-        if (callback_buffer[i] == END_DELIM) {
+    for (int i = indx; i < PUBSUB_CALLBACK_BUFFER_SIZE; i++)
+    {
+        if (callback_buffer[i] == END_DELIM)
+        {
             callback_buffer[i] = '\0';
             break;
         }
     }
 
-    if (strcmp(callback_event, current_event) != 0) {
+    if (strcmp(callback_event, current_event) != 0)
+    {
         Log.info("Wrong event callback: expecting event %s, received event %s", current_event, callback_event);
-    } else {
-        switch (current_event_code) {
-            case PUBSUB_VERIFY_DEVICE:
-                callback_verify_device();
-                break;
-            case PUBSUB_VALIDATE_CARTRIDGE:
-                callback_validate_cartridge();
-                break;
-            case PUBSUB_START_TEST:
-                callback_start_test();
-                break;
-            case PUBSUB_UPLOAD_TEST:
-                callback_upload_test();
-                break;
-            case PUBSUB_VALIDATE_MAGNETS:
-                callback_upload_magnet_validation();
-                break;
-            default:
-                Log.info("Unknown event code %d", current_event_code);
-                clear_current_event();
+    }
+    else
+    {
+        switch (current_event_code)
+        {
+        case PUBSUB_VERIFY_DEVICE:
+            callback_verify_device();
+            break;
+        case PUBSUB_VALIDATE_CARTRIDGE:
+            callback_validate_cartridge();
+            break;
+        case PUBSUB_START_TEST:
+            callback_start_test();
+            break;
+        case PUBSUB_UPLOAD_TEST:
+            callback_upload_test();
+            break;
+        case PUBSUB_VALIDATE_MAGNETS:
+            callback_upload_magnet_validation();
+            break;
+        default:
+            Log.info("Unknown event code %d", current_event_code);
+            clear_current_event();
         }
     }
 }
@@ -1232,7 +1427,8 @@ void brevitest_callback(const char *event, const char *data)
     strcat(callback_buffer, data);
     int last = strlen(data) - 1;
     callback_complete = (data[last] == END_DELIM);
-    if (callback_complete) {
+    if (callback_complete)
+    {
         Log.info("RESPONSE | callback_buffer: %s, callback_complete: %c", callback_buffer, callback_complete ? 'Y' : 'N');
     }
 }
@@ -1243,11 +1439,13 @@ void brevitest_callback(const char *event, const char *data)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void erase_test_from_cache() {
+void erase_test_from_cache()
+{
     memset(&eeprom.cache, 0, sizeof(BrevitestTestRecord));
 }
 
-void initialize_test_cache() {
+void initialize_test_cache()
+{
     erase_test_from_cache();
     store_eeprom();
 }
@@ -1261,38 +1459,43 @@ void store_test()
 int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
 {
     return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
-                    reading->channel, ARG_DELIM,
-                    reading->samples, ARG_DELIM,
-                    reading->msec, ARG_DELIM,
-                    reading->f1, ARG_DELIM,
-                    reading->f2, ARG_DELIM,
-                    reading->f3, ARG_DELIM,
-                    reading->f4, ARG_DELIM,
-                    reading->f5, ARG_DELIM,
-                    reading->f6, ARG_DELIM,
-                    reading->f7, ARG_DELIM,
-                    reading->f8, ARG_DELIM,
-                    reading->clear, ARG_DELIM,
-                    reading->nir, ITEM_DELIM,
-                    reading->temperature, ATTR_DELIM);
+                   reading->channel, ARG_DELIM,
+                   reading->samples, ARG_DELIM,
+                   reading->msec, ARG_DELIM,
+                   reading->f1, ARG_DELIM,
+                   reading->f2, ARG_DELIM,
+                   reading->f3, ARG_DELIM,
+                   reading->f4, ARG_DELIM,
+                   reading->f5, ARG_DELIM,
+                   reading->f6, ARG_DELIM,
+                   reading->f7, ARG_DELIM,
+                   reading->f8, ARG_DELIM,
+                   reading->clear, ARG_DELIM,
+                   reading->nir, ITEM_DELIM,
+                   reading->temperature, ATTR_DELIM);
 }
 
 void process_test_record()
 {
     char c;
     BrevitestTestRecord *t = &eeprom.cache;
-    int len = sprintf(particle_register, "%.24s%c%c%c%d%c",t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM);;
+    int len = sprintf(particle_register, "%.24s%c%c%c%d%c", t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM);
+    ;
 
-    if (t->number_of_readings) { // test completed
+    if (t->number_of_readings)
+    { // test completed
         for (int i = 0; i < SPECTRO_MAXIMUM_NUMBER_OF_READINGS; i++)
         {
             c = t->reading[i].channel;
-            if (c == 'A' || c == '1' || c == '2') {
+            if (c == 'A' || c == '1' || c == '2')
+            {
                 len += append_test_reading(len, &(t->reading[i]));
             }
         }
         particle_register[len - 1] = '\0';
-    } else { // test cancelled
+    }
+    else
+    { // test cancelled
         particle_register[len] = '0';
         particle_register[len + 1] = '\0';
     }
@@ -1301,10 +1504,13 @@ void process_test_record()
 void write_test_record_to_eeprom()
 {
     // increment test_index (check for overflow and if so reset circular buffer)
-    if (test_cancelled) {
+    if (test_cancelled)
+    {
         test.number_of_readings = 0;
         test_cancelled = false;
-    } else {
+    }
+    else
+    {
         test_completed = true;
     }
     memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
@@ -1313,12 +1519,16 @@ void write_test_record_to_eeprom()
 
 bool test_cached()
 {
-    if (eeprom.cache.cartridge_uuid[0] != '\0') {
-        if (serial_messaging_on) {
+    if (eeprom.cache.cartridge_uuid[0] != '\0')
+    {
+        if (serial_messaging_on)
+        {
             Log.info("Test cached for cartridge %s", eeprom.cache.cartridge_uuid);
         }
         return true;
-    } else {
+    }
+    else
+    {
         return false;
     }
 }
@@ -1334,22 +1544,28 @@ int get_BCODE_token(int index, int *token)
     int i;
     char *bcode = assay.BCODE;
 
-    if (test_cancelled) return index;
+    if (test_cancelled)
+        return index;
 
     // end of string so return end of string location
-    if (bcode[index] == ITEM_DELIM) return index;
+    if (bcode[index] == ITEM_DELIM)
+        return index;
 
-     // command has no arguments so skip delim
-    if (bcode[index] == ATTR_DELIM) return index + 1;
+    // command has no arguments so skip delim
+    if (bcode[index] == ATTR_DELIM)
+        return index + 1;
 
     // there are arguments to extract
     i = index;
-    while (i < BCODE_CAPACITY) {
-        if (bcode[i] == ATTR_DELIM) {
+    while (i < BCODE_CAPACITY)
+    {
+        if (bcode[i] == ATTR_DELIM)
+        {
             *token = extract_int_from_string(bcode, index, (i - index));
             return i; // return end of string location
         }
-        if (bcode[i] == ARG_DELIM) {
+        if (bcode[i] == ARG_DELIM)
+        {
             *token = extract_int_from_string(bcode, index, (i - index));
             i++; // skip past parameter
             return i;
@@ -1365,18 +1581,23 @@ void update_progress(String message, int duration)
     int new_percent_complete;
     int test_duration = assay.duration * 1000;
 
-    if (duration == 0) {
+    if (duration == 0)
+    {
         test_progress = 0;
         test_percent_complete = 0;
     }
-    else if (duration < 0) {
+    else if (duration < 0)
+    {
         test_progress = test_duration;
         test_percent_complete = -1;
-    } else {
+    }
+    else
+    {
         test_progress += duration;
         new_percent_complete = 100 * test_progress / test_duration;
         new_percent_complete = new_percent_complete > 100 ? 100 : new_percent_complete;
-        if (new_percent_complete != test_percent_complete) {
+        if (new_percent_complete != test_percent_complete)
+        {
             test_percent_complete = new_percent_complete;
         }
     }
@@ -1386,19 +1607,23 @@ int BCODE_loop()
 {
     unsigned long total_duration = millis();
 
-    set_heater_power(pid_control_value(&heater));
-    if (digitalRead(pinCartridgeDetected) == HIGH) {
+    set_heater_power(pid_controller());
+    if (digitalRead(pinCartridgeDetected) == HIGH)
+    {
         Serial.println("Cartridge movement detected...");
         delayMicroseconds(100000);
         test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
-        if (test_cancelled) {
+        if (test_cancelled)
+        {
             Serial.println("Cartridge removed while test underway. Test cancelled.");
-        } else {
+        }
+        else
+        {
             Serial.println("Cartridge ok. Test continuing.");
         }
     }
 
-    return (int) (millis() - total_duration);
+    return (int)(millis() - total_duration);
 }
 
 void BCODE_delay(int target_duration)
@@ -1407,14 +1632,18 @@ void BCODE_delay(int target_duration)
     int residual = target_duration % BCODE_MAX_DELAY;
     int loop_time = 0;
 
-    for (int i = 0; i < cycles; i++) {
+    for (int i = 0; i < cycles; i++)
+    {
         delayMicroseconds(1000 * (BCODE_MAX_DELAY - BCODE_loop()));
-        if (test_cancelled) return;
+        if (test_cancelled)
+            return;
     }
     loop_time = BCODE_loop();
-    if (test_cancelled) return;
-    if (residual > loop_time) {
-      delayMicroseconds(1000 * (residual - loop_time));
+    if (test_cancelled)
+        return;
+    if (residual > loop_time)
+    {
+        delayMicroseconds(1000 * (residual - loop_time));
     }
 }
 
@@ -1423,63 +1652,67 @@ int process_one_BCODE_command(int cmd, int index)
 {
     int param1, param2, param3, start_index;
 
-    if (test_cancelled) return index;
+    if (test_cancelled)
+        return index;
 
-    switch (cmd) {
-        case 0: // Start test()
-            update_progress("Starting", 9000);
-            BCODE_delay(1000);
-            break;
-        case 1: // Delay(milliseconds)
-            index = get_BCODE_token(index, &param1);
-            update_progress("Pausing", param1);
-            BCODE_delay(param1);
-            break;
-        case 2: // Move Microns(microns, microseconds)
-            index = get_BCODE_token(index, &param1); // microns to move
-            index = get_BCODE_token(index, &param2); // step_delay_us
-            update_progress("Moving", 2 * abs(param1) * param2 / MOTOR_MOVE_DURATION_UNIT);
-            move_stage(param1, param2);
-            BCODE_loop();
-            break;
-        case 3: // Oscillate Stage(microns, microseconds, cycles)
-            index = get_BCODE_token(index, &param1); // microns to move
-            index = get_BCODE_token(index, &param2); // step_delay_us
-            index = get_BCODE_token(index, &param3); // number of cycles
-            update_progress("Oscillating", 4 * abs(param1) * param2 * param3 / MOTOR_MOVE_DURATION_UNIT);
-            oscillate_stage(param1, param2, param3, true);
-            BCODE_loop();
-            break;
-        case 4: // Buzz(milliseconds, frequency)
-            index = get_BCODE_token(index, &param1); // duration_ms
-            index = get_BCODE_token(index, &param2); // frequency
-            update_progress("Buzzing", param1);
-            turn_on_buzzer_for_duration(param1, param2);
-            BCODE_loop();
-            break;
-        case 30: // Read spectrophotometers
-            // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
-            update_progress("Reading", 2000);
-            read_spectrophotometer('A');
-            read_spectrophotometer('B');
-            read_spectrophotometer('C');
-            break;
-        case 20: // Repeat begin(number of iterations)
-            index = get_BCODE_token(index, &param1);
-            start_index = index + 1;
-            for (int i = 0; i < param1; i += 1) {
-                if (test_cancelled) break;
-                index = process_BCODE(start_index);
-            }
-            break;
-        case 21: // Repeat end
-            return -index;
-            break;
-        case 99: // Finish test
-            update_progress("Finishing test", 8000);
-            break;
-        default:
-            BCODE_loop();
+    switch (cmd)
+    {
+    case 0: // Start test()
+        update_progress("Starting", 9000);
+        BCODE_delay(1000);
+        break;
+    case 1: // Delay(milliseconds)
+        index = get_BCODE_token(index, &param1);
+        update_progress("Pausing", param1);
+        BCODE_delay(param1);
+        break;
+    case 2:                                      // Move Microns(microns, microseconds)
+        index = get_BCODE_token(index, &param1); // microns to move
+        index = get_BCODE_token(index, &param2); // step_delay_us
+        update_progress("Moving", 2 * abs(param1) * param2 / MOTOR_MOVE_DURATION_UNIT);
+        move_stage(param1, param2);
+        BCODE_loop();
+        break;
+    case 3:                                      // Oscillate Stage(microns, microseconds, cycles)
+        index = get_BCODE_token(index, &param1); // microns to move
+        index = get_BCODE_token(index, &param2); // step_delay_us
+        index = get_BCODE_token(index, &param3); // number of cycles
+        update_progress("Oscillating", 4 * abs(param1) * param2 * param3 / MOTOR_MOVE_DURATION_UNIT);
+        oscillate_stage(param1, param2, param3, true);
+        BCODE_loop();
+        break;
+    case 4:                                      // Buzz(milliseconds, frequency)
+        index = get_BCODE_token(index, &param1); // duration_ms
+        index = get_BCODE_token(index, &param2); // frequency
+        update_progress("Buzzing", param1);
+        turn_on_buzzer_for_duration(param1, param2);
+        BCODE_loop();
+        break;
+    case 30: // Read spectrophotometers
+        // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
+        update_progress("Reading", 2000);
+        read_spectrophotometer('A');
+        read_spectrophotometer('B');
+        read_spectrophotometer('C');
+        break;
+    case 20: // Repeat begin(number of iterations)
+        index = get_BCODE_token(index, &param1);
+        start_index = index + 1;
+        for (int i = 0; i < param1; i += 1)
+        {
+            if (test_cancelled)
+                break;
+            index = process_BCODE(start_index);
+        }
+        break;
+    case 21: // Repeat end
+        return -index;
+        break;
+    case 99: // Finish test
+        update_progress("Finishing test", 8000);
+        break;
+    default:
+        BCODE_loop();
     }
 
     return index + 1;
@@ -1490,14 +1723,18 @@ int process_BCODE(int start_index)
     int cmd, index;
 
     index = get_BCODE_token(start_index, &cmd);
-    if ((start_index == 0) && (cmd != 0)) { // first command
+    if ((start_index == 0) && (cmd != 0))
+    { // first command
         test_cancelled = true;
         return -1;
-    } else {
+    }
+    else
+    {
         index = process_one_BCODE_command(cmd, index);
     }
 
-    while ((cmd != 99) && (index > 0) && !test_cancelled) {
+    while ((cmd != 99) && (index > 0) && !test_cancelled)
+    {
         index = get_BCODE_token(index, &cmd);
         index = process_one_BCODE_command(cmd, index);
     };
@@ -1511,7 +1748,8 @@ int process_BCODE(int start_index)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-int start_stress_test(int limit, int led_power) {
+int start_stress_test(int limit, int led_power)
+{
     stress_test_mode = true;
     eeprom.stress_test_cycles = 0;
     eeprom.stress_test_reading_count = 0;
@@ -1526,8 +1764,10 @@ int start_stress_test(int limit, int led_power) {
     return 1;
 }
 
-void stop_stress_test() {
-    while (!WiFi.isOn()) {
+void stop_stress_test()
+{
+    while (!WiFi.isOn())
+    {
         WiFi.on();
         delayMicroseconds(2000000);
     }
@@ -1536,10 +1776,12 @@ void stop_stress_test() {
     stress_test_stop_flag = false;
 }
 
-void stress_test_store_optical_readings() {
+void stress_test_store_optical_readings()
+{
     int base, i;
     BrevitestSpectrophotometerRecord *r, *s;
-    for (i = 3; i < 9; i++) {
+    for (i = 3; i < 9; i++)
+    {
         base = i % 3;
         test.reading[base].temperature += test.reading[i].temperature;
         test.reading[base].f1 += test.reading[i].f1;
@@ -1553,17 +1795,19 @@ void stress_test_store_optical_readings() {
         test.reading[base].clear += test.reading[i].clear;
         test.reading[base].nir += test.reading[i].nir;
     }
-    
-    if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS) {
+
+    if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS)
+    {
         eeprom.stress_test_reading_count = 0;
     }
     Serial.printlnf("count: %d", eeprom.stress_test_reading_count);
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < 3; i++)
+    {
         base = eeprom.stress_test_reading_count + i;
         r = &(eeprom.stress_test_reading[base]);
         s = &(test.reading[i]);
         r->channel = s->channel;
-        r->samples = s-> samples;
+        r->samples = s->samples;
         r->msec = s->msec;
         r->temperature = s->temperature / 3;
         r->f1 = test.reading[i].f1 / 3;
@@ -1582,10 +1826,11 @@ void stress_test_store_optical_readings() {
     store_eeprom();
 }
 
-int stress_test_loop_time() {
+int stress_test_loop_time()
+{
     unsigned long total_duration = millis();
-    set_heater_power(pid_control_value(&heater));
-    return (int) (millis() - total_duration);
+    set_heater_power(pid_controller());
+    return (int)(millis() - total_duration);
 }
 
 void stress_test_delay(int target_duration)
@@ -1594,103 +1839,110 @@ void stress_test_delay(int target_duration)
     int residual = target_duration % BCODE_MAX_DELAY;
     int loop_time = 0;
 
-    for (int i = 0; i < cycles; i++) {
+    for (int i = 0; i < cycles; i++)
+    {
         delayMicroseconds(1000 * (BCODE_MAX_DELAY - stress_test_loop_time()));
-        if (stress_test_stop_flag) return;
+        if (stress_test_stop_flag)
+            return;
     }
     loop_time = stress_test_loop_time();
 
-    if (residual > loop_time) {
-      delayMicroseconds(1000 * (residual - loop_time));
+    if (residual > loop_time)
+    {
+        delayMicroseconds(1000 * (residual - loop_time));
     }
 }
 
 void stress_test_oscillate_stage(int amplitude, int step_delay, int cycles)
 {
-    for (int i = 0; i < cycles; i++) {
+    for (int i = 0; i < cycles; i++)
+    {
         move_stage(amplitude, step_delay);
-        set_heater_power(pid_control_value(&heater));
+        set_heater_power(pid_controller());
         move_stage(-amplitude, step_delay);
-        set_heater_power(pid_control_value(&heater));
+        set_heater_power(pid_controller());
     }
 }
 
-void do_stress_test_step(int step) {
+void do_stress_test_step(int step)
+{
     Serial.print('.');
-    set_heater_power(pid_control_value(&heater));
-    switch(step % 16) {
-        case 0: // restart stress test
-            reset_stage(false);
-            move_stage_to_test_start_position();
-            break;
-        case 1: // move to start of well 2 and wait one minute
-            move_stage(-1500, MOTOR_SLOW_STEP_DELAY);
-            stress_test_delay(60000);
-            break;
-        case 2: // oscillate in well 2 and wait for beads to gather
-            stress_test_oscillate_stage(3000, 350, 70);
-            stress_test_delay(3000);
-            break;
-        case 3: // move to well 1
-            move_stage(-6000, 65000);
-            break;
-        case 4: // oscillate in well 1
-            stress_test_oscillate_stage(-4500, 350, 175);
-            stress_test_delay(4000);
-            break;
-        case 5: // move to well 2
-            move_stage(6000, 80000);
-            stress_test_delay(3000);
-            move_stage(3750, 10000);
-            break;
-        case 6: // oscillate in well 2
-            stress_test_oscillate_stage(-4500, 400, 125);
-            stress_test_delay(3000);
-            break;
-        case 7: // move to well 3
-            move_stage(4800, 80000);
-            stress_test_delay(3000);
-            move_stage(3200, 10000);
-            break;
-        case 8: // oscillate in well 3
-            stress_test_oscillate_stage(-4500, 350, 100);
-            break;
-        case 9: // read baseline sensors
-            stress_test_delay(1500);
-            break;
-        case 10: // move to well 4
-            move_stage(4800, 80000);
-            stress_test_delay(3000);
-            move_stage(3200, 10000);
-            break;
-        case 11: // oscillate in well 4
-            stress_test_oscillate_stage(-4500, 375, 200);
-            stress_test_delay(1500);
-            break;
-        case 12: // move to well 5
-            move_stage(4400, 80000);
-            stress_test_delay(3000);
-            break;
-        case 13: // oscillate in well 5
-            stress_test_oscillate_stage(6500, 400, 200);
-            stress_test_delay(5000);
-            move_stage(-5000, 65000);
-            stress_test_delay(300);
-            break;
-        case 14: // read sensors
-            stress_test_read_spectrophotometer();
-            break;
-        case 15: // save cycle number
-            eeprom.stress_test_cycles++;
-            eeprom.stress_test_cycles_since_reset++;
-            eeprom.lifetime_stress_test_cycles++;
-            Serial.printlnf("Stress test cycles: current = %d, since reset = %d, lifetime = %d", eeprom.stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.lifetime_stress_test_cycles);
-            store_eeprom();
-            if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit) {
-                stress_test_stop_flag = true;
-                reset_stage(true);
-            }
-            break;
+    set_heater_power(pid_controller());
+    switch (step % 16)
+    {
+    case 0: // restart stress test
+        reset_stage(false);
+        move_stage_to_test_start_position();
+        break;
+    case 1: // move to start of well 2 and wait one minute
+        move_stage(-1500, MOTOR_SLOW_STEP_DELAY);
+        stress_test_delay(60000);
+        break;
+    case 2: // oscillate in well 2 and wait for beads to gather
+        stress_test_oscillate_stage(3000, 350, 70);
+        stress_test_delay(3000);
+        break;
+    case 3: // move to well 1
+        move_stage(-6000, 65000);
+        break;
+    case 4: // oscillate in well 1
+        stress_test_oscillate_stage(-4500, 350, 175);
+        stress_test_delay(4000);
+        break;
+    case 5: // move to well 2
+        move_stage(6000, 80000);
+        stress_test_delay(3000);
+        move_stage(3750, 10000);
+        break;
+    case 6: // oscillate in well 2
+        stress_test_oscillate_stage(-4500, 400, 125);
+        stress_test_delay(3000);
+        break;
+    case 7: // move to well 3
+        move_stage(4800, 80000);
+        stress_test_delay(3000);
+        move_stage(3200, 10000);
+        break;
+    case 8: // oscillate in well 3
+        stress_test_oscillate_stage(-4500, 350, 100);
+        break;
+    case 9: // read baseline sensors
+        stress_test_delay(1500);
+        break;
+    case 10: // move to well 4
+        move_stage(4800, 80000);
+        stress_test_delay(3000);
+        move_stage(3200, 10000);
+        break;
+    case 11: // oscillate in well 4
+        stress_test_oscillate_stage(-4500, 375, 200);
+        stress_test_delay(1500);
+        break;
+    case 12: // move to well 5
+        move_stage(4400, 80000);
+        stress_test_delay(3000);
+        break;
+    case 13: // oscillate in well 5
+        stress_test_oscillate_stage(6500, 400, 200);
+        stress_test_delay(5000);
+        move_stage(-5000, 65000);
+        stress_test_delay(300);
+        break;
+    case 14: // read sensors
+        stress_test_read_spectrophotometer();
+        break;
+    case 15: // save cycle number
+        eeprom.stress_test_cycles++;
+        eeprom.stress_test_cycles_since_reset++;
+        eeprom.lifetime_stress_test_cycles++;
+        Serial.printlnf("Stress test cycles: current = %d, since reset = %d, lifetime = %d", eeprom.stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.lifetime_stress_test_cycles);
+        store_eeprom();
+        if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit)
+        {
+            stress_test_stop_flag = true;
+            reset_stage(true);
+        }
+        break;
     }
 }
 
@@ -1704,14 +1956,20 @@ int get_next_command_param(String arg, int indx, int *param, int def)
 {
     int next;
 
-    if (indx == -1) {
+    if (indx == -1)
+    {
         *param = def;
         next = -1;
-    } else {
+    }
+    else
+    {
         next = arg.indexOf(ARG_DELIM, indx);
-        if (next == -1) {
+        if (next == -1)
+        {
             *param = arg.substring(indx).toInt();
-        } else {
+        }
+        else
+        {
             *param = arg.substring(indx, next).toInt();
             next++;
         }
@@ -1732,300 +1990,305 @@ int particle_command(String arg)
     bool pinState = false;
 
     indx = get_next_command_param(arg, indx, &cmd, 0);
-    switch (cmd) {
-//
-//  LOW LEVEL COMMANDS
-//
-        case 1: // system reset
-            System.reset();
-            break;
-        case 2: // reset EEPROM
-            reset_eeprom();
-            result = (int)eeprom.data_format_version;
-            break;
-        case 3: // clear test cache
-            initialize_test_cache();
-            result = eeprom.cache.cartridge_uuid[ 0] == '\0' ? 1 : 0;
-            break;
-        case 4: // check pin state
-            indx = get_next_command_param(arg, indx, &param1, 0);
-            result = digitalRead(param1);
-            break;
-        case 5: // limit switch state
-            result = digitalRead(pinStageLimit);
-            break;
-        case 6: // set pin state, param1 = pin, param2 = state
-            indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
-            indx = get_next_command_param(arg, indx, &param2, 0);
-            digitalWrite((uint16_t) param1, (u_int8_t) param2);
-            result = digitalRead((uint16_t) param1);
-            break;
-        case 7: // repeatedly toggle pin state, param1 = pin, param2 = number of iterations, param3 = delay
-            indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
-            indx = get_next_command_param(arg, indx, &param2, 1);
-            indx = get_next_command_param(arg, indx, &param3, 1000);
-            pinState = digitalRead((uint16_t) param1) == HIGH ? true : false;
-            for (int i = 0; i < param2; i++) {
-                Log.info("Toggle pin %d, cycle = %d, state = %d", param1, i, pinState);
-                digitalWrite((uint16_t) param1, pinState ? LOW : HIGH);
-                delay(param3);
-                digitalWrite((uint16_t) param1, pinState? HIGH : LOW);
-                delay(param3);
-            }
-            digitalWrite((uint16_t) param1, (u_int8_t) param2);
-            result = param2;
-            break;
-//
-//  SERIAL PORT MESSAGING
-//
-        case 10: // turn on serial messaging
-            serial_messaging_on = true;
-            result = 1;
-            break;
-        case 11: // turn off serial messaging
-            serial_messaging_on = false;
-            result = 0;
-            break;
-//
-//  STAGE MOTION
-//
-        case 20: // reset stage
-            reset_stage(true);
-            result = stage_position;
-            break;
-        case 21: // wake motor
-            wake_motor();
-            result = stage_position;
-            break;
-        case 22: // move microns, param1 microns with param2 step
-            indx = get_next_command_param(arg, indx, &param1, 0);
-            indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
-            move_stage(param1, param2);
-            Log.info("Move stage %d microns, cumulative %d, error = %d", param1, stage_position, microns_error);
-            result = stage_position;
-            break;
-        case 23: // move to specified location param1 at step delay param2
-            indx = get_next_command_param(arg, indx, &param1, 0);
-            indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
-            reset_stage(false);
-            move_stage_to_position(param1, param2);
-            sleep_motor();
-            result = stage_position;
-            break;
-        case 24: // move stage to test start position
-            reset_stage(false);
-            move_stage_to_test_start_position();
-            sleep_motor();
-            result = stage_position;
-            break;
-        case 25: // move stage to optical read position
-            reset_stage(false);
-            move_stage_to_optical_read_position();
-            sleep_motor();
-            result = stage_position;
-            break;
-        case 26: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
-            indx = get_next_command_param(arg, indx, &param1, 25);
-            indx = get_next_command_param(arg, indx, &param2, MOTOR_OSCILLATION_STEP_DELAY);
-            indx = get_next_command_param(arg, indx, &param3, 10);
-            oscillate_stage(param1, param2, param3, false);
-            result = stage_position;
-            break;
-        case 27: // move to shipping bolt location
-            move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
-            Log.info("Ready to insert shipping bolt");
-            result = stage_position;
-            break;
-        case 28: // move to position zero at param1 step_delay
-            indx = get_next_command_param(arg, indx, &param1, MOTOR_SLOW_STEP_DELAY);
-            move_stage(-stage_position, param1);
-            result = stage_position;
-            break;
-        case 29: // sleep motor
-            sleep_motor();
-            result = stage_position;
-            break;
+    switch (cmd)
+    {
+        //
+        //  LOW LEVEL COMMANDS
+        //
+    case 1: // system reset
+        System.reset();
+        break;
+    case 2: // reset EEPROM
+        reset_eeprom();
+        result = (int)eeprom.data_format_version;
+        break;
+    case 3: // clear test cache
+        initialize_test_cache();
+        result = eeprom.cache.cartridge_uuid[0] == '\0' ? 1 : 0;
+        break;
+    case 4: // check pin state
+        indx = get_next_command_param(arg, indx, &param1, 0);
+        result = digitalRead(param1);
+        break;
+    case 5: // limit switch state
+        result = digitalRead(pinStageLimit);
+        break;
+    case 6: // set pin state, param1 = pin, param2 = state
+        indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
+        indx = get_next_command_param(arg, indx, &param2, 0);
+        digitalWrite((uint16_t)param1, (u_int8_t)param2);
+        result = digitalRead((uint16_t)param1);
+        break;
+    case 7: // repeatedly toggle pin state, param1 = pin, param2 = number of iterations, param3 = delay
+        indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
+        indx = get_next_command_param(arg, indx, &param2, 1);
+        indx = get_next_command_param(arg, indx, &param3, 1000);
+        pinState = digitalRead((uint16_t)param1) == HIGH ? true : false;
+        for (int i = 0; i < param2; i++)
+        {
+            Log.info("Toggle pin %d, cycle = %d, state = %d", param1, i, pinState);
+            digitalWrite((uint16_t)param1, pinState ? LOW : HIGH);
+            delay(param3);
+            digitalWrite((uint16_t)param1, pinState ? HIGH : LOW);
+            delay(param3);
+        }
+        digitalWrite((uint16_t)param1, (u_int8_t)param2);
+        result = param2;
+        break;
+        //
+        //  SERIAL PORT MESSAGING
+        //
+    case 10: // turn on serial messaging
+        serial_messaging_on = true;
+        result = 1;
+        break;
+    case 11: // turn off serial messaging
+        serial_messaging_on = false;
+        result = 0;
+        break;
+        //
+        //  STAGE MOTION
+        //
+    case 20: // reset stage
+        reset_stage(true);
+        result = stage_position;
+        break;
+    case 21: // wake motor
+        wake_motor();
+        result = stage_position;
+        break;
+    case 22: // move microns, param1 microns with param2 step
+        indx = get_next_command_param(arg, indx, &param1, 0);
+        indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
+        move_stage(param1, param2);
+        Log.info("Move stage %d microns, cumulative %d, error = %d", param1, stage_position, microns_error);
+        result = stage_position;
+        break;
+    case 23: // move to specified location param1 at step delay param2
+        indx = get_next_command_param(arg, indx, &param1, 0);
+        indx = get_next_command_param(arg, indx, &param2, MOTOR_SLOW_STEP_DELAY);
+        reset_stage(false);
+        move_stage_to_position(param1, param2);
+        sleep_motor();
+        result = stage_position;
+        break;
+    case 24: // move stage to test start position
+        reset_stage(false);
+        move_stage_to_test_start_position();
+        sleep_motor();
+        result = stage_position;
+        break;
+    case 25: // move stage to optical read position
+        reset_stage(false);
+        move_stage_to_optical_read_position();
+        sleep_motor();
+        result = stage_position;
+        break;
+    case 26: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
+        indx = get_next_command_param(arg, indx, &param1, 25);
+        indx = get_next_command_param(arg, indx, &param2, MOTOR_OSCILLATION_STEP_DELAY);
+        indx = get_next_command_param(arg, indx, &param3, 10);
+        oscillate_stage(param1, param2, param3, false);
+        result = stage_position;
+        break;
+    case 27: // move to shipping bolt location
+        move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
+        Log.info("Ready to insert shipping bolt");
+        result = stage_position;
+        break;
+    case 28: // move to position zero at param1 step_delay
+        indx = get_next_command_param(arg, indx, &param1, MOTOR_SLOW_STEP_DELAY);
+        move_stage(-stage_position, param1);
+        result = stage_position;
+        break;
+    case 29: // sleep motor
+        sleep_motor();
+        result = stage_position;
+        break;
 
-//
-//  LASER DIODES
-//
-        case 30: // turn on laser A for param1 milliseconds 
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            turn_on_laser_for_duration('A', param1);
-            result = param1;
-            break;
-        case 31: // turn on laser B for param1 milliseconds
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            turn_on_laser_for_duration('B', param1);
-            result = param1;
-            break;
-        case 32: // turn on laser C for param1 milliseconds
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            turn_on_laser_for_duration('C', param1);
-            result = param1;
-            break;
-        case 33: // turn on all lasers for param1 milliseconds
-            indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
-            turn_on_all_lasers_for_duration(param1);
-            result = param1;
-            break;
-//
-//  BUZZER
-//
-        case 40: // turn on buzzer param1 duration param2 frequency
-            indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
-            indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
-            turn_on_buzzer_for_duration(param1, param2);
-            result = param1;
-            break;
-        case 41: // turn on alert buzzer
-            turn_on_buzzer_alert();
-            result = 1;
-            break;
-        case 42: // turn on problem buzzer
-            turn_on_buzzer_problem();
-            result = 1;
-            break;
-        case 43: // turn off buzzer
-            turn_off_buzzer_timer();
-            result = 1;
-            break;
-//
-//  HEATER
-//
-        case 50: // read heater temperature
-            Log.info("Heater: T = %d.%d˚C", heater.value / 10, heater.value % 10);
-            result = heater.value;
-            break;
-        case 51: // turn on heater at power param1
-            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
-            turn_on_heater(param1);
-            result = param1;
-            break;
-        case 52: // turn off heater
-            turn_off_heater();
-            result = 1;
-            break;
-        case 53: // set heater target temperature
-            indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
-            if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
-            {
-                heater.target = param1;
-                heater.read_time = 0;
-            }
-            result = param1;
-            break;
-        case 54: // start temperature control
-            start_temperature_control();
-            result = 1;
-            break;
-        case 55: // stop temperature control
-            stop_temperature_control();
-            result = 1;
-            break;
-//
-//  BARCODE SCANNER
-//
-        case 60: // scan barcode
-            result = scan_barcode();
-            break;
-//
-//  MAGNETOMETER
-//
-        case 70: // validate magnets
-            result = validate_magnets();
-            break;
-        case 71: // set initial heating delay
-            indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_INITIAL_HEATING_DELAY);
-            magnetometer_initial_heating_delay = param1;
-            break;
-        case 72: // set initial heating delay
-            indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_HEATING_DELAY);
-            magnetometer_heating_delay = param1;
-            break;
-//
-//  STRESS TEST
-//
-        case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
-            eeprom.stress_test_cycles_since_reset = 0;
-            store_eeprom();
-            WiFi.off();
-            break;
-        case 91: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
-            WiFi.off();
-            break;
-        case 92: // start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
-            indx = get_next_command_param(arg, indx, &param1, 25);
-            indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
-            result = start_stress_test(param1, param2);
-            break;
-        case 93: // stop stress test
-            stress_test_stop_flag = true;
-            result = 1;
-            break;
-        case 94: // send stress test readings to serial port
-            BrevitestSpectrophotometerRecord *r;
-            Log.info("lifetime cycles: %d, cycles since reset: %d, cycles: %d, readings: %d", eeprom.lifetime_stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.stress_test_cycles, eeprom.stress_test_reading_count);
-            for (int i = 0; i < STRESS_TEST_MAXIMUM_RECORDS; i++) {
-                r = &(eeprom.stress_test_reading[i]);
-                Log.info("C: %c, t: %lu, T: %d, f1: %d, f2: %d, f3: %d, f4: %d, f5: %d, f6: %d, f7: %d, f8: %d, clear: %d, nir: %d", r->channel, r->msec, r->temperature, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
-            }
-            result = eeprom.stress_test_reading_count;
-            break;
-//
-//  VALIDATION
-//
-        case 100: // validate magnets
-            result = validate_magnets();
-            if (result == 1) {
-                publish_upload_magnet_validation();
-            }
-            break;
-//
-//  BLUETOOTH LE
-//
-        case 200: // scan BLE
-            result = BLE_scan();
-            if (result > 0) {
-                Log.info("%d devices found", result);
-            }
-            break;
-//
-//  SPECTROPHOTOMETER
-//
-        case 300: // read spectrophotometer channel param1
-            indx = get_next_command_param(arg, indx, &param1, 1);
-            print_spectrophotometer_heading();
-            read_spectrophotometer_number(param1);
-            result = stage_position;
-            break;
-        case 301: // set spectrophotometer params
-            indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
-            indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
-            indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
-            spectro_astep = param1;
-            spectro_atime = param2;
-            spectro_again = param3;
-            result = stage_position;
-            break;
-        case 302: // read spectrophotometers on all channels
-            print_spectrophotometer_heading();
-            read_spectrophotometer('A');
-            read_spectrophotometer('B');
-            read_spectrophotometer('C');
-            result = stage_position;
-            break;
-        case 303: // power on channel param1
-            indx = get_next_command_param(arg, indx, &param1, 1);
-            power_on_spectrophotometer((param1 - 1) + 'A');
-            result = stage_position;
-            break;
-        case 304: // power off all spectrophotometers
-            power_off_all_spectrophotometers();
-            result = stage_position;
-            break;
-        default:
-            result = 0;
+        //
+        //  LASER DIODES
+        //
+    case 30: // turn on laser A for param1 milliseconds
+        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+        turn_on_laser_for_duration('A', param1);
+        result = param1;
+        break;
+    case 31: // turn on laser B for param1 milliseconds
+        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+        turn_on_laser_for_duration('B', param1);
+        result = param1;
+        break;
+    case 32: // turn on laser C for param1 milliseconds
+        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+        turn_on_laser_for_duration('C', param1);
+        result = param1;
+        break;
+    case 33: // turn on all lasers for param1 milliseconds
+        indx = get_next_command_param(arg, indx, &param1, LED_DURATION);
+        turn_on_all_lasers_for_duration(param1);
+        result = param1;
+        break;
+        //
+        //  BUZZER
+        //
+    case 40: // turn on buzzer param1 duration param2 frequency
+        indx = get_next_command_param(arg, indx, &param1, BUZZER_FREQUENCY);
+        indx = get_next_command_param(arg, indx, &param2, BUZZER_DURATION);
+        turn_on_buzzer_for_duration(param1, param2);
+        result = param1;
+        break;
+    case 41: // turn on alert buzzer
+        turn_on_buzzer_alert();
+        result = 1;
+        break;
+    case 42: // turn on problem buzzer
+        turn_on_buzzer_problem();
+        result = 1;
+        break;
+    case 43: // turn off buzzer
+        turn_off_buzzer_timer();
+        result = 1;
+        break;
+        //
+        //  HEATER
+        //
+    case 50: // read heater temperature
+        Log.info("Heater: T = %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+        result = heater.temp_C_10X;
+        break;
+    case 51: // turn on heater at power param1
+        indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_POWER);
+        turn_on_heater(param1);
+        result = param1;
+        break;
+    case 52: // turn off heater
+        turn_off_heater();
+        result = 1;
+        break;
+    case 53: // set heater target temperature
+        indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
+        if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
+        {
+            heater.temp_C_10X = param1;
+            heater.read_time = 0;
+        }
+        result = param1;
+        break;
+    case 54: // start temperature control
+        start_temperature_control();
+        result = 1;
+        break;
+    case 55: // stop temperature control
+        stop_temperature_control();
+        result = 1;
+        break;
+        //
+        //  BARCODE SCANNER
+        //
+    case 60: // scan barcode
+        result = scan_barcode();
+        break;
+        //
+        //  MAGNETOMETER
+        //
+    case 70: // validate magnets
+        result = validate_magnets();
+        break;
+    case 71: // set initial heating delay
+        indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_INITIAL_HEATING_DELAY);
+        magnetometer_initial_heating_delay = param1;
+        break;
+    case 72: // set initial heating delay
+        indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_HEATING_DELAY);
+        magnetometer_heating_delay = param1;
+        break;
+        //
+        //  STRESS TEST
+        //
+    case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+        eeprom.stress_test_cycles_since_reset = 0;
+        store_eeprom();
+        WiFi.off();
+        break;
+    case 91: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+        WiFi.off();
+        break;
+    case 92: // start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
+        indx = get_next_command_param(arg, indx, &param1, 25);
+        indx = get_next_command_param(arg, indx, &param2, LED_DEFAULT_POWER);
+        result = start_stress_test(param1, param2);
+        break;
+    case 93: // stop stress test
+        stress_test_stop_flag = true;
+        result = 1;
+        break;
+    case 94: // send stress test readings to serial port
+        BrevitestSpectrophotometerRecord *r;
+        Log.info("lifetime cycles: %d, cycles since reset: %d, cycles: %d, readings: %d", eeprom.lifetime_stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.stress_test_cycles, eeprom.stress_test_reading_count);
+        for (int i = 0; i < STRESS_TEST_MAXIMUM_RECORDS; i++)
+        {
+            r = &(eeprom.stress_test_reading[i]);
+            Log.info("C: %c, t: %lu, T: %d, f1: %d, f2: %d, f3: %d, f4: %d, f5: %d, f6: %d, f7: %d, f8: %d, clear: %d, nir: %d", r->channel, r->msec, r->temperature, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
+        }
+        result = eeprom.stress_test_reading_count;
+        break;
+        //
+        //  VALIDATION
+        //
+    case 100: // validate magnets
+        result = validate_magnets();
+        if (result == 1)
+        {
+            publish_upload_magnet_validation();
+        }
+        break;
+        //
+        //  BLUETOOTH LE
+        //
+    case 200: // scan BLE
+        result = BLE_scan();
+        if (result > 0)
+        {
+            Log.info("%d devices found", result);
+        }
+        break;
+        //
+        //  SPECTROPHOTOMETER
+        //
+    case 300: // read spectrophotometer channel param1
+        indx = get_next_command_param(arg, indx, &param1, 1);
+        print_spectrophotometer_heading();
+        read_spectrophotometer_number(param1);
+        result = stage_position;
+        break;
+    case 301: // set spectrophotometer params
+        indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
+        spectro_astep = param1;
+        spectro_atime = param2;
+        spectro_again = param3;
+        result = stage_position;
+        break;
+    case 302: // read spectrophotometers on all channels
+        print_spectrophotometer_heading();
+        read_spectrophotometer('A');
+        read_spectrophotometer('B');
+        read_spectrophotometer('C');
+        result = stage_position;
+        break;
+    case 303: // power on channel param1
+        indx = get_next_command_param(arg, indx, &param1, 1);
+        power_on_spectrophotometer((param1 - 1) + 'A');
+        result = stage_position;
+        break;
+    case 304: // power off all spectrophotometers
+        power_off_all_spectrophotometers();
+        result = stage_position;
+        break;
+    default:
+        result = 0;
     }
 
     Log.info("Completed command: %d, result: %d, p1: %d, p2: %d, p3: %d, p4: %d, p5: %d", cmd, result, param1, param2, param3, param4, param5);
@@ -2038,7 +2301,6 @@ int particle_command(String arg)
 //                           TESTS                         //
 //                                                         //
 /////////////////////////////////////////////////////////////
-
 
 void reset_globals()
 {
@@ -2062,16 +2324,19 @@ void reset_globals()
     particle_register[PARTICLE_REGISTER_SIZE] = '\0';
 }
 
-void disconnect_from_cloud() {
+void disconnect_from_cloud()
+{
     Log.info("Disconnecting from cloud...");
-    while (Particle.connected()) {
+    while (Particle.connected())
+    {
         Particle.disconnect();
         delay(PARTICLE_CLOUD_DELAY);
     }
     Log.info("Disconnected from cloud");
 }
 
-void connect_to_cloud() {
+void connect_to_cloud()
+{
 
     // connect_to_wifi();
 
@@ -2079,7 +2344,8 @@ void connect_to_cloud() {
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
 
-    while (!Particle.connected()) {
+    while (!Particle.connected())
+    {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
     }
@@ -2100,17 +2366,17 @@ void run_test()
     disconnect_from_cloud();
     stop_temperature_control();
 
-    SINGLE_THREADED_BLOCK() {
+    SINGLE_THREADED_BLOCK()
+    {
         memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
         store_eeprom();
         start_millis = millis();
 
         process_BCODE(0);
-        
+
         test.duration = (millis() - start_millis) / 1000;
         write_test_record_to_eeprom();
     }
-
 
     start_temperature_control();
 
@@ -2129,7 +2395,8 @@ void run_test()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void clear_state() {
+void clear_state()
+{
     cartridge_validation_in_progress = false;
     test_start_in_progress = false;
     test_upload_in_progress = false;
@@ -2145,7 +2412,7 @@ void clear_state() {
     test_underway = false;
     test_upload_mode = test_in_cache();
     magnet_validation_mode = false;
-    
+
     test_invalid = false;
     barcode_invalid = false;
     cartridge_validated = false;
@@ -2155,14 +2422,16 @@ void clear_state() {
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
     pinMode(pin, mode);
-    if (mode == OUTPUT) {
+    if (mode == OUTPUT)
+    {
         analogWrite(pin, value);
     }
 }
 
 void init_analog_pin(uint16_t pin, PinMode mode)
 {
-    if (mode == INPUT || mode == INPUT_PULLUP) {
+    if (mode == INPUT || mode == INPUT_PULLUP)
+    {
         pinMode(pin, mode);
     }
 }
@@ -2170,20 +2439,24 @@ void init_analog_pin(uint16_t pin, PinMode mode)
 void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
     pinMode(pin, mode);
-    if (mode == OUTPUT) {
+    if (mode == OUTPUT)
+    {
         digitalWrite(pin, value);
     }
 }
 
 void init_digital_pin(uint16_t pin, PinMode mode)
 {
-    if (mode == INPUT || mode == INPUT_PULLUP) {
+    if (mode == INPUT || mode == INPUT_PULLUP)
+    {
         pinMode(pin, mode);
     }
 }
 
-bool startI2C() {
-    if (Wire.isEnabled()) return true;
+bool startI2C()
+{
+    if (Wire.isEnabled())
+        return true;
 
     Wire.setSpeed(CLOCK_SPEED_400KHZ);
     Wire.begin();
@@ -2223,10 +2496,11 @@ void startup_device()
     Log.info("Lifetime stress test cycles: %d", eeprom.lifetime_stress_test_cycles);
     Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
     Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
-    Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');    
-    Log.info("Cached test ? %c", test_cached() ? 'Y' : 'N');    
+    Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
+    Log.info("Cached test ? %c", test_cached() ? 'Y' : 'N');
 
-    if (test_interrupted) {
+    if (test_interrupted)
+    {
         memcpy(eeprom.cache.cartridge_uuid, eeprom.running_test_uuid, CARTRIDGE_UUID_LENGTH);
         eeprom.cache.number_of_readings = 0;
         memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
@@ -2235,12 +2509,14 @@ void startup_device()
     }
 
     detector_on = digitalRead(pinCartridgeDetected) == LOW;
-    if (detector_on) {
+    if (detector_on)
+    {
         barcode_invalid = true;
     }
 }
 
-void setup() {
+void setup()
+{
 
     // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
     waitFor(Serial.isConnected, 15000);
@@ -2248,7 +2524,7 @@ void setup() {
     Log.info("====== Serial Connected, Begin Setup ======");
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
-    
+
     init_digital_pin(pinStageLimit, INPUT_PULLUP);
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
 
@@ -2270,10 +2546,6 @@ void setup() {
 
     init_analog_pin(pinHeaterThermistor, INPUT);
     init_analog_pin(pinHeater, OUTPUT, 0);
-    heater.power_pin = pinHeater;
-    heater.value_pin = pinHeaterThermistor;
-    heater.pulse_duration = HEATER_PULSE_DURATION;
-    heater.control_interval = HEATER_CONTROL_INTERVAL;
 
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
@@ -2297,15 +2569,18 @@ void setup() {
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
-    if (startI2C()) {
+    if (startI2C())
+    {
         Log.info("I2C bus started");
-    }  else {
+    }
+    else
+    {
         Log.info("Could not start I2C bus");
     }
 
     start_temperature_control();
     stop_temperature_control(); // turn off temperature control for prototyping
-    device_verified = true; // bypass verification for prototyping
+    device_verified = true;     // bypass verification for prototyping
     Log.info("Setup complete");
 }
 
@@ -2315,24 +2590,36 @@ void setup() {
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-bool heater_debounced() {
-    if (previous_heater_ready != heater_ready) {
+bool heater_debounced()
+{
+    if (previous_heater_ready != heater_ready)
+    {
         heater_debouncing_in_progress = true;
         heater_debounce_time = millis() + HEATER_READY_DEBOUNCE_DELAY;
-    } else if (heater_debouncing_in_progress) {
+    }
+    else if (heater_debouncing_in_progress)
+    {
         heater_debouncing_in_progress = millis() < heater_debounce_time;
-    } else if (heater_ready) {
+    }
+    else if (heater_ready)
+    {
         return true;
     }
     return false;
 }
 
-void turn_on_ready_indicator(bool force) {
-    if (force) {
+void turn_on_ready_indicator(bool force)
+{
+    if (force)
+    {
         turn_on_available_LED();
-    } else if (heater_debounced()) {
+    }
+    else if (heater_debounced())
+    {
         turn_on_available_LED();
-    } else {
+    }
+    else
+    {
         turn_on_busy_LED();
     }
 }
@@ -2340,39 +2627,63 @@ void turn_on_ready_indicator(bool force) {
 void set_device_indicators()
 {
     previous_heater_ready = heater_ready;
-    heater_ready = (heater.target - heater.value) < HEATER_READY_TEMP_DELTA;
+    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
-    if (!Particle.connected()) {
+    if (!Particle.connected())
+    {
         turn_off_indicator_LEDs();
-    } else if (test_invalid) {
+    }
+    else if (test_invalid)
+    {
         turn_on_problem_LED();
         turn_on_buzzer_problem();
-    } else if (stress_test_mode) {
+    }
+    else if (stress_test_mode)
+    {
         turn_on_async_LED();
-    } else if (!device_verified) {
-        if (heater_debounced()) {
+    }
+    else if (!device_verified)
+    {
+        if (heater_debounced())
+        {
             turn_on_validation_LED();
-        } else {
+        }
+        else
+        {
             turn_on_busy_LED();
         }
-    } else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode) {
+    }
+    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode)
+    {
         turn_on_busy_LED();
-    } else if (!device_verified || magnet_validation_mode) {
+    }
+    else if (!device_verified || magnet_validation_mode)
+    {
         turn_on_validation_LED();
-    } else if (barcode_invalid) {
+    }
+    else if (barcode_invalid)
+    {
         turn_on_ready_indicator(true);
         // turn_on_buzzer_alert();
-    } else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted) {
-        if (cartridge_validated) {
+    }
+    else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted)
+    {
+        if (cartridge_validated)
+        {
             turn_on_busy_LED();
-            if (test_completed || test_cancelled) {
+            if (test_completed || test_cancelled)
+            {
                 turn_on_buzzer_alert();
             }
-        } else {
+        }
+        else
+        {
             turn_on_buzzer_alert();
             turn_on_ready_indicator(true);
         }
-    } else {
+    }
+    else
+    {
         turn_on_ready_indicator(false);
         turn_on_ready_indicator(true); // show green during prototyping
         turn_off_buzzer_timer();
@@ -2387,50 +2698,58 @@ void set_device_indicators()
 
 void verify_device_loop()
 {
-    if (device_verification_in_progress) {
-        if (millis() > callback_timeout) {
+    if (device_verification_in_progress)
+    {
+        if (millis() > callback_timeout)
+        {
             Log.info("Device verification timed out. Retrying.");
             publish_verify_device();
         }
-    } else {
+    }
+    else
+    {
         publish_retry_attempt = 0;
         publish_verify_device();
     }
 }
 
-void barcode_scan_loop() {
+void barcode_scan_loop()
+{
     int max_cycles;
-    if (detector_on) {
-        if (barcode_scan_mode) {
+    if (detector_on)
+    {
+        if (barcode_scan_mode)
+        {
             barcode_scan_in_progress = true;
             cartridge_inserted = cartridge_validation_mode = false;
             magnetometer_inserted = magnet_validation_mode = false;
-            switch (scan_barcode()) {
-                case BARCODE_TYPE_CARTRIDGE:
-                    cartridge_inserted = true;
-                    cartridge_validation_mode = true;
-                    Log.info("Cartridge inserted");
-                    break;
-                case BARCODE_TYPE_MAGNETOMETER:
-                    magnetometer_inserted = true;
-                    magnet_validation_mode = true;
-                    Log.info("Magnetometer inserted");
-                    break;
-                case BARCODE_TYPE_STRESS_TEST:
-                    stress_test_cartridge_inserted = true;
-                    max_cycles = atoi(&barcode_uuid[12]);
-                    start_stress_test(max_cycles, LED_DEFAULT_POWER);
-                    Log.info("Stress test started, max_cycles = %d", max_cycles);
-                    break;
-                case BARCODE_TYPE_SHIPPING:
-                    // wake_motor();
-                    shipping_bolt_cartridge_inserted = true;
-                    move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
-                    Log.info("Ready for shipping bolt - please unplug the device");
-                    break;
-                default:
-                    barcode_invalid = true;
-                    Log.info("Unknown barcode format");
+            switch (scan_barcode())
+            {
+            case BARCODE_TYPE_CARTRIDGE:
+                cartridge_inserted = true;
+                cartridge_validation_mode = true;
+                Log.info("Cartridge inserted");
+                break;
+            case BARCODE_TYPE_MAGNETOMETER:
+                magnetometer_inserted = true;
+                magnet_validation_mode = true;
+                Log.info("Magnetometer inserted");
+                break;
+            case BARCODE_TYPE_STRESS_TEST:
+                stress_test_cartridge_inserted = true;
+                max_cycles = atoi(&barcode_uuid[12]);
+                start_stress_test(max_cycles, LED_DEFAULT_POWER);
+                Log.info("Stress test started, max_cycles = %d", max_cycles);
+                break;
+            case BARCODE_TYPE_SHIPPING:
+                // wake_motor();
+                shipping_bolt_cartridge_inserted = true;
+                move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
+                Log.info("Ready for shipping bolt - please unplug the device");
+                break;
+            default:
+                barcode_invalid = true;
+                Log.info("Unknown barcode format");
             }
             barcode_scan_in_progress = false;
             barcode_scan_mode = false;
@@ -2438,126 +2757,171 @@ void barcode_scan_loop() {
     }
 }
 
-void stress_test_loop() {
-    if (stress_test_stop_flag) {
+void stress_test_loop()
+{
+    if (stress_test_stop_flag)
+    {
         stop_stress_test();
-    } else {
-        SINGLE_THREADED_BLOCK() {
+    }
+    else
+    {
+        SINGLE_THREADED_BLOCK()
+        {
             do_stress_test_step(stress_test_step);
         }
         stress_test_step++;
     }
 }
 
-void magnet_validation_loop() {
-    if (magnet_validation_in_progress) {
-        if (millis() > callback_timeout) {
+void magnet_validation_loop()
+{
+    if (magnet_validation_in_progress)
+    {
+        if (millis() > callback_timeout)
+        {
             Log.info("Uploading magnet validation data timed out. Retrying.");
             publish_upload_magnet_validation();
         }
-    } else {
-        if (validate_magnets()) {
+    }
+    else
+    {
+        if (validate_magnets())
+        {
             publish_retry_attempt = 0;
             publish_upload_magnet_validation();
-        } else {
+        }
+        else
+        {
             magnet_validation_in_progress = false;
             magnet_validation_mode = false;
         }
     }
 }
 
-void cartridge_validation_loop() {
-    if (cartridge_validation_in_progress) {
-        if (millis() > callback_timeout) {
+void cartridge_validation_loop()
+{
+    if (cartridge_validation_in_progress)
+    {
+        if (millis() > callback_timeout)
+        {
             Log.info("Cartridge validation timed out. Remove cartridge.");
             cartridge_validation_in_progress = false;
             cartridge_validation_mode = false;
         }
-    } else {
+    }
+    else
+    {
         publish_retry_attempt = 0;
         publish_validate_cartridge();
     }
 }
 
-void test_start_loop() {
-    if (test_start_in_progress) {
-        if (millis() > callback_timeout) {
+void test_start_loop()
+{
+    if (test_start_in_progress)
+    {
+        if (millis() > callback_timeout)
+        {
             Log.info("Test start timed out. Retrying.");
             publish_start_test();
         }
-    } else {
+    }
+    else
+    {
         publish_retry_attempt = 0;
         publish_start_test();
     }
 }
 
-void test_upload_loop() {
-    if (test_upload_in_progress) {
-        if (millis() > callback_timeout) {
+void test_upload_loop()
+{
+    if (test_upload_in_progress)
+    {
+        if (millis() > callback_timeout)
+        {
             Log.info("Test upload timed out. Retrying.");
             publish_upload_test();
         }
-    } else {
+    }
+    else
+    {
         publish_retry_attempt = 0;
         publish_upload_test();
     }
 }
 
-void hardware_loop() {
-    if (detector_changed) {
-        if (detector_debouncing) {
+void hardware_loop()
+{
+    if (detector_changed)
+    {
+        if (detector_debouncing)
+        {
             detector_debouncing = false;
             detector_changed = false;
             detector_on = digitalRead(pinCartridgeDetected) == LOW;
             Log.info("%s detected", detector_on ? "Insertion" : "Removal");
-            if (detector_on) {
+            if (detector_on)
+            {
                 reset_stage(false);
                 move_stage_to_test_start_position();
                 sleep_motor();
-                if (heater_ready) {
+                if (heater_ready)
+                {
                     turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
                     turn_on_busy_LED();
                     barcode_scan_mode = true;
                     barcode_invalid = false;
-                } else {
+                }
+                else
+                {
                     barcode_invalid = true;
                 }
-            } else {
+            }
+            else
+            {
                 turn_on_buzzer_for_duration(BUZZER_REMOVE_DURATION, BUZZER_REMOVE_FREQUENCY);
                 turn_off_buzzer_timer();
                 clear_state();
                 reset_stage(true);
             }
-        } else {
+        }
+        else
+        {
             delayMicroseconds(50000);
             detector_debouncing = true;
         }
     }
 
-    if (control_heater_temperature_flag) {
+    if (control_heater_temperature_flag)
+    {
         control_heater_temperature_flag = false;
-        set_heater_power(pid_control_value(&heater));
+        set_heater_power(pid_controller());
     }
 
     set_device_indicators();
 
-    if (start_problem_buzzer) {
+    if (start_problem_buzzer)
+    {
         start_problem_buzzer = false;
         turn_on_buzzer_for_duration(BUZZER_PROBLEM_DURATION, BUZZER_PROBLEM_FREQUENCY);
     }
-    else if (start_alert_buzzer) {
+    else if (start_alert_buzzer)
+    {
         start_alert_buzzer = false;
         turn_on_buzzer_for_duration(BUZZER_ALERT_DURATION, BUZZER_ALERT_FREQUENCY);
     }
 }
 
-void process_serial_port() {
-    if (Serial.available()) {
+void process_serial_port()
+{
+    if (Serial.available())
+    {
         char c = Serial.read();
-        serial_buffer[serial_buffer_index] = c;    
+        serial_buffer[serial_buffer_index] = c;
         serial_buffer_index++;
         serial_buffer_index %= SERIAL_COMMAND_BUFFER_SIZE;
-        if (c == '\n') {
+        if (c == '\n')
+        {
             serial_buffer[serial_buffer_index] = '\0';
             Log.info(serial_buffer);
             serial_buffer_index = 0;
@@ -2570,24 +2934,38 @@ void loop()
 {
     process_serial_port();
     hardware_loop();
-    
-    if (stress_test_mode) {
+
+    if (stress_test_mode)
+    {
         stress_test_loop();
-    } else if (callback_complete) {
+    }
+    else if (callback_complete)
+    {
         process_callback_buffer();
-    } else if (test_upload_mode) {
+    }
+    else if (test_upload_mode)
+    {
         test_upload_loop();
-    } else if (test_start_mode) {
+    }
+    else if (test_start_mode)
+    {
         test_start_loop();
-    } else if (heater_debounced()) {
-        if (cartridge_validation_mode) {
+    }
+    else if (heater_debounced())
+    {
+        if (cartridge_validation_mode)
+        {
             cartridge_validation_loop();
-        } else if (magnet_validation_mode) {
+        }
+        else if (magnet_validation_mode)
+        {
             magnet_validation_loop();
-        } else if (barcode_scan_mode) {
+        }
+        else if (barcode_scan_mode)
+        {
             barcode_scan_loop();
-        // } else if (!device_verified) {
-        //     verify_device_loop();
+            // } else if (!device_verified) {
+            //     verify_device_loop();
         }
     }
 
