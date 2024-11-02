@@ -989,10 +989,10 @@ void stress_test_read_spectrophotometer()
 
 int get_heater_temperature()
 {
-    analogWrite(heater.heater_pin, 0);
-    delayMicroseconds(10000);
+    // analogWrite(heater.heater_pin, 0);
+    // delayMicroseconds(10000);
     int raw = analogRead(heater.thermistor_pin);
-    analogWrite(heater.heater_pin, heater.power);
+    // analogWrite(heater.heater_pin, heater.power);
 
     if (raw == 0)
     {
@@ -2006,14 +2006,14 @@ int particle_command(String arg)
         initialize_test_cache();
         result = eeprom.cache.cartridge_uuid[0] == '\0' ? 1 : 0;
         break;
-    case 4: // check pin state
+    case 4: // check digital pin state
         indx = get_next_command_param(arg, indx, &param1, 0);
         result = digitalRead(param1);
         break;
     case 5: // limit switch state
         result = digitalRead(pinStageLimit);
         break;
-    case 6: // set pin state, param1 = pin, param2 = state
+    case 6: // set digital pin state, param1 = pin, param2 = state
         indx = get_next_command_param(arg, indx, &param1, pinMotorDir);
         indx = get_next_command_param(arg, indx, &param2, 0);
         digitalWrite((uint16_t)param1, (u_int8_t)param2);
@@ -2034,6 +2034,10 @@ int particle_command(String arg)
         }
         digitalWrite((uint16_t)param1, (u_int8_t)param2);
         result = param2;
+        break;
+    case 8: // check analog pin state
+        indx = get_next_command_param(arg, indx, &param1, 0);
+        result = analogRead(param1);
         break;
         //
         //  SERIAL PORT MESSAGING
@@ -2579,7 +2583,7 @@ void setup()
     }
 
     start_temperature_control();
-    stop_temperature_control(); // turn off temperature control for prototyping
+    // stop_temperature_control(); // turn off temperature control for prototyping
     device_verified = true;     // bypass verification for prototyping
     Log.info("Setup complete");
 }
