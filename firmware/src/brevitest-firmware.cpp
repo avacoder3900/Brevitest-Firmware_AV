@@ -633,7 +633,17 @@ int scan_barcode()
 
 void turn_on_buzzer_for_duration(int duration, int frequency)
 {
+    bool reheat = false;
+    if (heater.heater_on)
+    {
+        turn_off_heater();
+        reheat = true;
+    }
     tone(pinBuzzer, frequency, duration);
+    delay(duration);
+    if (reheat) {
+        turn_on_heater(heater.power);
+    }
 }
 
 void check_buzzer()
