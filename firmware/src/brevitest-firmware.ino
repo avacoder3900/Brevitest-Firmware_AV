@@ -20,7 +20,30 @@ PRODUCT_VERSION(FIRMWARE_VERSION);
 
 //  temperature is 10x to get one decimal place of accuracy
 static int table_temperature[] = {1000, 950, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 50, 0};
-static int table_raw[] = {3698, 3478, 3248, 3010, 2767, 2521, 2275, 2033, 1799, 1575, 1364, 1169, 990, 830, 688, 564, 457, 367, 291, 228, 177};
+static int table_raw[] = {2438, 2290, 2136, 1977, 1814, 1651, 1488, 1329, 1174, 1028, 890, 763, 647, 544, 452, 372, 304, 245, 196, 155, 122};
+
+int raw_table_lookup(int raw)
+{
+    int result, indx1, indx2;
+
+    if (raw > table_raw[0])
+    {
+        return table_raw[0];
+    }
+
+    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
+    {
+        if (raw <= table_raw[indx1] && raw > table_raw[indx2])
+        {
+            result = table_temperature[indx1] + (((raw - table_raw[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_raw[indx2] - table_raw[indx1]));
+            if (serial_messaging_on)
+                Log.info("Table: indx1 = %d, indx2 = %d, raw = %d, raw1 = %d, temp1 = %d, temp2 = %d, result = %d", indx1, indx2, raw, table_raw[indx1], table_temperature[indx1], table_temperature[indx2], result);
+            return result;
+        }
+    }
+
+    return 0;
+}
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -66,28 +89,6 @@ static uint32_t crc32_tab[] = {
     0xbdbdf21c, 0xcabac28a, 0x53b39330, 0x24b4a3a6, 0xbad03605, 0xcdd70693,
     0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
     0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
-
-int raw_table_lookup(int raw)
-{
-    int result, indx1, indx2;
-
-    if (raw > table_raw[0])
-    {
-        return table_raw[0];
-    }
-
-    for (indx1 = 0, indx2 = 1; indx1 < (TERMISTOR_TABLE_LENGTH - 1); indx1++, indx2++)
-    {
-        if (raw <= table_raw[indx1] && raw > table_raw[indx2])
-        {
-            result = table_temperature[indx1] + (((raw - table_raw[indx1]) * (table_temperature[indx2] - table_temperature[indx1])) / (table_raw[indx2] - table_raw[indx1]));
-            /*if (serial_messaging_on) Log.info("Table: number = %d, indx1 = %d, indx2 = %d, result = %d", table_number, indx1, indx2, result);*/
-            return result;
-        }
-    }
-
-    return 0;
-}
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -638,11 +639,7 @@ void turn_off_heater()
 int set_heater_power(int power)
 {
     unsigned long start = millis();
-    if (power == -1)
-    {
-        stop_temperature_control();
-    }
-    else if (power != 0)
+    if (power != 0)
     {
         if (!spectrophotometer_read_in_progress)
             turn_on_heater(power);
@@ -989,13 +986,14 @@ void stress_test_read_spectrophotometer()
 
 int get_heater_temperature()
 {
-    // analogWrite(heater.heater_pin, 0);
-    // delayMicroseconds(10000);
+    analogWrite(heater.heater_pin, 0);
+    delayMicroseconds(10000);
     int raw = analogRead(heater.thermistor_pin);
-    // analogWrite(heater.heater_pin, heater.power);
+    analogWrite(heater.heater_pin, heater.power);
 
     if (raw == 0)
     {
+        Log.info("Thermistor read error");
         stop_temperature_control();
         heater.temp_C_10X = 0;
         heater.temp_F_10X = 0;
@@ -1006,6 +1004,7 @@ int get_heater_temperature()
         heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
         if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
         {
+            Log.info("Heater temperature too high: %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
             stop_temperature_control();
             raw = 0;
         }
@@ -2584,7 +2583,7 @@ void setup()
 
     start_temperature_control();
     // stop_temperature_control(); // turn off temperature control for prototyping
-    device_verified = true;     // bypass verification for prototyping
+    // device_verified = true; // bypass verification for prototyping
     Log.info("Setup complete");
 }
 
