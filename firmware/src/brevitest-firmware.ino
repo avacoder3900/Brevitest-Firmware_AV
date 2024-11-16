@@ -848,8 +848,10 @@ void init_spectrophotometer_switch()
     if (result != 0)
     {
         Log.info("Error initializing spectrophotometer power: %d", result);
+    } else {
+        Log.info("Spectrophotometer switch initialized");
     }
-    delay(1);
+    delay(10);
 }
 
 void set_spectrophotometer_power(byte code)
@@ -860,7 +862,7 @@ void set_spectrophotometer_power(byte code)
     byte result = Wire.endTransmission();
     if (result != 0)
     {
-        Log.info("Error setting spectrophotometer power: %d", result);
+        Log.info("Error setting spectrophotometer power: %X", result);
     }
 }
 
@@ -2556,7 +2558,6 @@ void setup()
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
-    init_spectrophotometer_switch();
     power_off_all_spectrophotometers();
 
     connect_to_cloud();
@@ -2581,6 +2582,7 @@ void setup()
     {
         Log.info("Could not start I2C bus");
     }
+    init_spectrophotometer_switch();
 
     start_temperature_control();
     // stop_temperature_control(); // turn off temperature control for prototyping
