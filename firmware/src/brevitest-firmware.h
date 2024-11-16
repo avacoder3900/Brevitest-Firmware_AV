@@ -122,7 +122,7 @@
 #define HEATER_MAX_TEMPERATURE 600
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
-#define HEATER_DEFAULT_TEMP_TARGET 450
+#define HEATER_DEFAULT_TEMP_TARGET 350
 #define HEATER_READY_TEMP_DELTA 10
 #define HEATER_READY_DEBOUNCE_DELAY 5000
 
@@ -300,11 +300,11 @@ struct HeatingElement
         integral = 0;
         target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
         k_p_num = 100;
-        k_p_den = 1;
+        k_p_den = 5;
         k_i_num = 1;
-        k_i_den = 1000;
+        k_i_den = 5000;
         k_d_num = 1;
-        k_d_den = 1;
+        k_d_den = 5;
     }
 } heater;
 
