@@ -2096,7 +2096,7 @@ int particle_command(String arg)
     case 25: // move stage to optical read position
         reset_stage(false);
         move_stage_to_optical_read_position();
-        sleep_motor();
+        // sleep_motor();
         result = stage_position;
         break;
     case 26: // oscillate - param1 microns, param2 step_delay, param3 number of cycles

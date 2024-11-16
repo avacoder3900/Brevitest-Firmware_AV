@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -144,7 +144,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -2233,7 +2233,7 @@ int particle_command(String arg)
     case 25: // move stage to optical read position
         reset_stage(false);
         move_stage_to_optical_read_position();
-        sleep_motor();
+        // sleep_motor();
         result = stage_position;
         break;
     case 26: // oscillate - param1 microns, param2 step_delay, param3 number of cycles
@@ -2732,7 +2732,7 @@ void setup()
 
     start_temperature_control();
     // stop_temperature_control(); // turn off temperature control for prototyping
-    device_verified = true;     // bypass verification for prototyping
+    // device_verified = true; // bypass verification for prototyping
     Log.info("Setup complete");
 }
 
