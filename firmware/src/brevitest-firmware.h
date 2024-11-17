@@ -118,7 +118,7 @@
 // heater
 #define HEATER_MAX_POWER 128
 #define HEATER_DEFAULT_POWER 64
-#define HEATER_PWM_FREQUENCY 50
+#define HEATER_PWM_FREQUENCY 5000
 #define HEATER_MAX_TEMPERATURE 600
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
@@ -180,8 +180,8 @@ int pinMotorDir = D8;
 int pinMotorReset = D11;
 int pinMotorSleep = D12;
 int pinMotorStep = D13;
-int pinBarcodeReady = D22;
-int pinBarcodeTrigger = D23;
+int pinBarcodeTrigger = D22;
+int pinBarcodeReady = D23;
 
 // global variables
 bool new_device = true;

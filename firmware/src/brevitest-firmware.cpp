@@ -2495,11 +2495,13 @@ void connect_to_cloud()
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
+    Log.info("Connection underway...");
 
     while (!Particle.connected())
     {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
+        Log.info("Not connected. Trying again...");
     }
     Log.info("Reconnected to cloud");
 }

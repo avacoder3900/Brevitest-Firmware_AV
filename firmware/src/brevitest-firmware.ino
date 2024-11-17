@@ -2353,8 +2353,6 @@ void disconnect_from_cloud()
 void connect_to_cloud()
 {
 
-    // connect_to_wifi();
-
     Log.info("Connecting to cloud...");
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
@@ -2363,7 +2361,9 @@ void connect_to_cloud()
     {
         Particle.connect();
         delay(PARTICLE_CLOUD_DELAY);
+        Log.info("Not connected. Trying again...");
     }
+
     Log.info("Reconnected to cloud");
 }
 
@@ -2534,6 +2534,7 @@ void setup()
 {
 
     // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
+    Serial.begin(115200); // standard serial port
     waitFor(Serial.isConnected, 15000);
     delay(1000);
     Log.info("====== Serial Connected, Begin Setup ======");
@@ -2578,8 +2579,6 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-error/" + PUBSUB_EVENT_NAME + "/"), brevitest_error, MY_DEVICES);
 
     setup_eeprom();
-
-    Serial.begin(115200); // standard serial port
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
