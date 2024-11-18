@@ -1804,7 +1804,7 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, start_index;
+    int param1, param2, param3, start_index, position;
 
     if (test_cancelled)
         return index;
@@ -1848,25 +1848,31 @@ int process_one_BCODE_command(int cmd, int index)
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of readings
         update_progress("Baseline", 2000);
+        position = stage_position;
+        move_stage_to_optical_read_position();
         for (;param1 > 0; param1--)
         {
             read_spectrophotometer('A');
             read_spectrophotometer('B');
             read_spectrophotometer('C');
         }
+        move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 14: // Baseline reading with pause
+    case 14: // Sensor readings with pause
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of readings
         index = get_BCODE_token(index, &param2); // pause in ms
         update_progress("Baseline", 2000);
+        position = stage_position;
+        move_stage_to_optical_read_position();
         for (;param1 > 0; param1--)
         {
             read_spectrophotometer('A');
             read_spectrophotometer('B');
             read_spectrophotometer('C');
+            BCODE_delay(param2);
         }
-        BCODE_delay(param2);
+        move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
     case 15: // Baseline time
         update_progress("Baseline time", 2000);
@@ -1874,10 +1880,12 @@ int process_one_BCODE_command(int cmd, int index)
     case 30: // Read spectrophotometers
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         update_progress("Reading", 2000);
+        position = stage_position;
         move_stage_to_optical_read_position();
         read_spectrophotometer('A');
         read_spectrophotometer('B');
         read_spectrophotometer('C');
+        move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
