@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -144,7 +144,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 PRODUCT_VERSION(FIRMWARE_VERSION);
@@ -990,11 +990,11 @@ void init_spectrophotometer_switch()
     byte result = Wire.endTransmission();
     if (result != 0)
     {
-        Log.info("Error initializing spectrophotometer power: %d", result);
+        Serial.printlnf("Error initializing spectrophotometer power: %d", result);
     }
     else
     {
-        Log.info("Spectrophotometer switch initialized");
+        Serial.printlnf("Spectrophotometer switch initialized");
     }
     delay(10);
 }
@@ -1007,7 +1007,7 @@ void set_spectrophotometer_power(byte code)
     byte result = Wire.endTransmission();
     if (result != 0)
     {
-        Log.info("Error setting spectrophotometer power: %X", result);
+        Serial.printlnf("Error setting spectrophotometer power: %X", result);
     }
 }
 
@@ -1091,37 +1091,40 @@ void print_spectrophotometer_heading()
 
 void read_spectrophotometer(char channel, bool log = false)
 {
-    BrevitestSpectrophotometerRecord* data = &(test.reading[test.number_of_readings]);
-
-    if (power_on_spectrophotometer(channel))
+    if (test.number_of_readings >= SPECTRO_MAXIMUM_NUMBER_OF_READINGS)
     {
-        DFRobot_AS7341 as7341(&Wire);
-        if (init_spectrophotometer(channel, &as7341))
-        {
-            take_spectrophotometer_reading(channel, &as7341, data);
-        }
-        else
-        {
-            Log.info("Could not initialize spectrophotometer %c", channel);
-        }
+        return;
     }
     else
     {
-        Log.info("Could not power on spectrophotometer %c", channel);
-    }
-    turn_off_all_lasers();
-    power_off_all_spectrophotometers();\
-    test.number_of_readings++;
-    if (test.number_of_readings >= SPECTRO_MAXIMUM_NUMBER_OF_READINGS)
-    {
-        test.number_of_readings = 0;
+        BrevitestSpectrophotometerRecord *data = &(test.reading[test.number_of_readings]);
+
+        if (power_on_spectrophotometer(channel))
+        {
+            DFRobot_AS7341 as7341(&Wire);
+            if (init_spectrophotometer(channel, &as7341))
+            {
+                take_spectrophotometer_reading(channel, &as7341, data);
+            }
+            else
+            {
+                Serial.printlnf("Could not initialize spectrophotometer %c", channel);
+            }
+        }
+        else
+        {
+            Serial.printlnf("Could not power on spectrophotometer %c", channel);
+        }
+        turn_off_all_lasers();
+        power_off_all_spectrophotometers();
+        test.number_of_readings++;
     }
 }
 
 void read_spectrophotometer_number(int channel_number, bool log = false)
 {
     char channel = (channel_number - 1) + 'A';
-    Log.info("Reading spectrophotometer %c (%d)", channel, channel_number);
+    Serial.printlnf("Reading spectrophotometer %c (%d)", channel, channel_number);
     read_spectrophotometer(channel, log);
 }
 
@@ -1387,6 +1390,7 @@ void publish_upload_test()
     {
         test_upload_in_progress = true;
         process_test_record();
+        Serial.println(particle_register);
         brevitest_publish("upload-test", particle_register);
     }
     else
@@ -1848,9 +1852,10 @@ int process_one_BCODE_command(int cmd, int index)
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of readings
         update_progress("Baseline", 2000);
+        Serial.printlnf("Baseline reading, count = %d", param1);
         position = stage_position;
         move_stage_to_optical_read_position();
-        for (;param1 > 0; param1--)
+        for (int count = 0; count < param1; count++)
         {
             read_spectrophotometer('A');
             read_spectrophotometer('B');
@@ -1863,9 +1868,10 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // number of readings
         index = get_BCODE_token(index, &param2); // pause in ms
         update_progress("Baseline", 2000);
+        Serial.printlnf("Sensor readings with pause, count = %d", param1);
         position = stage_position;
         move_stage_to_optical_read_position();
-        for (;param1 > 0; param1--)
+        for (int count = 0; count < param1; count++)
         {
             read_spectrophotometer('A');
             read_spectrophotometer('B');
