@@ -388,7 +388,6 @@ void sleep_motor()
 {
     digitalWrite(pinMotorSleep, LOW);
     motor_awake = false;
-    Log.info("Motor asleep");
 }
 
 void wake_motor()
@@ -396,7 +395,6 @@ void wake_motor()
     digitalWrite(pinMotorSleep, HIGH);
     delayMicroseconds(10000);
     motor_awake = true;
-    Log.info("Motor awake");
 }
 
 bool move_one_eighth_step(int dir, int step_delay)
@@ -1093,14 +1091,14 @@ void print_spectrophotometer_heading()
 
 void read_spectrophotometer(char channel, bool log = false)
 {
-    BrevitestSpectrophotometerRecord data;
+    BrevitestSpectrophotometerRecord* data = &(test.reading[test.number_of_readings]);
 
     if (power_on_spectrophotometer(channel))
     {
         DFRobot_AS7341 as7341(&Wire);
         if (init_spectrophotometer(channel, &as7341))
         {
-            take_spectrophotometer_reading(channel, &as7341, &data);
+            take_spectrophotometer_reading(channel, &as7341, data);
         }
         else
         {
@@ -1112,7 +1110,12 @@ void read_spectrophotometer(char channel, bool log = false)
         Log.info("Could not power on spectrophotometer %c", channel);
     }
     turn_off_all_lasers();
-    power_off_all_spectrophotometers();
+    power_off_all_spectrophotometers();\
+    test.number_of_readings++;
+    if (test.number_of_readings >= SPECTRO_MAXIMUM_NUMBER_OF_READINGS)
+    {
+        test.number_of_readings = 0;
+    }
 }
 
 void read_spectrophotometer_number(int channel_number, bool log = false)
@@ -1397,7 +1400,7 @@ void remove_test_from_cache(char *testToRemove)
 {
     if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0)
     {
-        memset(&eeprom.cache, 0, sizeof(BrevitestTestRecord));
+        eeprom.cache = {};
         store_eeprom();
         return;
     }
@@ -1592,7 +1595,7 @@ void brevitest_callback(const char *event, const char *data)
 
 void erase_test_from_cache()
 {
-    memset(&eeprom.cache, 0, sizeof(BrevitestTestRecord));
+    eeprom.cache = {};
 }
 
 void initialize_test_cache()
@@ -1839,9 +1842,39 @@ int process_one_BCODE_command(int cmd, int index)
         turn_on_buzzer_for_duration(param1, param2);
         BCODE_loop();
         break;
+    case 11: // Baseline reading
+    case 12: // Baseline reading
+    case 13: // Baseline reading
+        // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
+        index = get_BCODE_token(index, &param1); // number of readings
+        update_progress("Baseline", 2000);
+        for (;param1 > 0; param1--)
+        {
+            read_spectrophotometer('A');
+            read_spectrophotometer('B');
+            read_spectrophotometer('C');
+        }
+        break;
+    case 14: // Baseline reading with pause
+        // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
+        index = get_BCODE_token(index, &param1); // number of readings
+        index = get_BCODE_token(index, &param2); // pause in ms
+        update_progress("Baseline", 2000);
+        for (;param1 > 0; param1--)
+        {
+            read_spectrophotometer('A');
+            read_spectrophotometer('B');
+            read_spectrophotometer('C');
+        }
+        BCODE_delay(param2);
+        break;
+    case 15: // Baseline time
+        update_progress("Baseline time", 2000);
+        break;
     case 30: // Read spectrophotometers
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         update_progress("Reading", 2000);
+        move_stage_to_optical_read_position();
         read_spectrophotometer('A');
         read_spectrophotometer('B');
         read_spectrophotometer('C');
@@ -2679,6 +2712,9 @@ void setup()
     delay(1000);
     Log.info("====== Serial Connected, Begin Setup ======");
 
+    turn_off_indicator_LEDs();
+    indicatorBusy.setActive(true);
+
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
     init_digital_pin(pinStageLimit, INPUT_PULLUP);
@@ -2711,8 +2747,6 @@ void setup()
     power_off_all_spectrophotometers();
 
     connect_to_cloud();
-
-    indicatorBusy.setActive(true);
 
     device_id = System.deviceID();
     Particle.subscribe(String(device_id + "/hook-response/" + PUBSUB_EVENT_NAME + "/"), brevitest_callback, MY_DEVICES);
@@ -2784,7 +2818,7 @@ void set_device_indicators()
 
     if (!Particle.connected())
     {
-        turn_off_indicator_LEDs();
+        turn_on_problem_LED();
     }
     else if (test_invalid)
     {
@@ -2799,7 +2833,7 @@ void set_device_indicators()
     {
         if (heater_debounced())
         {
-            turn_on_validation_LED();
+            turn_on_problem_LED();
         }
         else
         {
@@ -2817,7 +2851,7 @@ void set_device_indicators()
     else if (barcode_invalid)
     {
         turn_on_ready_indicator(true);
-        // turn_on_buzzer_alert();
+        turn_on_buzzer_alert();
     }
     else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted)
     {
@@ -2838,7 +2872,6 @@ void set_device_indicators()
     else
     {
         turn_on_ready_indicator(false);
-        turn_on_ready_indicator(true); // show green during prototyping
         turn_off_buzzer_timer();
     }
 }

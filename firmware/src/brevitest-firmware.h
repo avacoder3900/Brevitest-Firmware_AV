@@ -40,7 +40,7 @@
 #define SPECTRO_ASTEP_DEFAULT 599
 #define SPECTRO_ATIME_DEFAULT 39
 #define SPECTRO_AGAIN_DEFAULT 7
-#define SPECTRO_MAXIMUM_NUMBER_OF_READINGS 21
+#define SPECTRO_MAXIMUM_NUMBER_OF_READINGS 15
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -118,7 +118,7 @@
 // heater
 #define HEATER_MAX_POWER 128
 #define HEATER_DEFAULT_POWER 64
-#define HEATER_PWM_FREQUENCY 500
+#define HEATER_PWM_FREQUENCY 20000
 #define HEATER_MAX_TEMPERATURE 600
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
@@ -194,10 +194,10 @@ bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
-LEDStatus indicatorProblem(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
-LEDStatus indicatorBusy(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorProblem(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
+LEDStatus indicatorBusy(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorAsync(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorAsync(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
@@ -265,8 +265,8 @@ bool shipping_bolt_cartridge_inserted = false;
 unsigned long callback_timeout = 0;
 bool publish_in_progress = false;
 int publish_retry_attempt = 0;
-int publish_retry_max_index = 11;
-unsigned long publish_retry_intervals[12] = {2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
+int publish_retry_max_index = 9;
+unsigned long publish_retry_intervals[10] = {5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
 unsigned long next_spectrophotometer_reading_time = 0;
 
 // temperature control system
@@ -342,6 +342,7 @@ bool buzzer_problem_running = false;
 int spectro_astep = SPECTRO_ASTEP_DEFAULT;
 int spectro_atime = SPECTRO_ATIME_DEFAULT;
 int spectro_again = SPECTRO_AGAIN_DEFAULT;
+int spectro_read_index = 0;
 
 // progress
 int test_progress;
@@ -386,11 +387,11 @@ struct BrevitestSpectrophotometerRecord
 };
 
 struct BrevitestTestRecord
-{ // 206 bytes
+{ // 448 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    uint8_t number_of_readings; // 0 = cancelled
+    uint8_t number_of_readings = 0; // 0 = cancelled
     uint16_t duration;
-    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS]; // 168 bytes
+    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS] = {}; // 28 * 15 = 420 bytes
 } test;
 
 struct BrevitestAssay
@@ -404,29 +405,16 @@ struct BrevitestAssay
 
 struct Particle_EEPROM
 {
-    uint8_t firmware_version; // 8 bytes
-    uint8_t data_format_version;
-    int lifetime_stress_test_cycles;
-    int stress_test_cycles_since_reset;
-    int stress_test_cycles;
+    uint8_t firmware_version = FIRMWARE_VERSION; // 8 bytes
+    uint8_t data_format_version = DATA_FORMAT_VERSION;
+    int lifetime_stress_test_cycles = 0;
+    int stress_test_cycles_since_reset = 0;
+    int stress_test_cycles = 0;
     int reserved[4];
-    char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
-    BrevitestTestRecord cache;
-    int stress_test_reading_count;
-    BrevitestSpectrophotometerRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS];
-
-    Particle_EEPROM()
-    {
-        firmware_version = FIRMWARE_VERSION;
-        data_format_version = DATA_FORMAT_VERSION;
-        lifetime_stress_test_cycles = 0;
-        stress_test_cycles_since_reset = 0;
-        stress_test_cycles = 0;
-        memset(running_test_uuid, 0, CARTRIDGE_UUID_LENGTH + 1);
-        memset(&cache, 0, sizeof(BrevitestTestRecord));
-        stress_test_reading_count = 0;
-        memset(&stress_test_reading, 0, STRESS_TEST_MAXIMUM_RECORDS * sizeof(BrevitestSpectrophotometerRecord));
-    }
+    char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1] = {};
+    BrevitestTestRecord cache = BrevitestTestRecord();
+    int stress_test_reading_count = 0;
+    BrevitestSpectrophotometerRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS] = {};
 } eeprom;
 
 #define BLE_TYPE BleCharacteristicProperty::READ
