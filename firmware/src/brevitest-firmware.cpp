@@ -1076,12 +1076,15 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
 
     as7341->startMeasure(as7341->eF1F4ClearNIR);
     data1 = as7341->readSpectralDataOne();
-    memcpy(&data->f1, &data1.ADF1, sizeof(data1));
+    memcpy(&(data->f1), &(data1.ADF1), sizeof(data1));
 
     as7341->startMeasure(as7341->eF5F8ClearNIR);
     data2 = as7341->readSpectralDataTwo();
-    memcpy(&data->f5, &data2.ADF5, sizeof(data2));
-    Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
+    memcpy(&(data->f5), &(data2.ADF5), sizeof(data2));
+    data->channel = channel;
+    data->samples = 1;
+    data->msec = millis();
+    data->temperature = heater.temp_C_10X;
 }
 
 void print_spectrophotometer_heading()
@@ -1097,23 +1100,17 @@ void read_spectrophotometer(char channel, bool log = false)
     }
     else
     {
-        BrevitestSpectrophotometerRecord *data = &(test.reading[test.number_of_readings]);
-
         if (power_on_spectrophotometer(channel))
         {
             DFRobot_AS7341 as7341(&Wire);
+            BrevitestSpectrophotometerRecord *data = &(test.reading[test.number_of_readings]);
             if (init_spectrophotometer(channel, &as7341))
             {
                 take_spectrophotometer_reading(channel, &as7341, data);
+                if (log) {
+                    Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
+                }
             }
-            else
-            {
-                Serial.printlnf("Could not initialize spectrophotometer %c", channel);
-            }
-        }
-        else
-        {
-            Serial.printlnf("Could not power on spectrophotometer %c", channel);
         }
         turn_off_all_lasers();
         power_off_all_spectrophotometers();
@@ -1124,7 +1121,6 @@ void read_spectrophotometer(char channel, bool log = false)
 void read_spectrophotometer_number(int channel_number, bool log = false)
 {
     char channel = (channel_number - 1) + 'A';
-    Serial.printlnf("Reading spectrophotometer %c (%d)", channel, channel_number);
     read_spectrophotometer(channel, log);
 }
 
@@ -1390,7 +1386,6 @@ void publish_upload_test()
     {
         test_upload_in_progress = true;
         process_test_record();
-        Serial.println(particle_register);
         brevitest_publish("upload-test", particle_register);
     }
     else
@@ -1611,12 +1606,13 @@ void initialize_test_cache()
 void store_test()
 {
     memcpy(eeprom.cache.cartridge_uuid, test.cartridge_uuid, sizeof(BrevitestTestRecord));
+    process_test_record();
     store_eeprom();
 }
 
 int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
+    return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
                    reading->channel, ARG_DELIM,
                    reading->samples, ARG_DELIM,
                    reading->msec, ARG_DELIM,
@@ -1629,34 +1625,22 @@ int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
                    reading->f7, ARG_DELIM,
                    reading->f8, ARG_DELIM,
                    reading->clear, ARG_DELIM,
-                   reading->nir, ITEM_DELIM,
-                   reading->temperature, ATTR_DELIM);
+                   reading->nir, ATTR_DELIM);
 }
 
 void process_test_record()
 {
-    char c;
-    BrevitestTestRecord *t = &eeprom.cache;
-    int len = sprintf(particle_register, "%.24s%c%c%c%d%c", t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM);
-    ;
+    BrevitestTestRecord* t = &eeprom.cache;
+    int len = sprintf(particle_register, "%.24s%c%c%c%d%c%d%c", t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM, t->number_of_readings, ITEM_DELIM);
 
     if (t->number_of_readings)
     { // test completed
-        for (int i = 0; i < SPECTRO_MAXIMUM_NUMBER_OF_READINGS; i++)
+        for (int i = 0; i < t->number_of_readings; i++)
         {
-            c = t->reading[i].channel;
-            if (c == 'A' || c == '1' || c == '2')
-            {
-                len += append_test_reading(len, &(t->reading[i]));
-            }
+            len += append_test_reading(len, &(t->reading[i]));
         }
-        particle_register[len - 1] = '\0';
     }
-    else
-    { // test cancelled
-        particle_register[len] = '0';
-        particle_register[len + 1] = '\0';
-    }
+    particle_register[len - 1] = '\0';
 }
 
 void write_test_record_to_eeprom()
@@ -1852,7 +1836,6 @@ int process_one_BCODE_command(int cmd, int index)
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of readings
         update_progress("Baseline", 2000);
-        Serial.printlnf("Baseline reading, count = %d", param1);
         position = stage_position;
         move_stage_to_optical_read_position();
         for (int count = 0; count < param1; count++)
@@ -1868,7 +1851,6 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // number of readings
         index = get_BCODE_token(index, &param2); // pause in ms
         update_progress("Baseline", 2000);
-        Serial.printlnf("Sensor readings with pause, count = %d", param1);
         position = stage_position;
         move_stage_to_optical_read_position();
         for (int count = 0; count < param1; count++)
@@ -2461,7 +2443,7 @@ int particle_command(String arg)
     case 300: // read spectrophotometer channel param1
         indx = get_next_command_param(arg, indx, &param1, 1);
         print_spectrophotometer_heading();
-        read_spectrophotometer_number(param1);
+        read_spectrophotometer_number(param1, true);
         result = stage_position;
         break;
     case 301: // set spectrophotometer params
@@ -2475,9 +2457,9 @@ int particle_command(String arg)
         break;
     case 302: // read spectrophotometers on all channels
         print_spectrophotometer_heading();
-        read_spectrophotometer('A');
-        read_spectrophotometer('B');
-        read_spectrophotometer('C');
+        read_spectrophotometer('A', true);
+        read_spectrophotometer('B', true);
+        read_spectrophotometer('C', true);
         result = stage_position;
         break;
     case 303: // power on channel param1

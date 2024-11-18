@@ -7,7 +7,7 @@
 #define FIRMWARE_VERSION 1
 #define DATA_FORMAT_VERSION 22
 
-#define TEST_DATA_FORMAT_CODE 'D'
+#define TEST_DATA_FORMAT_CODE 'E'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -391,7 +391,7 @@ struct BrevitestTestRecord
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     uint8_t number_of_readings = 0; // 0 = cancelled
     uint16_t duration;
-    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS] = {}; // 28 * 15 = 420 bytes
+    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS]; // 28 * 15 = 420 bytes
 } test;
 
 struct BrevitestAssay
@@ -411,10 +411,10 @@ struct Particle_EEPROM
     int stress_test_cycles_since_reset = 0;
     int stress_test_cycles = 0;
     int reserved[4];
-    char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1] = {};
-    BrevitestTestRecord cache = BrevitestTestRecord();
+    char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
+    BrevitestTestRecord cache;
     int stress_test_reading_count = 0;
-    BrevitestSpectrophotometerRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS] = {};
+    BrevitestSpectrophotometerRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS];
 } eeprom;
 
 #define BLE_TYPE BleCharacteristicProperty::READ
