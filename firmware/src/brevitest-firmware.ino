@@ -251,7 +251,6 @@ void sleep_motor()
 {
     digitalWrite(pinMotorSleep, LOW);
     motor_awake = false;
-    Log.info("Motor asleep");
 }
 
 void wake_motor()
@@ -259,7 +258,6 @@ void wake_motor()
     digitalWrite(pinMotorSleep, HIGH);
     delayMicroseconds(10000);
     motor_awake = true;
-    Log.info("Motor awake");
 }
 
 bool move_one_eighth_step(int dir, int step_delay)
@@ -504,7 +502,8 @@ void turn_on_buzzer_for_duration(int duration, int frequency)
     }
     tone(pinBuzzer, frequency, duration);
     delay(duration);
-    if (reheat) {
+    if (reheat)
+    {
         turn_on_heater(heater.power);
     }
 }
@@ -855,7 +854,9 @@ void init_spectrophotometer_switch()
     if (result != 0)
     {
         Log.info("Error initializing spectrophotometer power: %d", result);
-    } else {
+    }
+    else
+    {
         Log.info("Spectrophotometer switch initialized");
     }
     delay(10);
@@ -2593,8 +2594,7 @@ void setup()
     init_spectrophotometer_switch();
 
     start_temperature_control();
-    // stop_temperature_control(); // turn off temperature control for prototyping
-    // device_verified = true; // bypass verification for prototyping
+
     Log.info("Setup complete");
 }
 
@@ -2978,8 +2978,10 @@ void loop()
         else if (barcode_scan_mode)
         {
             barcode_scan_loop();
-            // } else if (!device_verified) {
-            //     verify_device_loop();
+        }
+        else if (!device_verified)
+        {
+            verify_device_loop();
         }
     }
 
