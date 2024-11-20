@@ -932,7 +932,8 @@ void turn_on_laser(char channel)
     Laser *laser = get_laser(channel);
 
     laser->power = 255;
-    analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
+    // analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
+    digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
     delayMicroseconds(500);
     if (serial_messaging_on)
@@ -946,7 +947,8 @@ void turn_off_laser(char channel)
 {
     Laser *laser = get_laser(channel);
 
-    analogWrite(laser->power_pin, 0);
+    // analogWrite(laser->power_pin, 0);
+    digitalWrite(laser->power_pin, LOW);
     laser->power_on = false;
     laser->power = 0;
     if (serial_messaging_on)
@@ -1110,7 +1112,11 @@ void read_spectrophotometer(char channel, bool log = false)
                 if (log) {
                     Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
                 }
+            } else {
+                Log.info("Spectrophotometer %c initialization failed", channel);
             }
+        } else {
+            Log.info("Spectrophotometer %c power on failed", channel);
         }
         turn_off_all_lasers();
         power_off_all_spectrophotometers();
@@ -2442,6 +2448,7 @@ int particle_command(String arg)
         //
     case 300: // read spectrophotometer channel param1
         indx = get_next_command_param(arg, indx, &param1, 1);
+        test.number_of_readings = 0;
         print_spectrophotometer_heading();
         read_spectrophotometer_number(param1, true);
         result = stage_position;
@@ -2457,6 +2464,7 @@ int particle_command(String arg)
         break;
     case 302: // read spectrophotometers on all channels
         print_spectrophotometer_heading();
+        test.number_of_readings = 0;
         read_spectrophotometer('A', true);
         read_spectrophotometer('B', true);
         read_spectrophotometer('C', true);
@@ -2719,9 +2727,12 @@ void setup()
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT);
 
-    init_analog_pin(pinLaserA, OUTPUT, 0);
-    init_analog_pin(pinLaserB, OUTPUT, 0);
-    init_analog_pin(pinLaserC, OUTPUT, 0);
+    init_digital_pin(pinLaserA, OUTPUT, LOW);
+    init_digital_pin(pinLaserB, OUTPUT, LOW);
+    init_digital_pin(pinLaserC, OUTPUT, LOW);
+    // init_analog_pin(pinLaserA, OUTPUT, 0);
+    // init_analog_pin(pinLaserB, OUTPUT, 0);
+    // init_analog_pin(pinLaserC, OUTPUT, 0);
     init_analog_pin(pinPhotoA, INPUT, 0);
     init_analog_pin(pinPhotoB, INPUT, 0);
     init_analog_pin(pinPhotoC, INPUT, 0);
