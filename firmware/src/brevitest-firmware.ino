@@ -950,6 +950,8 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
     data->samples = 1;
     data->msec = millis();
     data->temperature = heater.temp_C_10X;
+    data->laser_strength = analogRead(get_laser(channel)->value_pin);
+    data->stage_position = stage_position;
 }
 
 void print_spectrophotometer_heading()
@@ -972,13 +974,18 @@ void read_spectrophotometer(char channel, bool log = false)
             if (init_spectrophotometer(channel, &as7341))
             {
                 take_spectrophotometer_reading(channel, &as7341, data);
-                if (log) {
+                if (log)
+                {
                     Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
                 }
-            } else {
+            }
+            else
+            {
                 Log.info("Spectrophotometer %c initialization failed", channel);
             }
-        } else {
+        }
+        else
+        {
             Log.info("Spectrophotometer %c power on failed", channel);
         }
         turn_off_all_lasers();
@@ -991,6 +998,28 @@ void read_spectrophotometer_number(int channel_number, bool log = false)
 {
     char channel = (channel_number - 1) + 'A';
     read_spectrophotometer(channel, log);
+}
+
+void spectrophotometer_scan(int number_of_divisions)
+{
+    if (number_of_divisions <= 0)
+    {
+        return;
+    }
+    int microns_per_reading = SPECTRO_WELL_LENGTH / number_of_divisions;
+    move_stage_to_position(STAGE_SPECTROPHOTOMETER_READ_POSITION - (SPECTRO_WELL_LENGTH / 2), MOTOR_SLOW_STEP_DELAY);
+    test.number_of_readings = 0;
+    read_spectrophotometer('A', true);
+    read_spectrophotometer('B', true);
+    read_spectrophotometer('C', true);
+    for (int i = 0; i < number_of_divisions; i++)
+    {
+        test.number_of_readings = 0;
+        move_stage(microns_per_reading, MOTOR_SLOW_STEP_DELAY);
+        read_spectrophotometer('A', true);
+        read_spectrophotometer('B', true);
+        read_spectrophotometer('C', true);
+    }
 }
 
 void stress_test_read_spectrophotometer()
@@ -1499,7 +1528,7 @@ int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
 
 void process_test_record()
 {
-    BrevitestTestRecord* t = &eeprom.cache;
+    BrevitestTestRecord *t = &eeprom.cache;
     int len = sprintf(particle_register, "%.24s%c%c%c%d%c%d%c", t->cartridge_uuid, ITEM_DELIM, TEST_DATA_FORMAT_CODE, ITEM_DELIM, t->duration, ITEM_DELIM, t->number_of_readings, ITEM_DELIM);
 
     if (t->number_of_readings)
@@ -1832,7 +1861,6 @@ void stress_test_store_optical_readings()
     for (i = 3; i < 9; i++)
     {
         base = i % 3;
-        test.reading[base].temperature += test.reading[i].temperature;
         test.reading[base].f1 += test.reading[i].f1;
         test.reading[base].f2 += test.reading[i].f2;
         test.reading[base].f3 += test.reading[i].f3;
@@ -1843,6 +1871,8 @@ void stress_test_store_optical_readings()
         test.reading[base].f8 += test.reading[i].f8;
         test.reading[base].clear += test.reading[i].clear;
         test.reading[base].nir += test.reading[i].nir;
+        test.reading[base].temperature += test.reading[i].temperature;
+        test.reading[base].laser_strength += test.reading[i].laser_strength;
     }
 
     if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS)
@@ -2340,6 +2370,11 @@ int particle_command(String arg)
         break;
     case 304: // power off all spectrophotometers
         power_off_all_spectrophotometers();
+        result = stage_position;
+        break;
+    case 305: // scan sixth well with param1 number of readings
+        indx = get_next_command_param(arg, indx, &param1, 4);
+        spectrophotometer_scan(param1);
         result = stage_position;
         break;
     default:

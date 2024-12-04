@@ -5,9 +5,9 @@
 
 // general constants
 #define FIRMWARE_VERSION 1
-#define DATA_FORMAT_VERSION 22
+#define DATA_FORMAT_VERSION 33
 
-#define TEST_DATA_FORMAT_CODE 'E'
+#define TEST_DATA_FORMAT_CODE 'F'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -37,10 +37,11 @@
 #define SHIPPING_BOLT_BARCODE "SHIPPING BOLT"
 
 // spectrophotometer
-#define SPECTRO_ASTEP_DEFAULT 1000
-#define SPECTRO_ATIME_DEFAULT 255
-#define SPECTRO_AGAIN_DEFAULT 1
+#define SPECTRO_ASTEP_DEFAULT 599
+#define SPECTRO_ATIME_DEFAULT 39
+#define SPECTRO_AGAIN_DEFAULT 7
 #define SPECTRO_MAXIMUM_NUMBER_OF_READINGS 15
+#define SPECTRO_WELL_LENGTH 10000                // sixth well length in microns
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -369,7 +370,7 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 
 char channels[3] = { 'A', 'B', 'C' };
 struct BrevitestSpectrophotometerRecord
-{ // 28 bytes
+{ // 32 bytes
     char channel;
     uint8_t samples;
     unsigned long msec;
@@ -384,14 +385,16 @@ struct BrevitestSpectrophotometerRecord
     uint16_t clear;/**<clear diode data>*/
     uint16_t nir;/**<NIR diode data>*/
     uint16_t temperature;
+    uint16_t laser_strength;
+    uint16_t stage_position;
 };
 
 struct BrevitestTestRecord
-{ // 448 bytes
+{ // 484 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     uint8_t number_of_readings = 0; // 0 = cancelled
     uint16_t duration;
-    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS]; // 28 * 15 = 420 bytes
+    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS]; // 32 * 15 = 480 bytes
 } test;
 
 struct BrevitestAssay
