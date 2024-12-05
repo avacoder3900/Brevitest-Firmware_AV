@@ -1088,6 +1088,9 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
     data->samples = 1;
     data->msec = millis();
     data->temperature = heater.temp_C_10X;
+    data->laser_strength = analogRead(get_laser(channel)->value_pin);
+    data->starting_stage_position = stage_position;
+    data->ending_stage_position = stage_position;
 }
 
 void print_spectrophotometer_heading()
@@ -1997,7 +2000,6 @@ void stress_test_store_optical_readings()
     for (i = 3; i < 9; i++)
     {
         base = i % 3;
-        test.reading[base].temperature += test.reading[i].temperature;
         test.reading[base].f1 += test.reading[i].f1;
         test.reading[base].f2 += test.reading[i].f2;
         test.reading[base].f3 += test.reading[i].f3;
@@ -2008,6 +2010,8 @@ void stress_test_store_optical_readings()
         test.reading[base].f8 += test.reading[i].f8;
         test.reading[base].clear += test.reading[i].clear;
         test.reading[base].nir += test.reading[i].nir;
+        test.reading[base].temperature += test.reading[i].temperature;
+        test.reading[base].laser_strength += test.reading[i].laser_strength;
     }
 
     if ((eeprom.stress_test_reading_count + 3) > STRESS_TEST_MAXIMUM_RECORDS)

@@ -40,8 +40,9 @@
 #define SPECTRO_ASTEP_DEFAULT 599
 #define SPECTRO_ATIME_DEFAULT 39
 #define SPECTRO_AGAIN_DEFAULT 7
-#define SPECTRO_MAXIMUM_NUMBER_OF_READINGS 15
+#define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 20    // maximum number of samples in a scan
 #define SPECTRO_WELL_LENGTH 10000                // sixth well length in microns
+#define SPECTRO_STARTING_STAGE_POSITION 23000
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -111,7 +112,6 @@
 // stage
 #define STAGE_RESET_STEPS -60000
 #define STAGE_POSITION_LIMIT 45000
-#define STAGE_SPECTROPHOTOMETER_READ_POSITION 23500
 #define STAGE_MICRONS_TO_INITIAL_POSITION -300
 #define STAGE_MICRONS_TO_TEST_START_POSITION 9800
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
@@ -374,27 +374,38 @@ struct BrevitestSpectrophotometerRecord
     char channel;
     uint8_t samples;
     unsigned long msec;
-    uint16_t f1;/**<F1 diode data>*/
-    uint16_t f2;/**<F2 diode data>*/
-    uint16_t f3;/**<F3 diode data>*/
-    uint16_t f4;/**<F4 diode data>*/
-    uint16_t f5;/**<F5 diode data>*/
-    uint16_t f6;/**<F6 diode data>*/
-    uint16_t f7;/**<F7 diode data>*/
-    uint16_t f8;/**<F8 diode data>*/
-    uint16_t clear;/**<clear diode data>*/
-    uint16_t nir;/**<NIR diode data>*/
+    uint16_t f1;
+    uint16_t f2;
+    uint16_t f3;
+    uint16_t f4;
+    uint16_t f5;
+    uint16_t f6;
+    uint16_t f7;
+    uint16_t f8;
+    uint16_t clear;
+    uint16_t nir;
     uint16_t temperature;
     uint16_t laser_strength;
-    uint16_t stage_position;
 };
+
+struct BrevitestScanRecord
+{ // 484 bytes
+    uint8_t number_of_samples;
+    uint16_t starting_stage_position;
+    uint16_t sample_spacing_microns;
+    BrevitestSpectrophotometerRecord sample[3 * SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES]; // 32 * 60 = 1920 bytes
+} baseline_scan, test_scan;
 
 struct BrevitestTestRecord
 { // 484 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    uint8_t number_of_readings = 0; // 0 = cancelled
+    bool test_completed = false;
+    uint16_t sample_spacing_microns;
     uint16_t duration;
-    BrevitestSpectrophotometerRecord reading[SPECTRO_MAXIMUM_NUMBER_OF_READINGS]; // 32 * 15 = 480 bytes
+    BrevitestSpectrophotometerRecord baseline_mean[3];
+    BrevitestSpectrophotometerRecord baseline_var[3];
+    BrevitestSpectrophotometerRecord test_mean[3];
+    BrevitestSpectrophotometerRecord test_var[3];
 } test;
 
 struct BrevitestAssay
