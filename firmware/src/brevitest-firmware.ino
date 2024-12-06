@@ -365,7 +365,7 @@ void reset_stage(bool sleep)
 
 void move_stage_to_optical_read_position()
 {
-    move_stage_to_position(STAGE_SPECTROPHOTOMETER_READ_POSITION, MOTOR_SLOW_STEP_DELAY);
+    move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION, MOTOR_SLOW_STEP_DELAY);
 }
 
 void move_stage_to_test_start_position()
@@ -569,10 +569,6 @@ void turn_off_indicator_LEDs()
         indicatorBusy.setActive(false);
     if (indicatorAvailable.isActive())
         indicatorAvailable.setActive(false);
-    if (indicatorAsync.isActive())
-        indicatorAsync.setActive(false);
-    if (indicatorValidation.isActive())
-        indicatorValidation.setActive(false);
 }
 
 void turn_on_problem_LED()
@@ -599,24 +595,6 @@ void turn_on_available_LED()
     {
         turn_off_indicator_LEDs();
         indicatorAvailable.setActive(true);
-    }
-}
-
-void turn_on_async_LED()
-{
-    if (!indicatorAsync.isActive())
-    {
-        turn_off_indicator_LEDs();
-        indicatorAsync.setActive(true);
-    }
-}
-
-void turn_on_validation_LED()
-{
-    if (!indicatorValidation.isActive())
-    {
-        turn_off_indicator_LEDs();
-        indicatorValidation.setActive(true);
     }
 }
 
@@ -955,7 +933,7 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
 
 void print_spectrophotometer_heading()
 {
-    Serial.println("channel\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
+    Serial.println("channel\tposition\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\tNIR");
 }
 
 void read_spectrophotometer(BrevitestSpectrophotometerRecord *data, char channel, bool log = false)
@@ -968,7 +946,7 @@ void read_spectrophotometer(BrevitestSpectrophotometerRecord *data, char channel
             take_spectrophotometer_reading(channel, &as7341, data);
             if (log)
             {
-                Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t%d", channel, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
+                Serial.printlnf("%c\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, data->laser_strength, data->f1, data->f2, data->f3, data->f4, data->f5, data->f6, data->f7, data->f8, data->clear, data->nir);
             }
         }
         else
@@ -1504,7 +1482,7 @@ void store_test()
 
 int append_test_reading(int start, BrevitestSpectrophotometerRecord *reading)
 {
-    return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
+    return sprintf(&(particle_register[start]), "%c%c%d%c%lX%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
                    reading->channel, ARG_DELIM,
                    reading->samples, ARG_DELIM,
                    reading->msec, ARG_DELIM,
@@ -1764,7 +1742,6 @@ int process_one_BCODE_command(int cmd, int index)
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         update_progress("Reading", 2000);
         position = stage_position;
-        move_stage_to_optical_read_position();
         spectrophotometer_scan(&test_scan, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
@@ -2314,9 +2291,12 @@ int particle_command(String arg)
         power_off_all_spectrophotometers();
         result = stage_position;
         break;
-    case 305: // scan sixth well with param1 number of readings starting at param2 stage position
+    case 305: // scan sixth well with param1 number of readings
         indx = get_next_command_param(arg, indx, &param1, 4);
+        reset_stage(false);
+        print_spectrophotometer_heading();
         spectrophotometer_scan(&test_scan, param1);
+        sleep_motor();
         result = stage_position;
         break;
     default:
@@ -2642,7 +2622,7 @@ bool heater_debounced()
     return false;
 }
 
-void turn_on_ready_indicator(bool force)
+void turn_on_ready_indicator(bool force = false)
 {
     if (force)
     {
@@ -2669,12 +2649,12 @@ void set_device_indicators()
     }
     else if (test_invalid)
     {
-        turn_on_problem_LED();
+        turn_on_ready_indicator();
         turn_on_buzzer_problem();
     }
     else if (stress_test_mode)
     {
-        turn_on_async_LED();
+        turn_on_busy_LED();
     }
     else if (!device_verified)
     {
@@ -2693,7 +2673,7 @@ void set_device_indicators()
     }
     else if (!device_verified || magnet_validation_mode)
     {
-        turn_on_validation_LED();
+        turn_on_busy_LED();
     }
     else if (barcode_invalid)
     {

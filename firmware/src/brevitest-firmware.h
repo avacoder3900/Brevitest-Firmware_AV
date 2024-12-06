@@ -41,8 +41,8 @@
 #define SPECTRO_ATIME_DEFAULT 39
 #define SPECTRO_AGAIN_DEFAULT 7
 #define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 20    // maximum number of samples in a scan
-#define SPECTRO_WELL_LENGTH 10000                // sixth well length in microns
-#define SPECTRO_STARTING_STAGE_POSITION 23000
+#define SPECTRO_WELL_LENGTH 6000                // sixth well length in microns
+#define SPECTRO_STARTING_STAGE_POSITION 22000
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -198,8 +198,6 @@ bool motor_awake = false;
 LEDStatus indicatorProblem(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
 LEDStatus indicatorBusy(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorAsync(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorValidation(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;
