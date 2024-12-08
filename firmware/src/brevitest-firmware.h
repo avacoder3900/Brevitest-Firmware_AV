@@ -367,11 +367,8 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 // spectrophotometer data structure
 
 char channels[3] = { 'A', 'B', 'C' };
-struct BrevitestSpectrophotometerRecord
+struct BrevitestSpectrophotometerReading
 { // 32 bytes
-    char channel;
-    uint8_t samples;
-    unsigned long msec;
     uint16_t f1;
     uint16_t f2;
     uint16_t f3;
@@ -386,11 +383,33 @@ struct BrevitestSpectrophotometerRecord
     uint16_t laser_strength;
 };
 
+struct BrevitestSpectrophotometerRecord
+{ // 32 bytes
+    char channel;
+    uint16_t position;
+    unsigned long msec;
+    BrevitestSpectrophotometerReading reading;
+} stress_spectro_record[3];
+
+struct SpectrophotometerAccumulator
+{ // 48 bytes
+    uint32_t f1;
+    uint32_t f2;
+    uint32_t f3;
+    uint32_t f4;
+    uint32_t f5;
+    uint32_t f6;
+    uint32_t f7;
+    uint32_t f8;
+    uint32_t clear;
+    uint32_t nir;
+    uint32_t temperature;
+    uint32_t laser_strength;
+} accum_a, accum_b, accum_c;
+
 struct BrevitestScanRecord
 { // 484 bytes
     uint8_t number_of_samples;
-    uint16_t starting_stage_position;
-    uint16_t sample_spacing_microns;
     BrevitestSpectrophotometerRecord sample[3 * SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES]; // 32 * 60 = 1920 bytes
 } baseline_scan, test_scan;
 
@@ -398,12 +417,12 @@ struct BrevitestTestRecord
 { // 484 bytes
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     bool test_completed = false;
-    uint16_t sample_spacing_microns;
+    uint16_t number_of_samples;
     uint16_t duration;
-    BrevitestSpectrophotometerRecord baseline_mean[3];
-    BrevitestSpectrophotometerRecord baseline_var[3];
-    BrevitestSpectrophotometerRecord test_mean[3];
-    BrevitestSpectrophotometerRecord test_var[3];
+    BrevitestSpectrophotometerReading baseline_mean[3];
+    BrevitestSpectrophotometerReading baseline_stdev[3];
+    BrevitestSpectrophotometerReading test_mean[3];
+    BrevitestSpectrophotometerReading test_stdev[3];
 } test;
 
 struct BrevitestAssay
