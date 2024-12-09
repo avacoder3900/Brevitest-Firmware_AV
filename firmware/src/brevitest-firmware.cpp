@@ -100,10 +100,15 @@ void erase_test_from_cache();
 void initialize_test_cache();
 void store_test();
 int append_test_reading(int start, char channel, BrevitestSpectrophotometerReading *reading);
-void init_accum(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample);
-void add_to_accum(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample);
+void init_accum_mean(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample);
+void add_to_accum_mean(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample);
 void generate_mean(BrevitestSpectrophotometerReading *reading, SpectrophotometerAccumulator *accum, int number_of_samples);
-void calculate_mean(BrevitestSpectrophotometerReading *reading, BrevitestScanRecord *scan);
+void calculate_mean(BrevitestScanRecord *scan, BrevitestSpectrophotometerReading *output);
+void init_accum_stdev(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *sample);
+void add_to_accum_stdev(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *sample);
+void generate_stdev(BrevitestSpectrophotometerReading *reading, SpectrophotometerAccumulator *accum, int number_of_samples);
+void generate_diff();
+void calculate_stdev(BrevitestScanRecord *scan, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *output);
 void process_test_samples(BrevitestTestRecord *t);
 void process_test_record();
 void write_test_record_to_eeprom();
@@ -1637,7 +1642,7 @@ int append_test_reading(int start, char channel, BrevitestSpectrophotometerReadi
                    reading->laser_strength, ATTR_DELIM);
 }
 
-void init_accum(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample)
+void init_accum_mean(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample)
 {
     accum->f1 = sample->f1;
     accum->f2 = sample->f2;
@@ -1653,7 +1658,7 @@ void init_accum(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerR
     accum->laser_strength = sample->laser_strength;
 }
 
-void add_to_accum(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample)
+void add_to_accum_mean(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *sample)
 {
     accum->f1 += sample->f1;
     accum->f2 += sample->f2;
@@ -1687,30 +1692,148 @@ void generate_mean(BrevitestSpectrophotometerReading *reading, Spectrophotometer
              reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir, reading->temperature, reading->laser_strength);
 }
 
-void calculate_mean(BrevitestSpectrophotometerReading *reading, BrevitestScanRecord *scan)
+void calculate_mean(BrevitestScanRecord *scan, BrevitestSpectrophotometerReading *output)
 {
     int i;
-    init_accum(&accum_a, &(scan->sample[0].reading));
-    init_accum(&accum_b, &(scan->sample[1].reading));
-    init_accum(&accum_c, &(scan->sample[2].reading));
+    init_accum_mean(&accum_a, &(scan->sample[0].reading));
+    init_accum_mean(&accum_b, &(scan->sample[1].reading));
+    init_accum_mean(&accum_c, &(scan->sample[2].reading));
     for (i = 1; i < scan->number_of_samples; i++)
     {
-        add_to_accum(&accum_a, &(scan->sample[3 * i].reading));
-        add_to_accum(&accum_b, &(scan->sample[3 * i + 1].reading));
-        add_to_accum(&accum_c, &(scan->sample[3 * i + 2].reading));
+        add_to_accum_mean(&accum_a, &(scan->sample[3 * i].reading));
+        add_to_accum_mean(&accum_b, &(scan->sample[3 * i + 1].reading));
+        add_to_accum_mean(&accum_c, &(scan->sample[3 * i + 2].reading));
     }
-    generate_mean(&(reading[0]), &accum_a, scan->number_of_samples);
-    generate_mean(&(reading[1]), &accum_b, scan->number_of_samples);
-    generate_mean(&(reading[2]), &accum_c, scan->number_of_samples);
+    generate_mean(&(output[0]), &accum_a, scan->number_of_samples);
+    generate_mean(&(output[1]), &accum_b, scan->number_of_samples);
+    generate_mean(&(output[2]), &accum_c, scan->number_of_samples);
+}
+
+void init_accum_stdev(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *sample)
+{
+    accum->f1 = (sample->f1 - mean->f1) * (sample->f1 - mean->f1);
+    accum->f2 = (sample->f2 - mean->f2) * (sample->f2 - mean->f2);
+    accum->f3 = (sample->f3 - mean->f3) * (sample->f3 - mean->f3);
+    accum->f4 = (sample->f4 - mean->f4) * (sample->f4 - mean->f4);
+    accum->f5 = (sample->f5 - mean->f5) * (sample->f5 - mean->f5);
+    accum->f6 = (sample->f6 - mean->f6) * (sample->f6 - mean->f6);
+    accum->f7 = (sample->f7 - mean->f7) * (sample->f7 - mean->f7);
+    accum->f8 = (sample->f8 - mean->f8) * (sample->f8 - mean->f8);
+    accum->clear = (sample->clear - mean->clear) * (sample->clear - mean->clear);
+    accum->nir = (sample->nir - mean->nir) * (sample->nir - mean->nir);
+    accum->temperature = (sample->temperature - mean->temperature) * (sample->temperature - mean->temperature);
+    accum->laser_strength = (sample->laser_strength - mean->laser_strength) * (sample->laser_strength - mean->laser_strength);
+}
+
+void add_to_accum_stdev(SpectrophotometerAccumulator *accum, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *sample)
+{
+    accum->f1 += (sample->f1 - mean->f1) * (sample->f1 - mean->f1);
+    accum->f2 += (sample->f2 - mean->f2) * (sample->f2 - mean->f2);
+    accum->f3 += (sample->f3 - mean->f3) * (sample->f3 - mean->f3);
+    accum->f4 += (sample->f4 - mean->f4) * (sample->f4 - mean->f4);
+    accum->f5 += (sample->f5 - mean->f5) * (sample->f5 - mean->f5);
+    accum->f6 += (sample->f6 - mean->f6) * (sample->f6 - mean->f6);
+    accum->f7 += (sample->f7 - mean->f7) * (sample->f7 - mean->f7);
+    accum->f8 += (sample->f8 - mean->f8) * (sample->f8 - mean->f8);
+    accum->clear += (sample->clear - mean->clear) * (sample->clear - mean->clear);
+    accum->nir += (sample->nir - mean->nir) * (sample->nir - mean->nir);
+    accum->temperature += (sample->temperature - mean->temperature) * (sample->temperature - mean->temperature);
+    accum->laser_strength += (sample->laser_strength - mean->laser_strength) * (sample->laser_strength - mean->laser_strength);
+}
+
+void generate_stdev(BrevitestSpectrophotometerReading *reading, SpectrophotometerAccumulator *accum, int number_of_samples)
+{
+    int denom = number_of_samples - 1;
+    reading->f1 = denom > 0 ? integerSqrt(accum->f1 / denom) : 0;
+    reading->f2 = denom > 0 ? integerSqrt(accum->f2 / denom) : 0;
+    reading->f3 = denom > 0 ? integerSqrt(accum->f3 / denom) : 0;
+    reading->f4 = denom > 0 ? integerSqrt(accum->f4 / denom) : 0;
+    reading->f5 = denom > 0 ? integerSqrt(accum->f5 / denom) : 0;
+    reading->f6 = denom > 0 ? integerSqrt(accum->f6 / denom) : 0;
+    reading->f7 = denom > 0 ? integerSqrt(accum->f7 / denom) : 0;
+    reading->f8 = denom > 0 ? integerSqrt(accum->f8 / denom) : 0;
+    reading->clear = denom > 0 ? integerSqrt(accum->clear / denom) : 0;
+    reading->nir = denom > 0 ? integerSqrt(accum->nir / denom) : 0;
+    reading->temperature = denom > 0 ? integerSqrt(accum->temperature / denom) : 0;
+    reading->laser_strength = denom > 0 ? integerSqrt(accum->laser_strength / denom) : 0;
+    Log.info("\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d",
+             reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir, reading->temperature, reading->laser_strength);
+}
+
+void generate_diff()
+{
+    BrevitestSpectrophotometerReading *d, *b, *t;
+    char channel;
+    int position;
+
+    if (baseline_scan.number_of_samples != test_scan.number_of_samples)
+    {
+        Log.info("Baseline and test scans have different number of samples");
+        return;
+    }
+    print_spectrophotometer_heading();
+
+    diff_scan.number_of_samples = baseline_scan.number_of_samples;
+    for (int i = 0; i < baseline_scan.number_of_samples; i++)
+    {
+        channel = baseline_scan.sample[i].channel;
+        position = baseline_scan.sample[i].position;
+        d = &(diff_scan.sample[i].reading);
+        b = &(baseline_scan.sample[i].reading);
+        t = &(test_scan.sample[i].reading);
+        d->f1 = t->f1 - b->f1;
+        d->f2 = t->f2 - b->f2;
+        d->f3 = t->f3 - b->f3;
+        d->f4 = t->f4 - b->f4;
+        d->f5 = t->f5 - b->f5;
+        d->f6 = t->f6 - b->f6;
+        d->f7 = t->f7 - b->f7;
+        d->f8 = t->f8 - b->f8;
+        d->clear = t->clear - b->clear;
+        d->nir = t->nir - b->nir;
+        d->temperature = t->temperature - b->temperature;
+        d->laser_strength = t->laser_strength - b->laser_strength;
+        Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, position, d->laser_strength, d->f1, d->f2, d->f3, d->f4, d->f5, d->f6, d->f7, d->f8, d->clear, d->nir);
+    }
+}
+
+void calculate_stdev(BrevitestScanRecord *scan, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *output)
+{
+    int i;
+    init_accum_stdev(&accum_a, mean, &(scan->sample[0].reading));
+    init_accum_stdev(&accum_b, mean, &(scan->sample[1].reading));
+    init_accum_stdev(&accum_c, mean, &(scan->sample[2].reading));
+    for (i = 1; i < scan->number_of_samples; i++)
+    {
+        add_to_accum_stdev(&accum_a, mean, &(scan->sample[3 * i].reading));
+        add_to_accum_stdev(&accum_b, mean, &(scan->sample[3 * i + 1].reading));
+        add_to_accum_stdev(&accum_c, mean, &(scan->sample[3 * i + 2].reading));
+    }
+    generate_stdev(&(output[0]), &accum_a, scan->number_of_samples);
+    generate_stdev(&(output[1]), &accum_b, scan->number_of_samples);
+    generate_stdev(&(output[2]), &accum_c, scan->number_of_samples);
 }
 
 void process_test_samples(BrevitestTestRecord *t)
 {
-    Log.info("Mean: f1\t\tf2\t\tf3\t\tf4\t\tf5\t\tf6\t\tf7\t\tf8\t\tclear\t\tnir\t\ttemp\t\tlaser");
-    calculate_mean(t->baseline_mean, &baseline_scan);
-    calculate_mean(t->test_mean, &test_scan);
-    // process baseline variance
-    // process test variance
+    generate_diff();
+
+    Log.info("\t\tf1\t\tf2\t\tf3\t\tf4\t\tf5\t\tf6\t\tf7\t\tf8\t\tclear\t\tnir\t\ttemp\t\tlaser");
+
+    Log.info("Baseline:\tMean:");
+    calculate_mean(&baseline_scan, t->baseline_mean);
+    Log.info("\t\tStdev:");
+    calculate_stdev(&baseline_scan, t->baseline_mean, t->baseline_stdev);
+
+    Log.info("Test:\tMean:");
+    calculate_mean(&test_scan, t->test_mean);
+    Log.info("\t\tStdev:");
+    calculate_stdev(&test_scan, t->test_mean, t->test_stdev);
+
+    Log.info("Diff:\tMean:");
+    calculate_mean(&diff_scan, t->diff_mean);
+    Log.info("\t\tStdev:");
+    calculate_stdev(&diff_scan, t->diff_mean, t->diff_stdev);
 }
 
 void process_test_record()
@@ -1728,7 +1851,7 @@ void process_test_record()
         }
         for (i = 0; i < 3; i++)
         {
-            len += append_test_reading(len, channels[i], &(t->baseline_var[i]));
+            len += append_test_reading(len, channels[i], &(t->baseline_stdev[i]));
         }
         for (i = 0; i < 3; i++)
         {
@@ -1736,7 +1859,7 @@ void process_test_record()
         }
         for (i = 0; i < 3; i++)
         {
-            len += append_test_reading(len, channels[i], &(t->test_var[i]));
+            len += append_test_reading(len, channels[i], &(t->test_stdev[i]));
         }
     }
     particle_register[len - 1] = '\0';
@@ -2496,7 +2619,15 @@ int particle_command(String arg)
         power_off_all_spectrophotometers();
         result = stage_position;
         break;
-    case 305: // scan sixth well with param1 number of readings
+    case 305: // baseline scan param1 number of readings
+        indx = get_next_command_param(arg, indx, &param1, 4);
+        reset_stage(false);
+        print_spectrophotometer_heading();
+        spectrophotometer_scan(&baseline_scan, param1);
+        sleep_motor();
+        result = stage_position;
+        break;
+    case 306: // test scan param1 number of readings
         indx = get_next_command_param(arg, indx, &param1, 4);
         reset_stage(false);
         print_spectrophotometer_heading();
@@ -2504,7 +2635,7 @@ int particle_command(String arg)
         sleep_motor();
         result = stage_position;
         break;
-    case 306: // generate test data record
+    case 307: // generate test data record
         process_test_record();
         Log.info("Particle register: %s", particle_register);
         result = stage_position;

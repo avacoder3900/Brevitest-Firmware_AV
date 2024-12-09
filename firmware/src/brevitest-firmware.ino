@@ -1600,20 +1600,57 @@ void add_to_accum_stdev(SpectrophotometerAccumulator *accum, BrevitestSpectropho
 void generate_stdev(BrevitestSpectrophotometerReading *reading, SpectrophotometerAccumulator *accum, int number_of_samples)
 {
     int denom = number_of_samples - 1;
-    reading->f1 = accum->f1 / denom;
-    reading->f2 = accum->f2 / denom;
-    reading->f3 = accum->f3 / denom;
-    reading->f4 = accum->f4 / denom;
-    reading->f5 = accum->f5 / denom;
-    reading->f6 = accum->f6 / denom;
-    reading->f7 = accum->f7 / denom;
-    reading->f8 = accum->f8 / denom;
-    reading->clear = accum->clear / denom;
-    reading->nir = accum->nir / denom;
-    reading->temperature = accum->temperature / denom;
-    reading->laser_strength = accum->laser_strength / denom;
+    reading->f1 = denom > 0 ? integerSqrt(accum->f1 / denom) : 0;
+    reading->f2 = denom > 0 ? integerSqrt(accum->f2 / denom) : 0;
+    reading->f3 = denom > 0 ? integerSqrt(accum->f3 / denom) : 0;
+    reading->f4 = denom > 0 ? integerSqrt(accum->f4 / denom) : 0;
+    reading->f5 = denom > 0 ? integerSqrt(accum->f5 / denom) : 0;
+    reading->f6 = denom > 0 ? integerSqrt(accum->f6 / denom) : 0;
+    reading->f7 = denom > 0 ? integerSqrt(accum->f7 / denom) : 0;
+    reading->f8 = denom > 0 ? integerSqrt(accum->f8 / denom) : 0;
+    reading->clear = denom > 0 ? integerSqrt(accum->clear / denom) : 0;
+    reading->nir = denom > 0 ? integerSqrt(accum->nir / denom) : 0;
+    reading->temperature = denom > 0 ? integerSqrt(accum->temperature / denom) : 0;
+    reading->laser_strength = denom > 0 ? integerSqrt(accum->laser_strength / denom) : 0;
     Log.info("\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d",
              reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir, reading->temperature, reading->laser_strength);
+}
+
+void generate_diff()
+{
+    BrevitestSpectrophotometerReading *d, *b, *t;
+    char channel;
+    int position;
+
+    if (baseline_scan.number_of_samples != test_scan.number_of_samples)
+    {
+        Log.info("Baseline and test scans have different number of samples");
+        return;
+    }
+    print_spectrophotometer_heading();
+
+    diff_scan.number_of_samples = baseline_scan.number_of_samples;
+    for (int i = 0; i < baseline_scan.number_of_samples * 3; i++)
+    {
+        channel = baseline_scan.sample[i].channel;
+        position = baseline_scan.sample[i].position;
+        d = &(diff_scan.sample[i].reading);
+        b = &(baseline_scan.sample[i].reading);
+        t = &(test_scan.sample[i].reading);
+        d->f1 = t->f1 - b->f1;
+        d->f2 = t->f2 - b->f2;
+        d->f3 = t->f3 - b->f3;
+        d->f4 = t->f4 - b->f4;
+        d->f5 = t->f5 - b->f5;
+        d->f6 = t->f6 - b->f6;
+        d->f7 = t->f7 - b->f7;
+        d->f8 = t->f8 - b->f8;
+        d->clear = t->clear - b->clear;
+        d->nir = t->nir - b->nir;
+        d->temperature = t->temperature - b->temperature;
+        d->laser_strength = t->laser_strength - b->laser_strength;
+        Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, position, d->laser_strength, d->f1, d->f2, d->f3, d->f4, d->f5, d->f6, d->f7, d->f8, d->clear, d->nir);
+    }
 }
 
 void calculate_stdev(BrevitestScanRecord *scan, BrevitestSpectrophotometerReading *mean, BrevitestSpectrophotometerReading *output)
@@ -1635,12 +1672,24 @@ void calculate_stdev(BrevitestScanRecord *scan, BrevitestSpectrophotometerReadin
 
 void process_test_samples(BrevitestTestRecord *t)
 {
-    Log.info("Mean: f1\t\tf2\t\tf3\t\tf4\t\tf5\t\tf6\t\tf7\t\tf8\t\tclear\t\tnir\t\ttemp\t\tlaser");
+    generate_diff();
+
+    Log.info("\t\tf1\t\tf2\t\tf3\t\tf4\t\tf5\t\tf6\t\tf7\t\tf8\t\tclear\t\tnir\t\ttemp\t\tlaser");
+
+    Log.info("Baseline:\tMean:");
     calculate_mean(&baseline_scan, t->baseline_mean);
+    Log.info("\t\tStdev:");
     calculate_stdev(&baseline_scan, t->baseline_mean, t->baseline_stdev);
+
+    Log.info("Test:\tMean:");
     calculate_mean(&test_scan, t->test_mean);
-    // process baseline variance
-    // process test variance
+    Log.info("\t\tStdev:");
+    calculate_stdev(&test_scan, t->test_mean, t->test_stdev);
+
+    Log.info("Diff:\tMean:");
+    calculate_mean(&diff_scan, t->diff_mean);
+    Log.info("\t\tStdev:");
+    calculate_stdev(&diff_scan, t->diff_mean, t->diff_stdev);
 }
 
 void process_test_record()
@@ -2426,7 +2475,15 @@ int particle_command(String arg)
         power_off_all_spectrophotometers();
         result = stage_position;
         break;
-    case 305: // scan sixth well with param1 number of readings
+    case 305: // baseline scan param1 number of readings
+        indx = get_next_command_param(arg, indx, &param1, 4);
+        reset_stage(false);
+        print_spectrophotometer_heading();
+        spectrophotometer_scan(&baseline_scan, param1);
+        sleep_motor();
+        result = stage_position;
+        break;
+    case 306: // test scan param1 number of readings
         indx = get_next_command_param(arg, indx, &param1, 4);
         reset_stage(false);
         print_spectrophotometer_heading();
@@ -2434,7 +2491,7 @@ int particle_command(String arg)
         sleep_motor();
         result = stage_position;
         break;
-    case 306: // generate test data record
+    case 307: // generate test data record
         process_test_record();
         Log.info("Particle register: %s", particle_register);
         result = stage_position;

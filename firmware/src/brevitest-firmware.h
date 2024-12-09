@@ -411,7 +411,7 @@ struct BrevitestScanRecord
 { // 484 bytes
     uint8_t number_of_samples;
     BrevitestSpectrophotometerRecord sample[3 * SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES]; // 32 * 60 = 1920 bytes
-} baseline_scan, test_scan;
+} baseline_scan, test_scan, diff_scan;
 
 struct BrevitestTestRecord
 { // 484 bytes
@@ -423,6 +423,8 @@ struct BrevitestTestRecord
     BrevitestSpectrophotometerReading baseline_stdev[3];
     BrevitestSpectrophotometerReading test_mean[3];
     BrevitestSpectrophotometerReading test_stdev[3];
+    BrevitestSpectrophotometerReading diff_mean[3];
+    BrevitestSpectrophotometerReading diff_stdev[3];
 } test;
 
 struct BrevitestAssay
