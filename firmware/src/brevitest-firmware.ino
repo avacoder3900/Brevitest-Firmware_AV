@@ -1489,8 +1489,8 @@ void initialize_test_cache()
 
 void store_test()
 {
+    process_test_record(&test);
     memcpy(eeprom.cache.cartridge_uuid, test.cartridge_uuid, sizeof(BrevitestTestRecord));
-    process_test_record(&(eeprom.cache));
     store_eeprom();
 }
 
