@@ -1832,18 +1832,18 @@ int append_test_reading(int start, char channel, BrevitestSpectrophotometerData 
 {
     return sprintf(&(particle_register[start]), "%c%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
                    channel, ARG_DELIM,
-                   reading->f1, ARG_DELIM,
-                   reading->f2, ARG_DELIM,
-                   reading->f3, ARG_DELIM,
-                   reading->f4, ARG_DELIM,
-                   reading->f5, ARG_DELIM,
-                   reading->f6, ARG_DELIM,
-                   reading->f7, ARG_DELIM,
-                   reading->f8, ARG_DELIM,
-                   reading->clear, ARG_DELIM,
-                   reading->nir, ARG_DELIM,
-                   reading->temperature, ARG_DELIM,
-                   reading->laser_strength, ATTR_DELIM);
+                   (uint16_t) (reading->f1), ARG_DELIM,
+                   (uint16_t) (reading->f2), ARG_DELIM,
+                   (uint16_t) (reading->f3), ARG_DELIM,
+                   (uint16_t) (reading->f4), ARG_DELIM,
+                   (uint16_t) (reading->f5), ARG_DELIM,
+                   (uint16_t) (reading->f6), ARG_DELIM,
+                   (uint16_t) (reading->f7), ARG_DELIM,
+                   (uint16_t) (reading->f8), ARG_DELIM,
+                   (uint16_t) (reading->clear), ARG_DELIM,
+                   (uint16_t) (reading->nir), ARG_DELIM,
+                   (uint16_t) (reading->temperature), ARG_DELIM,
+                   (uint16_t) (reading->laser_strength), ATTR_DELIM);
 }
 
 void process_test_record(BrevitestTestRecord *t)
@@ -2054,13 +2054,6 @@ int process_one_BCODE_command(int cmd, int index)
         oscillate_stage(param1, param2, param3, true);
         BCODE_loop();
         break;
-    case 4:                                      // Buzz(milliseconds, frequency)
-        index = get_BCODE_token(index, &param1); // duration_ms
-        index = get_BCODE_token(index, &param2); // frequency
-        update_progress("Buzzing", param1);
-        turn_on_buzzer_for_duration(param1, param2);
-        BCODE_loop();
-        break;
     case 11: // Baseline reading
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of samples
@@ -2069,7 +2062,7 @@ int process_one_BCODE_command(int cmd, int index)
         spectrophotometer_scan(&baseline_scan, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 14: // Read spectrophotometers
+    case 14: // Test readings
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of samples
         update_progress("Reading", 2000);
