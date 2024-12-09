@@ -2062,8 +2062,6 @@ int process_one_BCODE_command(int cmd, int index)
         BCODE_loop();
         break;
     case 11: // Baseline reading
-    case 12: // Baseline reading
-    case 13: // Baseline reading
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
         index = get_BCODE_token(index, &param1); // number of samples
         update_progress("Baseline", 2000);
@@ -2071,12 +2069,9 @@ int process_one_BCODE_command(int cmd, int index)
         spectrophotometer_scan(&baseline_scan, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 15: // Baseline time
-        update_progress("Baseline time", 2000);
-        break;
     case 14: // Read spectrophotometers
-    case 30: // Read spectrophotometers
         // update_progress("Preparing", abs(stage_position - STAGE_OPTICAL_SENSOR_READ_POSITION) * MOTOR_FAST_STEP_DELAY / MOTOR_MOVE_DURATION_UNIT);
+        index = get_BCODE_token(index, &param1); // number of samples
         update_progress("Reading", 2000);
         position = stage_position;
         spectrophotometer_scan(&test_scan, param1);
