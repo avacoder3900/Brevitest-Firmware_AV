@@ -367,8 +367,31 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 // spectrophotometer data structure
 
 char channels[3] = { 'A', 'B', 'C' };
+
+struct BrevitestSpectrophotometerData
+{ // 32 bytes
+    char channel;
+    uint16_t position;
+    unsigned long msec;
+    int f1;
+    int f2;
+    int f3;
+    int f4;
+    int f5;
+    int f6;
+    int f7;
+    int f8;
+    int clear;
+    int nir;
+    int temperature;
+    int laser_strength;
+} stress_spectro_record[3];
+
 struct BrevitestSpectrophotometerReading
 { // 32 bytes
+    char channel;
+    uint16_t position;
+    unsigned long msec;
     uint16_t f1;
     uint16_t f2;
     uint16_t f3;
@@ -383,34 +406,26 @@ struct BrevitestSpectrophotometerReading
     uint16_t laser_strength;
 };
 
-struct BrevitestSpectrophotometerRecord
-{ // 32 bytes
-    char channel;
-    uint16_t position;
-    unsigned long msec;
-    BrevitestSpectrophotometerReading reading;
-} stress_spectro_record[3];
-
 struct SpectrophotometerAccumulator
 { // 48 bytes
-    uint32_t f1;
-    uint32_t f2;
-    uint32_t f3;
-    uint32_t f4;
-    uint32_t f5;
-    uint32_t f6;
-    uint32_t f7;
-    uint32_t f8;
-    uint32_t clear;
-    uint32_t nir;
-    uint32_t temperature;
-    uint32_t laser_strength;
+    int f1;
+    int f2;
+    int f3;
+    int f4;
+    int f5;
+    int f6;
+    int f7;
+    int f8;
+    int clear;
+    int nir;
+    int temperature;
+    int laser_strength;
 } accum_a, accum_b, accum_c;
 
-struct BrevitestScanRecord
+struct BrevitestScanData
 { // 484 bytes
     uint8_t number_of_samples;
-    BrevitestSpectrophotometerRecord sample[3 * SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES]; // 32 * 60 = 1920 bytes
+    BrevitestSpectrophotometerData sample[3 * SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES]; // 32 * 60 = 1920 bytes
 } baseline_scan, test_scan, diff_scan;
 
 struct BrevitestTestRecord
@@ -419,12 +434,12 @@ struct BrevitestTestRecord
     bool test_completed = false;
     uint16_t number_of_samples;
     uint16_t duration;
-    BrevitestSpectrophotometerReading baseline_mean[3];
-    BrevitestSpectrophotometerReading baseline_stdev[3];
-    BrevitestSpectrophotometerReading test_mean[3];
-    BrevitestSpectrophotometerReading test_stdev[3];
-    BrevitestSpectrophotometerReading diff_mean[3];
-    BrevitestSpectrophotometerReading diff_stdev[3];
+    BrevitestSpectrophotometerData baseline_mean[3];
+    BrevitestSpectrophotometerData baseline_stdev[3];
+    BrevitestSpectrophotometerData test_mean[3];
+    BrevitestSpectrophotometerData test_stdev[3];
+    BrevitestSpectrophotometerData diff_mean[3];
+    BrevitestSpectrophotometerData diff_stdev[3];
 } test;
 
 struct BrevitestAssay
@@ -447,7 +462,6 @@ struct Particle_EEPROM
     char running_test_uuid[CARTRIDGE_UUID_LENGTH + 1];
     BrevitestTestRecord cache;
     int stress_test_reading_count = 0;
-    BrevitestSpectrophotometerRecord stress_test_reading[STRESS_TEST_MAXIMUM_RECORDS];
 } eeprom;
 
 #define BLE_TYPE BleCharacteristicProperty::READ
