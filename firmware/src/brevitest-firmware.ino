@@ -2757,8 +2757,6 @@ void setup()
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
-    power_off_all_spectrophotometers();
-
     connect_to_cloud();
 
     device_id = System.deviceID();
@@ -2778,6 +2776,7 @@ void setup()
         Log.info("Could not start I2C bus");
     }
     init_spectrophotometer_switch();
+    power_off_all_spectrophotometers();
 
     start_temperature_control();
 

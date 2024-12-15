@@ -1631,8 +1631,8 @@ void initialize_test_cache()
 
 void store_test()
 {
+    process_test_record(&test);
     memcpy(eeprom.cache.cartridge_uuid, test.cartridge_uuid, sizeof(BrevitestTestRecord));
-    process_test_record(&(eeprom.cache));
     store_eeprom();
 }
 
@@ -1832,18 +1832,18 @@ int append_test_reading(int start, char channel, BrevitestSpectrophotometerData 
 {
     return sprintf(&(particle_register[start]), "%c%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c%X%c",
                    channel, ARG_DELIM,
-                   (uint16_t) (reading->f1), ARG_DELIM,
-                   (uint16_t) (reading->f2), ARG_DELIM,
-                   (uint16_t) (reading->f3), ARG_DELIM,
-                   (uint16_t) (reading->f4), ARG_DELIM,
-                   (uint16_t) (reading->f5), ARG_DELIM,
-                   (uint16_t) (reading->f6), ARG_DELIM,
-                   (uint16_t) (reading->f7), ARG_DELIM,
-                   (uint16_t) (reading->f8), ARG_DELIM,
-                   (uint16_t) (reading->clear), ARG_DELIM,
-                   (uint16_t) (reading->nir), ARG_DELIM,
-                   (uint16_t) (reading->temperature), ARG_DELIM,
-                   (uint16_t) (reading->laser_strength), ATTR_DELIM);
+                   reading->f1, ARG_DELIM,
+                   reading->f2, ARG_DELIM,
+                   reading->f3, ARG_DELIM,
+                   reading->f4, ARG_DELIM,
+                   reading->f5, ARG_DELIM,
+                   reading->f6, ARG_DELIM,
+                   reading->f7, ARG_DELIM,
+                   reading->f8, ARG_DELIM,
+                   reading->clear, ARG_DELIM,
+                   reading->nir, ARG_DELIM,
+                   reading->temperature, ARG_DELIM,
+                   reading->laser_strength, ATTR_DELIM);
 }
 
 void process_test_record(BrevitestTestRecord *t)
@@ -2899,8 +2899,6 @@ void setup()
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
-    power_off_all_spectrophotometers();
-
     connect_to_cloud();
 
     device_id = System.deviceID();
@@ -2920,6 +2918,7 @@ void setup()
         Log.info("Could not start I2C bus");
     }
     init_spectrophotometer_switch();
+    power_off_all_spectrophotometers();
 
     start_temperature_control();
 
