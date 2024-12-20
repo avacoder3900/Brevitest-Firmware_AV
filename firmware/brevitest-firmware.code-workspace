@@ -28,6 +28,7 @@
             "stack": "cpp",
             "forward_list": "cpp",
             "ios": "cpp"
-        }
+        },
+        "particle.enablePre-releaseDeviceOSBuilds": true
 	}
 }

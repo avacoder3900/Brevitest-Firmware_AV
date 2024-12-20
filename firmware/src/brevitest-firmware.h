@@ -434,12 +434,8 @@ struct BrevitestTestRecord
     bool test_completed = false;
     uint16_t number_of_samples;
     uint16_t duration;
-    BrevitestSpectrophotometerData baseline_mean[3];
-    BrevitestSpectrophotometerData baseline_stdev[3];
-    BrevitestSpectrophotometerData test_mean[3];
-    BrevitestSpectrophotometerData test_stdev[3];
-    BrevitestSpectrophotometerData diff_mean[3];
-    BrevitestSpectrophotometerData diff_stdev[3];
+    BrevitestSpectrophotometerReading baseline[12];
+    BrevitestSpectrophotometerReading test[12];
 } test;
 
 struct BrevitestAssay
