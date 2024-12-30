@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 1
+#define FIRMWARE_VERSION 2
 #define DATA_FORMAT_VERSION 33
 
 #define TEST_DATA_FORMAT_CODE 'F'
@@ -40,7 +40,7 @@
 #define SPECTRO_ASTEP_DEFAULT 599
 #define SPECTRO_ATIME_DEFAULT 39
 #define SPECTRO_AGAIN_DEFAULT 7
-#define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 20    // maximum number of samples in a scan
+#define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 6    // maximum number of samples in a scan
 #define SPECTRO_WELL_LENGTH 6000                // sixth well length in microns
 #define SPECTRO_STARTING_STAGE_POSITION 22000
 
@@ -165,6 +165,16 @@
 // stress test
 #define STRESS_TEST_MAXIMUM_RECORDS 15
 
+// test status codes
+#define TEST_STATUS_UNDERWAY 0x00
+#define TEST_STATUS_SUCCESS 0x01
+#define TEST_STATUS_CANCELLED 0x02
+#define TEST_STATUS_INVALID_CARTRIDGE 0x03
+#define TEST_STATUS_VALIDATION_CANCELLED 0x04
+#define TEST_STATUS_FAILED_TO_START 0x05
+#define TEST_STATUS_START_CANCELLED 0x06
+#define TEST_STATUS_ERROR 0xFF
+
 // pin definitions
 int pinBuzzer = A0;
 int pinHeaterThermistor = A1;
@@ -265,7 +275,7 @@ unsigned long callback_timeout = 0;
 bool publish_in_progress = false;
 int publish_retry_attempt = 0;
 int publish_retry_max_index = 9;
-unsigned long publish_retry_intervals[10] = {5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000};
+unsigned long publish_retry_intervals[6] = {34000, 55000, 89000, 144000, 233000, 377000};
 unsigned long next_spectrophotometer_reading_time = 0;
 
 // temperature control system
@@ -368,30 +378,8 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 
 char channels[3] = { 'A', 'B', 'C' };
 
-struct BrevitestSpectrophotometerData
-{ // 32 bytes
-    char channel;
-    uint16_t position;
-    unsigned long msec;
-    int f1;
-    int f2;
-    int f3;
-    int f4;
-    int f5;
-    int f6;
-    int f7;
-    int f8;
-    int clear;
-    int nir;
-    int temperature;
-    int laser_strength;
-} stress_spectro_record[3];
-
 struct BrevitestSpectrophotometerReading
-{ // 32 bytes
-    char channel;
-    uint16_t position;
-    unsigned long msec;
+{ // 24 bytes
     uint16_t f1;
     uint16_t f2;
     uint16_t f3;
@@ -406,36 +394,29 @@ struct BrevitestSpectrophotometerReading
     uint16_t laser_strength;
 };
 
-struct SpectrophotometerAccumulator
-{ // 48 bytes
-    int f1;
-    int f2;
-    int f3;
-    int f4;
-    int f5;
-    int f6;
-    int f7;
-    int f8;
-    int clear;
-    int nir;
-    int temperature;
-    int laser_strength;
-} accum_a, accum_b, accum_c;
+struct BrevitestSpectrophotometerData
+{ // 78 bytes
+    uint16_t position;
+    unsigned long msec;
+    BrevitestSpectrophotometerReading channel_a; // 24 bytes
+    BrevitestSpectrophotometerReading channel_b; // 24 bytes
+    BrevitestSpectrophotometerReading channel_c; // 24 bytes
+} stress_spectro_data;
 
-struct BrevitestScanData
-{ // 484 bytes
+struct BrevitestScanRecord
+{ // 966 bytes for 6 samples max
     uint8_t number_of_samples;
-    BrevitestSpectrophotometerData sample[3 * SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES]; // 32 * 60 = 1920 bytes
-} baseline_scan, test_scan, diff_scan;
+    BrevitestSpectrophotometerData sample[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
+} scan;
 
 struct BrevitestTestRecord
-{ // 484 bytes
+{ // 966 bytes for 6 samples max
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    bool test_completed = false;
-    uint16_t number_of_samples;
+    uint8_t number_of_samples;
+    uint16_t test_status_code = TEST_STATUS_UNDERWAY;
     uint16_t duration;
-    BrevitestSpectrophotometerReading baseline[12];
-    BrevitestSpectrophotometerReading test[12];
+    BrevitestSpectrophotometerData baseline[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
+    BrevitestSpectrophotometerData test[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
 } test;
 
 struct BrevitestAssay
