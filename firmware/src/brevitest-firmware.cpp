@@ -68,7 +68,6 @@ bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341);
 void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerReading *reading);
 void print_spectrophotometer_heading();
 BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data);
-void spectrophotometer_scan(BrevitestSpectrophotometerData *data, int number_of_samples);
 void stress_test_read_spectrophotometer();
 int get_heater_temperature();
 void heater_temperature_read();
@@ -1114,7 +1113,7 @@ void read_spectrophotometer_number(BrevitestSpectrophotometerData *data, int cha
     read_spectrophotometer(data, channel, log);
 }
 
-void spectrophotometer_scan(BrevitestSpectrophotometerData *data, int number_of_samples)
+void spectrophotometer_scan(BrevitestSpectrophotometerData *data, int number_of_samples, bool log = false)
 {
     BrevitestSpectrophotometerData *d;
     int sample_spacing_microns = 0;
@@ -1132,18 +1131,18 @@ void spectrophotometer_scan(BrevitestSpectrophotometerData *data, int number_of_
     move_stage_to_position(starting_stage_position, MOTOR_SLOW_STEP_DELAY);
     data->position = stage_position;
     data->msec = millis();
-    read_spectrophotometer(data, 'A', true);
-    read_spectrophotometer(data, 'B', true);
-    read_spectrophotometer(data, 'C', true);
+    read_spectrophotometer(data, 'A', log);
+    read_spectrophotometer(data, 'B', log);
+    read_spectrophotometer(data, 'C', log);
     for (int i = 1; i < sample_count; i++)
     {
         d = &(data[i]);
         move_stage(sample_spacing_microns, MOTOR_SLOW_STEP_DELAY);
         d->position = stage_position;
         d->msec = millis();
-        read_spectrophotometer(d, 'A', true);
-        read_spectrophotometer(d, 'B', true);
-        read_spectrophotometer(d, 'C', true);
+        read_spectrophotometer(d, 'A', log);
+        read_spectrophotometer(d, 'B', log);
+        read_spectrophotometer(d, 'C', log);
     }
 }
 
@@ -1502,14 +1501,37 @@ void remove_test_from_cache(char *testToRemove)
 void callback_upload_test(const char *name, String result)
 {
     clear_current_event();
-    bool success = (strncmp(callback_status, SUCCESS, 7) == 0);
-    bool invalid = (strncmp(callback_status, INVALID, 7) == 0);
-    if (success || invalid)
+    test_upload_in_progress = false;
+    test_upload_mode = false;
+
+    JSONValue parsed = JSONValue::parseCopy(result);
+    JSONObjectIterator iter(parsed);
+    while (iter.next())
     {
-        test_upload_in_progress = false;
-        test_upload_mode = false;
-        test_invalid = invalid;
-        remove_test_from_cache(callback_data);
+        if (iter.name() == "status")
+        {
+            if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
+            {
+                test_invalid = false;
+                Log.info("Uploaded test successful");
+            }
+            else
+            {
+                test_invalid = true;
+                Log.info("Uploaded test invalid");
+            }
+        }
+        else if (iter.name() == "errorMessage")
+        {
+            char *error = (char *)iter.value().toString().data();
+            Log.info("Upload test error: %s", error);
+        }
+        else if (iter.name() == "serialNumber")
+        {
+            char *serialNumber = (char *)iter.value().toString().data();
+            remove_test_from_cache(serialNumber);
+            Log.info("Upload test: serial number %s", serialNumber);
+        }
     }
 }
 
@@ -1814,7 +1836,7 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // number of samples
         update_progress("Baseline", 2000);
         position = stage_position;
-        test.number_of_samples = param1;
+        test.number_of_samples = param1 << 4;
         spectrophotometer_scan(test.baseline, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
@@ -1823,7 +1845,7 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // number of samples
         update_progress("Reading", 2000);
         position = stage_position;
-        test.number_of_samples = param1;
+        test.number_of_samples = test.number_of_samples | param1;
         spectrophotometer_scan(test.test, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
@@ -2365,8 +2387,8 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &param1, 4);
         reset_stage(false);
         print_spectrophotometer_heading();
-        scan.number_of_samples = param1;
-        spectrophotometer_scan(scan.sample, param1);
+        scan.number_of_samples = param1 << 4;
+        spectrophotometer_scan(scan.sample, param1, true);
         sleep_motor();
         result = stage_position;
         break;
@@ -2375,7 +2397,7 @@ int particle_command(String arg)
         reset_stage(false);
         print_spectrophotometer_heading();
         scan.number_of_samples = param1;
-        spectrophotometer_scan(scan.sample, param1);
+        spectrophotometer_scan(scan.sample, param1, true);
         sleep_motor();
         result = stage_position;
         break;
@@ -2457,17 +2479,17 @@ void run_test()
     disconnect_from_cloud();
     stop_temperature_control();
 
-    // SINGLE_THREADED_BLOCK()
-    // {
-    memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
-    store_eeprom();
-    start_millis = millis();
+    SINGLE_THREADED_BLOCK()
+    {
+        memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
+        store_eeprom();
+        start_millis = millis();
 
-    process_BCODE(0);
+        process_BCODE(0);
 
-    test.duration = (millis() - start_millis) / 1000;
-    write_test_record_to_eeprom();
-    // }
+        test.duration = (millis() - start_millis) / 1000;
+        write_test_record_to_eeprom();
+    }
 
     start_temperature_control();
 

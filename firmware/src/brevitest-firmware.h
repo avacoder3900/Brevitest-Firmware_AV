@@ -395,8 +395,9 @@ struct BrevitestSpectrophotometerReading
 };
 
 struct BrevitestSpectrophotometerData
-{ // 78 bytes
+{ // 80 bytes
     uint16_t position;
+    uint16_t reserved;
     unsigned long msec;
     BrevitestSpectrophotometerReading channel_a; // 24 bytes
     BrevitestSpectrophotometerReading channel_b; // 24 bytes
@@ -410,11 +411,12 @@ struct BrevitestScanRecord
 } scan;
 
 struct BrevitestTestRecord
-{ // 966 bytes for 6 samples max
+{ // 992 bytes for 6 samples max
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    uint8_t number_of_samples;
+    uint8_t number_of_samples; // 4 MSB = number of baselines, 4 LSB = number of tests
     uint16_t test_status_code = TEST_STATUS_UNDERWAY;
     uint16_t duration;
+    uint16_t reserved;
     BrevitestSpectrophotometerData baseline[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
     BrevitestSpectrophotometerData test[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
 } test;
