@@ -148,15 +148,8 @@
 #define PID_STABLE_VALUE_DELTA 10
 
 // pubsub
-#define PUBSUB_EVENT_NAME "brevitest-multiplex"
 #define PUBSUB_EVENT_MAX_LENGTH 32
-#define PUBSUB_STATUS_MAX_LENGTH 16
-#define PUBSUB_CALLBACK_BUFFER_SIZE 5000
-#define PUBSUB_VERIFY_DEVICE 10
-#define PUBSUB_VALIDATE_CARTRIDGE 20
-#define PUBSUB_START_TEST 30
-#define PUBSUB_UPLOAD_TEST 40
-#define PUBSUB_VALIDATE_MAGNETS 50
+#define PUBSUB_RETRY_DELAY 22000
 
 // magnetometer
 #define MAGNETOMETER_HEATING_DELAY 3000
@@ -273,10 +266,6 @@ bool shipping_bolt_cartridge_inserted = false;
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
 bool publish_in_progress = false;
-int publish_retry_attempt = 0;
-int publish_retry_max_index = 9;
-unsigned long publish_retry_intervals[6] = {34000, 55000, 89000, 144000, 233000, 377000};
-unsigned long next_spectrophotometer_reading_time = 0;
 
 // temperature control system
 struct HeatingElement
@@ -363,13 +352,7 @@ char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 
 // publish and subscribe callback
-char callback_buffer[PUBSUB_CALLBACK_BUFFER_SIZE + 1];
-bool callback_complete;
-char callback_event[PUBSUB_EVENT_MAX_LENGTH + 1];
-char callback_status[PUBSUB_STATUS_MAX_LENGTH + 1];
-char *callback_data;
 char current_event[PUBSUB_EVENT_MAX_LENGTH + 1];
-int current_event_code = 0;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];

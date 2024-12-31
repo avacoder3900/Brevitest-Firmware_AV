@@ -90,9 +90,9 @@ void publish_upload_magnet_validation();
 void callback_upload_magnet_validation(const char *name, String result);
 void set_current_event(String event_name);
 void clear_current_event();
-bool brevitest_publish(String event_name, char *payload, int size);
-bool brevitest_publish(String event_name, char *event_data);
-bool brevitest_publish(String event_name);
+void brevitest_publish(String event_name, char *payload, int size);
+void brevitest_publish(String event_name, char *event_data);
+void brevitest_publish(String event_name);
 void erase_test_from_cache();
 void initialize_test_cache();
 void store_test();
@@ -960,11 +960,11 @@ void init_spectrophotometer_switch()
     byte result = Wire.endTransmission();
     if (result != 0)
     {
-        Serial.printlnf("Error initializing spectrophotometer power: %d", result);
+        Log.info("Error initializing spectrophotometer power: %d", result);
     }
     else
     {
-        Serial.printlnf("Spectrophotometer switch initialized");
+        Log.info("Spectrophotometer switch initialized");
     }
     delay(10);
 }
@@ -1163,8 +1163,13 @@ void stress_test_read_spectrophotometer()
 int get_heater_temperature()
 {
     analogWrite(heater.heater_pin, 0);
-    delayMicroseconds(10000);
-    int raw = analogRead(heater.thermistor_pin);
+    delay(5);
+
+    int raw1 = analogRead(heater.thermistor_pin);
+    int raw2 = analogRead(heater.thermistor_pin);
+    int raw3 = analogRead(heater.thermistor_pin);
+    int raw = raw1 + raw2 + raw3 - max(raw1, max(raw2, raw3)) - min(raw1, min(raw2, raw3));
+
     analogWrite(heater.heater_pin, heater.power);
 
     if (raw == 0)
@@ -1270,7 +1275,7 @@ void stop_temperature_control()
 void callback_error(const char *name, String result)
 {
     clear_current_event();
-    Log.info("Webhook error: %s", result.c_str());
+    Log.info("Webhook error: event = %s, error = %s", name, result.c_str());
 }
 
 /////////////////////////////////////////////////////
@@ -1287,7 +1292,14 @@ void publish_verify_device()
 void startup_device(void);
 void callback_verify_device(const char *name, String result)
 {
+    if (strcmp(current_event, "verify-device") != 0)
+    {
+        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
+        return;
+    }
     clear_current_event();
+    device_verification_in_progress = false;
+
     JSONValue parsed = JSONValue::parseCopy(result);
     JSONObjectIterator iter(parsed);
     while (iter.next())
@@ -1306,7 +1318,6 @@ void callback_verify_device(const char *name, String result)
                 Log.info("Device not verified - device not started!");
                 device_verified = false;
             }
-            device_verification_in_progress = false;
         }
     }
 }
@@ -1327,6 +1338,11 @@ void callback_validate_cartridge(const char *name, String result)
 {
     int crc_loaded = 0, crc_calculated;
 
+    if (strcmp(current_event, "validate-cartridge") != 0)
+    {
+        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
+        return;
+    }
     clear_current_event();
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
@@ -1412,6 +1428,11 @@ void publish_start_test()
 void write_test_record_to_eeprom();
 void callback_start_test(const char *name, String result)
 {
+    if (strcmp(current_event, "start-test") != 0)
+    {
+        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
+        return;
+    }
     clear_current_event();
     test_start_in_progress = false;
     test_start_mode = false;
@@ -1500,6 +1521,11 @@ void remove_test_from_cache(char *testToRemove)
 
 void callback_upload_test(const char *name, String result)
 {
+    if (strcmp(current_event, "upload-test") != 0)
+    {
+        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
+        return;
+    }
     clear_current_event();
     test_upload_in_progress = false;
     test_upload_mode = false;
@@ -1546,6 +1572,11 @@ void publish_upload_magnet_validation()
 
 void callback_upload_magnet_validation(const char *name, String result)
 {
+    if (strcmp(current_event, "validate-magnets") != 0)
+    {
+        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
+        return;
+    }
     clear_current_event();
     Log.info("Magnet validation: %s", result.c_str());
     delay(2000);
@@ -1559,73 +1590,57 @@ void callback_upload_magnet_validation(const char *name, String result)
 void set_current_event(String event_name)
 {
     strcpy(current_event, event_name.c_str());
-    if (strcmp(current_event, "verify-device") == 0)
-    {
-        current_event_code = PUBSUB_VERIFY_DEVICE;
-    }
-    else if (strcmp(current_event, "validate-cartridge") == 0)
-    {
-        current_event_code = PUBSUB_VALIDATE_CARTRIDGE;
-    }
-    else if (strcmp(current_event, "start-test") == 0)
-    {
-        current_event_code = PUBSUB_START_TEST;
-    }
-    else if (strcmp(current_event, "upload-test") == 0)
-    {
-        current_event_code = PUBSUB_UPLOAD_TEST;
-    }
-    else if (strcmp(current_event, "validate-magnets") == 0)
-    {
-        current_event_code = PUBSUB_VALIDATE_MAGNETS;
-    }
-    else
-    {
-        current_event_code = 0;
-    }
+    publish_in_progress = true;
+    callback_timeout = millis() + PUBSUB_RETRY_DELAY;
 }
 
 void clear_current_event()
 {
     current_event[0] = '\0';
-    current_event_code = 0;
+    publish_in_progress = false;
 }
 
-bool brevitest_publish(String event_name, char *payload, int size) // binary test data
+void brevitest_publish(String event_name, char *payload, int size) // binary test data
 {
-    unsigned long retry_delay = rand() % 1000 + publish_retry_intervals[min(publish_retry_attempt, publish_retry_max_index)];
-    callback_timeout = millis() + retry_delay;
-    retry_delay /= 1000;
-    publish_retry_attempt++;
-    set_current_event(event_name);
-    Particle.publish(event_name, payload, size, ContentType::BINARY);
-    Log.info("PUBLISH: event = %s, payload size = %u", event_name.c_str(), size);
-    return true;
+    if (publish_in_progress)
+    {
+        Log.info("Publish in progress, event = %s", current_event);
+    }
+    else
+    {
+        set_current_event(event_name);
+        Log.info("PUBLISH: event = %s, payload size = %u", event_name.c_str(), size);
+        Particle.publish(event_name, payload, size, ContentType::BINARY, WITH_ACK);
+    }
 }
 
-bool brevitest_publish(String event_name, char *event_data) // text data
+void brevitest_publish(String event_name, char *event_data) // text data
 {
-    unsigned long retry_delay = rand() % 1000 + publish_retry_intervals[min(publish_retry_attempt, publish_retry_max_index)];
-    callback_timeout = millis() + retry_delay;
-    retry_delay /= 1000;
-    publish_retry_attempt++;
-    set_current_event(event_name);
-    String payload = String(event_data);
-    Particle.publish(event_name, payload, payload.length(), ContentType::TEXT);
-    Log.info("PUBLISH: event = %s,  payload size = %u, payload = %s", event_name.c_str(), payload.length(), payload.c_str());
-    return true;
+    if (publish_in_progress)
+    {
+        Log.info("Publish in progress, event = %s", current_event);
+    }
+    else
+    {
+        set_current_event(event_name);
+        String payload = String(event_data);
+        Log.info("PUBLISH: event = %s,  payload size = %u, payload = %s", event_name.c_str(), payload.length(), payload.c_str());
+        Particle.publish(event_name, payload, payload.length(), ContentType::TEXT, WITH_ACK);
+    }
 }
 
-bool brevitest_publish(String event_name) // no data
+void brevitest_publish(String event_name) // no data
 {
-    unsigned long retry_delay = rand() % 1000 + publish_retry_intervals[min(publish_retry_attempt, publish_retry_max_index)];
-    callback_timeout = millis() + retry_delay;
-    retry_delay /= 1000;
-    publish_retry_attempt++;
-    set_current_event(event_name);
-    Particle.publish(event_name);
-    Log.info("PUBLISH: event = %s", event_name.c_str());
-    return true;
+    if (publish_in_progress)
+    {
+        Log.info("Publish in progress, event = %s", current_event);
+    }
+    else
+    {
+        set_current_event(event_name);
+        Log.info("PUBLISH: event = %s", event_name.c_str());
+        Particle.publish(event_name, WITH_ACK);
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -2676,7 +2691,7 @@ void setup()
     Log.info("Device ID: %s", device_id.c_str());
 
     connect_to_cloud();
-    
+
     Particle.subscribe(String(device_id + "/hook-response/verify-device/"), callback_verify_device);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), callback_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), callback_start_test);
@@ -2822,17 +2837,21 @@ void set_device_indicators()
 
 void verify_device_loop()
 {
-    if (device_verification_in_progress)
+    if (device_verified)
+    {
+        return;
+    }
+    else if (device_verification_in_progress)
     {
         if (millis() > callback_timeout)
         {
-            Log.info("Device verification timed out. Retrying.");
-            publish_verify_device();
+            Log.info("Device verification timed out. Clearing event.");
+            device_verification_in_progress = false;
+            clear_current_event();
         }
     }
     else
     {
-        publish_retry_attempt = 0;
         publish_verify_device();
     }
 }
@@ -2903,56 +2922,61 @@ void magnet_validation_loop()
     {
         if (millis() > callback_timeout)
         {
-            Log.info("Uploading magnet validation data timed out. Retrying.");
-            publish_upload_magnet_validation();
+            Log.info("Uploading magnet validation data timed out. Clearing event.");
+            clear_current_event();
         }
+    }
+    else if (validate_magnets())
+    {
+        publish_upload_magnet_validation();
     }
     else
     {
-        if (validate_magnets())
-        {
-            publish_retry_attempt = 0;
-            publish_upload_magnet_validation();
-        }
-        else
-        {
-            magnet_validation_in_progress = false;
-            magnet_validation_mode = false;
-        }
+        magnet_validation_in_progress = false;
+        magnet_validation_mode = false;
     }
 }
 
 void cartridge_validation_loop()
 {
-    if (cartridge_validation_in_progress)
+    if (cartridge_validated)
+    {
+        return;
+    }
+    else if (cartridge_validation_in_progress)
     {
         if (millis() > callback_timeout)
         {
             Log.info("Cartridge validation timed out. Remove cartridge.");
             cartridge_validation_in_progress = false;
             cartridge_validation_mode = false;
+            clear_current_event();
         }
     }
     else
     {
-        publish_retry_attempt = 0;
         publish_validate_cartridge();
     }
 }
 
 void test_start_loop()
 {
-    if (test_start_in_progress)
+    if (test_underway)
+    {
+        return;
+    }
+    else if (test_start_in_progress)
     {
         if (millis() > callback_timeout)
         {
-            Log.info("Test start timed out. Retrying.");
-            publish_start_test();
+            Log.info("Test start timed out. Clearing event.");
+            test_start_mode = false;
+            test_start_in_progress = false;
+            clear_current_event();
         }
     }
     else
     {
-        publish_retry_attempt = 0;
         publish_start_test();
     }
 }
@@ -2963,13 +2987,14 @@ void test_upload_loop()
     {
         if (millis() > callback_timeout)
         {
-            Log.info("Test upload timed out. Retrying.");
-            publish_upload_test();
+            Log.info("Test upload timed out. Clearing event.");
+            test_upload_mode = false;
+            test_upload_in_progress = false;
+            clear_current_event();
         }
     }
     else
     {
-        publish_retry_attempt = 0;
         publish_upload_test();
     }
 }
