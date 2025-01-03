@@ -41,7 +41,7 @@
 #define SPECTRO_ATIME_DEFAULT 39
 #define SPECTRO_AGAIN_DEFAULT 7
 #define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 6    // maximum number of samples in a scan
-#define SPECTRO_WELL_LENGTH 6000                // sixth well length in microns
+#define SPECTRO_WELL_LENGTH 3000                // sixth well length in microns
 #define SPECTRO_STARTING_STAGE_POSITION 22000
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
