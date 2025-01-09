@@ -775,7 +775,7 @@ void turn_on_laser(char channel)
     // analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
     digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
-    delayMicroseconds(500);
+    // delayMicroseconds(500);
     if (serial_messaging_on)
     {
         int value = analogRead(laser->value_pin);
@@ -914,9 +914,9 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
     as7341->startMeasure(mode);
     while (!as7341->measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
     {
-        delay(1);
+        delayMicroseconds(10);
     }
-    if (as7341->measureComplete())
+    if (millis() - startTime < SPECTRO_TIMEOUT)
     {
         if (mode == as7341->eF1F4ClearNIR)
         {
@@ -952,6 +952,7 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
     }
     turn_on_laser(channel);
     spectroMeasure(channel, as7341, as7341->eF1F4ClearNIR, reading);
+    reading->msec = millis();
     reading->laser_power = analogRead(get_laser(channel)->value_pin);
     spectroMeasure(channel, as7341, as7341->eF5F8ClearNIR, reading);
     turn_off_laser(channel);
@@ -959,7 +960,7 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
 
 void print_spectrophotometer_heading()
 {
-    Serial.println("channel\tposition\tlaser pulses\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
+    Serial.println("channel\tposition\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
 BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data)
@@ -1042,7 +1043,6 @@ void spectrophotometer_reading(bool baseline, bool log = false)
 
     move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION, MOTOR_SLOW_STEP_DELAY);
     data->position = stage_position;
-    data->msec = millis();
     read_spectrophotometer(baseline, data, 'A', log);
     read_spectrophotometer(baseline, data, 'B', log);
     read_spectrophotometer(baseline, data, 'C', log);
@@ -1054,6 +1054,65 @@ void stress_test_read_spectrophotometer()
     read_spectrophotometer(true, &stress_spectro_data, 'A', true);
     read_spectrophotometer(true, &stress_spectro_data, 'B', true);
     read_spectrophotometer(true, &stress_spectro_data, 'C', true);
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//               LASER CHARACTERIZATION CODE               //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void characterize_laser(char channel, int cycles)
+{
+    BrevitestSpectrophotometerReading *reading;
+    int laser_pin = get_laser(channel)->value_pin;
+    unsigned long last;
+
+    reset_stage(false);
+    move_stage_to_optical_read_position();
+    DFRobot_AS7341 as7341(&Wire);
+    if (power_on_spectrophotometer(channel))
+    {
+        if (init_spectrophotometer(channel, &as7341))
+        {
+            Serial.printlnf("Characterizing laser - astep: %d, atime: %d, again: %d.", spectro_astep, spectro_atime, spectro_again);
+            memset(laser_characteristics, 0, sizeof(laser_characteristics));
+            last = millis();
+            for (int i = 0; i < cycles; i++)
+            {
+                if (i == 1)
+                {
+                    turn_on_laser(channel);
+                }
+                else if (i == cycles - 2)
+                {
+                    turn_off_laser(channel);
+                }
+                reading = &(laser_characteristics[i]);
+                spectroMeasure(channel, &as7341, as7341.eF1F4ClearNIR, reading);
+                reading->msec = millis() - last;
+                last = millis();
+                reading->laser_power = analogRead(laser_pin);
+                spectroMeasure(channel, &as7341, as7341.eF5F8ClearNIR, reading);
+            }
+            print_spectrophotometer_heading();
+            for (int i = 0; i < cycles; i++)
+            {
+                reading = &(laser_characteristics[i]);
+                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+            }
+        }
+        else
+        {
+            Log.info("Spectrophotometer %c initialization failed", channel);
+        }
+    }
+    else
+    {
+        Log.info("Spectrophotometer %c power on failed", channel);
+    }
+    power_off_all_spectrophotometers();
+    sleep_motor();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1754,7 +1813,7 @@ int process_one_BCODE_command(int cmd, int index)
         spectrophotometer_reading(true);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 14:                                     // Test readings
+    case 14: // Test readings
         update_progress("Reading", 2000);
         position = stage_position;
         spectrophotometer_reading(false);
@@ -2271,6 +2330,18 @@ int particle_command(String arg)
         spectro_atime = param2;
         spectro_again = param3;
         result = stage_position;
+        break;
+    case 302: // characterize laser param1: channel, param2: cycles, param3: astep, param4: atime, param5: again
+        indx = get_next_command_param(arg, indx, &param1, 1);
+        indx = get_next_command_param(arg, indx, &param2, LASER_CHARACTERIZE_MAX_CYCLES);
+        indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
+        spectro_astep = param3;
+        spectro_atime = param4;
+        spectro_again = param5;
+        characterize_laser((param1 - 1) + 'A', param2);
+        result = param2;
         break;
     case 303: // power on channel param1
         indx = get_next_command_param(arg, indx, &param1, 1);

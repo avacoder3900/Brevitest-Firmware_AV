@@ -134,6 +134,7 @@
 #define LASER_MAX_POWER 255
 #define LASER_DEFAULT_POWER 128
 #define LASER_PWM_FREQUENCY 500
+#define LASER_CHARACTERIZE_MAX_CYCLES 100
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -368,7 +369,8 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char channels[3] = { 'A', 'B', 'C' };
 
 struct BrevitestSpectrophotometerReading
-{ // 24 bytes
+{ // 28 bytes
+    unsigned long msec;
     uint16_t f1;
     uint16_t f2;
     uint16_t f3;
@@ -379,18 +381,17 @@ struct BrevitestSpectrophotometerReading
     uint16_t f8;
     uint16_t clear;
     uint16_t nir;
-    uint16_t laser_pulses;
     uint16_t laser_power;
-};
+    uint16_t laser_pulses;
+} laser_characteristics[100];
 
 struct BrevitestSpectrophotometerData
-{ // 80 bytes
+{ // 88 bytes
     uint16_t position;
     uint16_t temperature;
-    unsigned long msec;
-    BrevitestSpectrophotometerReading channel_a; // 24 bytes
-    BrevitestSpectrophotometerReading channel_b; // 24 bytes
-    BrevitestSpectrophotometerReading channel_c; // 24 bytes
+    BrevitestSpectrophotometerReading channel_a; // 28 bytes
+    BrevitestSpectrophotometerReading channel_b; // 28 bytes
+    BrevitestSpectrophotometerReading channel_c; // 28 bytes
 } stress_spectro_data;
 
 struct BrevitestTestRecord

@@ -58,7 +58,7 @@ void DFRobot_AS7341::enableAS7341(bool on)
         data = data & (~1);
     }
     writeReg(REG_AS7341_ENABLE, &data, 1);
-    delay(100);
+    delay(10);
 }
 
 void DFRobot_AS7341::enableSpectralMeasure(bool on)
@@ -227,7 +227,7 @@ uint16_t DFRobot_AS7341::getChannelData(uint8_t channel)
     readReg(REG_AS7341_CH0_DATA_H + channel * 2, data + 1, 1);
     channelData = data[1];
     channelData = (channelData << 8) | data[0];
-    delay(5);
+    // delay(5);
     return channelData;
 }
 
@@ -429,7 +429,7 @@ void DFRobot_AS7341::writeReg(uint8_t reg, void *pBuf, size_t size)
         _pWire->write(_pBuf[i]);
     }
     _pWire->endTransmission();
-    delay(1);
+    // delay(1);
 }
 uint8_t DFRobot_AS7341::readReg(uint8_t reg)
 {
@@ -451,7 +451,7 @@ uint8_t DFRobot_AS7341::readReg(uint8_t reg, void *pBuf, size_t size)
     {
         return 0;
     }
-    delay(1);
+    delayMicroseconds(10);
     _pWire->requestFrom(_address, size);
     for (uint16_t i = 0; i < size; i++)
     {
