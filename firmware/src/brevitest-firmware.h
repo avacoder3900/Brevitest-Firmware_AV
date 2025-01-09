@@ -5,7 +5,7 @@
 
 // general constants
 #define FIRMWARE_VERSION 5
-#define DATA_FORMAT_VERSION 34
+#define DATA_FORMAT_VERSION 35
 
 #define TEST_DATA_FORMAT_CODE 'F'
 #define ASSAY_UUID_LENGTH 8
@@ -37,12 +37,15 @@
 #define SHIPPING_BOLT_BARCODE "SHIPPING BOLT"
 
 // spectrophotometer
-#define SPECTRO_ASTEP_DEFAULT 599
-#define SPECTRO_ATIME_DEFAULT 39
-#define SPECTRO_AGAIN_DEFAULT 7
-#define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 6    // maximum number of samples in a scan
+#define SPECTRO_ASTEP_DEFAULT 249
+#define SPECTRO_ATIME_DEFAULT 9
+#define SPECTRO_AGAIN_DEFAULT 3
+#define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 10    // maximum number of samples in a scan
 #define SPECTRO_WELL_LENGTH 3000                // sixth well length in microns
-#define SPECTRO_STARTING_STAGE_POSITION 22000
+#define SPECTRO_STARTING_STAGE_POSITION 23000
+#define SPECTRO_TIMEOUT 2000
+#define SPECTRO_F3_THRESHOLD 1000
+#define SPECTRO_MAX_PULSES 100
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -327,6 +330,9 @@ struct Laser
         power_on = false;
     }
 } laserA, laserB, laserC;
+int pulsesA = 10;
+int pulsesB = 10;
+int pulsesC = 10;
 
 // buzzer
 void check_buzzer(void);
@@ -373,35 +379,28 @@ struct BrevitestSpectrophotometerReading
     uint16_t f8;
     uint16_t clear;
     uint16_t nir;
-    uint16_t temperature;
-    uint16_t laser_strength;
+    uint16_t laser_pulses;
+    uint16_t laser_power;
 };
 
 struct BrevitestSpectrophotometerData
 { // 80 bytes
     uint16_t position;
-    uint16_t reserved;
+    uint16_t temperature;
     unsigned long msec;
     BrevitestSpectrophotometerReading channel_a; // 24 bytes
     BrevitestSpectrophotometerReading channel_b; // 24 bytes
     BrevitestSpectrophotometerReading channel_c; // 24 bytes
 } stress_spectro_data;
 
-struct BrevitestScanRecord
-{ // 966 bytes for 6 samples max
-    uint8_t number_of_samples;
-    BrevitestSpectrophotometerData sample[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
-} scan;
-
 struct BrevitestTestRecord
 { // 992 bytes for 6 samples max
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    uint8_t number_of_samples; // 4 MSB = number of baselines, 4 LSB = number of tests
     uint16_t test_status_code = TEST_STATUS_UNDERWAY;
     uint16_t duration;
     uint16_t reserved;
-    BrevitestSpectrophotometerData baseline[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
-    BrevitestSpectrophotometerData test[SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES];
+    BrevitestSpectrophotometerData baseline;
+    BrevitestSpectrophotometerData test;
 } test;
 
 struct BrevitestAssay
