@@ -910,23 +910,31 @@ bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341)
 void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChChoose_t mode, BrevitestSpectrophotometerReading *reading)
 {
     unsigned long startTime = millis();
-    int laser_power = 0;
-    int cycles = 0;
+    int laser_pin = get_laser(channel)->value_pin;
 
     as7341->startMeasure(mode);
+    reading->laser_pulses = 0;
+    reading->laser_power = 0;
     while (!as7341->measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
     {
-        turn_on_laser(channel);
-        delayMicroseconds(250);
-        laser_power += analogRead(get_laser(channel)->value_pin);
-        cycles++;
-        delayMicroseconds(250);
-        turn_off_laser(channel);
-        delayMicroseconds(1500);
+        if (reading->laser_pulses < 140)
+        {
+            turn_on_laser(channel);
+            delayMicroseconds(250);
+            reading->laser_power += analogRead(laser_pin);
+            reading->laser_pulses++;
+            delayMicroseconds(250);
+            turn_off_laser(channel);
+            delayMicroseconds(1500);
+        }
+        else
+        {
+            delayMicroseconds(2000);
+        }
     }
     if (millis() - startTime < SPECTRO_TIMEOUT)
     {
-        reading->laser_power = laser_power / cycles;
+        reading->laser_power /= reading->laser_pulses;
         if (mode == as7341->eF1F4ClearNIR)
         {
             DFRobot_AS7341::sModeOneData_t data1;
@@ -967,7 +975,7 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
 
 void print_spectrophotometer_heading()
 {
-    Serial.println("channel\tposition\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
+    Serial.println("channel\tposition\ttime ms\tlaser pulses\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
 BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data)
@@ -1015,7 +1023,7 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
                 data->temperature = heater.temp_C_10X;
                 if (log)
                 {
-                    Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, data->position, reading->laser_pulses, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                    Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, data->position, reading->laser_pulses, reading->laser_power, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
                 }
             }
         }
@@ -1072,7 +1080,6 @@ void stress_test_read_spectrophotometer()
 void characterize_laser(char channel, int cycles)
 {
     BrevitestSpectrophotometerReading *reading;
-    int laser_pin = get_laser(channel)->value_pin;
     unsigned long last;
 
     reset_stage(false);
@@ -1091,14 +1098,13 @@ void characterize_laser(char channel, int cycles)
                 spectroMeasure(channel, &as7341, as7341.eF1F4ClearNIR, reading);
                 reading->msec = millis() - last;
                 last = millis();
-                reading->laser_power = analogRead(laser_pin);
                 spectroMeasure(channel, &as7341, as7341.eF5F8ClearNIR, reading);
             }
             print_spectrophotometer_heading();
             for (int i = 0; i < cycles; i++)
             {
                 reading = &(laser_characteristics[i]);
-                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->laser_pulses, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
             }
         }
         else
