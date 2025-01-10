@@ -1039,14 +1039,23 @@ bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341)
 void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChChoose_t mode, BrevitestSpectrophotometerReading *reading)
 {
     unsigned long startTime = millis();
+    int laser_power = 0;
+    int cycles = 0;
 
     as7341->startMeasure(mode);
     while (!as7341->measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
     {
-        delayMicroseconds(10);
+        turn_on_laser(channel);
+        delayMicroseconds(250);
+        laser_power += analogRead(get_laser(channel)->value_pin);
+        cycles++;
+        delayMicroseconds(250);
+        turn_off_laser(channel);
+        delayMicroseconds(1500);
     }
     if (millis() - startTime < SPECTRO_TIMEOUT)
     {
+        reading->laser_power = laser_power / cycles;
         if (mode == as7341->eF1F4ClearNIR)
         {
             DFRobot_AS7341::sModeOneData_t data1;
@@ -1079,12 +1088,10 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
     {
         return;
     }
-    turn_on_laser(channel);
     spectroMeasure(channel, as7341, as7341->eF1F4ClearNIR, reading);
     reading->msec = millis();
     reading->laser_power = analogRead(get_laser(channel)->value_pin);
     spectroMeasure(channel, as7341, as7341->eF5F8ClearNIR, reading);
-    turn_off_laser(channel);
 }
 
 void print_spectrophotometer_heading()
@@ -1209,14 +1216,6 @@ void characterize_laser(char channel, int cycles)
             last = millis();
             for (int i = 0; i < cycles; i++)
             {
-                if (i == 1)
-                {
-                    turn_on_laser(channel);
-                }
-                else if (i == cycles - 2)
-                {
-                    turn_off_laser(channel);
-                }
                 reading = &(laser_characteristics[i]);
                 spectroMeasure(channel, &as7341, as7341.eF1F4ClearNIR, reading);
                 reading->msec = millis() - last;
