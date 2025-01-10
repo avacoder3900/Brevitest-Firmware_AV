@@ -1040,6 +1040,8 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
 {
     unsigned long startTime = millis();
     int laser_pin = get_laser(channel)->value_pin;
+    int laser_on_time_us = SPECTRO_PWM_DURATION_US * SPECTRO_DUTY_CYCLE / 100;
+    int laser_off_time_us = SPECTRO_PWM_DURATION_US * (100 - SPECTRO_DUTY_CYCLE) / 100;
 
     as7341->startMeasure(mode);
     reading->laser_pulses = 0;
@@ -1049,16 +1051,16 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
         if (reading->laser_pulses < 140)
         {
             turn_on_laser(channel);
-            delayMicroseconds(250);
+            delayMicroseconds(laser_on_time_us);
             reading->laser_power += analogRead(laser_pin);
             reading->laser_pulses++;
-            delayMicroseconds(250);
+            delayMicroseconds(laser_on_time_us);
             turn_off_laser(channel);
-            delayMicroseconds(1500);
+            delayMicroseconds(laser_off_time_us);
         }
         else
         {
-            delayMicroseconds(2000);
+            delayMicroseconds(SPECTRO_PWM_DURATION_US);
         }
     }
     if (millis() - startTime < SPECTRO_TIMEOUT)
@@ -1210,6 +1212,7 @@ void characterize_laser(char channel, int cycles)
 {
     BrevitestSpectrophotometerReading *reading;
     unsigned long last;
+    int number_of_iterations = min(cycles, LASER_CHARACTERIZE_MAX_CYCLES);
 
     reset_stage(false);
     move_stage_to_optical_read_position();
@@ -1218,16 +1221,16 @@ void characterize_laser(char channel, int cycles)
     {
         if (init_spectrophotometer(channel, &as7341))
         {
-            Serial.printlnf("Characterizing laser - astep: %d, atime: %d, again: %d.", spectro_astep, spectro_atime, spectro_again);
+            Serial.printlnf("Characterizing laser - channel: %c, cycles: %d, astep: %d, atime: %d, again: %d.", channel, cycles, spectro_astep, spectro_atime, spectro_again);
             memset(laser_characteristics, 0, sizeof(laser_characteristics));
             last = millis();
-            for (int i = 0; i < cycles; i++)
+            for (int i = 0; i < number_of_iterations; i++)
             {
                 reading = &(laser_characteristics[i]);
                 spectroMeasure(channel, &as7341, as7341.eF1F4ClearNIR, reading);
+                spectroMeasure(channel, &as7341, as7341.eF5F8ClearNIR, reading);
                 reading->msec = millis() - last;
                 last = millis();
-                spectroMeasure(channel, &as7341, as7341.eF5F8ClearNIR, reading);
             }
             print_spectrophotometer_heading();
             for (int i = 0; i < cycles; i++)

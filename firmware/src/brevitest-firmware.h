@@ -46,6 +46,8 @@
 #define SPECTRO_TIMEOUT 2000
 #define SPECTRO_F3_THRESHOLD 1000
 #define SPECTRO_MAX_PULSES 100
+#define SPECTRO_DUTY_CYCLE 2
+#define SPECTRO_PWM_DURATION_US 2000
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -134,7 +136,7 @@
 #define LASER_MAX_POWER 255
 #define LASER_DEFAULT_POWER 128
 #define LASER_PWM_FREQUENCY 500
-#define LASER_CHARACTERIZE_MAX_CYCLES 100
+#define LASER_CHARACTERIZE_MAX_CYCLES 500
 
 // thermistors
 #define THERMISTOR_SCALE 10000
@@ -383,7 +385,7 @@ struct BrevitestSpectrophotometerReading
     uint16_t nir;
     uint16_t laser_power;
     uint16_t laser_pulses;
-} laser_characteristics[100];
+} laser_characteristics[500];
 
 struct BrevitestSpectrophotometerData
 { // 88 bytes
