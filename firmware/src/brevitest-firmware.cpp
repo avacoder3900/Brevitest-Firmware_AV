@@ -1044,16 +1044,16 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
     int laser_off_time_us = SPECTRO_PWM_DURATION_US * (100 - SPECTRO_DUTY_CYCLE) / 100;
 
     as7341->startMeasure(mode);
-    reading->laser_pulses = 0;
+    int pulses = 0;
     reading->laser_power = 0;
     while (!as7341->measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
     {
-        if (reading->laser_pulses < 140)
+        if (pulses < 100)
         {
             turn_on_laser(channel);
             delayMicroseconds(laser_on_time_us);
             reading->laser_power += analogRead(laser_pin);
-            reading->laser_pulses++;
+            pulses++;
             delayMicroseconds(laser_on_time_us);
             turn_off_laser(channel);
             delayMicroseconds(laser_off_time_us);
@@ -1065,7 +1065,7 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
     }
     if (millis() - startTime < SPECTRO_TIMEOUT)
     {
-        reading->laser_power /= reading->laser_pulses;
+        reading->laser_power /= pulses;
         if (mode == as7341->eF1F4ClearNIR)
         {
             DFRobot_AS7341::sModeOneData_t data1;
@@ -1126,27 +1126,27 @@ BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSp
 
 void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data, char channel, bool log = false)
 {
+    DFRobot_AS7341 as7341(&Wire);
     if (power_on_spectrophotometer(channel))
     {
-        DFRobot_AS7341 as7341(&Wire);
         if (init_spectrophotometer(channel, &as7341))
         {
             BrevitestSpectrophotometerReading *reading = get_reading_pointer(channel, data);
             if (reading != NULL)
             {
-                memset(&(reading->f1), 0, 20);
+                memset(&(reading->f1), 0, 22);
                 if (baseline)
                 {
-                    reading->laser_pulses = 0;
-                    while (reading->f3 < SPECTRO_F3_THRESHOLD && reading->laser_pulses < SPECTRO_MAX_PULSES)
+                    reading->laser_cycles = 0;
+                    while (reading->f3 < SPECTRO_F3_THRESHOLD && reading->laser_cycles < SPECTRO_MAX_CYCLES)
                     {
                         take_spectrophotometer_reading(channel, &as7341, reading);
-                        reading->laser_pulses++;
+                        reading->laser_cycles++;
                     }
                 }
                 else
                 {
-                    for (int i = 0; i < reading->laser_pulses; i++)
+                    for (int i = 0; i < reading->laser_cycles; i++)
                     {
                         take_spectrophotometer_reading(channel, &as7341, reading);
                     }
@@ -1154,16 +1154,16 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
                 data->temperature = heater.temp_C_10X;
                 if (log)
                 {
-                    Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, data->position, reading->laser_pulses, reading->laser_power, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                    Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, data->position, reading->laser_cycles, reading->laser_power, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
                 }
             }
         }
-        else
+        else if (log)
         {
             Log.info("Spectrophotometer %c initialization failed", channel);
         }
     }
-    else
+    else if (log)
     {
         Log.info("Spectrophotometer %c power on failed", channel);
     }
@@ -1182,13 +1182,14 @@ void spectrophotometer_reading(bool baseline, bool log = false)
     else
     {
         data = &(test.test);
-        test.test.channel_a.laser_pulses = test.baseline.channel_a.laser_pulses;
-        test.test.channel_b.laser_pulses = test.baseline.channel_b.laser_pulses;
-        test.test.channel_c.laser_pulses = test.baseline.channel_c.laser_pulses;
+        test.test.channel_a.laser_cycles = test.baseline.channel_a.laser_cycles;
+        test.test.channel_b.laser_cycles = test.baseline.channel_b.laser_cycles;
+        test.test.channel_c.laser_cycles = test.baseline.channel_c.laser_cycles;
     }
 
     move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION, MOTOR_SLOW_STEP_DELAY);
     data->position = stage_position;
+    data->temperature = heater.temp_C_10X;
     read_spectrophotometer(baseline, data, 'A', log);
     read_spectrophotometer(baseline, data, 'B', log);
     read_spectrophotometer(baseline, data, 'C', log);
@@ -1236,7 +1237,7 @@ void characterize_laser(char channel, int cycles)
             for (int i = 0; i < cycles; i++)
             {
                 reading = &(laser_characteristics[i]);
-                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->laser_pulses, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->laser_cycles, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
             }
         }
         else
