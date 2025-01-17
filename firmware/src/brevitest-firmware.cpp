@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -137,7 +137,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
@@ -905,7 +905,6 @@ void turn_on_laser(char channel)
     // analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
     digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
-    // delayMicroseconds(500);
     if (serial_messaging_on)
     {
         int value = analogRead(laser->value_pin);
@@ -1044,8 +1043,8 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
 
 int pulse_laser(char channel)
 {
-    int laser_on_time_us = SPECTRO_PWM_DURATION_US * SPECTRO_DUTY_CYCLE / 100;
-    int laser_off_time_us = SPECTRO_PWM_DURATION_US * (100 - SPECTRO_DUTY_CYCLE) / 100;
+    int laser_on_time_us = LASER_PWM_ON_US >> 1;
+    int laser_off_time_us = LASER_PWM_TOTAL_US - LASER_PWM_ON_US;
     turn_on_laser(channel);
     delayMicroseconds(laser_on_time_us);
     int power = analogRead(get_laser(channel)->value_pin);
@@ -1130,6 +1129,7 @@ BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSp
 void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data, char channel, bool log = false)
 {
     DFRobot_AS7341 as7341(&Wire);
+
     if (power_on_spectrophotometer(channel))
     {
         if (init_spectrophotometer(channel, &as7341))
@@ -1137,44 +1137,18 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
             BrevitestSpectrophotometerReading *reading = get_reading_pointer(channel, data);
             if (reading != NULL)
             {
-                if (baseline)
+                for (int i = 0; i < SPECTRO_PREHEAT_CYCLES; i++)
                 {
-                    reading->preheat_cycles = 0;
-                    int hits = 0;
-                    memset(&(reading->f1), 0, 22);
-                    while (hits < 3 && reading->preheat_cycles < SPECTRO_MAX_CYCLES)
-                    {
-                        hits += abs(reading->f3 - SPECTRO_CYCLE_TARGET) > SPECTRO_CYCLE_STABILITY_THRESHOLD ? 0 : 1;
-                        take_spectrophotometer_reading(channel, &as7341, reading);
-                        reading->preheat_cycles++;
-                    }
-                    reset_spectrophotometer(channel, &as7341);
-                    memset(&(reading->f1), 0, 22);
-                    reading->power_cycles = 0;
-                    while (reading->f3 < SPECTRO_F3_THRESHOLD && reading->power_cycles < SPECTRO_MAX_CYCLES)
-                    {
-                        take_spectrophotometer_reading(channel, &as7341, reading);
-                        reading->power_cycles++;
-                    }
+                    pulse_laser(channel);
                 }
-                else
+                memset(&(reading->f1), 0, 22);
+                for (int i = 0; i < SPECTRO_READING_CYCLES; i++)
                 {
-                    memset(&(reading->f1), 0, 22);
-                    for (int i = 0; i < reading->preheat_cycles; i++)
-                    {
-                        take_spectrophotometer_reading(channel, &as7341, reading);
-                    }
-                    reset_spectrophotometer(channel, &as7341);
-                    memset(&(reading->f1), 0, 22);
-                    for (int i = 0; i < reading->power_cycles; i++)
-                    {
-                        take_spectrophotometer_reading(channel, &as7341, reading);
-                    }
+                    take_spectrophotometer_reading(channel, &as7341, reading);
                 }
-                data->temperature = heater.temp_C_10X;
                 if (log)
                 {
-                    Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->power_cycles, reading->power_cycles, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                    Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, SPECTRO_PREHEAT_CYCLES, SPECTRO_READING_CYCLES, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
                 }
             }
         }
@@ -1207,15 +1181,9 @@ void spectrophotometer_reading(bool baseline, bool log = false)
         else
         {
             data = &(test.test[i]);
-            test.test[i].channel_a.power_cycles = test.baseline[i].channel_a.power_cycles;
-            test.test[i].channel_b.power_cycles = test.baseline[i].channel_b.power_cycles;
-            test.test[i].channel_c.power_cycles = test.baseline[i].channel_c.power_cycles;
-            test.test[i].channel_a.preheat_cycles = test.baseline[i].channel_a.preheat_cycles;
-            test.test[i].channel_b.preheat_cycles = test.baseline[i].channel_b.preheat_cycles;
-            test.test[i].channel_c.preheat_cycles = test.baseline[i].channel_c.preheat_cycles;
         }
 
-        move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / SPECTRO_NUMBER_OF_READINGS), MOTOR_SLOW_STEP_DELAY);
+        move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
         data->position = stage_position;
         data->temperature = heater.temp_C_10X;
 
@@ -1241,8 +1209,6 @@ void stress_test_read_spectrophotometer()
 
 void characterize_laser(char channel, int cycles)
 {
-    BrevitestSpectrophotometerReading *reading;
-    unsigned long last;
     int number_of_iterations = min(cycles, LASER_CHARACTERIZE_MAX_CYCLES);
 
     reset_stage(false);
@@ -1253,21 +1219,11 @@ void characterize_laser(char channel, int cycles)
         if (init_spectrophotometer(channel, &as7341))
         {
             Serial.printlnf("Characterizing laser - channel: %c, cycles: %d, astep: %d, atime: %d, again: %d.", channel, cycles, spectro_astep, spectro_atime, spectro_again);
+            print_spectrophotometer_heading();
             memset(laser_characteristics, 0, sizeof(laser_characteristics));
-            last = millis();
             for (int i = 0; i < number_of_iterations; i++)
             {
-                reading = &(laser_characteristics[i]);
-                spectroMeasure(channel, &as7341, as7341.eF1F4ClearNIR, reading);
-                spectroMeasure(channel, &as7341, as7341.eF5F8ClearNIR, reading);
-                reading->msec = millis() - last;
-                last = millis();
-            }
-            print_spectrophotometer_heading();
-            for (int i = 0; i < cycles; i++)
-            {
-                reading = &(laser_characteristics[i]);
-                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->power_cycles, reading->power_cycles, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                read_spectrophotometer(true, &laser_characteristics[i], channel, true);
             }
         }
         else
@@ -2846,6 +2802,8 @@ void setup()
     start_temperature_control();
 
     Log.info("Setup complete");
+
+    device_verified = true;
 }
 
 /////////////////////////////////////////////////////////////
