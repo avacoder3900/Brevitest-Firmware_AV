@@ -4,10 +4,10 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 6
-#define DATA_FORMAT_VERSION 36
+#define FIRMWARE_VERSION 7
+#define DATA_FORMAT_VERSION 37
 
-#define TEST_DATA_FORMAT_CODE 'F'
+#define TEST_DATA_FORMAT_CODE 'G'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -37,16 +37,18 @@
 #define SHIPPING_BOLT_BARCODE "SHIPPING BOLT"
 
 // spectrophotometer
-#define SPECTRO_ASTEP_DEFAULT 499
+#define SPECTRO_ASTEP_DEFAULT 199
 #define SPECTRO_ATIME_DEFAULT 19
-#define SPECTRO_AGAIN_DEFAULT 6
-#define SPECTRO_MAXIMUM_NUMBER_OF_SAMPLES 10    // maximum number of samples in a scan
+#define SPECTRO_AGAIN_DEFAULT 5
 #define SPECTRO_WELL_LENGTH 3000                // sixth well length in microns
-#define SPECTRO_STARTING_STAGE_POSITION 23000
+#define SPECTRO_STARTING_STAGE_POSITION 22500
+#define SPECTRO_NUMBER_OF_READINGS 5
 #define SPECTRO_TIMEOUT 2000
 #define SPECTRO_F3_THRESHOLD 1000
-#define SPECTRO_MAX_CYCLES 100
-#define SPECTRO_DUTY_CYCLE 2
+#define SPECTRO_MAX_CYCLES 255
+#define SPECTRO_CYCLE_TARGET 10
+#define SPECTRO_CYCLE_STABILITY_THRESHOLD 2
+#define SPECTRO_DUTY_CYCLE 1
 #define SPECTRO_PWM_DURATION_US 2000
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
@@ -384,7 +386,8 @@ struct BrevitestSpectrophotometerReading
     uint16_t clear;
     uint16_t nir;
     uint16_t laser_power;
-    uint16_t laser_cycles;
+    uint8_t preheat_cycles;
+    uint8_t power_cycles;
 } laser_characteristics[500];
 
 struct BrevitestSpectrophotometerData
@@ -397,13 +400,16 @@ struct BrevitestSpectrophotometerData
 } stress_spectro_data;
 
 struct BrevitestTestRecord
-{ // 992 bytes for 6 samples max
+{ // 916 bytes for 5 readings
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
     uint16_t test_status_code = TEST_STATUS_UNDERWAY;
     uint16_t duration;
-    uint16_t reserved;
-    BrevitestSpectrophotometerData baseline;
-    BrevitestSpectrophotometerData test;
+    uint16_t astep;
+    uint8_t atime;
+    uint8_t again;
+    uint16_t number_of_readings = SPECTRO_NUMBER_OF_READINGS;
+    BrevitestSpectrophotometerData baseline[SPECTRO_NUMBER_OF_READINGS];
+    BrevitestSpectrophotometerData test[SPECTRO_NUMBER_OF_READINGS];
 } test;
 
 struct BrevitestAssay

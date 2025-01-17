@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -63,8 +63,9 @@ void init_spectrophotometer_switch();
 void set_spectrophotometer_power(byte code);
 bool power_on_spectrophotometer(char channel);
 void power_off_all_spectrophotometers();
+bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
 bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
-bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341);
+int pulse_laser(char channel);
 void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerReading *reading);
 void print_spectrophotometer_heading();
 BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data);
@@ -136,7 +137,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
@@ -1010,7 +1011,7 @@ void power_off_all_spectrophotometers()
     set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
 }
 
-bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
+bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
 {
     int count = 5;
     while (as7341->begin() != 0)
@@ -1022,50 +1023,53 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
         Serial.println("IIC init failed, please check if the wire connection is correct");
         delay(1000);
     }
-    delay(10);
-
-    as7341->setAstep(spectro_astep);
-    as7341->setAtime(spectro_atime);
-    as7341->setAGAIN(spectro_again);
+    delay(2);
     return true;
 }
 
-bool init_spectrophotometer_number(int channel_number, DFRobot_AS7341 *as7341)
+bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
 {
-    char channel = (channel_number - 1) + 'A';
-    return init_spectrophotometer(channel, as7341);
+    if (reset_spectrophotometer(channel, as7341))
+    {
+        as7341->setAstep(spectro_astep);
+        as7341->setAtime(spectro_atime);
+        as7341->setAGAIN(spectro_again);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+int pulse_laser(char channel)
+{
+    int laser_on_time_us = SPECTRO_PWM_DURATION_US * SPECTRO_DUTY_CYCLE / 100;
+    int laser_off_time_us = SPECTRO_PWM_DURATION_US * (100 - SPECTRO_DUTY_CYCLE) / 100;
+    turn_on_laser(channel);
+    delayMicroseconds(laser_on_time_us);
+    int power = analogRead(get_laser(channel)->value_pin);
+    delayMicroseconds(laser_on_time_us);
+    turn_off_laser(channel);
+    delayMicroseconds(laser_off_time_us);
+    return power;
 }
 
 void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChChoose_t mode, BrevitestSpectrophotometerReading *reading)
 {
     unsigned long startTime = millis();
-    int laser_pin = get_laser(channel)->value_pin;
-    int laser_on_time_us = SPECTRO_PWM_DURATION_US * SPECTRO_DUTY_CYCLE / 100;
-    int laser_off_time_us = SPECTRO_PWM_DURATION_US * (100 - SPECTRO_DUTY_CYCLE) / 100;
 
     as7341->startMeasure(mode);
     int pulses = 0;
-    reading->laser_power = 0;
+    int power = 0;
     while (!as7341->measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
     {
-        if (pulses < 100)
-        {
-            turn_on_laser(channel);
-            delayMicroseconds(laser_on_time_us);
-            reading->laser_power += analogRead(laser_pin);
-            pulses++;
-            delayMicroseconds(laser_on_time_us);
-            turn_off_laser(channel);
-            delayMicroseconds(laser_off_time_us);
-        }
-        else
-        {
-            delayMicroseconds(SPECTRO_PWM_DURATION_US);
-        }
+        power += pulse_laser(channel);
+        pulses++;
     }
     if (millis() - startTime < SPECTRO_TIMEOUT)
     {
-        reading->laser_power /= pulses;
+        reading->laser_power = power / pulses;
         if (mode == as7341->eF1F4ClearNIR)
         {
             DFRobot_AS7341::sModeOneData_t data1;
@@ -1100,13 +1104,12 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
     }
     spectroMeasure(channel, as7341, as7341->eF1F4ClearNIR, reading);
     reading->msec = millis();
-    reading->laser_power = analogRead(get_laser(channel)->value_pin);
     spectroMeasure(channel, as7341, as7341->eF5F8ClearNIR, reading);
 }
 
 void print_spectrophotometer_heading()
 {
-    Serial.println("channel\tposition\ttime ms\tlaser pulses\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
+    Serial.println("channel\tposition\ttime ms\tpreheat cycles\tpower cycles\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
 BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data)
@@ -1134,19 +1137,36 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
             BrevitestSpectrophotometerReading *reading = get_reading_pointer(channel, data);
             if (reading != NULL)
             {
-                memset(&(reading->f1), 0, 22);
                 if (baseline)
                 {
-                    reading->laser_cycles = 0;
-                    while (reading->f3 < SPECTRO_F3_THRESHOLD && reading->laser_cycles < SPECTRO_MAX_CYCLES)
+                    reading->preheat_cycles = 0;
+                    int hits = 0;
+                    memset(&(reading->f1), 0, 22);
+                    while (hits < 3 && reading->preheat_cycles < SPECTRO_MAX_CYCLES)
+                    {
+                        hits += abs(reading->f3 - SPECTRO_CYCLE_TARGET) > SPECTRO_CYCLE_STABILITY_THRESHOLD ? 0 : 1;
+                        take_spectrophotometer_reading(channel, &as7341, reading);
+                        reading->preheat_cycles++;
+                    }
+                    reset_spectrophotometer(channel, &as7341);
+                    memset(&(reading->f1), 0, 22);
+                    reading->power_cycles = 0;
+                    while (reading->f3 < SPECTRO_F3_THRESHOLD && reading->power_cycles < SPECTRO_MAX_CYCLES)
                     {
                         take_spectrophotometer_reading(channel, &as7341, reading);
-                        reading->laser_cycles++;
+                        reading->power_cycles++;
                     }
                 }
                 else
                 {
-                    for (int i = 0; i < reading->laser_cycles; i++)
+                    memset(&(reading->f1), 0, 22);
+                    for (int i = 0; i < reading->preheat_cycles; i++)
+                    {
+                        take_spectrophotometer_reading(channel, &as7341, reading);
+                    }
+                    reset_spectrophotometer(channel, &as7341);
+                    memset(&(reading->f1), 0, 22);
+                    for (int i = 0; i < reading->power_cycles; i++)
                     {
                         take_spectrophotometer_reading(channel, &as7341, reading);
                     }
@@ -1154,7 +1174,7 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
                 data->temperature = heater.temp_C_10X;
                 if (log)
                 {
-                    Serial.printlnf("%c\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, data->position, reading->laser_cycles, reading->laser_power, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                    Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->power_cycles, reading->power_cycles, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
                 }
             }
         }
@@ -1175,24 +1195,34 @@ void spectrophotometer_reading(bool baseline, bool log = false)
 {
     BrevitestSpectrophotometerData *data;
 
-    if (baseline)
+    test.astep = spectro_astep;
+    test.atime = spectro_atime;
+    test.again = spectro_again;
+    for (int i = 0; i < SPECTRO_NUMBER_OF_READINGS; i++)
     {
-        data = &(test.baseline);
-    }
-    else
-    {
-        data = &(test.test);
-        test.test.channel_a.laser_cycles = test.baseline.channel_a.laser_cycles;
-        test.test.channel_b.laser_cycles = test.baseline.channel_b.laser_cycles;
-        test.test.channel_c.laser_cycles = test.baseline.channel_c.laser_cycles;
-    }
+        if (baseline)
+        {
+            data = &(test.baseline[i]);
+        }
+        else
+        {
+            data = &(test.test[i]);
+            test.test[i].channel_a.power_cycles = test.baseline[i].channel_a.power_cycles;
+            test.test[i].channel_b.power_cycles = test.baseline[i].channel_b.power_cycles;
+            test.test[i].channel_c.power_cycles = test.baseline[i].channel_c.power_cycles;
+            test.test[i].channel_a.preheat_cycles = test.baseline[i].channel_a.preheat_cycles;
+            test.test[i].channel_b.preheat_cycles = test.baseline[i].channel_b.preheat_cycles;
+            test.test[i].channel_c.preheat_cycles = test.baseline[i].channel_c.preheat_cycles;
+        }
 
-    move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION, MOTOR_SLOW_STEP_DELAY);
-    data->position = stage_position;
-    data->temperature = heater.temp_C_10X;
-    read_spectrophotometer(baseline, data, 'A', log);
-    read_spectrophotometer(baseline, data, 'B', log);
-    read_spectrophotometer(baseline, data, 'C', log);
+        move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / SPECTRO_NUMBER_OF_READINGS), MOTOR_SLOW_STEP_DELAY);
+        data->position = stage_position;
+        data->temperature = heater.temp_C_10X;
+
+        read_spectrophotometer(baseline, data, 'A', log);
+        read_spectrophotometer(baseline, data, 'B', log);
+        read_spectrophotometer(baseline, data, 'C', log);
+    }
 }
 
 void stress_test_read_spectrophotometer()
@@ -1237,7 +1267,7 @@ void characterize_laser(char channel, int cycles)
             for (int i = 0; i < cycles; i++)
             {
                 reading = &(laser_characteristics[i]);
-                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->laser_cycles, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, reading->power_cycles, reading->power_cycles, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
             }
         }
         else
