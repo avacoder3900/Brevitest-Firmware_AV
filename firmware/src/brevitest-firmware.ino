@@ -1174,6 +1174,10 @@ int pid_controller()
                 heater.previous_error = 0;
                 heater.integral = 0;
             }
+            else if (heater.target_C_10X > HEATER_MAX_TEMPERATURE)
+            {
+                output = 0;
+            }
             else
             {
                 dt = heater.read_time - prev_read_time;
