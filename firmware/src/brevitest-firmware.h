@@ -121,7 +121,7 @@
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
 
 // heater
-#define HEATER_MAX_POWER 128
+#define HEATER_MAX_POWER 140
 #define HEATER_DEFAULT_POWER 64
 #define HEATER_PWM_FREQUENCY 10
 #define HEATER_MAX_TEMPERATURE 500
@@ -145,8 +145,6 @@
 
 // PID controller
 #define PHOTO_SCALE 10000
-#define PID_MAX_POWER 255
-#define PID_DEFAULT_POWER 128
 #define PID_PWM_FREQUENCY 50
 #define PID_MAX_VALUE 600
 #define PID_CONTROL_INTERVAL 1000
@@ -304,7 +302,7 @@ struct HeatingElement
         previous_error = 0;
         integral = 0;
         target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
-        k_p_num = 100;
+        k_p_num = 50;
         k_p_den = 5;
         k_i_num = 1;
         k_i_den = 5000;
