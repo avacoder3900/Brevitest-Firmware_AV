@@ -4,10 +4,10 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 8
-#define DATA_FORMAT_VERSION 37
+#define FIRMWARE_VERSION 9
+#define DATA_FORMAT_VERSION 38
 
-#define TEST_DATA_FORMAT_CODE 'G'
+#define TEST_DATA_FORMAT_CODE 'H'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -37,7 +37,7 @@
 #define SHIPPING_BOLT_BARCODE "SHIPPING BOLT"
 
 // spectrophotometer
-#define SPECTRO_ASTEP_DEFAULT 499
+#define SPECTRO_ASTEP_DEFAULT 999
 #define SPECTRO_ATIME_DEFAULT 49
 #define SPECTRO_AGAIN_DEFAULT 7
 #define SPECTRO_WELL_LENGTH 3000
@@ -45,8 +45,7 @@
 #define SPECTRO_NUMBER_OF_READINGS 5
 #define SPECTRO_TIMEOUT 2000
 #define SPECTRO_MAX_CYCLES 255
-#define SPECTRO_PREHEAT_CYCLES 5
-#define SPECTRO_READING_CYCLES 20
+#define SPECTRO_READING_CYCLES 5
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -127,7 +126,7 @@
 #define HEATER_MAX_TEMPERATURE 500
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
-#define HEATER_DEFAULT_TEMP_TARGET 450
+#define HEATER_DEFAULT_TEMP_TARGET 370
 #define HEATER_READY_TEMP_DELTA 10
 #define HEATER_READY_DEBOUNCE_DELAY 5000
 
@@ -387,17 +386,20 @@ struct BrevitestSpectrophotometerReading
 };
 
 struct BrevitestSpectrophotometerData
-{ // 88 bytes
+{ // 92 bytes
     uint16_t position;
     uint16_t temperature;
+    uint16_t number_of_cycles;
+    uint16_t reserved;
     BrevitestSpectrophotometerReading channel_a; // 28 bytes
     BrevitestSpectrophotometerReading channel_b; // 28 bytes
     BrevitestSpectrophotometerReading channel_c; // 28 bytes
 } stress_spectro_data, laser_characteristics[LASER_CHARACTERIZE_MAX_CYCLES];
 
 struct BrevitestTestRecord
-{ // 916 bytes for 5 readings
+{ // 956 bytes for 5 readings
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
+    char data_format_code = TEST_DATA_FORMAT_CODE; // 1 byte
     uint16_t test_status_code = TEST_STATUS_UNDERWAY;
     uint16_t duration;
     uint16_t astep;

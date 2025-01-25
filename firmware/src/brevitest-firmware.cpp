@@ -1125,7 +1125,7 @@ BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSp
     }
 }
 
-void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data, char channel, bool log = false)
+void read_spectrophotometer(BrevitestSpectrophotometerData *data, char channel, bool log = false)
 {
     DFRobot_AS7341 as7341(&Wire);
 
@@ -1136,10 +1136,6 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
             BrevitestSpectrophotometerReading *reading = get_reading_pointer(channel, data);
             if (reading != NULL)
             {
-                for (int i = 0; i < SPECTRO_PREHEAT_CYCLES; i++)
-                {
-                    pulse_laser(channel);
-                }
                 memset(&(reading->f1), 0, 22);
                 for (int i = 0; i < SPECTRO_READING_CYCLES; i++)
                 {
@@ -1147,7 +1143,7 @@ void read_spectrophotometer(bool baseline, BrevitestSpectrophotometerData *data,
                 }
                 if (log)
                 {
-                    Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, SPECTRO_PREHEAT_CYCLES, SPECTRO_READING_CYCLES, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                    Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, SPECTRO_READING_CYCLES, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
                 }
             }
         }
@@ -1185,19 +1181,20 @@ void spectrophotometer_reading(bool baseline, bool log = false)
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
         data->position = stage_position;
         data->temperature = heater.temp_C_10X;
+        data->number_of_cycles = SPECTRO_READING_CYCLES;
 
-        read_spectrophotometer(baseline, data, 'A', log);
-        read_spectrophotometer(baseline, data, 'B', log);
-        read_spectrophotometer(baseline, data, 'C', log);
+        read_spectrophotometer(data, 'A', log);
+        read_spectrophotometer(data, 'B', log);
+        read_spectrophotometer(data, 'C', log);
     }
 }
 
 void stress_test_read_spectrophotometer()
 {
     print_spectrophotometer_heading();
-    read_spectrophotometer(true, &stress_spectro_data, 'A', true);
-    read_spectrophotometer(true, &stress_spectro_data, 'B', true);
-    read_spectrophotometer(true, &stress_spectro_data, 'C', true);
+    read_spectrophotometer(&stress_spectro_data, 'A', true);
+    read_spectrophotometer(&stress_spectro_data, 'B', true);
+    read_spectrophotometer(&stress_spectro_data, 'C', true);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1222,7 +1219,7 @@ void characterize_laser(char channel, int cycles)
             memset(laser_characteristics, 0, sizeof(laser_characteristics));
             for (int i = 0; i < number_of_iterations; i++)
             {
-                read_spectrophotometer(true, &laser_characteristics[i], channel, true);
+                read_spectrophotometer(&laser_characteristics[i], channel, true);
             }
         }
         else
@@ -1244,7 +1241,7 @@ void characterize_laser(char channel, int cycles)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-#define HEATER_READINGS 30
+#define HEATER_READINGS 10
 int get_heater_temperature()
 {
     analogWrite(heater.heater_pin, 128);
@@ -2765,6 +2762,8 @@ void setup()
     device_id = System.deviceID();
     Log.info("Device ID: %s", device_id.c_str());
 
+    Particle.variable("temperature", heater.temp_C_10X);
+
     connect_to_cloud();
 
     Particle.subscribe(String(device_id + "/hook-response/verify-device/"), callback_verify_device);
@@ -2778,6 +2777,7 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), callback_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), callback_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), callback_error);
+
 
     setup_eeprom();
 
