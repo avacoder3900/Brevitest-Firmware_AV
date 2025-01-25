@@ -307,7 +307,7 @@ struct HeatingElement
         k_p_num = 100;
         k_p_den = 5;
         k_i_num = 1;
-        k_i_den = 5000;
+        k_i_den = 50000;
         k_d_num = 1;
         k_d_den = 5;
     }

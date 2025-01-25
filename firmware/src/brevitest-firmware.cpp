@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -72,7 +72,6 @@ BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSp
 void stress_test_read_spectrophotometer();
 void characterize_laser(char channel, int cycles);
 int get_heater_temperature();
-void heater_temperature_read();
 int pid_controller();
 void control_heater_temperature();
 void start_temperature_control();
@@ -137,7 +136,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
@@ -1245,17 +1244,16 @@ void characterize_laser(char channel, int cycles)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+#define HEATER_READINGS 30
 int get_heater_temperature()
 {
-    analogWrite(heater.heater_pin, 0);
-    delay(5);
-
-    int raw1 = analogRead(heater.thermistor_pin);
-    int raw2 = analogRead(heater.thermistor_pin);
-    int raw3 = analogRead(heater.thermistor_pin);
-    int raw = raw1 + raw2 + raw3 - max(raw1, max(raw2, raw3)) - min(raw1, min(raw2, raw3));
-
-    analogWrite(heater.heater_pin, heater.power);
+    analogWrite(heater.heater_pin, 128);
+    delayMicroseconds(100);
+    int raw = 0;
+    for (int i = 0; i < HEATER_READINGS; i++) {
+        raw += analogRead(heater.thermistor_pin);
+    }
+    raw /= HEATER_READINGS;
 
     if (raw == 0)
     {
@@ -1278,13 +1276,6 @@ int get_heater_temperature()
     return raw;
 }
 
-void heater_temperature_read()
-{
-    get_heater_temperature();
-    if (serial_messaging_on)
-        Log.info("Temperature: %d.%d˚C, %d.%d˚F", heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.temp_F_10X / 10, heater.temp_F_10X % 10);
-}
-
 int pid_controller()
 {
     int dt, error, derivative, raw;
@@ -1303,6 +1294,10 @@ int pid_controller()
             {
                 heater.previous_error = 0;
                 heater.integral = 0;
+            }
+            else if (heater.target_C_10X > HEATER_MAX_TEMPERATURE)
+            {
+                output = 0;
             }
             else
             {

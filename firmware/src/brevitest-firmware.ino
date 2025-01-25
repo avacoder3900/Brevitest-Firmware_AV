@@ -1115,17 +1115,16 @@ void characterize_laser(char channel, int cycles)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+#define HEATER_READINGS 30
 int get_heater_temperature()
 {
-    analogWrite(heater.heater_pin, 0);
-    delay(5);
-
-    int raw1 = analogRead(heater.thermistor_pin);
-    int raw2 = analogRead(heater.thermistor_pin);
-    int raw3 = analogRead(heater.thermistor_pin);
-    int raw = raw1 + raw2 + raw3 - max(raw1, max(raw2, raw3)) - min(raw1, min(raw2, raw3));
-
-    analogWrite(heater.heater_pin, heater.power);
+    analogWrite(heater.heater_pin, 128);
+    delayMicroseconds(100);
+    int raw = 0;
+    for (int i = 0; i < HEATER_READINGS; i++) {
+        raw += analogRead(heater.thermistor_pin);
+    }
+    raw /= HEATER_READINGS;
 
     if (raw == 0)
     {
@@ -1146,13 +1145,6 @@ int get_heater_temperature()
         }
     }
     return raw;
-}
-
-void heater_temperature_read()
-{
-    get_heater_temperature();
-    if (serial_messaging_on)
-        Log.info("Temperature: %d.%d˚C, %d.%d˚F", heater.temp_C_10X / 10, heater.temp_C_10X % 10, heater.temp_F_10X / 10, heater.temp_F_10X % 10);
 }
 
 int pid_controller()
