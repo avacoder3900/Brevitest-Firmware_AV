@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -136,7 +136,7 @@ void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
@@ -1167,6 +1167,7 @@ void spectrophotometer_reading(bool baseline, bool log = false)
     test.astep = spectro_astep;
     test.atime = spectro_atime;
     test.again = spectro_again;
+    test.data_format_code = TEST_DATA_FORMAT_CODE;
     for (int i = 0; i < SPECTRO_NUMBER_OF_READINGS; i++)
     {
         if (baseline)

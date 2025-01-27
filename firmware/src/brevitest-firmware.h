@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 9
+#define FIRMWARE_VERSION 10
 #define DATA_FORMAT_VERSION 38
 
 #define TEST_DATA_FORMAT_CODE 'H'
@@ -399,7 +399,7 @@ struct BrevitestSpectrophotometerData
 struct BrevitestTestRecord
 { // 956 bytes for 5 readings
     char cartridge_uuid[CARTRIDGE_UUID_LENGTH + 1]; // 25 bytes
-    char data_format_code = TEST_DATA_FORMAT_CODE; // 1 byte
+    char data_format_code; // 1 byte
     uint16_t test_status_code = TEST_STATUS_UNDERWAY;
     uint16_t duration;
     uint16_t astep;
