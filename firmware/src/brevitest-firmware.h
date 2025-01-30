@@ -4,10 +4,10 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 10
+#define FIRMWARE_VERSION 11
 #define DATA_FORMAT_VERSION 38
 
-#define TEST_DATA_FORMAT_CODE 'H'
+#define TEST_DATA_FORMAT_CODE 'I'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -45,7 +45,7 @@
 #define SPECTRO_NUMBER_OF_READINGS 5
 #define SPECTRO_TIMEOUT 2000
 #define SPECTRO_MAX_CYCLES 255
-#define SPECTRO_READING_CYCLES 5
+#define SPECTRO_READING_CYCLES 10
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -382,7 +382,7 @@ struct BrevitestSpectrophotometerReading
     uint16_t clear;
     uint16_t nir;
     uint16_t laser_power;
-    uint16_t reserved;
+    uint16_t laser_pulses;
 };
 
 struct BrevitestSpectrophotometerData

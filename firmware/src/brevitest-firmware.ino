@@ -939,6 +939,7 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
     if (millis() - startTime < SPECTRO_TIMEOUT)
     {
         reading->laser_power = power / pulses;
+        reading->laser_pulses = pulses;
         if (mode == as7341->eF1F4ClearNIR)
         {
             DFRobot_AS7341::sModeOneData_t data1;
