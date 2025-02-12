@@ -202,6 +202,7 @@ bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
+LEDStatus indicatorNoConnection(RGB_COLOR_MAGENTA, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
 LEDStatus indicatorProblem(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
 LEDStatus indicatorBusy(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
@@ -310,13 +311,13 @@ struct HeatingElement
     }
 } heater;
 
-void control_heater_temperature(void);
-Timer control_heater_temperature_timer(HEATER_CONTROL_INTERVAL, control_heater_temperature);
+bool temperature_control_on = false;
 bool control_heater_temperature_flag = false;
 bool heater_debouncing_in_progress = false;
 unsigned long heater_debounce_time;
 bool heater_ready = false;
 bool previous_heater_ready = false;
+int current_temperature = 0;
 
 // lasers
 struct Laser

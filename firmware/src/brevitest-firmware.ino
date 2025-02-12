@@ -562,12 +562,23 @@ void turn_off_buzzer_timer()
 
 void turn_off_indicator_LEDs()
 {
+    if (indicatorNoConnection.isActive())
+        indicatorNoConnection.setActive(false);
     if (indicatorProblem.isActive())
         indicatorProblem.setActive(false);
     if (indicatorBusy.isActive())
         indicatorBusy.setActive(false);
     if (indicatorAvailable.isActive())
         indicatorAvailable.setActive(false);
+}
+
+void turn_on_no_connectivity_LED()
+{
+    if (!indicatorNoConnection.isActive())
+    {
+        turn_off_indicator_LEDs();
+        indicatorProblem.setActive(true);
+    }
 }
 
 void turn_on_problem_LED()
@@ -1130,11 +1141,13 @@ int get_heater_temperature()
         Log.info("Thermistor read error");
         stop_temperature_control();
         heater.temp_C_10X = 0;
+        current_temperature = 0;
         heater.temp_F_10X = 0;
     }
     else
     {
         heater.temp_C_10X = raw_table_lookup(raw);
+        current_temperature = heater.temp_C_10X;
         heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
         if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
         {
@@ -1193,21 +1206,16 @@ int pid_controller()
     return output;
 }
 
-void control_heater_temperature()
-{
-    control_heater_temperature_flag = !spectrophotometer_read_in_progress;
-}
-
 void start_temperature_control()
 {
     heater.read_time = 0;
-    control_heater_temperature_timer.start();
+    temperature_control_on = true;
     Log.info("Temperature control system started");
 }
 
 void stop_temperature_control()
 {
-    control_heater_temperature_timer.stop();
+    temperature_control_on = false;
     set_heater_power(0);
     Log.info("Temperature control system stopped");
 }
@@ -1877,12 +1885,7 @@ int start_stress_test(int limit, int led_power)
 
 void stop_stress_test()
 {
-    while (!WiFi.isOn())
-    {
-        WiFi.on();
-        delayMicroseconds(2000000);
-    }
-    Particle.connect();
+    connect_to_cloud();
     stress_test_mode = false;
     stress_test_stop_flag = false;
 }
@@ -2235,7 +2238,7 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &param1, HEATER_DEFAULT_TEMP_TARGET);
         if (param1 > 0 && param1 <= HEATER_MAX_TEMPERATURE)
         {
-            heater.temp_C_10X = param1;
+            heater.target_C_10X = param1;
             heater.read_time = 0;
         }
         result = param1;
@@ -2451,15 +2454,14 @@ void run_test()
         write_test_record_to_eeprom();
     }
 
+    reset_stage(true);
+    reset_globals();
     start_temperature_control();
 
     test_underway = false;
     test_upload_mode = true;
 
     connect_to_cloud();
-
-    reset_stage(true);
-    reset_globals();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2635,7 +2637,7 @@ void setup()
     device_id = System.deviceID();
     Log.info("Device ID: %s", device_id.c_str());
 
-    Particle.variable("temperature", heater.temp_C_10X);
+    Particle.variable("temperature", current_temperature);
 
     connect_to_cloud();
 
@@ -2721,7 +2723,7 @@ void set_device_indicators()
 
     if (!Particle.connected())
     {
-        turn_on_problem_LED();
+        turn_on_no_connectivity_LED();
     }
     else if (test_invalid)
     {
@@ -2991,9 +2993,8 @@ void hardware_loop()
         }
     }
 
-    if (control_heater_temperature_flag)
+    if (temperature_control_on && !spectrophotometer_read_in_progress)
     {
-        control_heater_temperature_flag = false;
         set_heater_power(pid_controller());
     }
 
