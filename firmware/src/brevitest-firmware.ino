@@ -618,6 +618,8 @@ void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+    delay(HEATER_PULSE_DURATION);
+    analogWrite(heater.heater_pin, 0);
     heater.power = power;
     heater.heater_on = true;
     if (serial_messaging_on)
@@ -2403,6 +2405,7 @@ void reset_globals()
 void disconnect_from_cloud()
 {
     Log.info("Disconnecting from cloud...");
+    set_heater_power(0);
     while (Particle.connected())
     {
         Particle.disconnect();
@@ -2415,6 +2418,7 @@ void connect_to_cloud()
 {
 
     Log.info("Connecting to cloud...");
+    set_heater_power(0);
     Particle.connect();
     delay(PARTICLE_CLOUD_DELAY);
 
@@ -2721,6 +2725,7 @@ void set_device_indicators()
     previous_heater_ready = heater_ready;
     heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
+    set_heater_power(0);
     if (!Particle.connected())
     {
         turn_on_no_connectivity_LED();
@@ -2993,12 +2998,12 @@ void hardware_loop()
         }
     }
 
+    set_device_indicators();
+
     if (temperature_control_on && !spectrophotometer_read_in_progress)
     {
         set_heater_power(pid_controller());
     }
-
-    set_device_indicators();
 
     if (start_problem_buzzer)
     {
