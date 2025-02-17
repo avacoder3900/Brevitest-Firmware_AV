@@ -172,6 +172,18 @@ int integerSqrt(int n)
     return result;
 }
 
+int set_wifi_credentials(String params)
+{
+    String ssid, password;
+    int indx = params.indexOf(":::");
+    ssid = params.substring(0, indx);
+    password = params.substring(indx + 3);
+    Log.info("set_wifi_credentials, ssid = %s, password = %s", ssid.c_str(), password.c_str());
+    WiFi.setCredentials(ssid, password);
+    WiFi.connect();
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////
 //                                                         //
 //                         EEPROM                          //
@@ -2105,9 +2117,12 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &param1, 0);
         result = analogRead(param1);
         break;
-        //
-        //  SERIAL PORT MESSAGING
-        //
+    case 9: // clear wifi credentials
+        WiFi.clearCredentials();
+        break;
+    //
+    //  SERIAL PORT MESSAGING
+    //
     case 10: // turn on serial messaging
         serial_messaging_on = true;
         result = 1;
@@ -2642,6 +2657,7 @@ void setup()
     Log.info("Device ID: %s", device_id.c_str());
 
     Particle.variable("temperature", current_temperature);
+    Particle.function("set_wifi_credentials", set_wifi_credentials);
 
     connect_to_cloud();
 
