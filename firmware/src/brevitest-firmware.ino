@@ -1434,7 +1434,7 @@ void callback_start_test(const char *name, String result)
             else
             {
                 Log.info("Test failed to start");
-                test_underway = true;
+                test_underway = false;
                 cartridge_validated = false;
                 test.test_status_code = TEST_STATUS_FAILED_TO_START;
             }
@@ -1486,6 +1486,7 @@ void remove_test_from_cache(char *testToRemove)
     if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0)
     {
         eeprom.cache = {};
+        eeprom.cache.cartridge_uuid[0] = '\0';
         store_eeprom();
         return;
     }
