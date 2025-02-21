@@ -115,7 +115,6 @@ int get_next_command_param(String arg, int indx, int *param, int def);
 int particle_command(String arg);
 void reset_globals();
 void disconnect_from_cloud();
-void connect_to_cloud();
 void run_test();
 void clear_state();
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value);
@@ -138,7 +137,6 @@ void hardware_loop();
 void process_serial_port();
 void loop();
 #line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
-SYSTEM_MODE(SEMI_AUTOMATIC);
 PRODUCT_VERSION(FIRMWARE_VERSION);
 
 /////////////////////////////////////////////////////////////
@@ -760,8 +758,6 @@ void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
     analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
-    delay(HEATER_PULSE_DURATION);
-    analogWrite(heater.heater_pin, 0);
     heater.power = power;
     heater.heater_on = true;
     if (serial_messaging_on)
@@ -1272,8 +1268,6 @@ void characterize_laser(char channel, int cycles)
 #define HEATER_READINGS 10
 int get_heater_temperature()
 {
-    analogWrite(heater.heater_pin, 128);
-    delayMicroseconds(100);
     int raw = 0;
     for (int i = 0; i < HEATER_READINGS; i++) {
         raw += analogRead(heater.thermistor_pin);
@@ -2030,7 +2024,6 @@ int start_stress_test(int limit, int led_power)
 
 void stop_stress_test()
 {
-    connect_to_cloud();
     stress_test_mode = false;
     stress_test_stop_flag = false;
 }
@@ -2551,31 +2544,13 @@ void reset_globals()
 void disconnect_from_cloud()
 {
     Log.info("Disconnecting from cloud...");
-    set_heater_power(0);
+    Particle.disconnect();
     while (Particle.connected())
     {
         Particle.disconnect();
         delay(PARTICLE_CLOUD_DELAY);
     }
     Log.info("Disconnected from cloud");
-}
-
-void connect_to_cloud()
-{
-
-    Log.info("Connecting to cloud...");
-    set_heater_power(0);
-    Particle.connect();
-    delay(PARTICLE_CLOUD_DELAY);
-
-    while (!Particle.connected())
-    {
-        Particle.connect();
-        delay(PARTICLE_CLOUD_DELAY);
-        Log.info("Not connected. Trying again...");
-    }
-
-    Log.info("Reconnected to cloud");
 }
 
 void run_test()
@@ -2610,8 +2585,6 @@ void run_test()
 
     test_underway = false;
     test_upload_mode = true;
-
-    connect_to_cloud();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2763,9 +2736,6 @@ void setup()
     init_digital_pin(pinLaserA, OUTPUT, LOW);
     init_digital_pin(pinLaserB, OUTPUT, LOW);
     init_digital_pin(pinLaserC, OUTPUT, LOW);
-    // init_analog_pin(pinLaserA, OUTPUT, 0);
-    // init_analog_pin(pinLaserB, OUTPUT, 0);
-    // init_analog_pin(pinLaserC, OUTPUT, 0);
     init_analog_pin(pinPhotoA, INPUT, 0);
     init_analog_pin(pinPhotoB, INPUT, 0);
     init_analog_pin(pinPhotoC, INPUT, 0);
@@ -2790,7 +2760,7 @@ void setup()
     Particle.variable("temperature", current_temperature);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
 
-    connect_to_cloud();
+    start_temperature_control();
 
     Particle.subscribe(String(device_id + "/hook-response/verify-device/"), callback_verify_device);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), callback_validate_cartridge);
@@ -2819,8 +2789,6 @@ void setup()
     }
     init_spectrophotometer_switch();
     power_off_all_spectrophotometers();
-
-    start_temperature_control();
 
     Log.info("Setup complete");
 
@@ -2872,12 +2840,7 @@ void set_device_indicators()
     previous_heater_ready = heater_ready;
     heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
-    set_heater_power(0);
-    if (!Particle.connected())
-    {
-        turn_on_no_connectivity_LED();
-    }
-    else if (test_invalid)
+    if (test_invalid)
     {
         turn_on_ready_indicator();
         turn_on_buzzer_problem();
