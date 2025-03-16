@@ -628,20 +628,24 @@ void turn_on_available_LED()
 void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
-    analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+    digitalWrite(heater.heater_pin, HIGH);
+    delay(power);
+    digitalWrite(heater.heater_pin, LOW);
+    // analogWrite(heater.heater_pin, power);
     heater.power = power;
     heater.heater_on = true;
-    if (serial_messaging_on)
-        Log.info("Heater set to power %d", power);
+    // if (serial_messaging_on)
+    //     Log.info("Heater set to power %d", power);
 }
 
 void turn_off_heater()
 {
-    analogWrite(heater.heater_pin, 0);
+    digitalWrite(heater.heater_pin, LOW);
+    // analogWrite(heater.heater_pin, 0);
     heater.heater_on = false;
     heater.power = 0;
-    if (serial_messaging_on)
-        Log.info("Heater turned off");
+    // if (serial_messaging_on)
+    //     Log.info("Heater turned off");
 }
 
 int set_heater_power(int power)
@@ -794,14 +798,14 @@ void turn_on_laser(char channel)
     Laser *laser = get_laser(channel);
 
     laser->power = 255;
-    // analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
+    // analogWrite(laser->power_pin, laser->power);
     digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
-    if (serial_messaging_on)
-    {
+    // if (serial_messaging_on)
+    // {
         int value = analogRead(laser->value_pin);
         Log.info("Laser %c set to power %d, value %d", channel, laser->power, value);
-    }
+    // }
 }
 
 void turn_off_laser(char channel)
@@ -812,7 +816,7 @@ void turn_off_laser(char channel)
     digitalWrite(laser->power_pin, LOW);
     laser->power_on = false;
     laser->power = 0;
-    if (serial_messaging_on)
+    // if (serial_messaging_on)
         Log.info("Laser %c turned off", channel);
 }
 
@@ -2605,20 +2609,17 @@ void setup()
     init_digital_pin(pinBarcodeReady, INPUT);
 
     init_digital_pin(pinLaserA, OUTPUT, LOW);
-    init_digital_pin(pinLaserB, OUTPUT, LOW);
-    init_digital_pin(pinLaserC, OUTPUT, LOW);
-    init_analog_pin(pinPhotoA, INPUT, 0);
-    init_analog_pin(pinPhotoB, INPUT, 0);
-    init_analog_pin(pinPhotoC, INPUT, 0);
     laserA.power_pin = pinLaserA;
     laserA.value_pin = pinPhotoA;
+    init_digital_pin(pinLaserB, OUTPUT, LOW);
     laserB.power_pin = pinLaserB;
     laserB.value_pin = pinPhotoB;
+    init_digital_pin(pinLaserC, OUTPUT, LOW);
     laserC.power_pin = pinLaserC;
     laserC.value_pin = pinPhotoC;
 
     init_analog_pin(pinHeaterThermistor, INPUT);
-    init_analog_pin(pinHeater, OUTPUT, 0);
+    init_digital_pin(pinHeater, OUTPUT, LOW);
 
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);

@@ -120,7 +120,7 @@
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
 
 // heater
-#define HEATER_MAX_POWER 140
+#define HEATER_MAX_POWER 255
 #define HEATER_DEFAULT_POWER 64
 #define HEATER_PWM_FREQUENCY 10
 #define HEATER_MAX_TEMPERATURE 500
@@ -165,13 +165,10 @@
 
 // pin definitions
 int pinBuzzer = A0;
-int pinHeaterThermistor = A1;
 int pinPhotoA = A2;
 int pinPhotoB = A3;
 int pinPhotoC = A4;
-int pinStageLimit = D2;
-int pinCartridgeDetected = D3;
-int pinHeater = D4;
+int pinHeaterThermistor = A6;
 int pinLaserA = D5;
 int pinLaserB = D6;
 int pinLaserC = D7;
@@ -179,8 +176,11 @@ int pinMotorDir = D8;
 int pinMotorReset = D11;
 int pinMotorSleep = D12;
 int pinMotorStep = D13;
-int pinBarcodeTrigger = D22;
-int pinBarcodeReady = D23;
+int pinHeater = D14;
+int pinCartridgeDetected = D23;
+int pinBarcodeReady = D24;
+int pinBarcodeTrigger = D25;
+int pinStageLimit = D27;
 
 // global variables
 bool new_device = true;
