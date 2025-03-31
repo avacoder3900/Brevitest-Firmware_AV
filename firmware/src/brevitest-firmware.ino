@@ -2664,7 +2664,7 @@ void setup()
 
     Log.info("Setup complete");
 
-    device_verified = true;
+    // device_verified = true;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2732,11 +2732,7 @@ void set_device_indicators()
             turn_on_busy_LED();
         }
     }
-    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode)
-    {
-        turn_on_busy_LED();
-    }
-    else if (!device_verified || magnet_validation_mode)
+    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode || magnet_validation_mode)
     {
         turn_on_busy_LED();
     }
