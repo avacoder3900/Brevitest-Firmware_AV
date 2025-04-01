@@ -2735,7 +2735,7 @@ void setup()
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
-    init_digital_pin(pinBarcodeReady, INPUT);
+    init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
 
     init_digital_pin(pinLaserA, OUTPUT, LOW);
     laserA.power_pin = pinLaserA;
@@ -2763,6 +2763,8 @@ void setup()
 
     start_temperature_control();
 
+    Log.info("Connecting to cloud...");
+
     Particle.subscribe(String(device_id + "/hook-response/verify-device/"), callback_verify_device);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), callback_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), callback_start_test);
@@ -2774,7 +2776,6 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), callback_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), callback_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), callback_error);
-
 
     setup_eeprom();
 
@@ -2804,6 +2805,7 @@ void setup()
 
 bool heater_debounced()
 {
+    Log.info("heater_debounced: %d, temp=%d", heater_ready, heater.temp_C_10X);
     if (previous_heater_ready != heater_ready)
     {
         heater_debouncing_in_progress = true;
