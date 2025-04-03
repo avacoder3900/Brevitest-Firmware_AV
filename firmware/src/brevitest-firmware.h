@@ -61,6 +61,9 @@
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
+// detector debouncing
+#define DETECTOR_DEBOUNCE_DELAY 10
+
 // LEDs
 #define LED_DEFAULT_POWER 115
 #define LED_WARMUP_DELAY_MS 1000
@@ -193,10 +196,9 @@ bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
-LEDStatus indicatorNoConnection(RGB_COLOR_MAGENTA, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
-LEDStatus indicatorProblem(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
-LEDStatus indicatorBusy(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorInsert(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorRemove(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorDontTouch(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;
@@ -208,6 +210,7 @@ SerialLogHandler logHandler;
 // detector
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
+unsigned long detector_debouncing_time = 0;
 bool detector_on = false;
 
 // verify device
@@ -255,9 +258,6 @@ bool stress_test_stop_flag = false;
 int stress_test_step = 0;
 int stress_test_limit = 0;
 int stress_test_LED_power = 0;
-
-// shipping bolt
-bool shipping_bolt_cartridge_inserted = false;
 
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
