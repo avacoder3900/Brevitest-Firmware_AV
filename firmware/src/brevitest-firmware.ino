@@ -618,26 +618,17 @@ void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
     digitalWrite(heater.heater_pin, HIGH);
-    // pinMode(heater.heater_pin, OUTPUT);
-    // analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
     delay(power);
     digitalWrite(heater.heater_pin, LOW);
-    // analogWrite(heater.heater_pin, 0);
     heater.power = power;
     heater.heater_on = true;
-    // if (serial_messaging_on)
-    //     Log.info("Heater set to power %d", power);
 }
 
 void turn_off_heater()
 {
     digitalWrite(heater.heater_pin, LOW);
-    // pinMode(heater.heater_pin, OUTPUT);
-    // analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
     heater.heater_on = false;
     heater.power = 0;
-    // if (serial_messaging_on)
-    //     Log.info("Heater turned off");
 }
 
 int set_heater_power(int power)
