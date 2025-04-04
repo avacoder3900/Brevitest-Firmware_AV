@@ -61,6 +61,9 @@
 // async commands
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
+// detector debouncing
+#define DETECTOR_DEBOUNCE_DELAY 10
+
 // LEDs
 #define LED_DEFAULT_POWER 115
 #define LED_WARMUP_DELAY_MS 1000
@@ -208,6 +211,7 @@ SerialLogHandler logHandler;
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
+unsigned long detector_debounce_time = 0;
 
 // verify device
 bool device_verified = false;
