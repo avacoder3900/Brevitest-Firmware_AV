@@ -87,7 +87,7 @@
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63 
-#define PARTICLE_CLOUD_DELAY 4000
+#define PARTICLE_CLOUD_DELAY 10000
 
 // barcode scanner
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
@@ -193,10 +193,9 @@ bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
-LEDStatus indicatorNoConnection(RGB_COLOR_MAGENTA, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
-LEDStatus indicatorProblem(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_CRITICAL);
-LEDStatus indicatorBusy(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorAvailable(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorInsert(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorRemove(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorDontTouch(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;
@@ -262,6 +261,7 @@ bool shipping_bolt_cartridge_inserted = false;
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
 bool publish_in_progress = false;
+unsigned long particle_connect_timeout = 0;
 
 // temperature control system
 struct HeatingElement

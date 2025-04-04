@@ -2428,6 +2428,18 @@ void disconnect_from_cloud()
     Log.info("Disconnected from cloud");
 }
 
+void connect_to_cloud()
+{
+    Log.info("Connecting to cloud...");
+    Particle.connect();
+    while (!Particle.connected())
+    {
+        delay(PARTICLE_CLOUD_DELAY);
+        Particle.connect();
+    }
+    Log.info("Connected from cloud");
+}
+
 void run_test()
 {
     unsigned long start_millis;
@@ -2454,9 +2466,9 @@ void run_test()
         write_test_record_to_eeprom();
     }
 
+    start_temperature_control();
     reset_stage(true);
     reset_globals();
-    start_temperature_control();
 
     test_underway = false;
     test_upload_mode = true;
@@ -2598,7 +2610,7 @@ void setup()
     Log.info("====== Serial Connected, Begin Setup ======");
 
     turn_off_indicator_LEDs();
-    indicatorBusy.setActive(true);
+    indicatorDontTouch.setActive(true);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
@@ -3024,31 +3036,40 @@ void loop()
     {
         stress_test_loop();
     }
-    else if (test_upload_mode)
+    else if (Particle.connected())
     {
-        test_upload_loop();
-    }
-    else if (test_start_mode)
-    {
-        test_start_loop();
-    }
-    else if (heater_debounced())
-    {
-        if (cartridge_validation_mode)
+        particle_connect_timeout = 0;
+        if (test_upload_mode)
         {
-            cartridge_validation_loop();
+            test_upload_loop();
         }
-        else if (magnet_validation_mode)
+        else if (heater_debounced())
         {
-            magnet_validation_loop();
+            if (test_start_mode)
+            {
+                test_start_loop();
+            }
+            else if (cartridge_validation_mode)
+            {
+                cartridge_validation_loop();
+            }
+            else if (magnet_validation_mode)
+            {
+                magnet_validation_loop();
+            }
+            else if (barcode_scan_mode)
+            {
+                barcode_scan_loop();
+            }
+            else if (!device_verified)
+            {
+                verify_device_loop();
+            }
         }
-        else if (barcode_scan_mode)
+        else if (millis() > particle_connect_timeout)
         {
-            barcode_scan_loop();
-        }
-        else if (!device_verified)
-        {
-            verify_device_loop();
+            particle_connect_timeout = millis() + PARTICLE_CLOUD_DELAY;
+            Particle.connect();
         }
     }
 
