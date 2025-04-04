@@ -2442,9 +2442,10 @@ void run_test()
         write_test_record_to_eeprom();
     }
 
+    start_temperature_control();
+
     reset_stage(true);
     reset_globals();
-    start_temperature_control();
 
     test_underway = false;
     test_upload_mode = true;
