@@ -193,9 +193,9 @@ bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
+LEDStatus indicatorDontTouch(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorInsert(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorRemove(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorDontTouch(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;

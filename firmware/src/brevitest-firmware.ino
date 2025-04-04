@@ -573,49 +573,38 @@ void turn_off_buzzer_timer()
 
 void turn_off_indicator_LEDs()
 {
-    if (indicatorNoConnection.isActive())
-        indicatorNoConnection.setActive(false);
-    if (indicatorProblem.isActive())
-        indicatorProblem.setActive(false);
-    if (indicatorBusy.isActive())
-        indicatorBusy.setActive(false);
-    if (indicatorAvailable.isActive())
-        indicatorAvailable.setActive(false);
+    if (indicatorDontTouch.isActive())
+        indicatorDontTouch.setActive(false);
+    if (indicatorInsert.isActive())
+        indicatorInsert.setActive(false);
+    if (indicatorRemove.isActive())
+        indicatorRemove.setActive(false);
 }
 
-void turn_on_no_connectivity_LED()
+void turn_on_dont_touch_LED()
 {
-    if (!indicatorNoConnection.isActive())
+    if (!indicatorDontTouch.isActive())
     {
         turn_off_indicator_LEDs();
-        indicatorProblem.setActive(true);
+        indicatorDontTouch.setActive(true);
     }
 }
 
-void turn_on_problem_LED()
+void turn_on_insert_cartridge_LED()
 {
-    if (!indicatorProblem.isActive())
+    if (!indicatorInsert.isActive())
     {
         turn_off_indicator_LEDs();
-        indicatorProblem.setActive(true);
+        indicatorInsert.setActive(true);
     }
 }
 
-void turn_on_busy_LED()
+void turn_on_remove_cartridge_LED()
 {
-    if (!indicatorBusy.isActive())
+    if (!indicatorRemove.isActive())
     {
         turn_off_indicator_LEDs();
-        indicatorBusy.setActive(true);
-    }
-}
-
-void turn_on_available_LED()
-{
-    if (!indicatorAvailable.isActive())
-    {
-        turn_off_indicator_LEDs();
-        indicatorAvailable.setActive(true);
+        indicatorRemove.setActive(true);
     }
 }
 
@@ -2705,78 +2694,55 @@ bool heater_debounced()
     return false;
 }
 
-void turn_on_ready_indicator(bool force = false)
-{
-    if (force)
-    {
-        turn_on_available_LED();
-    }
-    else if (heater_debounced())
-    {
-        turn_on_available_LED();
-    }
-    else
-    {
-        turn_on_busy_LED();
-    }
-}
-
 void set_device_indicators()
 {
     previous_heater_ready = heater_ready;
     heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
-    if (test_invalid)
+    if (stress_test_mode)
     {
-        turn_on_ready_indicator();
-        turn_on_buzzer_problem();
-    }
-    else if (stress_test_mode)
-    {
-        turn_on_busy_LED();
+        turn_on_dont_touch_LED();
     }
     else if (!device_verified)
     {
-        if (heater_debounced())
+        if (detector_on)
         {
-            turn_on_problem_LED();
+            turn_on_remove_cartridge_LED();
         }
         else
         {
-            turn_on_busy_LED();
+            turn_on_dont_touch_LED();
         }
     }
     else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode || magnet_validation_mode)
     {
-        turn_on_busy_LED();
+        turn_on_dont_touch_LED();
+    }
+    else if (cartridge_validated && (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted))
+    {
+        turn_on_dont_touch_LED();
+        if (test_completed || test_cancelled)
+        {
+            turn_on_buzzer_alert();
+        }
     }
     else if (barcode_invalid)
     {
-        turn_on_ready_indicator(true);
+        turn_on_remove_cartridge_LED();
         turn_on_buzzer_alert();
     }
-    else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted)
+    else if (detector_on)
     {
-        if (cartridge_validated)
-        {
-            turn_on_busy_LED();
-            if (test_completed || test_cancelled)
-            {
-                turn_on_buzzer_alert();
-            }
-        }
-        else
-        {
-            turn_on_buzzer_alert();
-            turn_on_ready_indicator(true);
-        }
+        turn_on_remove_cartridge_LED();
+        turn_off_buzzer_timer();
     }
     else
     {
-        turn_on_ready_indicator(false);
+        turn_on_insert_cartridge_LED();
         turn_off_buzzer_timer();
     }
 }
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -2966,7 +2932,7 @@ void hardware_loop()
                 if (heater_ready)
                 {
                     turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
-                    turn_on_busy_LED();
+                    turn_on_dont_touch_LED();
                     barcode_scan_mode = true;
                     barcode_invalid = false;
                 }
