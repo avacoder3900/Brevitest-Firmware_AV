@@ -90,7 +90,7 @@
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63 
-#define PARTICLE_CLOUD_DELAY 4000
+#define PARTICLE_CLOUD_DELAY 10000
 
 // barcode scanner
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
@@ -212,6 +212,9 @@ volatile bool detector_changed = false;
 bool detector_debouncing = false;
 unsigned long detector_debouncing_time = 0;
 bool detector_on = false;
+
+// particle cloud connect
+unsigned long particle_connect_timeout = 0;
 
 // verify device
 bool device_verified = false;
