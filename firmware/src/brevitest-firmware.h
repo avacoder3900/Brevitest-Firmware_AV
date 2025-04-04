@@ -211,7 +211,7 @@ SerialLogHandler logHandler;
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
 bool detector_on = false;
-unsigned long detector_debounce_time = 0;
+unsigned long detector_debouncing_time = 0;
 
 // verify device
 bool device_verified = false;
