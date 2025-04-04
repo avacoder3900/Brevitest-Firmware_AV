@@ -259,9 +259,6 @@ int stress_test_step = 0;
 int stress_test_limit = 0;
 int stress_test_LED_power = 0;
 
-// shipping bolt
-bool shipping_bolt_cartridge_inserted = false;
-
 // pubsub callback timeouts and retries
 unsigned long callback_timeout = 0;
 bool publish_in_progress = false;

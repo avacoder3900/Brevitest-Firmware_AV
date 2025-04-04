@@ -2984,32 +2984,41 @@ void loop()
     {
         stress_test_loop();
     }
-    else if (test_upload_mode)
+    else if (Particle.connected())
     {
-        test_upload_loop();
+        particle_connect_timeout = 0;
+        if (test_upload_mode)
+        {
+            test_upload_loop();
+        }
+        else if (heater_debounced())
+        {
+            if (test_start_mode)
+            {
+                test_start_loop();
+            }
+            else if (cartridge_validation_mode)
+            {
+                cartridge_validation_loop();
+            }
+            else if (magnet_validation_mode)
+            {
+                magnet_validation_loop();
+            }
+            else if (barcode_scan_mode)
+            {
+                barcode_scan_loop();
+            }
+            else if (!device_verified)
+            {
+                verify_device_loop();
+            }
+        }
     }
-    else if (heater_debounced())
+    else if (millis() > particle_connect_timeout)
     {
-        if (test_start_mode)
-        {
-            test_start_loop();
-        }
-        else if (cartridge_validation_mode)
-        {
-            cartridge_validation_loop();
-        }
-        else if (magnet_validation_mode)
-        {
-            magnet_validation_loop();
-        }
-        else if (barcode_scan_mode)
-        {
-            barcode_scan_loop();
-        }
-        else if (!device_verified)
-        {
-            verify_device_loop();
-        }
+        particle_connect_timeout = millis() + PARTICLE_CLOUD_DELAY;
+        Particle.connect();
     }
 
     delayMicroseconds(1000);
