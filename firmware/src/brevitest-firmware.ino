@@ -618,26 +618,17 @@ void turn_on_heater(int power)
 {
     power = limit(power, HEATER_MAX_POWER, 0);
     digitalWrite(heater.heater_pin, HIGH);
-    // pinMode(heater.heater_pin, OUTPUT);
-    // analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
     delay(power);
     digitalWrite(heater.heater_pin, LOW);
-    // analogWrite(heater.heater_pin, 0);
     heater.power = power;
     heater.heater_on = true;
-    // if (serial_messaging_on)
-    //     Log.info("Heater set to power %d", power);
 }
 
 void turn_off_heater()
 {
     digitalWrite(heater.heater_pin, LOW);
-    // pinMode(heater.heater_pin, OUTPUT);
-    // analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
     heater.heater_on = false;
     heater.power = 0;
-    // if (serial_messaging_on)
-    //     Log.info("Heater turned off");
 }
 
 int set_heater_power(int power)
@@ -2451,9 +2442,10 @@ void run_test()
         write_test_record_to_eeprom();
     }
 
+    start_temperature_control();
+
     reset_stage(true);
     reset_globals();
-    start_temperature_control();
 
     test_underway = false;
     test_upload_mode = true;
@@ -2993,32 +2985,41 @@ void loop()
     {
         stress_test_loop();
     }
-    else if (test_upload_mode)
+    else if (Particle.connected())
     {
-        test_upload_loop();
+        particle_connect_timeout = 0;
+        if (test_upload_mode)
+        {
+            test_upload_loop();
+        }
+        else if (heater_debounced())
+        {
+            if (test_start_mode)
+            {
+                test_start_loop();
+            }
+            else if (cartridge_validation_mode)
+            {
+                cartridge_validation_loop();
+            }
+            else if (magnet_validation_mode)
+            {
+                magnet_validation_loop();
+            }
+            else if (barcode_scan_mode)
+            {
+                barcode_scan_loop();
+            }
+            else if (!device_verified)
+            {
+                verify_device_loop();
+            }
+        }
     }
-    else if (heater_debounced())
+    else if (millis() > particle_connect_timeout)
     {
-        if (test_start_mode)
-        {
-            test_start_loop();
-        }
-        else if (cartridge_validation_mode)
-        {
-            cartridge_validation_loop();
-        }
-        else if (magnet_validation_mode)
-        {
-            magnet_validation_loop();
-        }
-        else if (barcode_scan_mode)
-        {
-            barcode_scan_loop();
-        }
-        else if (!device_verified)
-        {
-            verify_device_loop();
-        }
+        particle_connect_timeout = millis() + PARTICLE_CLOUD_DELAY;
+        Particle.connect();
     }
 
     delayMicroseconds(1000);

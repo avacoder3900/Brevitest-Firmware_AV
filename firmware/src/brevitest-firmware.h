@@ -4,7 +4,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 14         
+#define FIRMWARE_VERSION 16         
 #define DATA_FORMAT_VERSION 38
 
 #define TEST_DATA_FORMAT_CODE 'I'
@@ -90,7 +90,7 @@
 // particle
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63 
-#define PARTICLE_CLOUD_DELAY 4000
+#define PARTICLE_CLOUD_DELAY 10000
 
 // barcode scanner
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
@@ -196,9 +196,9 @@ bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
+LEDStatus indicatorDontTouch(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorInsert(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorRemove(RGB_COLOR_RED, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorDontTouch(RGB_COLOR_BLUE, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorRemove(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;
@@ -212,6 +212,9 @@ volatile bool detector_changed = false;
 bool detector_debouncing = false;
 unsigned long detector_debouncing_time = 0;
 bool detector_on = false;
+
+// particle cloud connect
+unsigned long particle_connect_timeout = 0;
 
 // verify device
 bool device_verified = false;
