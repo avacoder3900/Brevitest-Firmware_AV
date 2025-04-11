@@ -46,6 +46,7 @@
 #define SPECTRO_TIMEOUT 2000
 #define SPECTRO_MAX_CYCLES 255
 #define SPECTRO_READING_CYCLES 10
+#define SPECTRO_RAW_MAX_CYCLES 300
 
 #define SPECTRO_SWITCH_ADDR 0x41                // I2C address of PCA9536.
 #define SPECTRO_SWITCH_CONFIG_COMMAND 0x03      // Configure command.
@@ -137,7 +138,6 @@
 #define LASER_MAX_POWER 255
 #define LASER_DEFAULT_POWER 128
 #define LASER_PWM_FREQUENCY 500
-#define LASER_CHARACTERIZE_MAX_CYCLES 10
 #define LASER_PWM_ON_US 100
 #define LASER_PWM_TOTAL_US 2000
 
@@ -362,6 +362,7 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 // spectrophotometer data structure
 
 char channels[3] = { 'A', 'B', 'C' };
+int raw_sensor_index = 0;
 
 struct BrevitestSpectrophotometerReading
 { // 28 bytes
@@ -380,6 +381,14 @@ struct BrevitestSpectrophotometerReading
     uint16_t laser_pulses;
 };
 
+struct RawReading
+{ // 28 bytes
+    char channel;
+    uint16_t temperature;
+    uint16_t position;
+    BrevitestSpectrophotometerReading reading;
+} raw_reading[SPECTRO_RAW_MAX_CYCLES];
+
 struct BrevitestSpectrophotometerData
 { // 92 bytes
     uint16_t position;
@@ -389,7 +398,7 @@ struct BrevitestSpectrophotometerData
     BrevitestSpectrophotometerReading channel_a; // 28 bytes
     BrevitestSpectrophotometerReading channel_b; // 28 bytes
     BrevitestSpectrophotometerReading channel_c; // 28 bytes
-} stress_spectro_data, laser_characteristics[LASER_CHARACTERIZE_MAX_CYCLES];
+} stress_spectro_data;
 
 struct BrevitestTestRecord
 { // 956 bytes for 5 readings
