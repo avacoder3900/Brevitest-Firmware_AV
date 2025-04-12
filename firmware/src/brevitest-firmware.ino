@@ -786,8 +786,7 @@ void turn_on_laser(char channel)
     laser->power_on = true;
     // if (serial_messaging_on)
     // {
-    int value = analogRead(laser->value_pin);
-    Log.info("Laser %c set to power %d, value %d", channel, laser->power, value);
+    // int value = analogRead(laser->value_pin);
     // }
 }
 
@@ -800,7 +799,6 @@ void turn_off_laser(char channel)
     laser->power_on = false;
     laser->power = 0;
     // if (serial_messaging_on)
-    Log.info("Laser %c turned off", channel);
 }
 
 void turn_off_all_lasers()
@@ -1041,6 +1039,54 @@ void read_spectrophotometer(BrevitestSpectrophotometerData *data, char channel, 
     power_off_all_spectrophotometers();
 }
 
+void single_reading(char channel)
+{
+    DFRobot_AS7341 as7341(&Wire);
+    if (power_on_spectrophotometer(channel))
+    {
+        if (init_spectrophotometer(channel, &as7341))
+        {
+            raw_reading[raw_sensor_index].channel = channel;
+            raw_reading[raw_sensor_index].position = stage_position;
+            raw_reading[raw_sensor_index].temperature = heater.temp_C_10X;
+            BrevitestSpectrophotometerReading *reading = &(raw_reading[raw_sensor_index].reading);
+            if (reading != NULL)
+            {
+                memset(&(reading->f1), 0, 22);
+                take_spectrophotometer_reading(channel, &as7341, reading);
+            }
+        }
+    }
+    turn_off_all_lasers();
+    power_off_all_spectrophotometers();
+
+    if (raw_sensor_index++ >= SPECTRO_RAW_MAX_CYCLES)
+        raw_sensor_index = 0;
+}
+
+void take_one_reading(int chan_num, int gain, int step, int integration)
+{
+    char channel;
+
+    channel = 'A' + (limit(chan_num, 3, 1) - 1);
+
+    spectro_again = gain;
+    spectro_astep = step;
+    spectro_atime = integration;
+
+    if (chan_num == 0)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            single_reading('A' + i);
+        }
+    }
+    else
+    {
+        single_reading(channel);
+    }
+}
+
 void spectrophotometer_reading(bool baseline, bool log = false)
 {
     BrevitestSpectrophotometerData *data;
@@ -1077,44 +1123,6 @@ void stress_test_read_spectrophotometer()
     read_spectrophotometer(&stress_spectro_data, 'A', true);
     read_spectrophotometer(&stress_spectro_data, 'B', true);
     read_spectrophotometer(&stress_spectro_data, 'C', true);
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//               LASER CHARACTERIZATION CODE               //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void characterize_laser(char channel, int cycles)
-{
-    int number_of_iterations = min(cycles, LASER_CHARACTERIZE_MAX_CYCLES);
-
-    reset_stage(false);
-    move_stage_to_optical_read_position();
-    DFRobot_AS7341 as7341(&Wire);
-    if (power_on_spectrophotometer(channel))
-    {
-        if (init_spectrophotometer(channel, &as7341))
-        {
-            Serial.printlnf("Characterizing laser - channel: %c, cycles: %d, astep: %d, atime: %d, again: %d.", channel, cycles, spectro_astep, spectro_atime, spectro_again);
-            print_spectrophotometer_heading();
-            memset(laser_characteristics, 0, sizeof(laser_characteristics));
-            for (int i = 0; i < number_of_iterations; i++)
-            {
-                read_spectrophotometer(&laser_characteristics[i], channel, true);
-            }
-        }
-        else
-        {
-            Log.info("Spectrophotometer %c initialization failed", channel);
-        }
-    }
-    else
-    {
-        Log.info("Spectrophotometer %c power on failed", channel);
-    }
-    power_off_all_spectrophotometers();
-    sleep_motor();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1731,17 +1739,8 @@ int BCODE_loop()
     set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeDetected) == HIGH)
     {
-        Serial.println("Cartridge movement detected...");
         delayMicroseconds(100000);
         test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
-        if (test_cancelled)
-        {
-            Serial.println("Cartridge removed while test underway. Test cancelled.");
-        }
-        else
-        {
-            Serial.println("Cartridge ok. Test continuing.");
-        }
     }
 
     return (int)(millis() - total_duration);
@@ -1771,7 +1770,7 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, start_index, position;
+    int param1, param2, param3, param4, start_index, position;
 
     if (test_cancelled)
         return index;
@@ -1813,6 +1812,13 @@ int process_one_BCODE_command(int cmd, int index)
         position = stage_position;
         spectrophotometer_reading(false);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
+        break;
+    case 15:  // Raw sensor readings
+        index = get_BCODE_token(index, &param1); // channel (all = 0, A = 1, B = 2, C = 3)
+        index = get_BCODE_token(index, &param2); // gain
+        index = get_BCODE_token(index, &param3); // step
+        index = get_BCODE_token(index, &param4); // integration
+        take_one_reading(param1, param2, param3, param4);
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
@@ -2327,18 +2333,6 @@ int particle_command(String arg)
         spectro_again = param3;
         result = stage_position;
         break;
-    case 302: // characterize laser param1: channel, param2: cycles, param3: astep, param4: atime, param5: again
-        indx = get_next_command_param(arg, indx, &param1, 1);
-        indx = get_next_command_param(arg, indx, &param2, LASER_CHARACTERIZE_MAX_CYCLES);
-        indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
-        indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
-        indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
-        spectro_astep = param3;
-        spectro_atime = param4;
-        spectro_again = param5;
-        characterize_laser((param1 - 1) + 'A', param2);
-        result = param2;
-        break;
     case 303: // power on channel param1
         indx = get_next_command_param(arg, indx, &param1, 1);
         power_on_spectrophotometer((param1 - 1) + 'A');
@@ -2367,6 +2361,25 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &pulsesB, 10);
         indx = get_next_command_param(arg, indx, &pulsesC, 10);
         result = stage_position;
+        break;
+    case 308: // take one reading
+        indx = get_next_command_param(arg, indx, &param1, 5);
+        indx = get_next_command_param(arg, indx, &param2, 0);
+        indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
+        param1 = limit(param1, param2 == 0 ? SPECTRO_RAW_MAX_CYCLES / 3 : SPECTRO_RAW_MAX_CYCLES, 1);
+        raw_sensor_index = 0;
+        for (int i = 0; i < param1; i++)
+        {
+            take_one_reading(param2, param3, param4, param5);
+        }
+        output_raw_readings();
+        result = raw_sensor_index;
+        break;
+    case 309: // output raw readings
+        output_raw_readings();
+        result = raw_sensor_index;
         break;
     default:
         result = 0;
@@ -2416,6 +2429,27 @@ void disconnect_from_cloud()
     Log.info("Disconnected from cloud");
 }
 
+void output_raw_readings()
+{
+    if (raw_sensor_index > 0)
+    {
+        Log.info("Raw sensor readings: %d", raw_sensor_index);
+        Serial.println("channel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
+        for (int i = 0; i < raw_sensor_index; i++)
+        {
+            char channel = raw_reading[i].channel;
+            int position = raw_reading[i].position;
+            int temperature = raw_reading[i].temperature;
+            BrevitestSpectrophotometerReading *r = &(raw_reading[i].reading);
+            Serial.printlnf("%c\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, position, temperature, r->msec, r->laser_power, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
+        }
+    }
+    else
+    {
+        Log.info("No raw sensor readings");
+    }
+}
+
 void run_test()
 {
     unsigned long start_millis;
@@ -2430,19 +2464,21 @@ void run_test()
     disconnect_from_cloud();
     stop_temperature_control();
 
-    SINGLE_THREADED_BLOCK()
-    {
-        memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
-        store_eeprom();
-        start_millis = millis();
+    // SINGLE_THREADED_BLOCK()
+    // {
+    memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
+    store_eeprom();
+    start_millis = millis();
 
-        process_BCODE(0);
+    raw_sensor_index = 0;
+    process_BCODE(0);
 
-        test.duration = (millis() - start_millis) / 1000;
-        write_test_record_to_eeprom();
-    }
+    test.duration = (millis() - start_millis) / 1000;
+    write_test_record_to_eeprom();
+    // }d
 
     start_temperature_control();
+    output_raw_readings();
 
     reset_stage(true);
     reset_globals();
