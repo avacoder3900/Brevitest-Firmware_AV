@@ -7,7 +7,7 @@
 #define FIRMWARE_VERSION 16         
 #define DATA_FORMAT_VERSION 38
 
-#define TEST_DATA_FORMAT_CODE 'I'
+#define TEST_DATA_FORMAT_CODE 'J'
 #define ASSAY_UUID_LENGTH 8
 #define BARCODE_UUID_LENGTH 36
 #define CARTRIDGE_UUID_LENGTH 24
@@ -21,7 +21,6 @@
 #define ATTR_DELIM ':'
 #define ITEM_DELIM '|'
 #define END_DELIM '#'
-#define MAX_ANALOG_READ 4095
 #define SERIAL_COMMAND_BUFFER_SIZE 40
 
 // barcode and callback strings

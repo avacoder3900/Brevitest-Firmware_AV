@@ -2535,11 +2535,11 @@ void startup_device()
 
     Log.info("Testing LEDs");
     // turn_on_all_LEDs(LED_DEFAULT_POWER);
-    turn_on_laser_for_duration('A', 500);
-    delay(500);
-    turn_on_laser_for_duration('B', 500);
-    delay(500);
-    turn_on_laser_for_duration('C', 500);
+    turn_on_laser_for_duration('A', 100);
+    delay(100);
+    turn_on_laser_for_duration('B', 100);
+    delay(100);
+    turn_on_laser_for_duration('C', 100);
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
