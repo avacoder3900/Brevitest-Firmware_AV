@@ -26,7 +26,7 @@ void setup_eeprom();
 bool create_dir_if_not_exists(const char *path);
 void write_test_to_file();
 void clear_cache();
-void load_cached_test(char* filename);
+void load_cached_test(char *filename);
 bool test_in_cache();
 void detector_changed_interrupt();
 void sleep_motor();
@@ -119,10 +119,6 @@ void set_device_indicators();
 void barcode_scan_loop();
 void stress_test_loop();
 void magnet_validation_loop();
-void cartridge_validation_loop();
-void test_start_loop();
-void test_upload_loop();
-void cancel_test_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
@@ -401,26 +397,33 @@ void write_test_to_file()
     Log.info("write_test_to_file, test size: %d, event data size: %d, file size: %ld", sizeof test, event.data().size(), statbuf.st_size);
 }
 
-void clear_cache() {
+void clear_cache()
+{
     int tries = 10;
-    while (test_in_cache() && --tries > 0) {
-        if ( unlink(cached_filename) == 0) {
+    while (test_in_cache() && --tries > 0)
+    {
+        if (unlink(cached_filename) == 0)
+        {
             cached_filename[0] = '\0';
             Log.info("Cache cleared: %s", cached_filename);
-        } else {
+        }
+        else
+        {
             Log.error("Failed to clear cache: %s, errno: %d", cached_filename, errno);
         }
     }
 }
 
-void load_cached_test(char* filename) {
+void load_cached_test(char *filename)
+{
     struct stat statbuf;
-    if (filename == NULL) {
+    if (filename == NULL)
+    {
         Log.error("load_cached_test: filename is NULL");
         return;
     }
     event.loadData(filename);
-    BrevitestTestRecord* t = (BrevitestTestRecord*) event.data().data();
+    BrevitestTestRecord *t = (BrevitestTestRecord *)event.data().data();
     stat(filename, &statbuf);
     Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %ld", filename, sizeof *t, event.data().size(), statbuf.st_size);
     Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, reading: %d", t->cartridge_id, t->assay_id, t->test_status_code, t->baseline_readings + t->test_readings);
@@ -430,7 +433,7 @@ bool test_in_cache()
 {
     if (cached_filename[0] != '\0')
     {
-        Log.info("Cached filename: %s", cached_filename);
+        Log.info("test_in_cache, file already retrieved: %s", cached_filename);
         return true;
     }
     DIR *cache = opendir("/cache");
@@ -445,11 +448,11 @@ bool test_in_cache()
         if (cache_entry->d_type != DT_REG)
         {
             continue;
-        }   
+        }
         if (strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH)
         {
             snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
-            Log.info("Cached filename: %s", cached_filename);
+            Log.info("test_in_cache, retrieving file: %s", cached_filename);
             break;
         }
     } while (cache_entry != NULL && --tries > 0);
@@ -1387,6 +1390,10 @@ void publish_validate_cartridge()
 
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
+        if (cartridge_validated)
+        {
+            return;
+        }
         lastPublish = millis();
         cartridge_validation_in_progress = true;
         cartridge_validated = false;
@@ -1490,6 +1497,10 @@ void publish_start_test()
 
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
+        if (test_underway)
+        {
+            return;
+        }
         lastPublish = millis();
         test_start_in_progress = true;
         test_underway = false;
@@ -1619,6 +1630,10 @@ void publish_upload_test()
 
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
+        if (!test_in_cache())
+        {
+            return;
+        }
         lastPublish = millis();
         test_upload_in_progress = true;
 
@@ -2397,19 +2412,20 @@ int particle_command(String arg)
         //  CLOUD FUNCTIONS
         //
     case 400: // check cache
-        result =  (int) test_in_cache();
+        result = (int)test_in_cache();
         break;
     case 401: // clear cache
         clear_cache();
         result = 1;
         break;
     case 402: // load cached record
-        if (test_in_cache()) {
+        if (test_in_cache())
+        {
             load_cached_test(cached_filename);
             result = test.checksum;
         }
         break;
-    case 403: 
+    case 403:
     default:
         result = 0;
     }
@@ -2421,25 +2437,29 @@ int particle_command(String arg)
 
 int test_runner(String cartridgeId)
 {
-    if (detector_on)  {
+    if (detector_on)
+    {
         cartridge_inserted = true;
-        if (cartridgeId.length() == BARCODE_UUID_LENGTH) {
+        if (cartridgeId.length() == BARCODE_UUID_LENGTH)
+        {
             strcpy(barcode_uuid, cartridgeId.c_str());
             cartridge_validation_mode = true;
             return 0;
-        } else {
+        }
+        else
+        {
             cartridge_validation_mode = false;
             Log.info("Invalid cartridge ID: %s", cartridgeId.c_str());
             return cartridgeId.length();
         }
-    } else {
+    }
+    else
+    {
         cartridge_inserted = false;
         Log.info("Cartridge not inserted");
         return -1;
     }
 }
-
-
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -2452,9 +2472,6 @@ void reset_globals()
     test_underway = false;
     cartridge_validated = false;
     spectrophotometer_read_in_progress = false;
-
-    test_progress = 0;
-    test_percent_complete = 0;
 
     barcode_uuid[0] = '\0';
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
@@ -2532,8 +2549,8 @@ void run_test()
     reset_stage(true);
     reset_globals();
 
-    test_underway = false;
     test_upload_mode = true;
+    test_upload_in_progress = false;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2779,7 +2796,7 @@ void set_device_indicators()
             turn_on_dont_touch_LED();
         }
     }
-    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_cancel_mode || test_upload_mode || magnet_validation_mode)
+    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || magnet_validation_mode)
     {
         turn_on_dont_touch_LED();
     }
@@ -2881,49 +2898,6 @@ void magnet_validation_loop()
     }
 }
 
-void cartridge_validation_loop()
-{
-    if (cartridge_validated)
-    {
-        return;
-    }
-    else if (!cartridge_validation_in_progress)
-    {
-        publish_validate_cartridge();
-    }
-}
-
-void test_start_loop()
-{
-    if (test_underway)
-    {
-        return;
-    }
-    else if (!test_start_in_progress)
-    {
-        publish_start_test();
-    }
-}
-
-void test_upload_loop()
-{
-    if (!test_upload_in_progress)
-    {
-        if (test_in_cache())
-        {
-            publish_upload_test();
-        }
-    }
-}
-
-void cancel_test_loop()
-{
-    if (!test_cancel_in_progress)
-    {
-        publish_cancel_test();
-    }
-}
-
 void hardware_loop()
 {
     if (detector_debouncing)
@@ -3014,23 +2988,23 @@ void loop()
     else if (Particle.connected())
     {
         particle_connect_timeout = 0;
-        if (test_cancel_mode)
+        if (test_cancel_mode && !test_cancel_in_progress)
         {
-            cancel_test_loop();
+            publish_cancel_test();
         }
-        else if (test_upload_mode)
+        else if (test_upload_mode && !test_upload_in_progress)
         {
-            test_upload_loop();
+            publish_upload_test();
         }
         else if (heater_debounced())
         {
-            if (test_start_mode)
+            if (test_start_mode && !test_start_in_progress)
             {
-                test_start_loop();
+                publish_start_test();
             }
-            else if (cartridge_validation_mode)
+            else if (cartridge_validation_mode && !cartridge_validation_in_progress)
             {
-                cartridge_validation_loop();
+                publish_validate_cartridge();
             }
             else if (magnet_validation_mode)
             {
