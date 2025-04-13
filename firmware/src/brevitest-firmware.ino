@@ -272,6 +272,54 @@ bool create_dir_if_not_exists(const char *path)
     }
 }
 
+void write_test_to_file()
+{
+    event.name("upload-test");
+    event.data((char *)&test, sizeof(test), ContentType::BINARY);
+    String filename = "/cache/" + String(test.cartridge_id);
+    event.saveData(filename);
+}
+
+void clear_cache() {
+    int tries = 500;
+    while (test_in_cache() && --tries > 0) {
+        Log.info("Clearing cache: %s", cached_filename);
+        unlink(cached_filename);
+    }
+}
+
+bool test_in_cache()
+{
+    if (cached_filename[0] != '\0')
+    {
+        Log.info("Cached filename: %s", cached_filename);
+        return true;
+    }
+    DIR *cache = opendir("/cache");
+    int tries = 10;
+    do
+    {
+        cache_entry = readdir(cache);
+        if (cache_entry == NULL)
+        {
+            break;
+        }
+        Log.info("Cache entry: %d %s", cache_entry->d_type, cache_entry->d_name);
+        if (cache_entry->d_type != DT_REG)
+        {
+            continue;
+        }   
+        if (strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH)
+        {
+            snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
+            Log.info("Cached filename: %s", cached_filename);
+            break;
+        }
+    } while (cache_entry != NULL && --tries > 0);
+    closedir(cache);
+    return cached_filename[0] != '\0';
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                       DETECTOR                          //
@@ -1401,13 +1449,13 @@ void response_cancel_test(const char *name, String result)
         {
             if (iter.value().toString() == "SUCCESS")
             {
-                Log.info("Test cancelled");
                 test_cancelled = true;
                 test.test_status_code = TEST_STATUS_CANCELLED;
                 test_cancel_mode = false;
                 test_underway = false;
                 eeprom.running_test_uuid[0] = '\0';
-                
+                EEPROM.put(0, eeprom);
+                Log.info("Test cancelled");
             }
             else
             {
@@ -1426,28 +1474,6 @@ void response_cancel_test(const char *name, String result)
 //                  UPLOAD TEST                    //
 /////////////////////////////////////////////////////
 
-void write_test_to_file() {
-    event.name("upload-test");
-    event.data((char *) &test, sizeof(test), ContentType::BINARY);
-    String filename = "/cache/" + String(test.cartridge_id);
-    event.saveData(filename);
-}
-bool test_in_cache()
-{
-    if (cached_filename[0] != '\0')
-    {
-        Log.info("Cached filename: %s", cached_filename);
-        return true;
-    }
-    DIR *cache = opendir("/cache");
-    cache_entry = readdir(cache);
-    Log.info("Cache entry: %d %s", cache_entry->d_type, cache_entry->d_name);
-    snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
-    Log.info("Cached filename: %s", cached_filename);
-    closedir(cache);
-    return (cache_entry != NULL && cache_entry->d_type == DT_REG && strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH);
-}
-
 void publish_upload_test()
 {
     particle::Variant data;
@@ -1456,7 +1482,6 @@ void publish_upload_test()
     {
         lastPublish = millis();
         test_upload_in_progress = true;
-        test_upload_mode = false;
 
         event.loadData(cached_filename);
         if (event.canPublish(event.size()))
@@ -2231,14 +2256,12 @@ int particle_command(String arg)
         //
         //  CLOUD FUNCTIONS
         //
-    case 400: // load cache
-        if (test_in_cache()) {
-            event.loadData(cached_filename);
-            Log.info("Loading test from cache: %s, event.name: %s", cached_filename, event.name());
-            result = 1;
-        } else {
-            result = 0;
-        }
+    case 400: // check cache
+        result =  (int) test_in_cache();
+        break;
+    case 401: // clear cache
+        clear_cache();
+        result = 1;
         break;
     default:
         result = 0;
