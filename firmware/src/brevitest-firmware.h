@@ -153,17 +153,6 @@
 // stress test
 #define STRESS_TEST_MAXIMUM_RECORDS 15
 
-// test status codes
-#define TEST_STATUS_STANDBY 0x00
-#define TEST_STATUS_UNDERWAY 0x01
-#define TEST_STATUS_SUCCESS 0x02
-#define TEST_STATUS_CANCELLED 0x03
-#define TEST_STATUS_INVALID_CARTRIDGE 0x04
-#define TEST_STATUS_VALIDATION_CANCELLED 0x05
-#define TEST_STATUS_FAILED_TO_START 0x06
-#define TEST_STATUS_START_CANCELLED 0x07
-#define TEST_STATUS_ERROR 0xFF
-
 // pin definitions
 int pinBuzzer = A0;
 int pinPhotoA = A2;
@@ -379,7 +368,7 @@ struct BrevitestSpectrophotometerReading
 struct BrevitestTestRecord
 { // 8256 bytes
     char data_format_code = TEST_DATA_FORMAT_CODE; // 0, 1 byte
-    uint8_t test_status_code = TEST_STATUS_STANDBY; // 1, 1 byte
+    uint8_t number_of_readings = 0; // 1, 1 byte
     char cartridge_id[BARCODE_UUID_LENGTH + 1]; // 2-39, 37 bytes
     char assay_id[ASSAY_UUID_LENGTH + 1]; // 39-48, 9 bytes
     uint16_t duration; // 48-49, 2 bytes
@@ -387,13 +376,12 @@ struct BrevitestTestRecord
     uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 54-55, 2 bytes
     uint8_t atime = SPECTRO_ATIME_DEFAULT; // 56, 1 byte
     uint8_t again = SPECTRO_AGAIN_DEFAULT; // 57, 1 byte
-    uint8_t baseline_readings = 0;   // 58, 1 byte
-    uint8_t test_readings = 0;  // 59, 1 byte
+    uint8_t baseline_scans = 0;   // 58, 1 byte
+    uint8_t test_scans = 0;  // 59, 1 byte
     uint32_t checksum;  // 60-63, 4 bytes
     BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 64-8255, 8192 bytes
 } test;
 int reading_index = 0;
-int reading_count = 0;
 
 struct BrevitestAssay
 {

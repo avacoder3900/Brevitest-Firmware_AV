@@ -426,7 +426,7 @@ void load_cached_test(char *filename)
     BrevitestTestRecord *t = (BrevitestTestRecord *)event.data().data();
     stat(filename, &statbuf);
     Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %ld", filename, sizeof *t, event.data().size(), statbuf.st_size);
-    Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, reading: %d", t->cartridge_id, t->assay_id, t->test_status_code, t->baseline_readings + t->test_readings);
+    Log.info("Test loaded, cartridge: %s, assay: %s, readings: %d", t->cartridge_id, t->assay_id, t->number_of_readings);
 }
 
 bool test_in_cache()
@@ -1187,12 +1187,11 @@ void single_reading(int number, char channel)
     {
         if (init_spectrophotometer(channel, &as7341))
         {
-            BrevitestSpectrophotometerReading *reading = &(test.reading[reading_index]);
+            BrevitestSpectrophotometerReading *reading = &(test.reading[test.number_of_readings]);
             reading->number = number;
             reading->channel = channel;
             reading->temperature = heater.temp_C_10X;
             reading->position = stage_position;
-            reading->msec = millis();
             turn_on_laser(channel);
             delayMicroseconds(LASER_PWM_ON_US);
             reading->laser_output = analogRead(get_laser(channel)->value_pin);
@@ -1202,8 +1201,8 @@ void single_reading(int number, char channel)
     }
     power_off_all_spectrophotometers();
 
-    if (reading_index++ >= SPECTRO_RAW_MAX_CYCLES)
-        reading_index = 0;
+    if (test.number_of_readings++ >= SPECTRO_MAX_READINGS)
+        test.number_of_readings = SPECTRO_MAX_READINGS - 1;
 }
 
 void take_one_reading(int number, int chan_num)
@@ -1225,20 +1224,18 @@ void take_one_reading(int number, int chan_num)
     }
 }
 
-void spectrophotometer_reading(bool baseline, bool log = false)
+void spectrophotometer_reading(bool baseline, int scans, bool log = false)
 {
     if (baseline)
     {
-        reading_index = 0;
-        test.baseline_readings = 3 * SPECTRO_NUMBER_OF_READINGS;
+        test.baseline_scans = scans;
     }
     else
     {
-        reading_index = test.baseline_readings;
-        test.test_readings = 3 * SPECTRO_NUMBER_OF_READINGS;
+        test.test_scans = scans;
     }
 
-    for (int i = 0; i < SPECTRO_NUMBER_OF_READINGS; i++)
+    for (int i = 0; i < scans; i++)
     {
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
         take_one_reading(i, 0);
@@ -1248,7 +1245,8 @@ void spectrophotometer_reading(bool baseline, bool log = false)
 void stress_test_read_spectrophotometer()
 {
     print_spectrophotometer_heading();
-    spectrophotometer_reading(true, true);
+    spectrophotometer_reading(true, 10, true);
+    spectrophotometer_reading(false, 10, true);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1430,13 +1428,11 @@ void response_validate_cartridge(const char *name, String result)
                 {
                     Log.info("Cartridge %s %s", barcode_uuid, "validated");
                     cartridge_validated = true;
-                    test.test_status_code = TEST_STATUS_UNDERWAY;
                 }
                 else
                 {
                     Log.info("Cartridge %s %s", barcode_uuid, "invalid");
                     cartridge_validated = false;
-                    test.test_status_code = TEST_STATUS_INVALID_CARTRIDGE;
                 }
             }
             else if (iter.name() == "errorMessage")
@@ -1533,7 +1529,6 @@ void response_start_test(const char *name, String result)
                     Log.info("Start test cancelled");
                     test_underway = false;
                     test_cancelled = true;
-                    test.test_status_code = TEST_STATUS_START_CANCELLED;
                     test_cancel_mode = true;
                 }
                 else
@@ -1546,7 +1541,6 @@ void response_start_test(const char *name, String result)
                 Log.info("Test failed to start");
                 test_underway = false;
                 cartridge_validated = false;
-                test.test_status_code = TEST_STATUS_FAILED_TO_START;
             }
         }
         else if (iter.name() == "errorMessage")
@@ -1600,7 +1594,6 @@ void response_cancel_test(const char *name, String result)
             if (iter.value().toString() == "SUCCESS")
             {
                 test_cancelled = true;
-                test.test_status_code = TEST_STATUS_CANCELLED;
                 test_cancel_mode = false;
                 test_underway = false;
                 eeprom.running_test_uuid[0] = '\0';
@@ -1842,8 +1835,7 @@ int process_one_BCODE_command(int cmd, int index)
         test.again = param2;
         test.astep = param3;
         test.atime = param4;
-        take_one_reading(reading_count, param1);
-        reading_count++;
+        take_one_reading(reading_index, param1);
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
@@ -2366,16 +2358,18 @@ int particle_command(String arg)
         result = stage_position;
         break;
     case 305: // baseline scan
+        indx = get_next_command_param(arg, indx, &param1, 1);
         reset_stage(false);
         print_spectrophotometer_heading();
-        spectrophotometer_reading(true, true);
+        spectrophotometer_reading(true, param1, true);
         sleep_motor();
         result = stage_position;
         break;
     case 306: // test scan
+        indx = get_next_command_param(arg, indx, &param1, 1);
         reset_stage(false);
         print_spectrophotometer_heading();
-        spectrophotometer_reading(false, true);
+        spectrophotometer_reading(false, param1, true);
         sleep_motor();
         result = stage_position;
         break;
@@ -2396,7 +2390,6 @@ int particle_command(String arg)
         test.atime = param4;
         test.again = param5;
         reading_index = 0;
-        reading_count = 0;
         for (int i = 0; i < param1; i++)
         {
             take_one_reading(i, param2);
@@ -2481,7 +2474,6 @@ void reset_globals()
     test.assay_id[ASSAY_UUID_LENGTH] = '\0';
     assay.id[0] = '\0';
     assay.id[ASSAY_UUID_LENGTH] = '\0';
-    test.test_status_code = TEST_STATUS_UNDERWAY;
 
     particle_register[0] = '\0';
     particle_register[PARTICLE_REGISTER_SIZE] = '\0';
@@ -2533,8 +2525,7 @@ void run_test()
     EEPROM.put(0, eeprom);
     test.start_time = millis();
 
-    reading_index = 0;
-    reading_count = 0;
+    test.number_of_readings = 0;
     process_BCODE(0);
 
     test.duration = (millis() - test.start_time) / 1000;
