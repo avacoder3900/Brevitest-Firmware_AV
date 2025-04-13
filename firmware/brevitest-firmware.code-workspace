@@ -30,7 +30,8 @@
             "ios": "cpp",
             "__node_handle": "cpp",
             "stdexcept": "cpp",
-            "typeinfo": "cpp"
+            "typeinfo": "cpp",
+            "chrono": "cpp"
         },
         "particle.enablePre-releaseDeviceOSBuilds": true
 	}
