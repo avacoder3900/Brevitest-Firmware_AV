@@ -304,7 +304,6 @@ bool test_in_cache()
         {
             break;
         }
-        Log.info("Cache entry: %d %s", cache_entry->d_type, cache_entry->d_name);
         if (cache_entry->d_type != DT_REG)
         {
             continue;
