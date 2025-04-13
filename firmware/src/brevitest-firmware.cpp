@@ -2462,6 +2462,8 @@ void reset_globals()
     test.cartridge_id[BARCODE_UUID_LENGTH] = '\0';
     test.assay_id[0] = '\0';
     test.assay_id[ASSAY_UUID_LENGTH] = '\0';
+    assay.id[0] = '\0';
+    assay.id[ASSAY_UUID_LENGTH] = '\0';
     test.test_status_code = TEST_STATUS_UNDERWAY;
 
     particle_register[0] = '\0';
@@ -2520,6 +2522,8 @@ void run_test()
 
     test.duration = (millis() - test.start_time) / 1000;
     write_test_to_file();
+    eeprom.running_test_uuid[0] = '\0';
+    EEPROM.put(0, eeprom);
     // }d
 
     start_temperature_control();
