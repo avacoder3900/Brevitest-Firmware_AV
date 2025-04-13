@@ -1282,7 +1282,7 @@ void publish_validate_cartridge()
         cartridge_validated = false;
 
         event.name("validate-cartridge");
-        event.data(barcode_uuid);
+        event.data(String(barcode_uuid));
         if (event.canPublish(event.size()))
         {
             Log.info("Publishing validate cartridge, %s", barcode_uuid);
@@ -1387,7 +1387,7 @@ void publish_start_test()
         test_underway = false;
 
         event.name("start-test");
-        event.data(barcode_uuid);
+        event.data(String(barcode_uuid));
         if (event.canPublish(event.size()))
         {
             Log.info("Publishing start test, %s", barcode_uuid);
@@ -1457,7 +1457,7 @@ void publish_cancel_test()
         test_cancelled = false;
 
         event.name("cancel-test");
-        event.data(eeprom.running_test_uuid);
+        event.data(String(eeprom.running_test_uuid));
         if (event.canPublish(event.size()))
         {
             Log.info("Publishing cancel test, %s", barcode_uuid);
