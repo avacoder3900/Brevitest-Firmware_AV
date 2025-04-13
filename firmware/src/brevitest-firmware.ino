@@ -279,7 +279,7 @@ void write_test_to_file()
     String filename = "/cache/" + String(test.cartridge_id);
     event.saveData(filename);
     stat(filename, &statbuf);
-    Log.info("write_test_to_file, test size: %d, event data size: %d, file size: %d", sizeof test, event.data().size(), statbuf.st_size);
+    Log.info("write_test_to_file, test size: %d, event data size: %d, file size: %ld", sizeof test, event.data().size(), statbuf.st_size);
 }
 
 void clear_cache() {
@@ -302,8 +302,9 @@ void load_cached_test(char* filename) {
     }
     event.loadData(filename);
     BrevitestTestRecord* t = (BrevitestTestRecord*) event.data().data();
-    Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %d", filename, sizeof *t, event.data().size(), statbuf.st_size);
-    Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, size: %d", t->cartridge_id, t->assay_id, t->test_status_code, t->baseline_readings + t->test_readings);
+    stat(filename, &statbuf);
+    Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %ld", filename, sizeof *t, event.data().size(), statbuf.st_size);
+    Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, reading: %d", t->cartridge_id, t->assay_id, t->test_status_code, t->baseline_readings + t->test_readings);
 }
 
 bool test_in_cache()

@@ -393,10 +393,12 @@ bool create_dir_if_not_exists(const char *path)
 
 void write_test_to_file()
 {
-    event.name("upload-test");
+    struct stat statbuf;
     event.data((char *)&test, sizeof(test), ContentType::BINARY);
     String filename = "/cache/" + String(test.cartridge_id);
     event.saveData(filename);
+    stat(filename, &statbuf);
+    Log.info("write_test_to_file, test size: %d, event data size: %d, file size: %ld", sizeof test, event.data().size(), statbuf.st_size);
 }
 
 void clear_cache() {
@@ -412,14 +414,16 @@ void clear_cache() {
 }
 
 void load_cached_test(char* filename) {
+    struct stat statbuf;
     if (filename == NULL) {
         Log.error("load_cached_test: filename is NULL");
         return;
     }
-    Log.info("Loading cached test from %s", filename);
     event.loadData(filename);
     BrevitestTestRecord* t = (BrevitestTestRecord*) event.data().data();
-    Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, size: %d", t->cartridge_id, t->assay_id, t->test_status_code, sizeof t);
+    stat(filename, &statbuf);
+    Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %ld", filename, sizeof *t, event.data().size(), statbuf.st_size);
+    Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, reading: %d", t->cartridge_id, t->assay_id, t->test_status_code, t->baseline_readings + t->test_readings);
 }
 
 bool test_in_cache()
@@ -1446,6 +1450,8 @@ void response_validate_cartridge(const char *name, String result)
                 Log.info("Assay ID: %s", assayId);
                 memcpy(assay.id, assayId, ASSAY_UUID_LENGTH);
                 assay.id[ASSAY_UUID_LENGTH] = '\0';
+                memcpy(test.assay_id, assayId, ASSAY_UUID_LENGTH);
+                test.assay_id[ASSAY_UUID_LENGTH] = '\0';
             }
             else if (iter.name() == "checksum")
             {
@@ -2494,8 +2500,6 @@ void output_test_readings()
 
 void run_test()
 {
-    unsigned long start_millis;
-
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
@@ -2508,13 +2512,13 @@ void run_test()
     // {
     memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH);
     EEPROM.put(0, eeprom);
-    start_millis = millis();
+    test.start_time = millis();
 
     reading_index = 0;
     reading_count = 0;
     process_BCODE(0);
 
-    test.duration = (millis() - start_millis) / 1000;
+    test.duration = (millis() - test.start_time) / 1000;
     write_test_to_file();
     // }d
 
