@@ -383,9 +383,8 @@ struct BrevitestTestRecord
     char cartridge_id[BARCODE_UUID_LENGTH + 1]; // 2-39, 37 bytes
     char assay_id[ASSAY_UUID_LENGTH + 1]; // 39-48, 9 bytes
     uint16_t duration; // 48-49, 2 bytes
-    uint16_t start_time; // 50-51, 2 bytes
-    uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 52-53, 2 bytes
-    uint16_t reserved;  // 54-55, 2 bytes
+    unsigned long start_time; // 50-53, 4 bytes
+    uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 54-55, 2 bytes
     uint8_t atime = SPECTRO_ATIME_DEFAULT; // 56, 1 byte
     uint8_t again = SPECTRO_AGAIN_DEFAULT; // 57, 1 byte
     uint8_t baseline_readings = 0;   // 58, 1 byte

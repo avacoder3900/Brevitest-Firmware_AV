@@ -274,18 +274,36 @@ bool create_dir_if_not_exists(const char *path)
 
 void write_test_to_file()
 {
-    event.name("upload-test");
+    struct stat statbuf;
     event.data((char *)&test, sizeof(test), ContentType::BINARY);
     String filename = "/cache/" + String(test.cartridge_id);
     event.saveData(filename);
+    stat(filename, &statbuf);
+    Log.info("write_test_to_file, test size: %d, event data size: %d, file size: %d", sizeof test, event.data().size(), statbuf.st_size);
 }
 
 void clear_cache() {
-    int tries = 500;
+    int tries = 10;
     while (test_in_cache() && --tries > 0) {
-        Log.info("Clearing cache: %s", cached_filename);
-        unlink(cached_filename);
+        if ( unlink(cached_filename) == 0) {
+            cached_filename[0] = '\0';
+            Log.info("Cache cleared: %s", cached_filename);
+        } else {
+            Log.error("Failed to clear cache: %s, errno: %d", cached_filename, errno);
+        }
     }
+}
+
+void load_cached_test(char* filename) {
+    struct stat statbuf;
+    if (filename == NULL) {
+        Log.error("load_cached_test: filename is NULL");
+        return;
+    }
+    event.loadData(filename);
+    BrevitestTestRecord* t = (BrevitestTestRecord*) event.data().data();
+    Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %d", filename, sizeof *t, event.data().size(), statbuf.st_size);
+    Log.info("Test loaded, cartridge: %s, assay: %s, status: %d, size: %d", t->cartridge_id, t->assay_id, t->test_status_code, t->baseline_readings + t->test_readings);
 }
 
 bool test_in_cache()
@@ -1312,6 +1330,8 @@ void response_validate_cartridge(const char *name, String result)
                 Log.info("Assay ID: %s", assayId);
                 memcpy(assay.id, assayId, ASSAY_UUID_LENGTH);
                 assay.id[ASSAY_UUID_LENGTH] = '\0';
+                memcpy(test.assay_id, assayId, ASSAY_UUID_LENGTH);
+                test.assay_id[ASSAY_UUID_LENGTH] = '\0';
             }
             else if (iter.name() == "checksum")
             {
@@ -1482,6 +1502,7 @@ void publish_upload_test()
         lastPublish = millis();
         test_upload_in_progress = true;
 
+        event.name("upload-test");
         event.loadData(cached_filename);
         if (event.canPublish(event.size()))
         {
@@ -1678,7 +1699,7 @@ int process_one_BCODE_command(int cmd, int index)
         spectrophotometer_reading(false, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 15:                                     // Raw sensor readings
+    case 15:                                     // take sensor readings
         index = get_BCODE_token(index, &param1); // channel (all = 0, A = 1, B = 2, C = 3)
         index = get_BCODE_token(index, &param2); // gain
         index = get_BCODE_token(index, &param3); // step
@@ -2262,6 +2283,13 @@ int particle_command(String arg)
         clear_cache();
         result = 1;
         break;
+    case 402: // load cached record
+        if (test_in_cache()) {
+            load_cached_test(cached_filename);
+            result = test.checksum;
+        }
+        break;
+    case 403: 
     default:
         result = 0;
     }
@@ -2270,6 +2298,28 @@ int particle_command(String arg)
 
     return result;
 }
+
+int test_runner(String cartridgeId)
+{
+    if (detector_on)  {
+        cartridge_inserted = true;
+        if (cartridgeId.length() == BARCODE_UUID_LENGTH) {
+            strcpy(barcode_uuid, cartridgeId.c_str());
+            cartridge_validation_mode = true;
+            return 0;
+        } else {
+            cartridge_validation_mode = false;
+            Log.info("Invalid cartridge ID: %s", cartridgeId.c_str());
+            return cartridgeId.length();
+        }
+    } else {
+        cartridge_inserted = false;
+        Log.info("Cartridge not inserted");
+        return -1;
+    }
+}
+
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -2290,8 +2340,8 @@ void reset_globals()
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
     test.cartridge_id[0] = '\0';
     test.cartridge_id[BARCODE_UUID_LENGTH] = '\0';
-    assay.id[0] = '\0';
-    assay.id[ASSAY_UUID_LENGTH] = '\0';
+    test.assay_id[0] = '\0';
+    test.assay_id[ASSAY_UUID_LENGTH] = '\0';
     test.test_status_code = TEST_STATUS_UNDERWAY;
 
     particle_register[0] = '\0';
@@ -2314,7 +2364,7 @@ void output_test_readings()
 {
     if (reading_index > 0)
     {
-        Log.info("Raw sensor readings: %d", reading_index);
+        Log.info("Test readings: %d", reading_index);
         Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
         for (int i = 0; i < reading_index; i++)
         {
@@ -2330,8 +2380,6 @@ void output_test_readings()
 
 void run_test()
 {
-    unsigned long start_millis;
-
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
@@ -2344,13 +2392,13 @@ void run_test()
     // {
     memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH);
     EEPROM.put(0, eeprom);
-    start_millis = millis();
+    test.start_time = millis();
 
     reading_index = 0;
     reading_count = 0;
     process_BCODE(0);
 
-    test.duration = (millis() - start_millis) / 1000;
+    test.duration = (millis() - test.start_time) / 1000;
     write_test_to_file();
     // }d
 
@@ -2440,10 +2488,6 @@ bool startI2C()
     return Wire.isEnabled();
 }
 
-void startup_device()
-{
-}
-
 void setup()
 {
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
@@ -2495,6 +2539,7 @@ void setup()
 
     Particle.variable("temperature", current_temperature);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
+    Particle.function("run_test", test_runner);
 
     start_temperature_control();
 
