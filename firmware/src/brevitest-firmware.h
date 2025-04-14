@@ -38,7 +38,7 @@
 #define SPECTRO_AGAIN_DEFAULT 7
 #define SPECTRO_WELL_LENGTH 6000
 #define SPECTRO_STARTING_STAGE_POSITION 21000
-#define SPECTRO_MAX_READINGS 256
+#define SPECTRO_MAX_READINGS 300
 #define SPECTRO_NUMBER_OF_READINGS 5
 #define SPECTRO_TIMEOUT 2000
 #define SPECTRO_MAX_CYCLES 255
@@ -254,7 +254,7 @@ int stress_test_LED_power = 0;
 
 // cloud communication
 CloudEvent event;
-const std::chrono::milliseconds publishPeriod = 5s;
+const std::chrono::milliseconds publishPeriod = 1s;
 unsigned long lastPublish;
 
 // temperature control system
@@ -366,21 +366,23 @@ struct BrevitestSpectrophotometerReading
 };
 
 struct BrevitestTestRecord
-{ // 8256 bytes
+{ // 9668 bytes
     char data_format_code = TEST_DATA_FORMAT_CODE; // 0, 1 byte
     char cartridge_id[BARCODE_UUID_LENGTH + 1]; // 1-37, 37 bytes
     char assay_id[ASSAY_UUID_LENGTH + 1]; // 38-46, 9 bytes
-    uint8_t number_of_readings = 0; // 47, 1 byte
+    char reserved;
     unsigned long start_time; // 48-51, 4 bytes
     uint16_t duration; // 52-53, 2 bytes
     uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 54-55, 2 bytes
     uint8_t atime = SPECTRO_ATIME_DEFAULT; // 56, 1 byte
     uint8_t again = SPECTRO_AGAIN_DEFAULT; // 57, 1 byte
-    uint8_t baseline_scans = 0;   // 58, 1 byte
-    uint8_t test_scans = 0;  // 59, 1 byte
-    uint32_t checksum;  // 60-63, 4 bytes
-    BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 68-9284, 8192 bytes
+    uint16_t number_of_readings = 0; // 58-59, 2 bytes
+    uint16_t baseline_scans = 0;   // 60-61, 2 bytes
+    uint16_t test_scans = 0;  // 62-63, 2 bytes
+    uint32_t checksum;  // 64-67, 4 bytes
+    BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 68-9667, 9600 bytes
 } test;
+#define TEST_SIZE sizeof (BrevitestTestRecord);
 
 struct BrevitestAssay
 {

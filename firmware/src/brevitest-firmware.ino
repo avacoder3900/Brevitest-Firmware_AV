@@ -322,6 +322,33 @@ bool test_in_cache()
         return true;
     }
     DIR *cache = opendir("/cache");
+    int tries = 50;
+    bool test_found = false;
+    do
+    {
+        cache_entry = readdir(cache);
+        if (cache_entry == NULL)
+        {
+            break;
+        }
+        if (cache_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        if (strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH)
+        {
+            snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
+            Log.info("test_in_cache, found file: %s", cached_filename);
+            test_found = true;
+        }
+    } while (cache_entry != NULL && --tries > 0);
+    closedir(cache);
+    return test_found;
+}
+
+void output_cache()
+{
+    DIR *cache = opendir("/cache");
     int tries = 10;
     do
     {
@@ -337,13 +364,13 @@ bool test_in_cache()
         if (strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH)
         {
             snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
-            Log.info("test_in_cache, retrieving file: %s", cached_filename);
-            break;
+            event.loadData(cached_filename);
+            output_test_readings((BrevitestTestRecord*) event.data().data());
         }
     } while (cache_entry != NULL && --tries > 0);
     closedir(cache);
-    return cached_filename[0] != '\0';
 }
+
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1065,7 +1092,7 @@ void print_spectrophotometer_heading()
     Serial.println("channel\tposition\ttime ms\tpreheat cycles\tpower cycles\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
-void single_reading(char channel)
+void single_reading(uint8_t number, char channel)
 {
     DFRobot_AS7341 as7341(&Wire);
     if (power_on_spectrophotometer(channel))
@@ -1073,7 +1100,7 @@ void single_reading(char channel)
         if (init_spectrophotometer(channel, &as7341))
         {
             BrevitestSpectrophotometerReading *reading = &(test.reading[test.number_of_readings]);
-            reading->number = test.number_of_readings;
+            reading->number = number;
             reading->channel = channel;
             reading->temperature = heater.temp_C_10X;
             reading->position = stage_position;
@@ -1082,16 +1109,13 @@ void single_reading(char channel)
             reading->laser_output = analogRead(get_laser(channel)->value_pin);
             take_spectrophotometer_reading(channel, &as7341, reading);
             turn_off_all_lasers();
+            test.number_of_readings++;
         }
     }
     power_off_all_spectrophotometers();
-
-    test.number_of_readings++;
-    if (test.number_of_readings >= SPECTRO_MAX_READINGS)
-        test.number_of_readings = SPECTRO_MAX_READINGS - 1;
 }
 
-void take_one_reading(int chan_num)
+void take_one_reading(uint8_t number, int chan_num)
 {
     char channel;
 
@@ -1099,13 +1123,13 @@ void take_one_reading(int chan_num)
     {
         for (int i = 0; i < 3; i++)
         {
-            single_reading(channels[i]);
+            single_reading(number, channels[i]);
         }
     }
     else
     {
         channel = channels[(limit(chan_num, 3, 1) - 1)];
-        single_reading(channel);
+        single_reading(number, channel);
     }
 }
 
@@ -1123,7 +1147,7 @@ void spectrophotometer_reading(bool baseline, int scans, bool log = false)
     for (int i = 0; i < scans; i++)
     {
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
-        take_one_reading(0);
+        take_one_reading(i, 0);
     }
 }
 
@@ -1543,7 +1567,7 @@ void response_upload_test(const char *name, String result)
             if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
             {
                 test_invalid = false;
-                unlink(cached_filename);
+                // unlink(cached_filename);
                 Log.info("Uploaded test successful");
             }
             else
@@ -1676,6 +1700,7 @@ int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
     int param1, param2, param3, param4, start_index, position;
+    uint8_t number;
 
     if (test_cancelled)
         return index;
@@ -1730,7 +1755,8 @@ int process_one_BCODE_command(int cmd, int index)
         test.again = param2;
         test.astep = param3;
         test.atime = param4;
-        take_one_reading(param1);
+        number = param1 == 0 ? test.number_of_readings / 3 : test.number_of_readings;
+        take_one_reading(number, param1);
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
@@ -2275,8 +2301,8 @@ int particle_command(String arg)
         result = stage_position;
         break;
     case 308: // take readings
-        indx = get_next_command_param(arg, indx, &param1, 5);
-        indx = get_next_command_param(arg, indx, &param2, 0);
+        indx = get_next_command_param(arg, indx, &param1, 5); // count
+        indx = get_next_command_param(arg, indx, &param2, 0); // channel (0 = all, 1 = A, 2 = B, 3 = C)
         indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
         indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
         indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
@@ -2287,7 +2313,7 @@ int particle_command(String arg)
         test.number_of_readings = 0;
         for (int i = 0; i < param1; i++)
         {
-            take_one_reading(param2);
+            take_one_reading(i, param2);
         }
         output_test_readings(&test);
         result = test.number_of_readings;
@@ -2307,15 +2333,13 @@ int particle_command(String arg)
         result = 1;
         break;
     case 402: // load cached record
-        if (test_in_cache())
-        {
-            load_cached_test(cached_filename);
-            BrevitestTestRecord *t = (BrevitestTestRecord *) event.data().data();
-            output_test_readings(t);
-            result = test.number_of_readings;
-        }
+        output_cache();
         break;
-    case 403:
+    case 403: // upload test
+        test_upload_mode = true;
+        test_upload_in_progress = false;
+        result = 1;
+        break;
     default:
         result = 0;
     }
@@ -2388,11 +2412,13 @@ void disconnect_from_cloud()
     Log.info("Disconnected from cloud");
 }
 
-void output_test_readings(BrevitestTestRecord* t)
+void output_test_readings(BrevitestTestRecord *t)
 {
     if (t->number_of_readings > 0)
     {
-        Serial.printlnf("Test - data format: %c, cartridge: %s, assay: %s, readings: %d",t->data_format_code,  t->cartridge_id, t->assay_id, t->number_of_readings);
+        Serial.printlnf("Test %s", t->cartridge_id);
+        Serial.printlnf("Data format: %c, assay: %s, duration: %d, start_time: %lu", t->data_format_code, t->assay_id, t->duration, t->start_time);
+        Serial.printlnf("astep: %d, atime: %d, again: %d, baseline_scans: %d, test_scans: %d, number_of_readings: %d", t->astep, t->atime, t->again, t->baseline_scans, t->test_scans, t->number_of_readings);
         Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
         for (int i = 0; i < t->number_of_readings; i++)
         {
@@ -2434,6 +2460,7 @@ void run_test()
     write_test_to_file();
     eeprom.running_test_uuid[0] = '\0';
     EEPROM.put(0, eeprom);
+    output_test_readings(&test);
 
     start_temperature_control();
     Particle.connect();
@@ -2441,8 +2468,8 @@ void run_test()
     reset_stage(true);
     reset_globals();
 
-    test_upload_mode = true;
-    test_upload_in_progress = false;
+    // test_upload_mode = true;
+    // test_upload_in_progress = false;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2455,7 +2482,7 @@ void clear_state()
 {
     cartridge_validation_in_progress = false;
     test_start_in_progress = false;
-    test_upload_in_progress = false;
+    // test_upload_in_progress = false;
 
     magnetometer_inserted = false;
     stress_test_cartridge_inserted = false;
@@ -2466,7 +2493,7 @@ void clear_state()
     test_start_mode = false;
     test_underway = false;
     cached_filename[0] = '\0';
-    test_upload_mode = test_in_cache();
+    // test_upload_mode = test_in_cache();
     magnet_validation_mode = false;
 
     test_invalid = false;
@@ -2634,7 +2661,7 @@ void setup()
     Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
     Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
-    Log.info("Cached test ? %c", cached_filename[0] == '\0' ? 'N' : 'Y');
+    Log.info("Cached test ? %c", test_in_cache() ? 'Y' : 'N');
 
     if (test_interrupted)
     {
@@ -2884,10 +2911,6 @@ void loop()
         {
             publish_cancel_test();
         }
-        else if (test_upload_mode && !test_upload_in_progress)
-        {
-            publish_upload_test();
-        }
         else if (heater_debounced())
         {
             if (test_start_mode && !test_start_in_progress)
@@ -2905,6 +2928,10 @@ void loop()
             else if (barcode_scan_mode)
             {
                 barcode_scan_loop();
+            }
+            else if (test_upload_mode && !test_upload_in_progress)
+            {
+                publish_upload_test();
             }
         }
     }
