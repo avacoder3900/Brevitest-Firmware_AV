@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 16         
+#define FIRMWARE_VERSION 17         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
@@ -346,9 +346,10 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char channels[3] = { 'A', 'B', 'C' };
 
 struct BrevitestSpectrophotometerReading
-{ // 32 bytes
+{ // 36 bytes
     uint8_t number;
     char channel;
+    uint16_t reserved1;
     uint16_t temperature;
     uint16_t position;
     unsigned long msec;
@@ -363,6 +364,7 @@ struct BrevitestSpectrophotometerReading
     uint16_t clear;
     uint16_t nir;
     uint16_t laser_output;
+    uint16_t reserved2;
 };
 
 struct BrevitestTestRecord
@@ -373,16 +375,18 @@ struct BrevitestTestRecord
     char assay_id[ASSAY_UUID_LENGTH + 1]; // 39-48, 9 bytes
     uint16_t duration; // 48-49, 2 bytes
     unsigned long start_time; // 50-53, 4 bytes
-    uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 54-55, 2 bytes
-    uint8_t atime = SPECTRO_ATIME_DEFAULT; // 56, 1 byte
-    uint8_t again = SPECTRO_AGAIN_DEFAULT; // 57, 1 byte
-    uint8_t baseline_scans = 0;   // 58, 1 byte
-    uint8_t test_scans = 0;  // 59, 1 byte
-    uint32_t checksum;  // 60-63, 4 bytes
-    BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 64-8255, 8192 bytes
+    uint16_t reserved; // 54-55, 2 bytes
+    uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 56-57, 2 bytes
+    uint8_t atime = SPECTRO_ATIME_DEFAULT; // 58, 1 byte
+    uint8_t again = SPECTRO_AGAIN_DEFAULT; // 59, 1 byte
+    uint8_t baseline_scans = 0;   // 60, 1 byte
+    uint8_t test_scans = 0;  // 61, 1 byte
+    uint32_t checksum;  // 62-65, 4 bytes
+    uint16_t reserved2; // 66-67, 2 bytes
+    BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 68-9284, 9216 bytes
 } test;
 int reading_index = 0;
-
+int c = sizeof test;
 struct BrevitestAssay
 {
     char id[ASSAY_UUID_LENGTH + 1];
