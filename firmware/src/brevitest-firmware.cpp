@@ -435,11 +435,6 @@ void load_cached_test(char *filename)
 
 bool test_in_cache()
 {
-    if (cached_filename[0] != '\0')
-    {
-        Log.info("test_in_cache, file already retrieved: %s", cached_filename);
-        return true;
-    }
     DIR *cache = opendir("/cache");
     int tries = 50;
     bool test_found = false;
