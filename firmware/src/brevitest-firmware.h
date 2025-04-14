@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 17         
+#define FIRMWARE_VERSION 18         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
@@ -89,6 +89,7 @@
 #define PARTICLE_REGISTER_SIZE 622
 #define PARTICLE_ARG_SIZE 63 
 #define PARTICLE_CLOUD_DELAY 5000
+#define PARTICLE_PAYLOAD_BUFFER_SIZE 10
 
 // barcode scanner
 #define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
@@ -340,6 +341,7 @@ String device_id;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
+String payload_buffer[PARTICLE_PAYLOAD_BUFFER_SIZE];
 
 // spectrophotometer data structure
 

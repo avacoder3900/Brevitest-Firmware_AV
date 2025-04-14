@@ -1291,6 +1291,42 @@ void response_error(CloudEvent event)
 //              VALIDATE CARTRIDGE                 //
 /////////////////////////////////////////////////////
 
+void clear_payload_buffer() {
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        payload_buffer[i] = "";
+    }
+}
+
+void output_payload_buffer() {
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        Log.info("Payload buffer[%d]: %s", i, payload_buffer[i].c_str());
+    }
+}
+
+bool all_payloads_received() {
+    bool all = true;
+    int last = -1;
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        int len = payload_buffer[i].length();
+        if (len > 0 && len < 512)
+        {
+            last = i;
+        }
+    }
+    if (last == -1)
+    {
+        return false;
+    }
+    for (int i = 0; i < last; i++)
+    {
+        all = all && payload_buffer[i].length() != 0;
+    }
+    return all;
+}
+
 void publish_validate_cartridge()
 {
     particle::Variant data;
@@ -1305,6 +1341,7 @@ void publish_validate_cartridge()
         cartridge_validation_in_progress = true;
         cartridge_validated = false;
 
+        clear_payload_buffer();
         event.clear();
         event.name("validate-cartridge");
         event.data(String(barcode_uuid));
@@ -1319,7 +1356,19 @@ void publish_validate_cartridge()
 void response_validate_cartridge(const char *name, String result)
 {
     int crc_loaded = 0, crc_calculated;
+    String final_result;
+    String str = String(name);
 
+    int index = str.charAt(str.length() - 1) - '0';
+    payload_buffer[index] = result;
+    if (!all_payloads_received())
+        return;
+    for (int ii = 0; ii < PARTICLE_PAYLOAD_BUFFER_SIZE; ii++)
+    {
+        if (payload_buffer[ii].length() > 0)
+            final_result += payload_buffer[ii];
+    }
+    Log.info("response_validate_cartridge: %s", final_result.c_str()); 
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
     if (!detector_on)
@@ -1328,7 +1377,7 @@ void response_validate_cartridge(const char *name, String result)
     }
     else
     {
-        JSONValue parsed = JSONValue::parseCopy(result);
+        JSONValue parsed = JSONValue::parseCopy(final_result);
         JSONObjectIterator iter(parsed);
         while (iter.next())
         {
@@ -1379,6 +1428,7 @@ void response_validate_cartridge(const char *name, String result)
             else if (iter.name() == "bcode")
             {
                 strcpy(assay.BCODE, (char *)iter.value().toString().data());
+                assay.BCODE_length = strlen(assay.BCODE);
                 Log.info("BCODE : %s", assay.BCODE);
             }
             else if (iter.name() == "duration")
@@ -2617,6 +2667,7 @@ void setup()
 
     setup_eeprom();
     create_dir_if_not_exists("/cache");
+    create_dir_if_not_exists("/buffer");
     event.onStatusChange(publishStatusChangeHandler);
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
