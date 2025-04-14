@@ -346,47 +346,42 @@ char particle_register[PARTICLE_REGISTER_SIZE + 1];
 char channels[3] = { 'A', 'B', 'C' };
 
 struct BrevitestSpectrophotometerReading
-{ // 36 bytes
-    uint8_t number;
-    char channel;
-    uint16_t reserved1;
-    uint16_t temperature;
-    uint16_t position;
-    unsigned long msec;
-    uint16_t f1;
-    uint16_t f2;
-    uint16_t f3;
-    uint16_t f4;
-    uint16_t f5;
-    uint16_t f6;
-    uint16_t f7;
-    uint16_t f8;
-    uint16_t clear;
-    uint16_t nir;
-    uint16_t laser_output;
-    uint16_t reserved2;
+{ // 32 bytes
+    uint8_t number; // 0, 1 byte
+    char channel; // 1, 1 byte
+    uint16_t position;  // 2-3, 2 bytes
+    uint16_t temperature; // 4-5, 2 bytes
+    uint16_t laser_output; // 6-7, 2 bytes
+    unsigned long msec; // 8-11, 4 bytes
+    uint16_t f1; // 12-13, 2 bytes
+    uint16_t f2; // 14-15, 2 bytes
+    uint16_t f3; // 16-17, 2 bytes
+    uint16_t f4; // 18-19, 2 bytes
+    uint16_t f5; // 20-21, 2 bytes
+    uint16_t f6; // 22-23, 2 bytes
+    uint16_t f7; // 24-25, 2 bytes
+    uint16_t f8; // 26-27, 2 bytes
+    uint16_t clear; // 28-29, 2 bytes
+    uint16_t nir; // 30-31, 2 bytes
 };
 
 struct BrevitestTestRecord
 { // 8256 bytes
     char data_format_code = TEST_DATA_FORMAT_CODE; // 0, 1 byte
-    uint8_t number_of_readings = 0; // 1, 1 byte
-    char cartridge_id[BARCODE_UUID_LENGTH + 1]; // 2-39, 37 bytes
-    char assay_id[ASSAY_UUID_LENGTH + 1]; // 39-48, 9 bytes
-    uint16_t duration; // 48-49, 2 bytes
-    unsigned long start_time; // 50-53, 4 bytes
-    uint16_t reserved; // 54-55, 2 bytes
-    uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 56-57, 2 bytes
-    uint8_t atime = SPECTRO_ATIME_DEFAULT; // 58, 1 byte
-    uint8_t again = SPECTRO_AGAIN_DEFAULT; // 59, 1 byte
-    uint8_t baseline_scans = 0;   // 60, 1 byte
-    uint8_t test_scans = 0;  // 61, 1 byte
-    uint32_t checksum;  // 62-65, 4 bytes
-    uint16_t reserved2; // 66-67, 2 bytes
-    BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 68-9284, 9216 bytes
+    char cartridge_id[BARCODE_UUID_LENGTH + 1]; // 1-37, 37 bytes
+    char assay_id[ASSAY_UUID_LENGTH + 1]; // 38-46, 9 bytes
+    uint8_t number_of_readings = 0; // 47, 1 byte
+    unsigned long start_time; // 48-51, 4 bytes
+    uint16_t duration; // 52-53, 2 bytes
+    uint16_t astep = SPECTRO_ASTEP_DEFAULT; // 54-55, 2 bytes
+    uint8_t atime = SPECTRO_ATIME_DEFAULT; // 56, 1 byte
+    uint8_t again = SPECTRO_AGAIN_DEFAULT; // 57, 1 byte
+    uint8_t baseline_scans = 0;   // 58, 1 byte
+    uint8_t test_scans = 0;  // 59, 1 byte
+    uint32_t checksum;  // 60-63, 4 bytes
+    BrevitestSpectrophotometerReading reading[SPECTRO_MAX_READINGS];  // 68-9284, 8192 bytes
 } test;
-int reading_index = 0;
-int c = sizeof test;
+
 struct BrevitestAssay
 {
     char id[ASSAY_UUID_LENGTH + 1];

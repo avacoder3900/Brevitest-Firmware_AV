@@ -70,8 +70,8 @@ bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
 bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
 void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerReading *reading);
 void print_spectrophotometer_heading();
-void single_reading(int number, char channel);
-void take_one_reading(int number, int chan_num);
+void single_reading(char channel);
+void take_one_reading(int chan_num);
 void stress_test_read_spectrophotometer();
 int get_heater_temperature();
 int pid_controller();
@@ -105,7 +105,7 @@ int particle_command(String arg);
 int test_runner(String cartridgeId);
 void reset_globals();
 void disconnect_from_cloud();
-void output_test_readings();
+void output_test_readings(BrevitestTestRecord* t);
 void run_test();
 void clear_state();
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value);
@@ -1180,7 +1180,7 @@ void print_spectrophotometer_heading()
     Serial.println("channel\tposition\ttime ms\tpreheat cycles\tpower cycles\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
-void single_reading(int number, char channel)
+void single_reading(char channel)
 {
     DFRobot_AS7341 as7341(&Wire);
     if (power_on_spectrophotometer(channel))
@@ -1188,7 +1188,7 @@ void single_reading(int number, char channel)
         if (init_spectrophotometer(channel, &as7341))
         {
             BrevitestSpectrophotometerReading *reading = &(test.reading[test.number_of_readings]);
-            reading->number = number;
+            reading->number = test.number_of_readings;
             reading->channel = channel;
             reading->temperature = heater.temp_C_10X;
             reading->position = stage_position;
@@ -1201,26 +1201,26 @@ void single_reading(int number, char channel)
     }
     power_off_all_spectrophotometers();
 
-    if (test.number_of_readings++ >= SPECTRO_MAX_READINGS)
+    test.number_of_readings++;
+    if (test.number_of_readings >= SPECTRO_MAX_READINGS)
         test.number_of_readings = SPECTRO_MAX_READINGS - 1;
 }
 
-void take_one_reading(int number, int chan_num)
+void take_one_reading(int chan_num)
 {
     char channel;
-
-    channel = 'A' + (limit(chan_num, 3, 1) - 1);
 
     if (chan_num == 0)
     {
         for (int i = 0; i < 3; i++)
         {
-            single_reading(number, 'A' + i);
+            single_reading(channels[i]);
         }
     }
     else
     {
-        single_reading(number, channel);
+        channel = channels[(limit(chan_num, 3, 1) - 1)];
+        single_reading(channel);
     }
 }
 
@@ -1238,7 +1238,7 @@ void spectrophotometer_reading(bool baseline, int scans, bool log = false)
     for (int i = 0; i < scans; i++)
     {
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
-        take_one_reading(i, 0);
+        take_one_reading(0);
     }
 }
 
@@ -1396,6 +1396,7 @@ void publish_validate_cartridge()
         cartridge_validation_in_progress = true;
         cartridge_validated = false;
 
+        event.clear();
         event.name("validate-cartridge");
         event.data(String(barcode_uuid));
         if (event.canPublish(event.size()))
@@ -1501,6 +1502,7 @@ void publish_start_test()
         test_start_in_progress = true;
         test_underway = false;
 
+        event.clear();
         event.name("start-test");
         event.data(String(barcode_uuid));
         if (event.canPublish(event.size()))
@@ -1571,6 +1573,7 @@ void publish_cancel_test()
         test_cancel_in_progress = true;
         test_cancelled = false;
 
+        event.clear();
         event.name("cancel-test");
         event.data(String(eeprom.running_test_uuid));
         if (event.canPublish(event.size()))
@@ -1630,11 +1633,12 @@ void publish_upload_test()
         lastPublish = millis();
         test_upload_in_progress = true;
 
+        event.clear();
         event.name("upload-test");
         event.loadData(cached_filename);
         if (event.canPublish(event.size()))
         {
-            Log.info("Publishing upload test, %s", cached_filename);
+            Log.info("Publishing upload test, %s (%d bytes)", cached_filename, event.size());
             Particle.publish(event);
         }
     }
@@ -1682,17 +1686,15 @@ void response_upload_test(const char *name, String result)
 
 void publish_upload_magnet_validation()
 {
-    particle::Variant data;
-
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
         lastPublish = millis();
         magnet_validation_in_progress = true;
         magnet_validation_mode = false;
 
-        data.set("device_id", device_id);
+        event.clear();
         event.name("validate-magnets");
-        event.data(data);
+        event.data(String(device_id));
         if (event.canPublish(sizeof(event)))
         {
             Particle.publish(event);
@@ -1815,14 +1817,22 @@ int process_one_BCODE_command(int cmd, int index)
         oscillate_stage(param1, param2, param3, true);
         BCODE_loop();
         break;
-    case 11:                                     // Baseline reading
-        index = get_BCODE_token(index, &param1); // nuumber of readings
+    case 10:                                     // Set sensor params
+        index = get_BCODE_token(index, &param1); // gain
+        index = get_BCODE_token(index, &param2); // step
+        index = get_BCODE_token(index, &param3); // integration time
+        test.again = param1;
+        test.astep = param2;
+        test.atime = param3;
+        break;
+    case 11:                                     // Baseline scans
+        index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
         position = stage_position;
         spectrophotometer_reading(true, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 14:                                     // Test readings
-        index = get_BCODE_token(index, &param1); // nuumber of readings
+    case 14:                                     // Test scans
+        index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
         position = stage_position;
         spectrophotometer_reading(false, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
@@ -1835,7 +1845,7 @@ int process_one_BCODE_command(int cmd, int index)
         test.again = param2;
         test.astep = param3;
         test.atime = param4;
-        take_one_reading(reading_index, param1);
+        take_one_reading(param1);
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
@@ -2379,7 +2389,7 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &pulsesC, 10);
         result = stage_position;
         break;
-    case 308: // take one reading
+    case 308: // take readings
         indx = get_next_command_param(arg, indx, &param1, 5);
         indx = get_next_command_param(arg, indx, &param2, 0);
         indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
@@ -2389,17 +2399,17 @@ int particle_command(String arg)
         test.astep = param3;
         test.atime = param4;
         test.again = param5;
-        reading_index = 0;
+        test.number_of_readings = 0;
         for (int i = 0; i < param1; i++)
         {
-            take_one_reading(i, param2);
+            take_one_reading(param2);
         }
-        output_test_readings();
-        result = reading_index;
+        output_test_readings(&test);
+        result = test.number_of_readings;
         break;
     case 309: // output raw readings
-        output_test_readings();
-        result = reading_index;
+        output_test_readings(&test);
+        result = test.number_of_readings;
         break;
         //
         //  CLOUD FUNCTIONS
@@ -2415,7 +2425,9 @@ int particle_command(String arg)
         if (test_in_cache())
         {
             load_cached_test(cached_filename);
-            result = test.checksum;
+            BrevitestTestRecord *t = (BrevitestTestRecord *) event.data().data();
+            output_test_readings(t);
+            result = test.number_of_readings;
         }
         break;
     case 403:
@@ -2491,21 +2503,21 @@ void disconnect_from_cloud()
     Log.info("Disconnected from cloud");
 }
 
-void output_test_readings()
+void output_test_readings(BrevitestTestRecord* t)
 {
-    if (reading_index > 0)
+    if (t->number_of_readings > 0)
     {
-        Log.info("Test readings: %d", reading_index);
+        Serial.printlnf("Test - data format: %c, cartridge: %s, assay: %s, readings: %d",t->data_format_code,  t->cartridge_id, t->assay_id, t->number_of_readings);
         Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
-        for (int i = 0; i < reading_index; i++)
+        for (int i = 0; i < t->number_of_readings; i++)
         {
-            BrevitestSpectrophotometerReading *r = &(test.reading[i]);
+            BrevitestSpectrophotometerReading *r = &(t->reading[i]);
             Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", r->number, r->channel, r->position, r->temperature, r->msec, r->laser_output, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
         }
     }
     else
     {
-        Log.info("No raw sensor readings");
+        Log.info("No test readings found");
     }
 }
 
@@ -2519,23 +2531,27 @@ void run_test()
     disconnect_from_cloud();
     stop_temperature_control();
 
-    // SINGLE_THREADED_BLOCK()
-    // {
     memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH);
     EEPROM.put(0, eeprom);
-    test.start_time = millis();
 
     test.number_of_readings = 0;
-    process_BCODE(0);
+    test.baseline_scans = 0;
+    test.test_scans = 0;
+    memset(test.reading, 0, sizeof(test.reading));
 
-    test.duration = (millis() - test.start_time) / 1000;
+    SINGLE_THREADED_BLOCK()
+    {
+        test.start_time = millis();
+        process_BCODE(0);
+        test.duration = (millis() - test.start_time) / 1000;
+    }
+
     write_test_to_file();
     eeprom.running_test_uuid[0] = '\0';
     EEPROM.put(0, eeprom);
-    // }d
 
     start_temperature_control();
-    output_test_readings();
+    Particle.connect();
 
     reset_stage(true);
     reset_globals();
