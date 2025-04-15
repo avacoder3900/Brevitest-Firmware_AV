@@ -1339,6 +1339,7 @@ void publish_validate_cartridge()
         clear_payload_buffer();
         event.clear();
         event.name("validate-cartridge");
+        event.contentType(ContentType::TEXT);
         event.data(String(barcode_uuid));
         if (event.canPublish(event.size()))
         {
@@ -1458,6 +1459,7 @@ void publish_start_test()
 
         event.clear();
         event.name("start-test");
+        event.contentType(ContentType::TEXT);
         event.data(String(barcode_uuid));
         if (event.canPublish(event.size()))
         {
@@ -1529,6 +1531,7 @@ void publish_cancel_test()
 
         event.clear();
         event.name("cancel-test");
+        event.contentType(ContentType::TEXT);
         event.data(String(eeprom.running_test_uuid));
         if (event.canPublish(event.size()))
         {
@@ -1589,6 +1592,7 @@ void publish_upload_test()
 
         event.clear();
         event.name("upload-test");
+        event.contentType(ContentType::BINARY);
         event.loadData(cached_filename);
         if (event.canPublish(event.size()))
         {
@@ -1612,7 +1616,7 @@ void response_upload_test(const char *name, String result)
             if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
             {
                 test_invalid = false;
-                // unlink(cached_filename);
+                unlink(cached_filename);
                 Log.info("Uploaded test successful");
             }
             else
@@ -1648,6 +1652,7 @@ void publish_upload_magnet_validation()
 
         event.clear();
         event.name("validate-magnets");
+        event.contentType(ContentType::TEXT);
         event.data(String(device_id));
         if (event.canPublish(sizeof(event)))
         {
@@ -2513,8 +2518,8 @@ void run_test()
     reset_stage(true);
     reset_globals();
 
-    // test_upload_mode = true;
-    // test_upload_in_progress = false;
+    test_upload_mode = true;
+    test_upload_in_progress = false;
 }
 
 /////////////////////////////////////////////////////////////
