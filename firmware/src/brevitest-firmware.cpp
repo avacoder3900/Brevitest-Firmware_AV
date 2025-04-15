@@ -1735,7 +1735,7 @@ void response_upload_test(const char *name, String result)
             if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
             {
                 test_invalid = false;
-                // unlink(cached_filename);
+                unlink(cached_filename);
                 Log.info("Uploaded test successful");
             }
             else
@@ -2637,8 +2637,8 @@ void run_test()
     reset_stage(true);
     reset_globals();
 
-    // test_upload_mode = true;
-    // test_upload_in_progress = false;
+    test_upload_mode = true;
+    test_upload_in_progress = false;
 }
 
 /////////////////////////////////////////////////////////////
