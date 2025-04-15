@@ -1306,7 +1306,7 @@ bool all_payloads_received() {
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
         int len = payload_buffer[i].length();
-        if (len > 0 && len < 512)
+        if (len > 0 && len <= 512)
         {
             last = i;
         }
@@ -1315,7 +1315,7 @@ bool all_payloads_received() {
     {
         return false;
     }
-    for (int i = 0; i < last; i++)
+    for (int i = 0; i <= last; i++)
     {
         all = all && payload_buffer[i].length() != 0;
     }
