@@ -9,7 +9,7 @@
 #include "DFRobot_AS7341.h"
 
 PRODUCT_VERSION(FIRMWARE_VERSION);
-SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////
 //                                                         //
