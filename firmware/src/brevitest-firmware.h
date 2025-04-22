@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 21         
+#define FIRMWARE_VERSION 22         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
@@ -341,7 +341,6 @@ String device_id;
 
 // particle messaging
 char particle_register[PARTICLE_REGISTER_SIZE + 1];
-String payload_buffer[PARTICLE_PAYLOAD_BUFFER_SIZE];
 
 // spectrophotometer data structure
 

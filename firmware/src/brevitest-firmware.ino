@@ -1258,20 +1258,6 @@ void stop_temperature_control()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void publishStatusChangeHandler(CloudEvent event)
-{
-    if (event.isSent())
-    {
-        Log.info("%s succeeded", event.name());
-        event.clear();
-    }
-    else if (!event.isOk())
-    {
-        Log.info("%s failed error=%d", event.name(), event.error());
-        event.clear();
-    }
-}
-
 /////////////////////////////////////////////////////
 //                 WEBHOOK ERROR                   //
 /////////////////////////////////////////////////////
@@ -1284,45 +1270,6 @@ void response_error(CloudEvent event)
 /////////////////////////////////////////////////////
 //              VALIDATE CARTRIDGE                 //
 /////////////////////////////////////////////////////
-
-void clear_payload_buffer()
-{
-    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
-    {
-        payload_buffer[i] = "";
-    }
-}
-
-void output_payload_buffer()
-{
-    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
-    {
-        Log.info("Payload buffer[%d]: %s", i, payload_buffer[i].c_str());
-    }
-}
-
-bool all_payloads_received()
-{
-    bool all = true;
-    int last = -1;
-    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
-    {
-        int len = payload_buffer[i].length();
-        if (len > 0 && len <= 512)
-        {
-            last = i;
-        }
-    }
-    if (last == -1)
-    {
-        return false;
-    }
-    for (int i = 0; i <= last; i++)
-    {
-        all = all && payload_buffer[i].length() != 0;
-    }
-    return all;
-}
 
 void publish_validate_cartridge()
 {
@@ -1340,7 +1287,6 @@ void publish_validate_cartridge()
         cartridge_validation_in_progress = true;
         cartridge_validated = false;
 
-        clear_payload_buffer();
         event.clear();
         event.name("validate-cartridge");
         event.contentType(ContentType::STRUCTURED);
@@ -1354,10 +1300,9 @@ void publish_validate_cartridge()
     }
 }
 
-void response_validate_cartridge(const CloudEvent validate_event)
+void response_validate_cartridge(CloudEvent validate_event)
 {
-    EventData data = validate_event.dataStructured();
-    Log.info("response_validate_cartridge: %s", data.toJSON().c_str());
+    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), validate_event.contentType());
 
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
@@ -1367,9 +1312,8 @@ void response_validate_cartridge(const CloudEvent validate_event)
     }
     else
     {
-
-        String status = data.get("status").toString();
-        if (status == "SUCCESS")
+        Variant json = Variant::fromJSON(validate_event.dataString());
+        if (json.get("status").toString() == "SUCCESS")
         {
             Log.info("Cartridge %s %s", barcode_uuid, "validated");
             cartridge_validated = true;
@@ -1380,26 +1324,30 @@ void response_validate_cartridge(const CloudEvent validate_event)
             cartridge_validated = false;
         }
 
-        Log.info("Validation error: %s", data.get("errorMessage").toString().c_str());
+        String errorMessage = json.get("errorMessage").toString();
+        if (errorMessage.length() > 0)
+        {
+            Log.info("Cartridge validation test error: %s", errorMessage.c_str());
+        }
 
-        strcpy(test.cartridge_id, data.get("uuid").toString().c_str());
+        strcpy(test.cartridge_id, json.get("uuid").toString().c_str());
         Log.info("Cartridge ID: %s", test.cartridge_id);
 
-        strcpy(assay.id, data.get("assayId").toString().c_str());
+        strcpy(assay.id, json.get("assayId").toString().c_str());
         strcpy(test.assay_id, assay.id);
         Log.info("Assay ID: %s", assay.id);
 
-        int crc_loaded = data.get("checksum").toInt();
+        int crc_loaded = json.get("checksum").toInt();
         Log.info("checksum: %d", crc_loaded);
 
-        assay.BCODE_version = data.get("version").toInt();
+        assay.BCODE_version = json.get("version").toInt();
         Log.info("BCODE version: %d", assay.BCODE_version);
 
-        strcpy(assay.BCODE, data.get("bcode").toString().c_str());
+        strcpy(assay.BCODE, json.get("bcode").toString().c_str());
         assay.BCODE_length = strlen(assay.BCODE);
         Log.info("BCODE : %s", assay.BCODE);
 
-        assay.duration = data.get("duration").toInt();
+        assay.duration = json.get("duration").toInt();
         Log.info("duration: %d", assay.duration);
 
         int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
@@ -1438,43 +1386,37 @@ void publish_start_test()
     }
 }
 
-void response_start_test(const char *name, String result)
+void response_start_test(CloudEvent start_event)
 {
     test_start_in_progress = false;
     test_start_mode = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(start_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
+        if (!detector_on)
         {
-            if (iter.value().toString() == "SUCCESS")
-            {
-                if (!detector_on)
-                {
-                    Log.info("Start test cancelled");
-                    test_underway = false;
-                    test_cancelled = true;
-                    test_cancel_mode = true;
-                }
-                else
-                {
-                    test_underway = true;
-                }
-            }
-            else
-            {
-                Log.info("Test failed to start");
-                test_underway = false;
-                cartridge_validated = false;
-            }
+            Log.info("Start test cancelled");
+            test_underway = false;
+            test_cancelled = true;
+            test_cancel_mode = true;
         }
-        else if (iter.name() == "errorMessage")
+        else
         {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Start test error: %s", error);
+            test_underway = true;
         }
+    }
+    else
+    {
+        Log.info("Test failed to start");
+        test_underway = false;
+        cartridge_validated = false;
+    }
+
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Start test error: %s", errorMessage.c_str());
     }
 
     if (test_underway)
@@ -1510,35 +1452,29 @@ void publish_cancel_test()
     }
 }
 
-void response_cancel_test(const char *name, String result)
+void response_cancel_test(CloudEvent cancel_event)
 {
     test_cancel_in_progress = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(cancel_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
-        {
-            if (iter.value().toString() == "SUCCESS")
-            {
-                test_cancelled = true;
-                test_cancel_mode = false;
-                test_underway = false;
-                eeprom.running_test_uuid[0] = '\0';
-                EEPROM.put(0, eeprom);
-                Log.info("Test cancelled");
-            }
-            else
-            {
-                Log.info("Test failed to cancel");
-            }
-        }
-        else if (iter.name() == "errorMessage")
-        {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Start test error: %s", error);
-        }
+        test_cancelled = true;
+        test_cancel_mode = false;
+        test_underway = false;
+        eeprom.running_test_uuid[0] = '\0';
+        EEPROM.put(0, eeprom);
+        Log.info("Test cancelled");
+    }
+    else
+    {
+        Log.info("Test failed to cancel");
+    }
+
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Cancel test error: %s", errorMessage.c_str());
     }
 }
 
@@ -1571,40 +1507,30 @@ void publish_upload_test()
     }
 }
 
-void response_upload_test(const char *name, String result)
+void response_upload_test(CloudEvent upload_event)
 {
     test_upload_in_progress = false;
     test_upload_mode = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(upload_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
-        {
-            if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
-            {
-                test_invalid = false;
-                unlink(cached_filename);
-                Log.info("Uploaded test successful");
-            }
-            else
-            {
-                test_invalid = true;
-                Log.info("Uploaded test invalid");
-            }
-        }
-        else if (iter.name() == "errorMessage")
-        {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Upload test error: %s", error);
-        }
-        else if (iter.name() == "cartridgeId")
-        {
-            char *cartridgeId = (char *)iter.value().toString().data();
-            Log.info("Upload test: cartridge %s", cartridgeId);
-        }
+        test_invalid = false;
+        unlink(cached_filename);
+        Log.info("Uploaded test successful");
     }
+    else
+    {
+        test_invalid = true;
+        Log.info("Uploaded test invalid");
+    }
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Cancel test error: %s", errorMessage.c_str());
+    }
+
+    Log.info("Upload test: cartridge %s", json.get("cartridgeId").toString().c_str());
 }
 
 /////////////////////////////////////////////////////
@@ -1630,9 +1556,10 @@ void publish_upload_magnet_validation()
     }
 }
 
-void response_upload_magnet_validation(const char *name, String result)
+void response_upload_magnet_validation(CloudEvent magnet_event)
 {
-    Log.info("Magnet validation: %s", result.c_str());
+    Variant json = Variant::fromJSON(magnet_event.dataString());
+    Log.info("Magnet validation: %s", json.get("status").toString().c_str());
     delay(2000);
     System.reset();
 }
@@ -2637,7 +2564,6 @@ void setup()
     setup_eeprom();
     create_dir_if_not_exists("/cache");
     create_dir_if_not_exists("/buffer");
-    event.onStatusChange(publishStatusChangeHandler);
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
