@@ -80,6 +80,9 @@ void start_temperature_control();
 void stop_temperature_control();
 void response_error(CloudEvent event);
 void publish_validate_cartridge();
+void clear_payload_buffer();
+void output_payload_buffer();
+bool all_payloads_received();
 void response_validate_cartridge(CloudEvent validate_event);
 void publish_start_test();
 void response_start_test(CloudEvent start_event);
@@ -1402,7 +1405,7 @@ void publish_validate_cartridge()
         cartridge_validation_in_progress = true;
         cartridge_validated = false;
 
-        event.clear();
+        clear_payload_buffer();
         event.name("validate-cartridge");
         event.contentType(ContentType::STRUCTURED);
         data.set("uuid", barcode_uuid);
@@ -1415,9 +1418,61 @@ void publish_validate_cartridge()
     }
 }
 
+void clear_payload_buffer() {
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        payload_buffer[i] = "";
+    }
+}
+
+void output_payload_buffer() {
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        Log.info("Payload buffer[%d]: %s", i, payload_buffer[i].c_str());
+    }
+}
+
+bool all_payloads_received() {
+    bool all = true;
+    int last = -1;
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        int len = payload_buffer[i].length();
+        if (len > 0 && len < 512)
+        {
+            last = i;
+        }
+    }
+    if (last == -1)
+    {
+        return false;
+    }
+    for (int i = 0; i < last; i++)
+    {
+        all = all && payload_buffer[i].length() != 0;
+    }
+    return all;
+}
+
 void response_validate_cartridge(CloudEvent validate_event)
 {
-    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), validate_event.contentType());
+    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int) validate_event.contentType());
+    String final_result;
+    String str = validate_event.dataString();
+
+    int index = limit(str.charAt(str.length() - 1) - '0', PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
+    Log.info("response data: %s, index: %d", str.c_str(), index);
+
+    payload_buffer[index] = str;
+    if (!all_payloads_received())
+        return;
+
+    for (int ii = 0; ii < PARTICLE_PAYLOAD_BUFFER_SIZE; ii++)
+    {
+        if (payload_buffer[ii].length() > 0)
+            final_result += payload_buffer[ii];
+    }
+    Log.info("response_validate_cartridge: %s", final_result.c_str()); 
 
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
@@ -1427,7 +1482,7 @@ void response_validate_cartridge(CloudEvent validate_event)
     }
     else
     {
-        Variant json = Variant::fromJSON(validate_event.dataString());
+        Variant json = Variant::fromJSON(final_result);
         if (json.get("status").toString() == "SUCCESS")
         {
             Log.info("Cartridge %s %s", barcode_uuid, "validated");
@@ -1466,7 +1521,8 @@ void response_validate_cartridge(CloudEvent validate_event)
         Log.info("duration: %d", assay.duration);
 
         int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
-        test_start_mode = crc_calculated && crc_loaded && crc_loaded == crc_calculated;
+        test_start_mode = cartridge_validated && crc_calculated && crc_loaded && crc_loaded == crc_calculated;
+        cartridge_validated = cartridge_validated && test_start_mode;
         Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
     }
 }
@@ -1489,7 +1545,6 @@ void publish_start_test()
         test_start_in_progress = true;
         test_underway = false;
 
-        event.clear();
         event.name("start-test");
         event.contentType(ContentType::TEXT);
         event.data(String(barcode_uuid));
@@ -1555,7 +1610,6 @@ void publish_cancel_test()
         test_cancel_in_progress = true;
         test_cancelled = false;
 
-        event.clear();
         event.name("cancel-test");
         event.contentType(ContentType::TEXT);
         event.data(String(eeprom.running_test_uuid));
@@ -1610,7 +1664,6 @@ void publish_upload_test()
         lastPublish = millis();
         test_upload_in_progress = true;
 
-        event.clear();
         event.name("upload-test");
         event.contentType(ContentType::BINARY);
         event.loadData(cached_filename);
@@ -1660,12 +1713,11 @@ void publish_upload_magnet_validation()
         magnet_validation_in_progress = true;
         magnet_validation_mode = false;
 
-        event.clear();
         event.name("validate-magnets");
         event.contentType(ContentType::TEXT);
         event.data(String(device_id));
         if (event.canPublish(sizeof(event)))
-        {
+        { 
             Particle.publish(event);
         }
     }
@@ -2665,13 +2717,13 @@ void setup()
     start_temperature_control();
 
     Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
-    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge"), response_validate_cartridge);
+    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
     Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
 
     Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), response_error);
