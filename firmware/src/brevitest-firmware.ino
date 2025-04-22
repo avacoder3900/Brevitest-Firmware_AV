@@ -2654,13 +2654,13 @@ void setup()
     start_temperature_control();
 
     Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
-    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
+    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
     Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
 
     Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), response_error);
