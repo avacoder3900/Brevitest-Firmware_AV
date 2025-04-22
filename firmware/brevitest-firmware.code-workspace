@@ -33,7 +33,10 @@
             "typeinfo": "cpp",
             "chrono": "cpp",
             "optional": "cpp",
-            "complex": "cpp"
+            "complex": "cpp",
+            "memory": "cpp",
+            "locale": "cpp",
+            "variant": "cpp"
         },
         "particle.enablePre-releaseDeviceOSBuilds": true
 	}

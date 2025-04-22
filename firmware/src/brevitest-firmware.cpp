@@ -78,21 +78,20 @@ int get_heater_temperature();
 int pid_controller();
 void start_temperature_control();
 void stop_temperature_control();
-void publishStatusChangeHandler(CloudEvent event);
 void response_error(CloudEvent event);
+void publish_validate_cartridge();
 void clear_payload_buffer();
 void output_payload_buffer();
 bool all_payloads_received();
-void publish_validate_cartridge();
-void response_validate_cartridge(const char *name, String result);
+void response_validate_cartridge(CloudEvent validate_event);
 void publish_start_test();
-void response_start_test(const char *name, String result);
+void response_start_test(CloudEvent start_event);
 void publish_cancel_test();
-void response_cancel_test(const char *name, String result);
+void response_cancel_test(CloudEvent cancel_event);
 void publish_upload_test();
-void response_upload_test(const char *name, String result);
+void response_upload_test(CloudEvent upload_event);
 void publish_upload_magnet_validation();
-void response_upload_magnet_validation(const char *name, String result);
+void response_upload_magnet_validation(CloudEvent magnet_event);
 int get_BCODE_token(int index, int *token);
 int BCODE_loop();
 void BCODE_delay(int target_duration);
@@ -479,12 +478,11 @@ void output_cache()
         {
             snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
             event.loadData(cached_filename);
-            output_test_readings((BrevitestTestRecord*) event.data().data());
+            output_test_readings((BrevitestTestRecord *)event.data().data());
         }
     } while (cache_entry != NULL && --tries > 0);
     closedir(cache);
 }
-
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1378,20 +1376,6 @@ void stop_temperature_control()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void publishStatusChangeHandler(CloudEvent event)
-{
-    if (event.isSent())
-    {
-        Log.info("%s succeeded", event.name());
-        event.clear();
-    }
-    else if (!event.isOk())
-    {
-        Log.info("%s failed error=%d", event.name(), event.error());
-        event.clear();
-    }
-}
-
 /////////////////////////////////////////////////////
 //                 WEBHOOK ERROR                   //
 /////////////////////////////////////////////////////
@@ -1404,6 +1388,35 @@ void response_error(CloudEvent event)
 /////////////////////////////////////////////////////
 //              VALIDATE CARTRIDGE                 //
 /////////////////////////////////////////////////////
+
+void publish_validate_cartridge()
+{
+    particle::Variant data;
+
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        Variant data;
+
+        if (cartridge_validated)
+        {
+            return;
+        }
+        lastPublish = millis();
+        cartridge_validation_in_progress = true;
+        cartridge_validated = false;
+
+        clear_payload_buffer();
+        event.name("validate-cartridge");
+        event.contentType(ContentType::STRUCTURED);
+        data.set("uuid", barcode_uuid);
+        event.data(data);
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing validate cartridge, %s", barcode_uuid);
+            Particle.publish(event);
+        }
+    }
+}
 
 void clear_payload_buffer() {
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
@@ -1425,7 +1438,7 @@ bool all_payloads_received() {
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
         int len = payload_buffer[i].length();
-        if (len > 0 && len <= 512)
+        if (len > 0 && len < 512)
         {
             last = i;
         }
@@ -1434,56 +1447,33 @@ bool all_payloads_received() {
     {
         return false;
     }
-    for (int i = 0; i <= last; i++)
+    for (int i = 0; i < last; i++)
     {
         all = all && payload_buffer[i].length() != 0;
     }
     return all;
 }
 
-void publish_validate_cartridge()
+void response_validate_cartridge(CloudEvent validate_event)
 {
-    particle::Variant data;
-
-    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
-    {
-        if (cartridge_validated)
-        {
-            return;
-        }
-        lastPublish = millis();
-        cartridge_validation_in_progress = true;
-        cartridge_validated = false;
-
-        clear_payload_buffer();
-        event.clear();
-        event.name("validate-cartridge");
-        event.contentType(ContentType::TEXT);
-        event.data(String(barcode_uuid));
-        if (event.canPublish(event.size()))
-        {
-            Log.info("Publishing validate cartridge, %s", barcode_uuid);
-            Particle.publish(event);
-        }
-    }
-}
-
-void response_validate_cartridge(const char *name, String result)
-{
-    int crc_loaded = 0, crc_calculated;
+    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int) validate_event.contentType());
     String final_result;
-    String str = String(name);
+    String str = validate_event.dataString();
 
-    int index = str.charAt(str.length() - 1) - '0';
-    payload_buffer[index] = result;
+    int index = limit(str.charAt(str.length() - 1) - '0', PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
+    Log.info("response data: %s, index: %d", str.c_str(), index);
+
+    payload_buffer[index] = str;
     if (!all_payloads_received())
         return;
+
     for (int ii = 0; ii < PARTICLE_PAYLOAD_BUFFER_SIZE; ii++)
     {
         if (payload_buffer[ii].length() > 0)
             final_result += payload_buffer[ii];
     }
     Log.info("response_validate_cartridge: %s", final_result.c_str()); 
+
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
     if (!detector_on)
@@ -1492,68 +1482,47 @@ void response_validate_cartridge(const char *name, String result)
     }
     else
     {
-        JSONValue parsed = JSONValue::parseCopy(final_result);
-        JSONObjectIterator iter(parsed);
-        while (iter.next())
+        Variant json = Variant::fromJSON(final_result);
+        if (json.get("status").toString() == "SUCCESS")
         {
-            if (iter.name() == "status")
-            {
-                if (iter.value().toString() == "SUCCESS")
-                {
-                    Log.info("Cartridge %s %s", barcode_uuid, "validated");
-                    cartridge_validated = true;
-                }
-                else
-                {
-                    Log.info("Cartridge %s %s", barcode_uuid, "invalid");
-                    cartridge_validated = false;
-                }
-            }
-            else if (iter.name() == "errorMessage")
-            {
-                char *error = (char *)iter.value().toString().data();
-                Log.info("Validation error: %s", error);
-            }
-            else if (iter.name() == "uuid")
-            {
-                char *uuid = (char *)iter.value().toString().data();
-                Log.info("Cartridge ID: %s", uuid);
-                memcpy(test.cartridge_id, uuid, BARCODE_UUID_LENGTH);
-                test.cartridge_id[BARCODE_UUID_LENGTH] = '\0';
-            }
-            else if (iter.name() == "assayId")
-            {
-                char *assayId = (char *)iter.value().toString().data();
-                Log.info("Assay ID: %s", assayId);
-                memcpy(assay.id, assayId, ASSAY_UUID_LENGTH);
-                assay.id[ASSAY_UUID_LENGTH] = '\0';
-                memcpy(test.assay_id, assayId, ASSAY_UUID_LENGTH);
-                test.assay_id[ASSAY_UUID_LENGTH] = '\0';
-            }
-            else if (iter.name() == "checksum")
-            {
-                crc_loaded = iter.value().toInt();
-                Log.info("checksum: %d", crc_loaded);
-            }
-            else if (iter.name() == "version")
-            {
-                assay.BCODE_version = iter.value().toInt();
-                Log.info("BCODE version: %d", assay.BCODE_version);
-            }
-            else if (iter.name() == "bcode")
-            {
-                strcpy(assay.BCODE, (char *)iter.value().toString().data());
-                assay.BCODE_length = strlen(assay.BCODE);
-                Log.info("BCODE : %s", assay.BCODE);
-            }
-            else if (iter.name() == "duration")
-            {
-                assay.duration = iter.value().toInt();
-                Log.info("duration: %d", assay.duration);
-            }
+            Log.info("Cartridge %s %s", barcode_uuid, "validated");
+            cartridge_validated = true;
         }
-        crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
-        test_start_mode = crc_calculated && crc_loaded && crc_loaded == crc_calculated;
+        else
+        {
+            Log.info("Cartridge %s %s", barcode_uuid, "invalid");
+            cartridge_validated = false;
+        }
+
+        String errorMessage = json.get("errorMessage").toString();
+        if (errorMessage.length() > 0)
+        {
+            Log.info("Cartridge validation test error: %s", errorMessage.c_str());
+        }
+
+        strcpy(test.cartridge_id, json.get("uuid").toString().c_str());
+        Log.info("Cartridge ID: %s", test.cartridge_id);
+
+        strcpy(assay.id, json.get("assayId").toString().c_str());
+        strcpy(test.assay_id, assay.id);
+        Log.info("Assay ID: %s", assay.id);
+
+        int crc_loaded = json.get("checksum").toInt();
+        Log.info("checksum: %d", crc_loaded);
+
+        assay.BCODE_version = json.get("version").toInt();
+        Log.info("BCODE version: %d", assay.BCODE_version);
+
+        strcpy(assay.BCODE, json.get("bcode").toString().c_str());
+        assay.BCODE_length = strlen(assay.BCODE);
+        Log.info("BCODE : %s", assay.BCODE);
+
+        assay.duration = json.get("duration").toInt();
+        Log.info("duration: %d", assay.duration);
+
+        int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
+        test_start_mode = cartridge_validated && crc_calculated && crc_loaded && crc_loaded == crc_calculated;
+        cartridge_validated = cartridge_validated && test_start_mode;
         Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
     }
 }
@@ -1576,7 +1545,6 @@ void publish_start_test()
         test_start_in_progress = true;
         test_underway = false;
 
-        event.clear();
         event.name("start-test");
         event.contentType(ContentType::TEXT);
         event.data(String(barcode_uuid));
@@ -1588,43 +1556,37 @@ void publish_start_test()
     }
 }
 
-void response_start_test(const char *name, String result)
+void response_start_test(CloudEvent start_event)
 {
     test_start_in_progress = false;
     test_start_mode = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(start_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
+        if (!detector_on)
         {
-            if (iter.value().toString() == "SUCCESS")
-            {
-                if (!detector_on)
-                {
-                    Log.info("Start test cancelled");
-                    test_underway = false;
-                    test_cancelled = true;
-                    test_cancel_mode = true;
-                }
-                else
-                {
-                    test_underway = true;
-                }
-            }
-            else
-            {
-                Log.info("Test failed to start");
-                test_underway = false;
-                cartridge_validated = false;
-            }
+            Log.info("Start test cancelled");
+            test_underway = false;
+            test_cancelled = true;
+            test_cancel_mode = true;
         }
-        else if (iter.name() == "errorMessage")
+        else
         {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Start test error: %s", error);
+            test_underway = true;
         }
+    }
+    else
+    {
+        Log.info("Test failed to start");
+        test_underway = false;
+        cartridge_validated = false;
+    }
+
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Start test error: %s", errorMessage.c_str());
     }
 
     if (test_underway)
@@ -1648,7 +1610,6 @@ void publish_cancel_test()
         test_cancel_in_progress = true;
         test_cancelled = false;
 
-        event.clear();
         event.name("cancel-test");
         event.contentType(ContentType::TEXT);
         event.data(String(eeprom.running_test_uuid));
@@ -1660,35 +1621,29 @@ void publish_cancel_test()
     }
 }
 
-void response_cancel_test(const char *name, String result)
+void response_cancel_test(CloudEvent cancel_event)
 {
     test_cancel_in_progress = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(cancel_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
-        {
-            if (iter.value().toString() == "SUCCESS")
-            {
-                test_cancelled = true;
-                test_cancel_mode = false;
-                test_underway = false;
-                eeprom.running_test_uuid[0] = '\0';
-                EEPROM.put(0, eeprom);
-                Log.info("Test cancelled");
-            }
-            else
-            {
-                Log.info("Test failed to cancel");
-            }
-        }
-        else if (iter.name() == "errorMessage")
-        {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Start test error: %s", error);
-        }
+        test_cancelled = true;
+        test_cancel_mode = false;
+        test_underway = false;
+        eeprom.running_test_uuid[0] = '\0';
+        EEPROM.put(0, eeprom);
+        Log.info("Test cancelled");
+    }
+    else
+    {
+        Log.info("Test failed to cancel");
+    }
+
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Cancel test error: %s", errorMessage.c_str());
     }
 }
 
@@ -1709,7 +1664,6 @@ void publish_upload_test()
         lastPublish = millis();
         test_upload_in_progress = true;
 
-        event.clear();
         event.name("upload-test");
         event.contentType(ContentType::BINARY);
         event.loadData(cached_filename);
@@ -1721,40 +1675,30 @@ void publish_upload_test()
     }
 }
 
-void response_upload_test(const char *name, String result)
+void response_upload_test(CloudEvent upload_event)
 {
     test_upload_in_progress = false;
     test_upload_mode = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(upload_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
-        {
-            if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
-            {
-                test_invalid = false;
-                unlink(cached_filename);
-                Log.info("Uploaded test successful");
-            }
-            else
-            {
-                test_invalid = true;
-                Log.info("Uploaded test invalid");
-            }
-        }
-        else if (iter.name() == "errorMessage")
-        {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Upload test error: %s", error);
-        }
-        else if (iter.name() == "cartridgeId")
-        {
-            char *cartridgeId = (char *)iter.value().toString().data();
-            Log.info("Upload test: cartridge %s", cartridgeId);
-        }
+        test_invalid = false;
+        unlink(cached_filename);
+        Log.info("Uploaded test successful");
     }
+    else
+    {
+        test_invalid = true;
+        Log.info("Uploaded test invalid");
+    }
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Cancel test error: %s", errorMessage.c_str());
+    }
+
+    Log.info("Upload test: cartridge %s", json.get("cartridgeId").toString().c_str());
 }
 
 /////////////////////////////////////////////////////
@@ -1769,20 +1713,20 @@ void publish_upload_magnet_validation()
         magnet_validation_in_progress = true;
         magnet_validation_mode = false;
 
-        event.clear();
         event.name("validate-magnets");
         event.contentType(ContentType::TEXT);
         event.data(String(device_id));
         if (event.canPublish(sizeof(event)))
-        {
+        { 
             Particle.publish(event);
         }
     }
 }
 
-void response_upload_magnet_validation(const char *name, String result)
+void response_upload_magnet_validation(CloudEvent magnet_event)
 {
-    Log.info("Magnet validation: %s", result.c_str());
+    Variant json = Variant::fromJSON(magnet_event.dataString());
+    Log.info("Magnet validation: %s", json.get("status").toString().c_str());
     delay(2000);
     System.reset();
 }
@@ -2469,7 +2413,7 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &pulsesC, 10);
         result = stage_position;
         break;
-    case 308: // take readings
+    case 308:                                                 // take readings
         indx = get_next_command_param(arg, indx, &param1, 5); // count
         indx = get_next_command_param(arg, indx, &param2, 0); // channel (0 = all, 1 = A, 2 = B, 3 = C)
         indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
@@ -2787,7 +2731,6 @@ void setup()
     setup_eeprom();
     create_dir_if_not_exists("/cache");
     create_dir_if_not_exists("/buffer");
-    event.onStatusChange(publishStatusChangeHandler);
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
