@@ -8,7 +8,7 @@
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
  * Author: Leo Linbeck III
- * Date: December 2023
+ * Date: December 2025
  */
 
 #include "brevitest-firmware.h"
@@ -84,7 +84,7 @@ void clear_payload_buffer();
 void output_payload_buffer();
 bool all_payloads_received();
 void publish_validate_cartridge();
-void response_validate_cartridge(const char *name, String result);
+void response_validate_cartridge(const CloudEvent validate_event);
 void publish_start_test();
 void response_start_test(const char *name, String result);
 void publish_cancel_test();
@@ -479,12 +479,11 @@ void output_cache()
         {
             snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
             event.loadData(cached_filename);
-            output_test_readings((BrevitestTestRecord*) event.data().data());
+            output_test_readings((BrevitestTestRecord *)event.data().data());
         }
     } while (cache_entry != NULL && --tries > 0);
     closedir(cache);
 }
-
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -1405,21 +1404,24 @@ void response_error(CloudEvent event)
 //              VALIDATE CARTRIDGE                 //
 /////////////////////////////////////////////////////
 
-void clear_payload_buffer() {
+void clear_payload_buffer()
+{
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
         payload_buffer[i] = "";
     }
 }
 
-void output_payload_buffer() {
+void output_payload_buffer()
+{
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
         Log.info("Payload buffer[%d]: %s", i, payload_buffer[i].c_str());
     }
 }
 
-bool all_payloads_received() {
+bool all_payloads_received()
+{
     bool all = true;
     int last = -1;
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
@@ -1447,6 +1449,8 @@ void publish_validate_cartridge()
 
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
+        Variant data;
+
         if (cartridge_validated)
         {
             return;
@@ -1458,8 +1462,9 @@ void publish_validate_cartridge()
         clear_payload_buffer();
         event.clear();
         event.name("validate-cartridge");
-        event.contentType(ContentType::TEXT);
-        event.data(String(barcode_uuid));
+        event.contentType(ContentType::STRUCTURED);
+        data.set("uuid", barcode_uuid);
+        event.data(data);
         if (event.canPublish(event.size()))
         {
             Log.info("Publishing validate cartridge, %s", barcode_uuid);
@@ -1468,22 +1473,11 @@ void publish_validate_cartridge()
     }
 }
 
-void response_validate_cartridge(const char *name, String result)
+void response_validate_cartridge(const CloudEvent validate_event)
 {
-    int crc_loaded = 0, crc_calculated;
-    String final_result;
-    String str = String(name);
+    EventData data = validate_event.dataStructured();
+    Log.info("response_validate_cartridge: %s", data.toJSON().c_str());
 
-    int index = str.charAt(str.length() - 1) - '0';
-    payload_buffer[index] = result;
-    if (!all_payloads_received())
-        return;
-    for (int ii = 0; ii < PARTICLE_PAYLOAD_BUFFER_SIZE; ii++)
-    {
-        if (payload_buffer[ii].length() > 0)
-            final_result += payload_buffer[ii];
-    }
-    Log.info("response_validate_cartridge: %s", final_result.c_str()); 
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
     if (!detector_on)
@@ -1492,67 +1486,42 @@ void response_validate_cartridge(const char *name, String result)
     }
     else
     {
-        JSONValue parsed = JSONValue::parseCopy(final_result);
-        JSONObjectIterator iter(parsed);
-        while (iter.next())
+
+        String status = data.get("status").toString();
+        if (status == "SUCCESS")
         {
-            if (iter.name() == "status")
-            {
-                if (iter.value().toString() == "SUCCESS")
-                {
-                    Log.info("Cartridge %s %s", barcode_uuid, "validated");
-                    cartridge_validated = true;
-                }
-                else
-                {
-                    Log.info("Cartridge %s %s", barcode_uuid, "invalid");
-                    cartridge_validated = false;
-                }
-            }
-            else if (iter.name() == "errorMessage")
-            {
-                char *error = (char *)iter.value().toString().data();
-                Log.info("Validation error: %s", error);
-            }
-            else if (iter.name() == "uuid")
-            {
-                char *uuid = (char *)iter.value().toString().data();
-                Log.info("Cartridge ID: %s", uuid);
-                memcpy(test.cartridge_id, uuid, BARCODE_UUID_LENGTH);
-                test.cartridge_id[BARCODE_UUID_LENGTH] = '\0';
-            }
-            else if (iter.name() == "assayId")
-            {
-                char *assayId = (char *)iter.value().toString().data();
-                Log.info("Assay ID: %s", assayId);
-                memcpy(assay.id, assayId, ASSAY_UUID_LENGTH);
-                assay.id[ASSAY_UUID_LENGTH] = '\0';
-                memcpy(test.assay_id, assayId, ASSAY_UUID_LENGTH);
-                test.assay_id[ASSAY_UUID_LENGTH] = '\0';
-            }
-            else if (iter.name() == "checksum")
-            {
-                crc_loaded = iter.value().toInt();
-                Log.info("checksum: %d", crc_loaded);
-            }
-            else if (iter.name() == "version")
-            {
-                assay.BCODE_version = iter.value().toInt();
-                Log.info("BCODE version: %d", assay.BCODE_version);
-            }
-            else if (iter.name() == "bcode")
-            {
-                strcpy(assay.BCODE, (char *)iter.value().toString().data());
-                assay.BCODE_length = strlen(assay.BCODE);
-                Log.info("BCODE : %s", assay.BCODE);
-            }
-            else if (iter.name() == "duration")
-            {
-                assay.duration = iter.value().toInt();
-                Log.info("duration: %d", assay.duration);
-            }
+            Log.info("Cartridge %s %s", barcode_uuid, "validated");
+            cartridge_validated = true;
         }
-        crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
+        else
+        {
+            Log.info("Cartridge %s %s", barcode_uuid, "invalid");
+            cartridge_validated = false;
+        }
+
+        Log.info("Validation error: %s", data.get("errorMessage").toString().c_str());
+
+        strcpy(test.cartridge_id, data.get("uuid").toString().c_str());
+        Log.info("Cartridge ID: %s", test.cartridge_id);
+
+        strcpy(assay.id, data.get("assayId").toString().c_str());
+        strcpy(test.assay_id, assay.id);
+        Log.info("Assay ID: %s", assay.id);
+
+        int crc_loaded = data.get("checksum").toInt();
+        Log.info("checksum: %d", crc_loaded);
+
+        assay.BCODE_version = data.get("version").toInt();
+        Log.info("BCODE version: %d", assay.BCODE_version);
+
+        strcpy(assay.BCODE, data.get("bcode").toString().c_str());
+        assay.BCODE_length = strlen(assay.BCODE);
+        Log.info("BCODE : %s", assay.BCODE);
+
+        assay.duration = data.get("duration").toInt();
+        Log.info("duration: %d", assay.duration);
+
+        int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
         test_start_mode = crc_calculated && crc_loaded && crc_loaded == crc_calculated;
         Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
     }
@@ -2469,7 +2438,7 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &pulsesC, 10);
         result = stage_position;
         break;
-    case 308: // take readings
+    case 308:                                                 // take readings
         indx = get_next_command_param(arg, indx, &param1, 5); // count
         indx = get_next_command_param(arg, indx, &param2, 0); // channel (0 = all, 1 = A, 2 = B, 3 = C)
         indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
@@ -2773,13 +2742,13 @@ void setup()
     start_temperature_control();
 
     Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
-    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
+    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
     Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
 
     Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), response_error);
