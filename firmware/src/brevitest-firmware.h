@@ -203,7 +203,6 @@ volatile bool detector_changed = false;
 bool detector_debouncing = false;
 unsigned long detector_debouncing_time = 0;
 bool detector_on = false;
-unsigned long detector_debouncing_time = 0;
 
 // particle cloud connect
 unsigned long particle_connect_timeout = 0;
