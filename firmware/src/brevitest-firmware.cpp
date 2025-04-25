@@ -8,7 +8,7 @@
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
  * Author: Leo Linbeck III
- * Date: December 2023
+ * Date: December 2025
  */
 
 #include "brevitest-firmware.h"
@@ -21,11 +21,14 @@ int extract_int_from_delimited_string(char *str, int *indx, char delim);
 uint32_t checksum(char *buf, int size);
 int integerSqrt(int n);
 int set_wifi_credentials(String params);
-void load_eeprom();
-void store_eeprom();
-void erase_eeprom();
 void reset_eeprom();
 void setup_eeprom();
+bool create_dir_if_not_exists(const char *path);
+void write_test_to_file();
+void clear_cache();
+void load_cached_test(char *filename);
+bool test_in_cache();
+void output_cache();
 void detector_changed_interrupt();
 void sleep_motor();
 void wake_motor();
@@ -44,10 +47,9 @@ void turn_on_buzzer_alert();
 void turn_on_buzzer_problem();
 void turn_off_buzzer_timer();
 void turn_off_indicator_LEDs();
-void turn_on_no_connectivity_LED();
-void turn_on_problem_LED();
-void turn_on_busy_LED();
-void turn_on_available_LED();
+void turn_on_remove_cartridge_LED();
+void turn_on_dont_touch_LED();
+void turn_on_insert_cartridge_LED();
 void turn_on_heater(int power);
 void turn_off_heater();
 int set_heater_power(int power);
@@ -67,40 +69,30 @@ bool power_on_spectrophotometer(char channel);
 void power_off_all_spectrophotometers();
 bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
 bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
-int pulse_laser(char channel);
 void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerReading *reading);
 void print_spectrophotometer_heading();
-BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data);
+void single_reading(uint8_t number, char channel);
+void take_one_reading(uint8_t number, int chan_num);
 void stress_test_read_spectrophotometer();
-void characterize_laser(char channel, int cycles);
 int get_heater_temperature();
 int pid_controller();
 void start_temperature_control();
 void stop_temperature_control();
-void callback_error(const char *name, String result);
-void publish_verify_device();
-void callback_verify_device(const char *name, String result);
+void response_error(CloudEvent event);
 void publish_validate_cartridge();
-void callback_validate_cartridge(const char *name, String result);
+void clear_payload_buffer();
+void output_payload_buffer();
+bool all_payloads_received();
+void response_validate_cartridge(CloudEvent validate_event);
 void publish_start_test();
-void callback_start_test(const char *name, String result);
-bool test_in_cache();
+void response_start_test(CloudEvent start_event);
+void publish_cancel_test();
+void response_cancel_test(CloudEvent cancel_event);
 void publish_upload_test();
-void remove_test_from_cache(char *testToRemove);
-void callback_upload_test(const char *name, String result);
+void response_upload_test(CloudEvent upload_event);
 void publish_upload_magnet_validation();
-void callback_upload_magnet_validation(const char *name, String result);
-void set_current_event(String event_name);
-void clear_current_event();
-void brevitest_publish(String event_name, char *payload, int size);
-void brevitest_publish(String event_name, char *event_data);
-void brevitest_publish(String event_name);
-void erase_test_from_cache();
-void initialize_test_cache();
-void store_test();
-bool test_cached();
+void response_upload_magnet_validation(CloudEvent magnet_event);
 int get_BCODE_token(int index, int *token);
-void update_progress(String message, int duration);
 int BCODE_loop();
 void BCODE_delay(int target_duration);
 int process_one_BCODE_command(int cmd, int index);
@@ -113,8 +105,10 @@ void stress_test_oscillate_stage(int amplitude, int step_delay, int cycles);
 void do_stress_test_step(int step);
 int get_next_command_param(String arg, int indx, int *param, int def);
 int particle_command(String arg);
+int test_runner(String cartridgeId);
 void reset_globals();
 void disconnect_from_cloud();
+void output_test_readings(BrevitestTestRecord *t);
 void run_test();
 void clear_state();
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value);
@@ -122,22 +116,18 @@ void init_analog_pin(uint16_t pin, PinMode mode);
 void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value);
 void init_digital_pin(uint16_t pin, PinMode mode);
 bool startI2C();
-void startup_device();
 void setup();
 bool heater_debounced();
 void set_device_indicators();
-void verify_device_loop();
 void barcode_scan_loop();
 void stress_test_loop();
 void magnet_validation_loop();
-void cartridge_validation_loop();
-void test_start_loop();
-void test_upload_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
 #line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
+SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////
 //                                                         //
@@ -318,34 +308,20 @@ int set_wifi_credentials(String params)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void load_eeprom()
-{
-    EEPROM.get(0, eeprom);
-}
-
-void store_eeprom()
-{
-    EEPROM.put(0, eeprom);
-}
-
-void erase_eeprom()
-{
-    EEPROM.clear();
-}
-
 void reset_eeprom()
 {
     Particle_EEPROM e;
 
+    Log.info("reset_eeprom");
     int lifetime = eeprom.lifetime_stress_test_cycles;
     if (lifetime == -1)
     {
         lifetime = 0;
     }
-    erase_eeprom();
+    EEPROM.clear();
     memcpy(&eeprom, &e, (int)sizeof(Particle_EEPROM));
     eeprom.lifetime_stress_test_cycles = lifetime;
-    store_eeprom();
+    EEPROM.put(0, eeprom);
 }
 
 void setup_eeprom()
@@ -360,12 +336,152 @@ void setup_eeprom()
     }
     else
     {
-        load_eeprom();
+        EEPROM.get(0, eeprom);
         if (eeprom.firmware_version != FIRMWARE_VERSION || eeprom.data_format_version != DATA_FORMAT_VERSION)
         {
             reset_eeprom();
         }
     }
+}
+
+////////////////////////////////////////////////////////////
+//                                                         //
+//                      FILE SYSTEM                        //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+bool create_dir_if_not_exists(const char *path)
+{
+    struct stat statbuf;
+
+    int result = stat(path, &statbuf);
+    if (result == 0)
+    {
+        if ((statbuf.st_mode & S_IFDIR) != 0)
+        {
+            Log.info("%s exists and is a directory", path);
+            return true;
+        }
+
+        Log.error("file in the way, deleting %s", path);
+        unlink(path);
+    }
+    else
+    {
+        if (errno != ENOENT)
+        {
+            // Error other than file does not exist
+            Log.error("stat filed errno=%d", errno);
+            return false;
+        }
+    }
+
+    // File does not exist (errno == 2)
+    result = mkdir(path, 0777);
+    if (result == 0)
+    {
+        Log.info("created dir %s", path);
+        return true;
+    }
+    else
+    {
+        Log.error("mkdir failed errno=%d", errno);
+        return false;
+    }
+}
+
+void write_test_to_file()
+{
+    struct stat statbuf;
+    event.data((char *)&test, sizeof(test), ContentType::BINARY);
+    String filename = "/cache/" + String(test.cartridge_id);
+    event.saveData(filename);
+    stat(filename, &statbuf);
+    Log.info("write_test_to_file, test size: %d, event data size: %d, file size: %ld", sizeof test, event.data().size(), statbuf.st_size);
+}
+
+void clear_cache()
+{
+    int tries = 10;
+    while (test_in_cache() && --tries > 0)
+    {
+        if (unlink(cached_filename) == 0)
+        {
+            cached_filename[0] = '\0';
+            Log.info("Cache cleared: %s", cached_filename);
+        }
+        else
+        {
+            Log.error("Failed to clear cache: %s, errno: %d", cached_filename, errno);
+        }
+    }
+}
+
+void load_cached_test(char *filename)
+{
+    struct stat statbuf;
+    if (filename == NULL)
+    {
+        Log.error("load_cached_test: filename is NULL");
+        return;
+    }
+    event.loadData(filename);
+    BrevitestTestRecord *t = (BrevitestTestRecord *)event.data().data();
+    stat(filename, &statbuf);
+    Log.info("load_cached_test from %s, test size: %d, event data size: %d, file size: %ld", filename, sizeof *t, event.data().size(), statbuf.st_size);
+    Log.info("Test loaded, cartridge: %s, assay: %s, readings: %d", t->cartridge_id, t->assay_id, t->number_of_readings);
+}
+
+bool test_in_cache()
+{
+    DIR *cache = opendir("/cache");
+    int tries = 50;
+    bool test_found = false;
+    do
+    {
+        cache_entry = readdir(cache);
+        if (cache_entry == NULL)
+        {
+            break;
+        }
+        if (cache_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        if (strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH)
+        {
+            snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
+            Log.info("test_in_cache, found file: %s", cached_filename);
+            test_found = true;
+        }
+    } while (cache_entry != NULL && --tries > 0);
+    closedir(cache);
+    return test_found;
+}
+
+void output_cache()
+{
+    DIR *cache = opendir("/cache");
+    int tries = 10;
+    do
+    {
+        cache_entry = readdir(cache);
+        if (cache_entry == NULL)
+        {
+            break;
+        }
+        if (cache_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        if (strlen(cache_entry->d_name) == BARCODE_UUID_LENGTH)
+        {
+            snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
+            event.loadData(cached_filename);
+            output_test_readings((BrevitestTestRecord *)event.data().data());
+        }
+    } while (cache_entry != NULL && --tries > 0);
+    closedir(cache);
 }
 
 /////////////////////////////////////////////////////////////
@@ -600,18 +716,6 @@ int scan_barcode()
             return BARCODE_TYPE_MAGNETOMETER;
         }
         break;
-    case OPTICAL_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
-        if (strncmp(barcode_uuid, OPTICAL_PREFIX, BARCODE_PREFIX_LENGTH) == 0)
-        { // is it an optical probe?
-            return BARCODE_TYPE_OPTICAL;
-        }
-        break;
-    case SHIPPING_BOLT_UUID_LENGTH:
-        if (strncmp(barcode_uuid, SHIPPING_BOLT_BARCODE, SHIPPING_BOLT_UUID_LENGTH) == 0)
-        { // is it a shipping bolt cartridge?
-            return BARCODE_TYPE_SHIPPING;
-        }
-        break;
     case STRESS_TEST_UUID_LENGTH:
         if (strncmp(barcode_uuid, STRESS_TEST_PREFIX, STRESS_TEST_PREFIX_LENGTH) == 0)
         { // is it a stress test cartridge?
@@ -702,49 +806,38 @@ void turn_off_buzzer_timer()
 
 void turn_off_indicator_LEDs()
 {
-    if (indicatorNoConnection.isActive())
-        indicatorNoConnection.setActive(false);
-    if (indicatorProblem.isActive())
-        indicatorProblem.setActive(false);
-    if (indicatorBusy.isActive())
-        indicatorBusy.setActive(false);
-    if (indicatorAvailable.isActive())
-        indicatorAvailable.setActive(false);
+    if (indicatorRemove.isActive())
+        indicatorRemove.setActive(false);
+    if (indicatorDontTouch.isActive())
+        indicatorDontTouch.setActive(false);
+    if (indicatorInsert.isActive())
+        indicatorInsert.setActive(false);
 }
 
-void turn_on_no_connectivity_LED()
+void turn_on_remove_cartridge_LED()
 {
-    if (!indicatorNoConnection.isActive())
+    if (!indicatorRemove.isActive())
     {
         turn_off_indicator_LEDs();
-        indicatorProblem.setActive(true);
+        indicatorRemove.setActive(true);
     }
 }
 
-void turn_on_problem_LED()
+void turn_on_dont_touch_LED()
 {
-    if (!indicatorProblem.isActive())
+    if (!indicatorDontTouch.isActive())
     {
         turn_off_indicator_LEDs();
-        indicatorProblem.setActive(true);
+        indicatorDontTouch.setActive(true);
     }
 }
 
-void turn_on_busy_LED()
+void turn_on_insert_cartridge_LED()
 {
-    if (!indicatorBusy.isActive())
+    if (!indicatorInsert.isActive())
     {
         turn_off_indicator_LEDs();
-        indicatorBusy.setActive(true);
-    }
-}
-
-void turn_on_available_LED()
-{
-    if (!indicatorAvailable.isActive())
-    {
-        turn_off_indicator_LEDs();
-        indicatorAvailable.setActive(true);
+        indicatorInsert.setActive(true);
     }
 }
 
@@ -760,21 +853,15 @@ void turn_on_heater(int power)
     digitalWrite(heater.heater_pin, HIGH);
     delay(power);
     digitalWrite(heater.heater_pin, LOW);
-    // analogWrite(heater.heater_pin, power);
     heater.power = power;
     heater.heater_on = true;
-    // if (serial_messaging_on)
-    //     Log.info("Heater set to power %d", power);
 }
 
 void turn_off_heater()
 {
     digitalWrite(heater.heater_pin, LOW);
-    // analogWrite(heater.heater_pin, 0);
     heater.heater_on = false;
     heater.power = 0;
-    // if (serial_messaging_on)
-    //     Log.info("Heater turned off");
 }
 
 int set_heater_power(int power)
@@ -927,13 +1014,12 @@ void turn_on_laser(char channel)
     Laser *laser = get_laser(channel);
 
     laser->power = 255;
-    // analogWrite(laser->power_pin, laser->power);
+    // analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
     digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
     // if (serial_messaging_on)
     // {
-        int value = analogRead(laser->value_pin);
-        Log.info("Laser %c set to power %d, value %d", channel, laser->power, value);
+    // int value = analogRead(laser->value_pin);
     // }
 }
 
@@ -941,12 +1027,11 @@ void turn_off_laser(char channel)
 {
     Laser *laser = get_laser(channel);
 
-    // analogWrite(laser->power_pin, 0);
+    // analogWrite(laser->power_pin, 0, LASER_PWM_FREQUENCY);
     digitalWrite(laser->power_pin, LOW);
     laser->power_on = false;
     laser->power = 0;
     // if (serial_messaging_on)
-        Log.info("Laser %c turned off", channel);
 }
 
 void turn_off_all_lasers()
@@ -1055,9 +1140,9 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
 {
     if (reset_spectrophotometer(channel, as7341))
     {
-        as7341->setAstep(spectro_astep);
-        as7341->setAtime(spectro_atime);
-        as7341->setAGAIN(spectro_again);
+        as7341->setAstep(test.astep);
+        as7341->setAtime(test.atime);
+        as7341->setAGAIN(test.again);
         return true;
     }
     else
@@ -1066,54 +1151,36 @@ bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
     }
 }
 
-int pulse_laser(char channel)
-{
-    int laser_on_time_us = LASER_PWM_ON_US >> 1;
-    int laser_off_time_us = LASER_PWM_TOTAL_US - LASER_PWM_ON_US;
-    turn_on_laser(channel);
-    delayMicroseconds(laser_on_time_us);
-    int power = analogRead(get_laser(channel)->value_pin);
-    delayMicroseconds(laser_on_time_us);
-    turn_off_laser(channel);
-    delayMicroseconds(laser_off_time_us);
-    return power;
-}
-
 void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChChoose_t mode, BrevitestSpectrophotometerReading *reading)
 {
     unsigned long startTime = millis();
 
     as7341->startMeasure(mode);
-    int pulses = 0;
-    int power = 0;
     while (!as7341->measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
     {
-        power += pulse_laser(channel);
-        pulses++;
+        delayMicroseconds(100);
     }
     if (millis() - startTime < SPECTRO_TIMEOUT)
     {
-        reading->laser_power = power / pulses;
-        reading->laser_pulses = pulses;
         if (mode == as7341->eF1F4ClearNIR)
         {
             DFRobot_AS7341::sModeOneData_t data1;
             data1 = as7341->readSpectralDataOne();
-            reading->f1 += data1.ADF1;
-            reading->f2 += data1.ADF2;
-            reading->f3 += data1.ADF3;
-            reading->f4 += data1.ADF4;
-            reading->clear += data1.ADCLEAR;
-            reading->nir += data1.ADNIR;
+            reading->f1 = data1.ADF1;
+            reading->f2 = data1.ADF2;
+            reading->f3 = data1.ADF3;
+            reading->f4 = data1.ADF4;
+            reading->clear = data1.ADCLEAR;
+            reading->nir = data1.ADNIR;
         }
         else
         {
             DFRobot_AS7341::sModeTwoData_t data2;
             data2 = as7341->readSpectralDataTwo();
-            reading->f5 += data2.ADF5;
-            reading->f6 += data2.ADF6;
-            reading->f7 += data2.ADF7;
-            reading->f8 += data2.ADF8;
+            reading->f5 = data2.ADF5;
+            reading->f6 = data2.ADF6;
+            reading->f7 = data2.ADF7;
+            reading->f8 = data2.ADF8;
         }
     }
     else
@@ -1137,130 +1204,70 @@ void print_spectrophotometer_heading()
     Serial.println("channel\tposition\ttime ms\tpreheat cycles\tpower cycles\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
-BrevitestSpectrophotometerReading *get_reading_pointer(char channel, BrevitestSpectrophotometerData *data)
-{
-    switch (channel)
-    {
-    case 'A':
-        return &(data->channel_a);
-    case 'B':
-        return &(data->channel_b);
-    case 'C':
-        return &(data->channel_c);
-    default:
-        return NULL;
-    }
-}
-
-void read_spectrophotometer(BrevitestSpectrophotometerData *data, char channel, bool log = false)
+void single_reading(uint8_t number, char channel)
 {
     DFRobot_AS7341 as7341(&Wire);
-
     if (power_on_spectrophotometer(channel))
     {
         if (init_spectrophotometer(channel, &as7341))
         {
-            BrevitestSpectrophotometerReading *reading = get_reading_pointer(channel, data);
-            if (reading != NULL)
-            {
-                memset(&(reading->f1), 0, 22);
-                for (int i = 0; i < SPECTRO_READING_CYCLES; i++)
-                {
-                    take_spectrophotometer_reading(channel, &as7341, reading);
-                }
-                if (log)
-                {
-                    Serial.printlnf("%c\t%d\t\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", channel, stage_position, reading->msec, SPECTRO_READING_CYCLES, reading->laser_power, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
-                }
-            }
-        }
-        else if (log)
-        {
-            Log.info("Spectrophotometer %c initialization failed", channel);
+            BrevitestSpectrophotometerReading *reading = &(test.reading[test.number_of_readings]);
+            reading->number = number;
+            reading->channel = channel;
+            reading->temperature = heater.temp_C_10X;
+            reading->position = stage_position;
+            turn_on_laser(channel);
+            delayMicroseconds(LASER_PWM_ON_US);
+            reading->laser_output = analogRead(get_laser(channel)->value_pin);
+            take_spectrophotometer_reading(channel, &as7341, reading);
+            turn_off_all_lasers();
+            test.number_of_readings++;
         }
     }
-    else if (log)
-    {
-        Log.info("Spectrophotometer %c power on failed", channel);
-    }
-    turn_off_all_lasers();
     power_off_all_spectrophotometers();
 }
 
-void spectrophotometer_reading(bool baseline, bool log = false)
+void take_one_reading(uint8_t number, int chan_num)
 {
-    BrevitestSpectrophotometerData *data;
+    char channel;
 
-    test.astep = spectro_astep;
-    test.atime = spectro_atime;
-    test.again = spectro_again;
-    test.data_format_code = TEST_DATA_FORMAT_CODE;
-    for (int i = 0; i < SPECTRO_NUMBER_OF_READINGS; i++)
+    if (chan_num == 0)
     {
-        if (baseline)
+        for (int i = 0; i < 3; i++)
         {
-            data = &(test.baseline[i]);
+            single_reading(number, channels[i]);
         }
-        else
-        {
-            data = &(test.test[i]);
-        }
+    }
+    else
+    {
+        channel = channels[(limit(chan_num, 3, 1) - 1)];
+        single_reading(number, channel);
+    }
+}
 
+void spectrophotometer_reading(bool baseline, int scans, bool log = false)
+{
+    if (baseline)
+    {
+        test.baseline_scans = scans;
+    }
+    else
+    {
+        test.test_scans = scans;
+    }
+
+    for (int i = 0; i < scans; i++)
+    {
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
-        data->position = stage_position;
-        data->temperature = heater.temp_C_10X;
-        data->number_of_cycles = SPECTRO_READING_CYCLES;
-
-        read_spectrophotometer(data, 'A', log);
-        read_spectrophotometer(data, 'B', log);
-        read_spectrophotometer(data, 'C', log);
+        take_one_reading(i, 0);
     }
 }
 
 void stress_test_read_spectrophotometer()
 {
     print_spectrophotometer_heading();
-    read_spectrophotometer(&stress_spectro_data, 'A', true);
-    read_spectrophotometer(&stress_spectro_data, 'B', true);
-    read_spectrophotometer(&stress_spectro_data, 'C', true);
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//               LASER CHARACTERIZATION CODE               //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void characterize_laser(char channel, int cycles)
-{
-    int number_of_iterations = min(cycles, LASER_CHARACTERIZE_MAX_CYCLES);
-
-    reset_stage(false);
-    move_stage_to_optical_read_position();
-    DFRobot_AS7341 as7341(&Wire);
-    if (power_on_spectrophotometer(channel))
-    {
-        if (init_spectrophotometer(channel, &as7341))
-        {
-            Serial.printlnf("Characterizing laser - channel: %c, cycles: %d, astep: %d, atime: %d, again: %d.", channel, cycles, spectro_astep, spectro_atime, spectro_again);
-            print_spectrophotometer_heading();
-            memset(laser_characteristics, 0, sizeof(laser_characteristics));
-            for (int i = 0; i < number_of_iterations; i++)
-            {
-                read_spectrophotometer(&laser_characteristics[i], channel, true);
-            }
-        }
-        else
-        {
-            Log.info("Spectrophotometer %c initialization failed", channel);
-        }
-    }
-    else
-    {
-        Log.info("Spectrophotometer %c power on failed", channel);
-    }
-    power_off_all_spectrophotometers();
-    sleep_motor();
+    spectrophotometer_reading(true, 10, true);
+    spectrophotometer_reading(false, 10, true);
 }
 
 /////////////////////////////////////////////////////////////
@@ -1273,7 +1280,8 @@ void characterize_laser(char channel, int cycles)
 int get_heater_temperature()
 {
     int raw = 0;
-    for (int i = 0; i < HEATER_READINGS; i++) {
+    for (int i = 0; i < HEATER_READINGS; i++)
+    {
         raw += analogRead(heater.thermistor_pin);
     }
     raw /= HEATER_READINGS;
@@ -1372,54 +1380,9 @@ void stop_temperature_control()
 //                 WEBHOOK ERROR                   //
 /////////////////////////////////////////////////////
 
-void callback_error(const char *name, String result)
+void response_error(CloudEvent event)
 {
-    clear_current_event();
-    Log.info("Webhook error: event = %s, error = %s", name, result.c_str());
-}
-
-/////////////////////////////////////////////////////
-//                 VERIFY DEVICE                   //
-/////////////////////////////////////////////////////
-
-void publish_verify_device()
-{
-    device_verification_in_progress = true;
-    device_verified = false;
-    brevitest_publish("verify-device");
-}
-
-void startup_device(void);
-void callback_verify_device(const char *name, String result)
-{
-    if (strcmp(current_event, "verify-device") != 0)
-    {
-        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
-        return;
-    }
-    clear_current_event();
-    device_verification_in_progress = false;
-
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
-    {
-        if (iter.name() == "status")
-        {
-            if (iter.value().toString() == "SUCCESS")
-            {
-                Log.info("Device verified - starting up...");
-                device_verified = true;
-                startup_device();
-                break;
-            }
-            else
-            {
-                Log.info("Device not verified - device not started!");
-                device_verified = false;
-            }
-        }
-    }
+    Log.info("Webhook error: event = %s, size = %d", event.name(), event.data().size());
 }
 
 /////////////////////////////////////////////////////
@@ -1428,89 +1391,139 @@ void callback_verify_device(const char *name, String result)
 
 void publish_validate_cartridge()
 {
-    cartridge_validation_in_progress = true;
-    cartridge_validated = false;
+    particle::Variant data;
 
-    brevitest_publish("validate-cartridge", barcode_uuid);
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        Variant data;
+
+        if (cartridge_validated)
+        {
+            return;
+        }
+        lastPublish = millis();
+        cartridge_validation_in_progress = true;
+        cartridge_validated = false;
+
+        clear_payload_buffer();
+        event.name("validate-cartridge");
+        event.contentType(ContentType::STRUCTURED);
+        data.set("uuid", barcode_uuid);
+        event.data(data);
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing validate cartridge, %s", barcode_uuid);
+            Particle.publish(event);
+        }
+    }
 }
 
-void callback_validate_cartridge(const char *name, String result)
-{
-    int crc_loaded = 0, crc_calculated;
-
-    if (strcmp(current_event, "validate-cartridge") != 0)
+void clear_payload_buffer() {
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
-        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
-        return;
+        payload_buffer[i] = "";
     }
-    clear_current_event();
+}
+
+void output_payload_buffer() {
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        Log.info("Payload buffer[%d]: %s", i, payload_buffer[i].c_str());
+    }
+}
+
+bool all_payloads_received() {
+    bool all = true;
+    int last = -1;
+    for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
+    {
+        int len = payload_buffer[i].length();
+        if (len > 0 && len < 512)
+        {
+            last = i;
+        }
+    }
+    if (last == -1)
+    {
+        return false;
+    }
+    for (int i = 0; i < last; i++)
+    {
+        all = all && payload_buffer[i].length() != 0;
+    }
+    return all;
+}
+
+void response_validate_cartridge(CloudEvent validate_event)
+{
+    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int) validate_event.contentType());
+    String final_result;
+    String str = validate_event.dataString();
+
+    int index = limit(str.charAt(str.length() - 1) - '0', PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
+    Log.info("response data: %s, index: %d", str.c_str(), index);
+
+    payload_buffer[index] = str;
+    if (!all_payloads_received())
+        return;
+
+    for (int ii = 0; ii < PARTICLE_PAYLOAD_BUFFER_SIZE; ii++)
+    {
+        if (payload_buffer[ii].length() > 0)
+            final_result += payload_buffer[ii];
+    }
+    Log.info("response_validate_cartridge: %s", final_result.c_str()); 
+
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
     if (!detector_on)
     {
         cartridge_validated = false;
-        test.test_status_code = TEST_STATUS_VALIDATION_CANCELLED;
     }
     else
     {
-        JSONValue parsed = JSONValue::parseCopy(result);
-        JSONObjectIterator iter(parsed);
-        while (iter.next())
+        Variant json = Variant::fromJSON(final_result);
+        if (json.get("status").toString() == "SUCCESS")
         {
-            if (iter.name() == "status")
-            {
-                if (iter.value().toString() == "SUCCESS")
-                {
-                    Log.info("Cartridge %s %s", barcode_uuid, "validated");
-                    cartridge_validated = true;
-                    test.test_status_code = TEST_STATUS_UNDERWAY;
-                }
-                else
-                {
-                    Log.info("Cartridge %s %s", barcode_uuid, "invalid");
-                    cartridge_validated = false;
-                    test.test_status_code = TEST_STATUS_INVALID_CARTRIDGE;
-                }
-            }
-            else if (iter.name() == "errorMessage")
-            {
-                char *error = (char *)iter.value().toString().data();
-                Log.info("Validation error: %s", error);
-            }
-            else if (iter.name() == "serialNumber")
-            {
-                char *serialNumber = (char *)iter.value().toString().data();
-                Log.info("Serial number: %s", serialNumber);
-                memcpy(test.cartridge_uuid, serialNumber, CARTRIDGE_UUID_LENGTH);
-                test.cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-
-                memcpy(assay.uuid, serialNumber, ASSAY_UUID_LENGTH);
-                assay.uuid[ASSAY_UUID_LENGTH] = '\0';
-            }
-            else if (iter.name() == "checksum")
-            {
-                crc_loaded = iter.value().toInt();
-                Log.info("checksum: %d", crc_loaded);
-            }
-            else if (iter.name() == "version")
-            {
-                assay.BCODE_version = iter.value().toInt();
-                Log.info("BCODE version: %d", assay.BCODE_version);
-            }
-            else if (iter.name() == "bcode")
-            {
-                strcpy(assay.BCODE, (char *)iter.value().toString().data());
-                Log.info("BCODE : %s", assay.BCODE);
-            }
-            else if (iter.name() == "duration")
-            {
-                assay.duration = iter.value().toInt();
-                Log.info("duration: %d", assay.duration);
-            }
+            Log.info("Cartridge %s %s", barcode_uuid, "validated");
+            cartridge_validated = true;
         }
-        crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
-        Log.info("crc_loaded: %d, crc_calculated: %d", crc_loaded, crc_calculated);
-        test_start_mode = crc_calculated && crc_loaded && crc_loaded == crc_calculated;
+        else
+        {
+            Log.info("Cartridge %s %s", barcode_uuid, "invalid");
+            cartridge_validated = false;
+        }
+
+        String errorMessage = json.get("errorMessage").toString();
+        if (errorMessage.length() > 0)
+        {
+            Log.info("Cartridge validation test error: %s", errorMessage.c_str());
+        }
+
+        strcpy(test.cartridge_id, json.get("uuid").toString().c_str());
+        Log.info("Cartridge ID: %s", test.cartridge_id);
+
+        strcpy(assay.id, json.get("assayId").toString().c_str());
+        strcpy(test.assay_id, assay.id);
+        Log.info("Assay ID: %s", assay.id);
+
+        int crc_loaded = json.get("checksum").toInt();
+        Log.info("checksum: %d", crc_loaded);
+
+        assay.BCODE_version = json.get("version").toInt();
+        Log.info("BCODE version: %d", assay.BCODE_version);
+
+        strcpy(assay.BCODE, json.get("bcode").toString().c_str());
+        assay.BCODE_length = strlen(assay.BCODE);
+        Log.info("BCODE : %s", assay.BCODE);
+
+        assay.duration = json.get("duration").toInt();
+        Log.info("duration: %d", assay.duration);
+
+        int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
+        test_start_mode = cartridge_validated && crc_calculated && crc_loaded && crc_loaded == crc_calculated;
+        cartridge_validated = cartridge_validated && test_start_mode;
+        Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
     }
 }
 
@@ -1520,63 +1533,60 @@ void callback_validate_cartridge(const char *name, String result)
 
 void publish_start_test()
 {
-    test_start_in_progress = true;
-    test_underway = false;
-    brevitest_publish("start-test", test.cartridge_uuid);
+    particle::Variant data;
+
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        if (test_underway)
+        {
+            return;
+        }
+        lastPublish = millis();
+        test_start_in_progress = true;
+        test_underway = false;
+
+        event.name("start-test");
+        event.contentType(ContentType::TEXT);
+        event.data(String(barcode_uuid));
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing start test, %s", barcode_uuid);
+            Particle.publish(event);
+        }
+    }
 }
 
-void write_test_record_to_eeprom();
-void callback_start_test(const char *name, String result)
+void response_start_test(CloudEvent start_event)
 {
-    if (strcmp(current_event, "start-test") != 0)
-    {
-        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
-        return;
-    }
-    clear_current_event();
     test_start_in_progress = false;
     test_start_mode = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(start_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
+        if (!detector_on)
         {
-            if (iter.value().toString() == "SUCCESS")
-            {
-                if (!detector_on)
-                {
-                    Log.info("Start test cancelled");
-                    test_underway = false;
-                    test_cancelled = true;
-                    test.test_status_code = TEST_STATUS_START_CANCELLED;
-                    write_test_record_to_eeprom();
-                    test_upload_mode = true;
-                }
-                else
-                {
-                    test_underway = true;
-                }
-            }
-            else
-            {
-                Log.info("Test failed to start");
-                test_underway = false;
-                cartridge_validated = false;
-                test.test_status_code = TEST_STATUS_FAILED_TO_START;
-            }
+            Log.info("Start test cancelled");
+            test_underway = false;
+            test_cancelled = true;
+            test_cancel_mode = true;
         }
-        else if (iter.name() == "errorMessage")
+        else
         {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Start test error: %s", error);
+            test_underway = true;
         }
-        else if (iter.name() == "serialNumber")
-        {
-            char *serialNumber = (char *)iter.value().toString().data();
-            Log.info("Start test: serial number %s", serialNumber);
-        }
+    }
+    else
+    {
+        Log.info("Test failed to start");
+        test_underway = false;
+        cartridge_validated = false;
+    }
+
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Start test error: %s", errorMessage.c_str());
     }
 
     if (test_underway)
@@ -1587,79 +1597,108 @@ void callback_start_test(const char *name, String result)
 }
 
 /////////////////////////////////////////////////////
-//                  UPLOAD TEST                    //
+//                  CANCEL TEST                    //
 /////////////////////////////////////////////////////
 
-bool test_in_cache()
+void publish_cancel_test()
 {
-    return eeprom.cache.cartridge_uuid[0] != '\0';
+    particle::Variant data;
+
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        lastPublish = millis();
+        test_cancel_in_progress = true;
+        test_cancelled = false;
+
+        event.name("cancel-test");
+        event.contentType(ContentType::TEXT);
+        event.data(String(eeprom.running_test_uuid));
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing cancel test, %s", barcode_uuid);
+            Particle.publish(event);
+        }
+    }
 }
 
-void publish_upload_test()
+void response_cancel_test(CloudEvent cancel_event)
 {
-    if (test_in_cache())
+    test_cancel_in_progress = false;
+
+    Variant json = Variant::fromJSON(cancel_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        test_upload_in_progress = true;
-        brevitest_publish("upload-test", (char *)&eeprom.cache, sizeof(eeprom.cache));
+        test_cancelled = true;
+        test_cancel_mode = false;
+        test_underway = false;
+        eeprom.running_test_uuid[0] = '\0';
+        EEPROM.put(0, eeprom);
+        Log.info("Test cancelled");
     }
     else
     {
-        test_upload_in_progress = false;
-        test_upload_mode = false;
+        Log.info("Test failed to cancel");
+    }
+
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Cancel test error: %s", errorMessage.c_str());
     }
 }
 
-void remove_test_from_cache(char *testToRemove)
+/////////////////////////////////////////////////////
+//                  UPLOAD TEST                    //
+/////////////////////////////////////////////////////
+
+void publish_upload_test()
 {
-    if (strncmp(testToRemove, eeprom.cache.cartridge_uuid, CARTRIDGE_UUID_LENGTH) == 0)
+    particle::Variant data;
+
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
-        eeprom.cache = {};
-        eeprom.cache.cartridge_uuid[0] = '\0';
-        store_eeprom();
-        return;
+        if (!test_in_cache())
+        {
+            return;
+        }
+        lastPublish = millis();
+        test_upload_in_progress = true;
+
+        event.name("upload-test");
+        event.contentType(ContentType::BINARY);
+        event.loadData(cached_filename);
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing upload test, %s (%d bytes)", cached_filename, event.size());
+            Particle.publish(event);
+        }
     }
 }
 
-void callback_upload_test(const char *name, String result)
+void response_upload_test(CloudEvent upload_event)
 {
-    if (strcmp(current_event, "upload-test") != 0)
-    {
-        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
-        return;
-    }
-    clear_current_event();
     test_upload_in_progress = false;
     test_upload_mode = false;
 
-    JSONValue parsed = JSONValue::parseCopy(result);
-    JSONObjectIterator iter(parsed);
-    while (iter.next())
+    Variant json = Variant::fromJSON(upload_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
     {
-        if (iter.name() == "status")
-        {
-            if (strncmp(iter.value().toString().data(), SUCCESS, 7) == 0)
-            {
-                test_invalid = false;
-                Log.info("Uploaded test successful");
-            }
-            else
-            {
-                test_invalid = true;
-                Log.info("Uploaded test invalid");
-            }
-        }
-        else if (iter.name() == "errorMessage")
-        {
-            char *error = (char *)iter.value().toString().data();
-            Log.info("Upload test error: %s", error);
-        }
-        else if (iter.name() == "serialNumber")
-        {
-            char *serialNumber = (char *)iter.value().toString().data();
-            remove_test_from_cache(serialNumber);
-            Log.info("Upload test: serial number %s", serialNumber);
-        }
+        test_invalid = false;
+        unlink(cached_filename);
+        Log.info("Uploaded test successful");
     }
+    else
+    {
+        test_invalid = true;
+        Log.info("Uploaded test invalid");
+    }
+    String errorMessage = json.get("errorMessage").toString();
+    if (errorMessage.length() > 0)
+    {
+        Log.info("Cancel test error: %s", errorMessage.c_str());
+    }
+
+    Log.info("Upload test: cartridge %s", json.get("cartridgeId").toString().c_str());
 }
 
 /////////////////////////////////////////////////////
@@ -1668,135 +1707,28 @@ void callback_upload_test(const char *name, String result)
 
 void publish_upload_magnet_validation()
 {
-    brevitest_publish("validate-magnets", barcode_uuid);
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        lastPublish = millis();
+        magnet_validation_in_progress = true;
+        magnet_validation_mode = false;
+
+        event.name("validate-magnets");
+        event.contentType(ContentType::TEXT);
+        event.data(String(device_id));
+        if (event.canPublish(sizeof(event)))
+        { 
+            Particle.publish(event);
+        }
+    }
 }
 
-void callback_upload_magnet_validation(const char *name, String result)
+void response_upload_magnet_validation(CloudEvent magnet_event)
 {
-    if (strcmp(current_event, "validate-magnets") != 0)
-    {
-        Log.info("Event mismatch: pending = %s, callback = %s", current_event, name);
-        return;
-    }
-    clear_current_event();
-    Log.info("Magnet validation: %s", result.c_str());
+    Variant json = Variant::fromJSON(magnet_event.dataString());
+    Log.info("Magnet validation: %s", json.get("status").toString().c_str());
     delay(2000);
     System.reset();
-}
-
-/////////////////////////////////////////////////////
-//               PUBSUB FUNCTIONS                  //
-/////////////////////////////////////////////////////
-
-void set_current_event(String event_name)
-{
-    strcpy(current_event, event_name.c_str());
-    publish_in_progress = true;
-    callback_timeout = millis() + PUBSUB_RETRY_DELAY;
-}
-
-void clear_current_event()
-{
-    current_event[0] = '\0';
-    publish_in_progress = false;
-}
-
-void brevitest_publish(String event_name, char *payload, int size) // binary test data
-{
-    if (publish_in_progress)
-    {
-        Log.info("Publish in progress, event = %s", current_event);
-    }
-    else
-    {
-        set_current_event(event_name);
-        Log.info("PUBLISH: event = %s, payload size = %u", event_name.c_str(), size);
-        Particle.publish(event_name, payload, size, ContentType::BINARY, WITH_ACK);
-    }
-}
-
-void brevitest_publish(String event_name, char *event_data) // text data
-{
-    if (publish_in_progress)
-    {
-        Log.info("Publish in progress, event = %s", current_event);
-    }
-    else
-    {
-        set_current_event(event_name);
-        String payload = String(event_data);
-        Log.info("PUBLISH: event = %s,  payload size = %u, payload = %s", event_name.c_str(), payload.length(), payload.c_str());
-        Particle.publish(event_name, payload, payload.length(), ContentType::TEXT, WITH_ACK);
-    }
-}
-
-void brevitest_publish(String event_name) // no data
-{
-    if (publish_in_progress)
-    {
-        Log.info("Publish in progress, event = %s", current_event);
-    }
-    else
-    {
-        set_current_event(event_name);
-        Log.info("PUBLISH: event = %s", event_name.c_str());
-        Particle.publish(event_name, WITH_ACK);
-    }
-}
-
-/////////////////////////////////////////////////////////////
-//                                                         //
-//               TEST CACHE AND UPLOADING                  //
-//                                                         //
-/////////////////////////////////////////////////////////////
-
-void erase_test_from_cache()
-{
-    eeprom.cache = {};
-}
-
-void initialize_test_cache()
-{
-    erase_test_from_cache();
-    store_eeprom();
-}
-
-void store_test()
-{
-    memcpy(eeprom.cache.cartridge_uuid, test.cartridge_uuid, sizeof(BrevitestTestRecord));
-    store_eeprom();
-}
-
-void write_test_record_to_eeprom()
-{
-    // increment test_index (check for overflow and if so reset circular buffer)
-    if (test_cancelled)
-    {
-        test.test_status_code = TEST_STATUS_CANCELLED;
-        test_cancelled = false;
-    }
-    else
-    {
-        test.test_status_code = TEST_STATUS_SUCCESS;
-    }
-    memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
-    store_test();
-}
-
-bool test_cached()
-{
-    if (eeprom.cache.cartridge_uuid[0] != '\0')
-    {
-        if (serial_messaging_on)
-        {
-            Log.info("Test cached for cartridge %s", eeprom.cache.cartridge_uuid);
-        }
-        return true;
-    }
-    else
-    {
-        return false;
-    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -1842,33 +1774,6 @@ int get_BCODE_token(int index, int *token)
     return i;
 }
 
-void update_progress(String message, int duration)
-{
-    int new_percent_complete;
-    int test_duration = assay.duration * 1000;
-
-    if (duration == 0)
-    {
-        test_progress = 0;
-        test_percent_complete = 0;
-    }
-    else if (duration < 0)
-    {
-        test_progress = test_duration;
-        test_percent_complete = -1;
-    }
-    else
-    {
-        test_progress += duration;
-        new_percent_complete = 100 * test_progress / test_duration;
-        new_percent_complete = new_percent_complete > 100 ? 100 : new_percent_complete;
-        if (new_percent_complete != test_percent_complete)
-        {
-            test_percent_complete = new_percent_complete;
-        }
-    }
-}
-
 int BCODE_loop()
 {
     unsigned long total_duration = millis();
@@ -1876,17 +1781,8 @@ int BCODE_loop()
     set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeDetected) == HIGH)
     {
-        Serial.println("Cartridge movement detected...");
         delayMicroseconds(100000);
         test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
-        if (test_cancelled)
-        {
-            Serial.println("Cartridge removed while test underway. Test cancelled.");
-        }
-        else
-        {
-            Serial.println("Cartridge ok. Test continuing.");
-        }
     }
 
     return (int)(millis() - total_duration);
@@ -1916,7 +1812,8 @@ void BCODE_delay(int target_duration)
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, start_index, position;
+    int param1, param2, param3, param4, start_index, position;
+    uint8_t number;
 
     if (test_cancelled)
         return index;
@@ -1924,18 +1821,15 @@ int process_one_BCODE_command(int cmd, int index)
     switch (cmd)
     {
     case 0: // Start test()
-        update_progress("Starting", 9000);
         BCODE_delay(1000);
         break;
     case 1: // Delay(milliseconds)
         index = get_BCODE_token(index, &param1);
-        update_progress("Pausing", param1);
         BCODE_delay(param1);
         break;
     case 2:                                      // Move Microns(microns, microseconds)
         index = get_BCODE_token(index, &param1); // microns to move
         index = get_BCODE_token(index, &param2); // step_delay_us
-        update_progress("Moving", 2 * abs(param1) * param2 / MOTOR_MOVE_DURATION_UNIT);
         move_stage(param1, param2);
         BCODE_loop();
         break;
@@ -1943,21 +1837,39 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // microns to move
         index = get_BCODE_token(index, &param2); // step_delay_us
         index = get_BCODE_token(index, &param3); // number of cycles
-        update_progress("Oscillating", 4 * abs(param1) * param2 * param3 / MOTOR_MOVE_DURATION_UNIT);
         oscillate_stage(param1, param2, param3, true);
         BCODE_loop();
         break;
-    case 11: // Baseline reading
-        update_progress("Baseline", 2000);
+    case 10:                                     // Set sensor params
+        index = get_BCODE_token(index, &param1); // gain
+        index = get_BCODE_token(index, &param2); // step
+        index = get_BCODE_token(index, &param3); // integration time
+        test.again = param1;
+        test.astep = param2;
+        test.atime = param3;
+        break;
+    case 11:                                     // Baseline scans
+        index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
         position = stage_position;
-        spectrophotometer_reading(true);
+        spectrophotometer_reading(true, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
-    case 14: // Test readings
-        update_progress("Reading", 2000);
+    case 14:                                     // Test scans
+        index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
         position = stage_position;
-        spectrophotometer_reading(false);
+        spectrophotometer_reading(false, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
+        break;
+    case 15:                                     // take sensor readings
+        index = get_BCODE_token(index, &param1); // channel (all = 0, A = 1, B = 2, C = 3)
+        index = get_BCODE_token(index, &param2); // gain
+        index = get_BCODE_token(index, &param3); // step
+        index = get_BCODE_token(index, &param4); // integration
+        test.again = param2;
+        test.astep = param3;
+        test.atime = param4;
+        number = param1 == 0 ? test.number_of_readings / 3 : test.number_of_readings;
+        take_one_reading(number, param1);
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
@@ -1973,7 +1885,6 @@ int process_one_BCODE_command(int cmd, int index)
         return -index;
         break;
     case 99: // Finish test
-        update_progress("Finishing test", 8000);
         break;
     default:
         BCODE_loop();
@@ -2017,7 +1928,7 @@ int start_stress_test(int limit, int led_power)
     stress_test_mode = true;
     eeprom.stress_test_cycles = 0;
     eeprom.stress_test_reading_count = 0;
-    store_eeprom();
+    EEPROM.put(0, eeprom);
     stress_test_limit = limit;
     stress_test_LED_power = led_power;
     stress_test_step = 0;
@@ -2142,7 +2053,7 @@ void do_stress_test_step(int step)
         eeprom.stress_test_cycles_since_reset++;
         eeprom.lifetime_stress_test_cycles++;
         Serial.printlnf("Stress test cycles: current = %d, since reset = %d, lifetime = %d", eeprom.stress_test_cycles, eeprom.stress_test_cycles_since_reset, eeprom.lifetime_stress_test_cycles);
-        store_eeprom();
+        EEPROM.put(0, eeprom);
         if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit)
         {
             stress_test_stop_flag = true;
@@ -2208,9 +2119,8 @@ int particle_command(String arg)
         reset_eeprom();
         result = (int)eeprom.data_format_version;
         break;
-    case 3: // clear test cache
-        initialize_test_cache();
-        result = eeprom.cache.cartridge_uuid[0] == '\0' ? 1 : 0;
+    case 3: // check cache
+        result = test_in_cache() ? 1 : 0;
         break;
     case 4: // check digital pin state
         indx = get_next_command_param(arg, indx, &param1, 0);
@@ -2258,6 +2168,10 @@ int particle_command(String arg)
     case 11: // turn off serial messaging
         serial_messaging_on = false;
         result = 0;
+        break;
+    case 12: // display id number
+        Log.info("ID number: %s", device_id.c_str());
+        result = 1;
         break;
         //
         //  STAGE MOTION
@@ -2421,7 +2335,7 @@ int particle_command(String arg)
         //
     case 90: // reset counter, deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
         eeprom.stress_test_cycles_since_reset = 0;
-        store_eeprom();
+        EEPROM.put(0, eeprom);
         WiFi.off();
         break;
     case 91: // deactivate WiFi and start stress test, up to param1 cycles (0 means no limit), LED power (0 means use baseline values)
@@ -2463,22 +2377,10 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &param1, SPECTRO_ASTEP_DEFAULT);
         indx = get_next_command_param(arg, indx, &param2, SPECTRO_ATIME_DEFAULT);
         indx = get_next_command_param(arg, indx, &param3, SPECTRO_AGAIN_DEFAULT);
-        spectro_astep = param1;
-        spectro_atime = param2;
-        spectro_again = param3;
+        test.astep = param1;
+        test.atime = param2;
+        test.again = param3;
         result = stage_position;
-        break;
-    case 302: // characterize laser param1: channel, param2: cycles, param3: astep, param4: atime, param5: again
-        indx = get_next_command_param(arg, indx, &param1, 1);
-        indx = get_next_command_param(arg, indx, &param2, LASER_CHARACTERIZE_MAX_CYCLES);
-        indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
-        indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
-        indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
-        spectro_astep = param3;
-        spectro_atime = param4;
-        spectro_again = param5;
-        characterize_laser((param1 - 1) + 'A', param2);
-        result = param2;
         break;
     case 303: // power on channel param1
         indx = get_next_command_param(arg, indx, &param1, 1);
@@ -2490,16 +2392,18 @@ int particle_command(String arg)
         result = stage_position;
         break;
     case 305: // baseline scan
+        indx = get_next_command_param(arg, indx, &param1, 1);
         reset_stage(false);
         print_spectrophotometer_heading();
-        spectrophotometer_reading(true, true);
+        spectrophotometer_reading(true, param1, true);
         sleep_motor();
         result = stage_position;
         break;
     case 306: // test scan
+        indx = get_next_command_param(arg, indx, &param1, 1);
         reset_stage(false);
         print_spectrophotometer_heading();
-        spectrophotometer_reading(false, true);
+        spectrophotometer_reading(false, param1, true);
         sleep_motor();
         result = stage_position;
         break;
@@ -2509,6 +2413,46 @@ int particle_command(String arg)
         indx = get_next_command_param(arg, indx, &pulsesC, 10);
         result = stage_position;
         break;
+    case 308:                                                 // take readings
+        indx = get_next_command_param(arg, indx, &param1, 5); // count
+        indx = get_next_command_param(arg, indx, &param2, 0); // channel (0 = all, 1 = A, 2 = B, 3 = C)
+        indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
+        param1 = limit(param1, param2 == 0 ? SPECTRO_RAW_MAX_CYCLES / 3 : SPECTRO_RAW_MAX_CYCLES, 1);
+        test.astep = param3;
+        test.atime = param4;
+        test.again = param5;
+        test.number_of_readings = 0;
+        for (int i = 0; i < param1; i++)
+        {
+            take_one_reading(i, param2);
+        }
+        output_test_readings(&test);
+        result = test.number_of_readings;
+        break;
+    case 309: // output raw readings
+        output_test_readings(&test);
+        result = test.number_of_readings;
+        break;
+        //
+        //  CLOUD FUNCTIONS
+        //
+    case 400: // check cache
+        result = (int)test_in_cache();
+        break;
+    case 401: // clear cache
+        clear_cache();
+        result = 1;
+        break;
+    case 402: // load cached record
+        output_cache();
+        break;
+    case 403: // upload test
+        test_upload_mode = true;
+        test_upload_in_progress = false;
+        result = 1;
+        break;
     default:
         result = 0;
     }
@@ -2516,6 +2460,32 @@ int particle_command(String arg)
     Log.info("Completed command: %d, result: %d, p1: %d, p2: %d, p3: %d, p4: %d, p5: %d", cmd, result, param1, param2, param3, param4, param5);
 
     return result;
+}
+
+int test_runner(String cartridgeId)
+{
+    if (detector_on)
+    {
+        cartridge_inserted = true;
+        if (cartridgeId.length() == BARCODE_UUID_LENGTH)
+        {
+            strcpy(barcode_uuid, cartridgeId.c_str());
+            cartridge_validation_mode = true;
+            return 0;
+        }
+        else
+        {
+            cartridge_validation_mode = false;
+            Log.info("Invalid cartridge ID: %s", cartridgeId.c_str());
+            return cartridgeId.length();
+        }
+    }
+    else
+    {
+        cartridge_inserted = false;
+        Log.info("Cartridge not inserted");
+        return -1;
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -2530,16 +2500,14 @@ void reset_globals()
     cartridge_validated = false;
     spectrophotometer_read_in_progress = false;
 
-    test_progress = 0;
-    test_percent_complete = 0;
-
     barcode_uuid[0] = '\0';
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
-    test.cartridge_uuid[0] = '\0';
-    test.cartridge_uuid[CARTRIDGE_UUID_LENGTH] = '\0';
-    assay.uuid[0] = '\0';
-    assay.uuid[ASSAY_UUID_LENGTH] = '\0';
-    test.test_status_code = TEST_STATUS_UNDERWAY;
+    test.cartridge_id[0] = '\0';
+    test.cartridge_id[BARCODE_UUID_LENGTH] = '\0';
+    test.assay_id[0] = '\0';
+    test.assay_id[ASSAY_UUID_LENGTH] = '\0';
+    assay.id[0] = '\0';
+    assay.id[ASSAY_UUID_LENGTH] = '\0';
 
     particle_register[0] = '\0';
     particle_register[PARTICLE_REGISTER_SIZE] = '\0';
@@ -2557,38 +2525,64 @@ void disconnect_from_cloud()
     Log.info("Disconnected from cloud");
 }
 
+void output_test_readings(BrevitestTestRecord *t)
+{
+    if (t->number_of_readings > 0)
+    {
+        Serial.printlnf("Test %s", t->cartridge_id);
+        Serial.printlnf("Data format: %c, assay: %s, duration: %d, start_time: %lu", t->data_format_code, t->assay_id, t->duration, t->start_time);
+        Serial.printlnf("astep: %d, atime: %d, again: %d, baseline_scans: %d, test_scans: %d, number_of_readings: %d", t->astep, t->atime, t->again, t->baseline_scans, t->test_scans, t->number_of_readings);
+        Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
+        for (int i = 0; i < t->number_of_readings; i++)
+        {
+            BrevitestSpectrophotometerReading *r = &(t->reading[i]);
+            Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", r->number, r->channel, r->position, r->temperature, r->msec, r->laser_output, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
+        }
+    }
+    else
+    {
+        Log.info("No test readings found");
+    }
+}
+
 void run_test()
 {
-    unsigned long start_millis;
-
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
     delay(2000);
 
-    update_progress("Running test", 0);
-
     disconnect_from_cloud();
     stop_temperature_control();
 
+    memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH);
+    EEPROM.put(0, eeprom);
+
+    test.number_of_readings = 0;
+    test.baseline_scans = 0;
+    test.test_scans = 0;
+    memset(test.reading, 0, sizeof(test.reading));
+
     SINGLE_THREADED_BLOCK()
     {
-        memcpy(eeprom.running_test_uuid, test.cartridge_uuid, CARTRIDGE_UUID_LENGTH);
-        store_eeprom();
-        start_millis = millis();
-
+        test.start_time = millis();
         process_BCODE(0);
-
-        test.duration = (millis() - start_millis) / 1000;
-        write_test_record_to_eeprom();
+        test.duration = (millis() - test.start_time) / 1000;
     }
+
+    write_test_to_file();
+    eeprom.running_test_uuid[0] = '\0';
+    EEPROM.put(0, eeprom);
+    output_test_readings(&test);
+
+    start_temperature_control();
+    Particle.connect();
 
     reset_stage(true);
     reset_globals();
-    start_temperature_control();
 
-    test_underway = false;
     test_upload_mode = true;
+    test_upload_in_progress = false;
 }
 
 /////////////////////////////////////////////////////////////
@@ -2601,18 +2595,18 @@ void clear_state()
 {
     cartridge_validation_in_progress = false;
     test_start_in_progress = false;
-    test_upload_in_progress = false;
+    // test_upload_in_progress = false;
 
     magnetometer_inserted = false;
     stress_test_cartridge_inserted = false;
-    shipping_bolt_cartridge_inserted = false;
 
     barcode_scan_mode = false;
     stress_test_mode = false;
     cartridge_validation_mode = false;
     test_start_mode = false;
     test_underway = false;
-    test_upload_mode = test_in_cache();
+    cached_filename[0] = '\0';
+    // test_upload_mode = test_in_cache();
     magnet_validation_mode = false;
 
     test_invalid = false;
@@ -2667,72 +2661,29 @@ bool startI2C()
     return Wire.isEnabled();
 }
 
-void startup_device()
+void setup()
 {
-    Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
-
-    Log.info("Resetting stage");
-    reset_stage(true);
-
-    Log.info("Testing LEDs");
-    // turn_on_all_LEDs(LED_DEFAULT_POWER);
-    turn_on_laser_for_duration('A', 500);
-    delay(500);
-    turn_on_laser_for_duration('B', 500);
-    delay(500);
-    turn_on_laser_for_duration('C', 500);
-
-    Log.info("Buzzing");
-    turn_on_buzzer_for_duration(250, 330);
-
-    reset_globals();
-    clear_current_event();
-
-    clear_state();
-
-    bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
-
-    Log.info("device id: %s", device_id.c_str());
-    Log.info("Firmware version: %d", eeprom.firmware_version);
-    Log.info("Data format version: %d", eeprom.data_format_version);
-    Log.info("Lifetime stress test cycles: %d", eeprom.lifetime_stress_test_cycles);
-    Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
-    Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
-    Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
-    Log.info("Cached test ? %c", test_cached() ? 'Y' : 'N');
-
-    if (test_interrupted)
-    {
-        memcpy(eeprom.cache.cartridge_uuid, eeprom.running_test_uuid, CARTRIDGE_UUID_LENGTH);
-        eeprom.cache.test_status_code = TEST_STATUS_CANCELLED;
-        memset(eeprom.running_test_uuid, 0, CARTRIDGE_UUID_LENGTH);
-        store_eeprom();
-        test_upload_mode = true;
-    }
-
+    init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
     detector_on = digitalRead(pinCartridgeDetected) == LOW;
     if (detector_on)
     {
-        barcode_invalid = true;
+        cartridge_inserted = true;
+        turn_on_remove_cartridge_LED();
     }
-}
+    else
+    {
+        cartridge_inserted = false;
+        turn_on_dont_touch_LED();
+    }
 
-void setup()
-{
-
-    // ####### For Logging ONLY, REMOVE FOR PRODUCTION #######
     Serial.begin(115200); // standard serial port
     waitFor(Serial.isConnected, 15000);
-    delay(1000);
+    delay(100);
     Log.info("====== Serial Connected, Begin Setup ======");
-
-    turn_off_indicator_LEDs();
-    indicatorBusy.setActive(true);
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
     init_digital_pin(pinStageLimit, INPUT_PULLUP);
-    init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
 
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
@@ -2749,6 +2700,7 @@ void setup()
 
     init_analog_pin(pinHeaterThermistor, INPUT);
     init_digital_pin(pinHeater, OUTPUT, LOW);
+    // init_analog_pin(pinHeater, OUTPUT, 0);
 
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
@@ -2760,24 +2712,25 @@ void setup()
 
     Particle.variable("temperature", current_temperature);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
+    Particle.function("run_test", test_runner);
 
     start_temperature_control();
 
-    Log.info("Connecting to cloud...");
+    Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
+    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge"), response_validate_cartridge);
+    Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
+    Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
+    Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
 
-    Particle.subscribe(String(device_id + "/hook-response/verify-device/"), callback_verify_device);
-    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), callback_validate_cartridge);
-    Particle.subscribe(String(device_id + "/hook-response/start-test/"), callback_start_test);
-    Particle.subscribe(String(device_id + "/hook-response/upload-test/"), callback_upload_test);
-    Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), callback_upload_magnet_validation);
-
-    Particle.subscribe(String(device_id + "/hook-error/verify-device/"), callback_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), callback_error);
-    Particle.subscribe(String(device_id + "/hook-error/start-test/"), callback_error);
-    Particle.subscribe(String(device_id + "/hook-error/upload-test/"), callback_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), callback_error);
+    Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), response_error);
 
     setup_eeprom();
+    create_dir_if_not_exists("/cache");
+    create_dir_if_not_exists("/buffer");
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
@@ -2792,9 +2745,43 @@ void setup()
     init_spectrophotometer_switch();
     power_off_all_spectrophotometers();
 
-    Log.info("Setup complete");
+    Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
 
-    // device_verified = true;
+    Log.info("Resetting stage");
+    reset_stage(true);
+
+    Log.info("Testing LEDs");
+    // turn_on_all_LEDs(LED_DEFAULT_POWER);
+    turn_on_laser_for_duration('A', 100);
+    delay(100);
+    turn_on_laser_for_duration('B', 100);
+    delay(100);
+    turn_on_laser_for_duration('C', 100);
+
+    Log.info("Buzzing");
+    turn_on_buzzer_for_duration(250, 330);
+
+    reset_globals();
+
+    clear_state();
+
+    bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
+
+    Log.info("device id: %s", device_id.c_str());
+    Log.info("Firmware version: %d", eeprom.firmware_version);
+    Log.info("Data format version: %d", eeprom.data_format_version);
+    Log.info("Lifetime stress test cycles: %d", eeprom.lifetime_stress_test_cycles);
+    Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
+    Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
+    Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
+    Log.info("Cached test ? %c", test_in_cache() ? 'Y' : 'N');
+
+    if (test_interrupted)
+    {
+        test_cancel_mode = true;
+    }
+
+    Log.info("Setup complete");
 }
 
 /////////////////////////////////////////////////////////////
@@ -2805,7 +2792,6 @@ void setup()
 
 bool heater_debounced()
 {
-    Log.info("heater_debounced: %d, temp=%d", heater_ready, heater.temp_C_10X);
     if (previous_heater_ready != heater_ready)
     {
         heater_debouncing_in_progress = true;
@@ -2822,75 +2808,51 @@ bool heater_debounced()
     return false;
 }
 
-void turn_on_ready_indicator(bool force = false)
-{
-    if (force)
-    {
-        turn_on_available_LED();
-    }
-    else if (heater_debounced())
-    {
-        turn_on_available_LED();
-    }
-    else
-    {
-        turn_on_busy_LED();
-    }
-}
-
 void set_device_indicators()
 {
     previous_heater_ready = heater_ready;
     heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
-    if (test_invalid)
+    if (stress_test_mode)
     {
-        turn_on_ready_indicator();
-        turn_on_buzzer_problem();
+        turn_on_dont_touch_LED();
     }
-    else if (stress_test_mode)
+    else if (!heater_debounced())
     {
-        turn_on_busy_LED();
-    }
-    else if (!device_verified)
-    {
-        if (heater_debounced())
+        if (detector_on)
         {
-            turn_on_problem_LED();
+            turn_on_remove_cartridge_LED();
         }
         else
         {
-            turn_on_busy_LED();
+            turn_on_dont_touch_LED();
         }
     }
-    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || test_upload_mode || magnet_validation_mode)
+    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || magnet_validation_mode)
     {
-        turn_on_busy_LED();
+        turn_on_dont_touch_LED();
+    }
+    else if (cartridge_validated && (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted))
+    {
+        turn_on_dont_touch_LED();
+        if (test_completed || test_cancelled)
+        {
+            turn_on_buzzer_alert();
+        }
     }
     else if (barcode_invalid)
     {
-        turn_on_ready_indicator(true);
+        turn_on_remove_cartridge_LED();
         turn_on_buzzer_alert();
     }
-    else if (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted || stress_test_cartridge_inserted)
+    else if (detector_on)
     {
-        if (cartridge_validated)
-        {
-            turn_on_busy_LED();
-            if (test_completed || test_cancelled)
-            {
-                turn_on_buzzer_alert();
-            }
-        }
-        else
-        {
-            turn_on_buzzer_alert();
-            turn_on_ready_indicator(true);
-        }
+        turn_on_remove_cartridge_LED();
+        turn_off_buzzer_timer();
     }
     else
     {
-        turn_on_ready_indicator(false);
+        turn_on_insert_cartridge_LED();
         turn_off_buzzer_timer();
     }
 }
@@ -2900,27 +2862,6 @@ void set_device_indicators()
 //                           LOOP                          //
 //                                                         //
 /////////////////////////////////////////////////////////////
-
-void verify_device_loop()
-{
-    if (device_verified)
-    {
-        return;
-    }
-    else if (device_verification_in_progress)
-    {
-        if (millis() > callback_timeout)
-        {
-            Log.info("Device verification timed out. Clearing event.");
-            device_verification_in_progress = false;
-            clear_current_event();
-        }
-    }
-    else
-    {
-        publish_verify_device();
-    }
-}
 
 void barcode_scan_loop()
 {
@@ -2950,12 +2891,6 @@ void barcode_scan_loop()
                 start_stress_test(max_cycles, LED_DEFAULT_POWER);
                 Log.info("Stress test started, max_cycles = %d", max_cycles);
                 break;
-            case BARCODE_TYPE_SHIPPING:
-                // wake_motor();
-                shipping_bolt_cartridge_inserted = true;
-                move_stage_to_position(STAGE_SHIPPING_BOLT_LOCATION, MOTOR_SLOW_STEP_DELAY);
-                Log.info("Ready for shipping bolt - please unplug the device");
-                break;
             default:
                 barcode_invalid = true;
                 Log.info("Unknown barcode format");
@@ -2984,15 +2919,7 @@ void stress_test_loop()
 
 void magnet_validation_loop()
 {
-    if (magnet_validation_in_progress)
-    {
-        if (millis() > callback_timeout)
-        {
-            Log.info("Uploading magnet validation data timed out. Clearing event.");
-            clear_current_event();
-        }
-    }
-    else if (validate_magnets())
+    if (validate_magnets())
     {
         publish_upload_magnet_validation();
     }
@@ -3003,74 +2930,13 @@ void magnet_validation_loop()
     }
 }
 
-void cartridge_validation_loop()
-{
-    if (cartridge_validated)
-    {
-        return;
-    }
-    else if (cartridge_validation_in_progress)
-    {
-        if (millis() > callback_timeout)
-        {
-            Log.info("Cartridge validation timed out. Remove cartridge.");
-            cartridge_validation_in_progress = false;
-            cartridge_validation_mode = false;
-            clear_current_event();
-        }
-    }
-    else
-    {
-        publish_validate_cartridge();
-    }
-}
-
-void test_start_loop()
-{
-    if (test_underway)
-    {
-        return;
-    }
-    else if (test_start_in_progress)
-    {
-        if (millis() > callback_timeout)
-        {
-            Log.info("Test start timed out. Clearing event.");
-            test_start_mode = false;
-            test_start_in_progress = false;
-            clear_current_event();
-        }
-    }
-    else
-    {
-        publish_start_test();
-    }
-}
-
-void test_upload_loop()
-{
-    if (test_upload_in_progress)
-    {
-        if (millis() > callback_timeout)
-        {
-            Log.info("Test upload timed out. Clearing event.");
-            test_upload_mode = false;
-            test_upload_in_progress = false;
-            clear_current_event();
-        }
-    }
-    else
-    {
-        publish_upload_test();
-    }
-}
-
 void hardware_loop()
 {
-    if (detector_changed)
+    if (detector_debouncing)
     {
-        if (detector_debouncing)
+        if (millis() > detector_debouncing_time)
         {
+            detector_debouncing_time = 0;
             detector_debouncing = false;
             detector_changed = false;
             detector_on = digitalRead(pinCartridgeDetected) == LOW;
@@ -3083,7 +2949,6 @@ void hardware_loop()
                 if (heater_ready)
                 {
                     turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
-                    turn_on_busy_LED();
                     barcode_scan_mode = true;
                     barcode_invalid = false;
                 }
@@ -3094,17 +2959,16 @@ void hardware_loop()
             }
             else
             {
-                turn_on_buzzer_for_duration(BUZZER_REMOVE_DURATION, BUZZER_REMOVE_FREQUENCY);
                 turn_off_buzzer_timer();
                 clear_state();
                 reset_stage(true);
             }
         }
-        else
-        {
-            delayMicroseconds(50000);
-            detector_debouncing = true;
-        }
+    }
+    else if (detector_changed)
+    {
+        detector_debouncing = true;
+        detector_debouncing_time = millis() + DETECTOR_DEBOUNCE_DELAY;
     }
 
     set_device_indicators();
@@ -3153,33 +3017,40 @@ void loop()
     {
         stress_test_loop();
     }
-    else if (test_upload_mode)
+    else if (Particle.connected())
     {
-        test_upload_loop();
+        particle_connect_timeout = 0;
+        if (test_cancel_mode && !test_cancel_in_progress)
+        {
+            publish_cancel_test();
+        }
+        else if (heater_debounced())
+        {
+            if (test_start_mode && !test_start_in_progress)
+            {
+                publish_start_test();
+            }
+            else if (cartridge_validation_mode && !cartridge_validation_in_progress)
+            {
+                publish_validate_cartridge();
+            }
+            else if (magnet_validation_mode)
+            {
+                magnet_validation_loop();
+            }
+            else if (barcode_scan_mode)
+            {
+                barcode_scan_loop();
+            }
+            else if (test_upload_mode && !test_upload_in_progress)
+            {
+                publish_upload_test();
+            }
+        }
     }
-    else if (test_start_mode)
+    else if (millis() > particle_connect_timeout)
     {
-        test_start_loop();
+        particle_connect_timeout = millis() + PARTICLE_CLOUD_DELAY;
+        Particle.connect();
     }
-    else if (heater_debounced())
-    {
-        if (cartridge_validation_mode)
-        {
-            cartridge_validation_loop();
-        }
-        else if (magnet_validation_mode)
-        {
-            magnet_validation_loop();
-        }
-        else if (barcode_scan_mode)
-        {
-            barcode_scan_loop();
-        }
-        else if (!device_verified)
-        {
-            verify_device_loop();
-        }
-    }
-
-    delayMicroseconds(1000);
 }
