@@ -1014,24 +1014,17 @@ void turn_on_laser(char channel)
     Laser *laser = get_laser(channel);
 
     laser->power = 255;
-    // analogWrite(laser->power_pin, laser->power, LASER_PWM_FREQUENCY);
     digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
-    // if (serial_messaging_on)
-    // {
-    // int value = analogRead(laser->value_pin);
-    // }
 }
 
 void turn_off_laser(char channel)
 {
     Laser *laser = get_laser(channel);
 
-    // analogWrite(laser->power_pin, 0, LASER_PWM_FREQUENCY);
     digitalWrite(laser->power_pin, LOW);
     laser->power_on = false;
     laser->power = 0;
-    // if (serial_messaging_on)
 }
 
 void turn_off_all_lasers()
@@ -1458,12 +1451,12 @@ void response_validate_cartridge(CloudEvent validate_event)
 {
     Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int) validate_event.contentType());
     String final_result;
-    String str = validate_event.dataString();
+    String name = validate_event.name();
 
-    int index = limit(str.charAt(str.length() - 1) - '0', PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
-    Log.info("response data: %s, index: %d", str.c_str(), index);
+    int index = limit(name.charAt(name.length() - 1) - '0', PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
+    Log.info("response data size: %d, index: %d", validate_event.data().size(), index);
 
-    payload_buffer[index] = str;
+    payload_buffer[index] = validate_event.dataString();
     if (!all_payloads_received())
         return;
 
@@ -2921,7 +2914,8 @@ void magnet_validation_loop()
 {
     if (validate_magnets())
     {
-        publish_upload_magnet_validation();
+        if (Particle.connected())
+            publish_upload_magnet_validation();
     }
     else
     {
