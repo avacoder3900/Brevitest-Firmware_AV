@@ -1122,6 +1122,8 @@ void take_one_reading(uint8_t number, int chan_num)
 
 void spectrophotometer_reading(bool baseline, int scans, bool log = false)
 {
+    BrevitestSpectrophotometerReading *r;
+
     if (baseline)
     {
         test.baseline_scans = scans;
@@ -1135,6 +1137,10 @@ void spectrophotometer_reading(bool baseline, int scans, bool log = false)
     {
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
         take_one_reading(i, 0);
+        r = &(test.reading[i]);
+        if (log) {
+            Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", r->number, r->channel, r->position, r->temperature, r->msec, r->laser_output, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
+        }
     }
 }
 
@@ -2564,12 +2570,17 @@ void setup()
     init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
 
     init_digital_pin(pinLaserA, OUTPUT, LOW);
+    init_analog_pin(pinPhotoA, INPUT);
     laserA.power_pin = pinLaserA;
     laserA.value_pin = pinPhotoA;
+
     init_digital_pin(pinLaserB, OUTPUT, LOW);
+    init_analog_pin(pinPhotoB, INPUT);
     laserB.power_pin = pinLaserB;
     laserB.value_pin = pinPhotoB;
+
     init_digital_pin(pinLaserC, OUTPUT, LOW);
+    init_analog_pin(pinPhotoC, INPUT);
     laserC.power_pin = pinLaserC;
     laserC.value_pin = pinPhotoC;
 
@@ -2667,20 +2678,18 @@ void setup()
 
 bool heater_debounced()
 {
-    if (previous_heater_ready != heater_ready)
+    if (heater_debouncing_in_progress)
+    {
+        heater_debouncing_in_progress = millis() < heater_debounce_time;
+        return false;
+    }
+    else if (previous_heater_ready != heater_ready)
     {
         heater_debouncing_in_progress = true;
         heater_debounce_time = millis() + HEATER_READY_DEBOUNCE_DELAY;
+        return false;
     }
-    else if (heater_debouncing_in_progress)
-    {
-        heater_debouncing_in_progress = millis() < heater_debounce_time;
-    }
-    else if (heater_ready)
-    {
-        return true;
-    }
-    return false;
+    return heater_ready;
 }
 
 void set_device_indicators()
