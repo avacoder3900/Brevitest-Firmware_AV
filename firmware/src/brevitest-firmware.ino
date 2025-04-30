@@ -2680,8 +2680,16 @@ bool heater_debounced()
 {
     if (heater_debouncing_in_progress)
     {
-        heater_debouncing_in_progress = millis() < heater_debounce_time;
-        return false;
+        if (millis() > heater_debounce_time)
+        {
+            heater_debouncing_in_progress = false;
+            heater_debounce_time = 0;
+            return heater_ready
+        }
+        else
+        {
+            return false;
+        }
     }
     else if (previous_heater_ready != heater_ready)
     {
