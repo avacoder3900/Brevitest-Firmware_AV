@@ -543,6 +543,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+#define BARCODE_DELAY_US 100000 // delay between reads
 int scan_barcode()
 {
     int buf;               // a little buffer for reading barcode (we will coerce into character)
@@ -558,7 +559,7 @@ int scan_barcode()
 
     while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout)
     { // if read is not complete or timed out, wait and check again
-        delayMicroseconds(10000);
+        delayMicroseconds(BARCODE_DELAY_US);
     };
     success = digitalRead(pinBarcodeReady) == HIGH; // successful if read is completed before timeout
     digitalWrite(pinBarcodeTrigger, HIGH);          // stop read by setting trigger pin back to high
@@ -567,9 +568,9 @@ int scan_barcode()
     {
         while (!Serial1.available() && millis() < timeout)
         { // if data buffer is empty, wait and check again
-            delayMicroseconds(10000);
+            delayMicroseconds(BARCODE_DELAY_US);
         };
-        delayMicroseconds(10000); // allow barcode buffer to fill before reading
+        delayMicroseconds(BARCODE_DELAY_US); // allow barcode buffer to fill before reading
         do
         {
             buf = Serial1.read(); // read a byte of data (returns -1 if no data is available)
@@ -2720,7 +2721,7 @@ void set_device_indicators()
     {
         turn_on_dont_touch_LED();
     }
-    else if (!heater_debounced())
+    else if (!heater_debounced() || !Particle.connected())
     {
         if (detector_on)
         {
