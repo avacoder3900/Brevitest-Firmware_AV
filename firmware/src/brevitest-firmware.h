@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 25         
+#define FIRMWARE_VERSION 26         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
@@ -60,7 +60,7 @@
 #define ASYNC_COMMAND_DEFAULT_INTERVAL 5000
 
 // detector debouncing
-#define DETECTOR_DEBOUNCE_DELAY 10
+#define DETECTOR_DEBOUNCE_DELAY_US 10000
 
 // LEDs
 #define LED_DEFAULT_POWER 115

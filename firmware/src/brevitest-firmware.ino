@@ -558,7 +558,7 @@ int scan_barcode()
 
     while (digitalRead(pinBarcodeReady) == LOW && millis() < timeout)
     { // if read is not complete or timed out, wait and check again
-        delay(100);
+        delayMicroseconds(10000);
     };
     success = digitalRead(pinBarcodeReady) == HIGH; // successful if read is completed before timeout
     digitalWrite(pinBarcodeTrigger, HIGH);          // stop read by setting trigger pin back to high
@@ -567,9 +567,9 @@ int scan_barcode()
     {
         while (!Serial1.available() && millis() < timeout)
         { // if data buffer is empty, wait and check again
-            delay(100);
+            delayMicroseconds(10000);
         };
-        delay(100); // allow barcode buffer to fill before reading
+        delayMicroseconds(10000); // allow barcode buffer to fill before reading
         do
         {
             buf = Serial1.read(); // read a byte of data (returns -1 if no data is available)
@@ -619,18 +619,8 @@ int scan_barcode()
 
 void turn_on_buzzer_for_duration(int duration, int frequency)
 {
-    bool reheat = false;
-    if (heater.heater_on)
-    {
-        turn_off_heater();
-        reheat = true;
-    }
     tone(pinBuzzer, frequency, duration);
-    delay(duration);
-    if (reheat)
-    {
-        turn_on_heater(heater.power);
-    }
+    delayMicroseconds(duration * 1000);
 }
 
 void check_buzzer()
@@ -729,21 +719,39 @@ void turn_on_insert_cartridge_LED()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void turn_on_heater(int power)
-{
-    power = limit(power, HEATER_MAX_POWER, 0);
-    digitalWrite(heater.heater_pin, HIGH);
-    delay(power);
-    digitalWrite(heater.heater_pin, LOW);
-    heater.power = power;
-    heater.heater_on = true;
-}
-
 void turn_off_heater()
 {
     digitalWrite(heater.heater_pin, LOW);
     heater.heater_on = false;
     heater.power = 0;
+}
+
+void turn_on_heater(int power)
+{
+    power = limit(power, HEATER_MAX_POWER, 0);
+    if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
+    {
+        Log.info("Heater is too hot, turning off");
+        turn_off_heater();
+        return;
+    }
+    else if (power == 0)
+    {
+        turn_off_heater();
+        return;
+    }
+    else if (power >= HEATER_MAX_POWER || (heater.temp_C_10X < (heater.target_C_10X - HEATER_READY_TEMP_DELTA)))
+    { // initial heating
+        digitalWrite(heater.heater_pin, HIGH);
+    }
+    else
+    { // steady state heating
+        digitalWrite(heater.heater_pin, HIGH);
+        delayMicroseconds(power * 1000);
+        digitalWrite(heater.heater_pin, LOW);
+    }
+    heater.power = power;
+    heater.heater_on = true;
 }
 
 int set_heater_power(int power)
@@ -952,7 +960,7 @@ void init_spectrophotometer_switch()
     {
         Log.info("Spectrophotometer switch initialized");
     }
-    delay(10);
+    delayMicroseconds(10000);
 }
 
 void set_spectrophotometer_power(byte code)
@@ -985,7 +993,7 @@ bool power_on_spectrophotometer(char channel)
         set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
         return false;
     }
-    delay(5); // Wait for sensor to power on.
+    delayMicroseconds(5000); // Wait for sensor to power on.
     return true;
 }
 
@@ -1005,9 +1013,9 @@ bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
             return false;
         }
         Serial.println("IIC init failed, please check if the wire connection is correct");
-        delay(1000);
+        delayMicroseconds(100000);
     }
-    delay(2);
+    delayMicroseconds(2000);
     return true;
 }
 
@@ -1138,7 +1146,8 @@ void spectrophotometer_reading(bool baseline, int scans, bool log = false)
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
         take_one_reading(i, 0);
         r = &(test.reading[i]);
-        if (log) {
+        if (log)
+        {
             Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", r->number, r->channel, r->position, r->temperature, r->msec, r->laser_output, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
         }
     }
@@ -1157,35 +1166,47 @@ void stress_test_read_spectrophotometer()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-#define HEATER_READINGS 10
+#define HEATER_READINGS 20
+#define HEATER_BAND_PASS_TAIL 3
+int heater_reads[HEATER_READINGS];
 int get_heater_temperature()
 {
     int raw = 0;
+
     for (int i = 0; i < HEATER_READINGS; i++)
     {
-        raw += analogRead(heater.thermistor_pin);
+        heater_reads[i] = analogRead(heater.thermistor_pin);
+        raw += heater_reads[i];
     }
-    raw /= HEATER_READINGS;
 
-    if (raw == 0)
+    std::sort(heater_reads, heater_reads + HEATER_READINGS);
+    raw = 0;
+    for (int i = HEATER_BAND_PASS_TAIL; i < HEATER_READINGS - HEATER_BAND_PASS_TAIL; i++)
     {
-        Log.info("Thermistor read error");
-        stop_temperature_control();
-        heater.temp_C_10X = 0;
-        current_temperature = 0;
-        heater.temp_F_10X = 0;
-    }
-    else
-    {
-        heater.temp_C_10X = raw_table_lookup(raw);
-        current_temperature = heater.temp_C_10X;
-        heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
-        if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
+        if (heater_reads[i] == 0)
         {
-            Log.info("Heater temperature too high: %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+            Log.info("Thermistor read error");
             stop_temperature_control();
-            raw = 0;
+            heater.temp_C_10X = 0;
+            current_temperature = 0;
+            heater.temp_F_10X = 0;
+            return 0;
         }
+        else
+        {
+            raw += heater_reads[i];
+        }
+    }
+
+    raw /= HEATER_READINGS - 2 * HEATER_BAND_PASS_TAIL;
+    heater.temp_C_10X = raw_table_lookup(raw);
+    current_temperature = heater.temp_C_10X;
+    heater.temp_F_10X = ((heater.temp_C_10X * 9) / 5) + 320;
+    if (heater.temp_C_10X > HEATER_MAX_TEMPERATURE)
+    {
+        Log.info("Heater temperature too high: %d.%d˚C", heater.temp_C_10X / 10, heater.temp_C_10X % 10);
+        stop_temperature_control();
+        raw = 0;
     }
     return raw;
 }
@@ -1299,21 +1320,24 @@ void publish_validate_cartridge()
     }
 }
 
-void clear_payload_buffer() {
+void clear_payload_buffer()
+{
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
         payload_buffer[i] = "";
     }
 }
 
-void output_payload_buffer() {
+void output_payload_buffer()
+{
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
     {
         Log.info("Payload buffer[%d]: %s", i, payload_buffer[i].c_str());
     }
 }
 
-bool all_payloads_received() {
+bool all_payloads_received()
+{
     bool all = true;
     int last = -1;
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
@@ -1337,7 +1361,7 @@ bool all_payloads_received() {
 
 void response_validate_cartridge(CloudEvent validate_event)
 {
-    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int) validate_event.contentType());
+    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int)validate_event.contentType());
     String final_result;
     String name = validate_event.name();
 
@@ -1353,7 +1377,7 @@ void response_validate_cartridge(CloudEvent validate_event)
         if (payload_buffer[ii].length() > 0)
             final_result += payload_buffer[ii];
     }
-    Log.info("response_validate_cartridge: %s", final_result.c_str()); 
+    Log.info("response_validate_cartridge: %s", final_result.c_str());
 
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
@@ -1598,7 +1622,7 @@ void publish_upload_magnet_validation()
         event.contentType(ContentType::TEXT);
         event.data(String(device_id));
         if (event.canPublish(sizeof(event)))
-        { 
+        {
             Particle.publish(event);
         }
     }
@@ -1662,7 +1686,7 @@ int BCODE_loop()
     set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeDetected) == HIGH)
     {
-        delayMicroseconds(100000);
+        delayMicroseconds(DETECTOR_DEBOUNCE_DELAY_US);
         test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
     }
 
@@ -2431,7 +2455,6 @@ void run_test()
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
-    delay(2000);
 
     disconnect_from_cloud();
     stop_temperature_control();
@@ -2537,7 +2560,7 @@ bool startI2C()
 
     Wire.setSpeed(CLOCK_SPEED_400KHZ);
     Wire.begin();
-    delay(10);
+    delayMicroseconds(10000);
 
     return Wire.isEnabled();
 }
@@ -2559,7 +2582,7 @@ void setup()
 
     Serial.begin(115200); // standard serial port
     waitFor(Serial.isConnected, 15000);
-    delay(100);
+    delayMicroseconds(100000);
     Log.info("====== Serial Connected, Begin Setup ======");
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
@@ -2570,23 +2593,18 @@ void setup()
     init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
 
     init_digital_pin(pinLaserA, OUTPUT, LOW);
-    init_analog_pin(pinPhotoA, INPUT);
     laserA.power_pin = pinLaserA;
     laserA.value_pin = pinPhotoA;
 
     init_digital_pin(pinLaserB, OUTPUT, LOW);
-    init_analog_pin(pinPhotoB, INPUT);
     laserB.power_pin = pinLaserB;
     laserB.value_pin = pinPhotoB;
 
     init_digital_pin(pinLaserC, OUTPUT, LOW);
-    init_analog_pin(pinPhotoC, INPUT);
     laserC.power_pin = pinLaserC;
     laserC.value_pin = pinPhotoC;
 
-    init_analog_pin(pinHeaterThermistor, INPUT);
     init_digital_pin(pinHeater, OUTPUT, LOW);
-    // init_analog_pin(pinHeater, OUTPUT, 0);
 
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
@@ -2600,10 +2618,8 @@ void setup()
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
 
-    start_temperature_control();
-
     Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
-    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge"), response_validate_cartridge);
+    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
     Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
@@ -2637,18 +2653,14 @@ void setup()
     reset_stage(true);
 
     Log.info("Testing LEDs");
-    // turn_on_all_LEDs(LED_DEFAULT_POWER);
-    turn_on_laser_for_duration('A', 100);
-    delay(100);
-    turn_on_laser_for_duration('B', 100);
-    delay(100);
-    turn_on_laser_for_duration('C', 100);
+    turn_on_laser_for_duration('A', 250);
+    turn_on_laser_for_duration('B', 250);
+    turn_on_laser_for_duration('C', 250);
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
 
     reset_globals();
-
     clear_state();
 
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
@@ -2667,6 +2679,8 @@ void setup()
         test_cancel_mode = true;
     }
 
+    start_temperature_control();
+
     Log.info("Setup complete");
 }
 
@@ -2684,7 +2698,7 @@ bool heater_debounced()
         {
             heater_debouncing_in_progress = false;
             heater_debounce_time = 0;
-            return heater_ready
+            return heater_ready;
         }
         else
         {
@@ -2702,9 +2716,6 @@ bool heater_debounced()
 
 void set_device_indicators()
 {
-    previous_heater_ready = heater_ready;
-    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
-
     if (stress_test_mode)
     {
         turn_on_dont_touch_LED();
@@ -2861,8 +2872,11 @@ void hardware_loop()
     else if (detector_changed)
     {
         detector_debouncing = true;
-        detector_debouncing_time = millis() + DETECTOR_DEBOUNCE_DELAY;
+        detector_debouncing_time = millis() + (DETECTOR_DEBOUNCE_DELAY_US / 1000);
     }
+
+    previous_heater_ready = heater_ready;
+    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
     set_device_indicators();
 
