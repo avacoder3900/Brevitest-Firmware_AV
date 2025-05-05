@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 29         
+#define FIRMWARE_VERSION 30         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
