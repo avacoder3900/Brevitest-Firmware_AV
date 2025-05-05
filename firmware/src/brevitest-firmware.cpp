@@ -94,7 +94,6 @@ void publish_upload_magnet_validation();
 void response_upload_magnet_validation(CloudEvent magnet_event);
 int get_BCODE_token(int index, int *token);
 int BCODE_loop();
-void BCODE_delay(int target_duration);
 int process_one_BCODE_command(int cmd, int index);
 int process_BCODE(int start_index);
 int start_stress_test(int limit, int led_power);
@@ -108,6 +107,7 @@ int particle_command(String arg);
 int test_runner(String cartridgeId);
 void reset_globals();
 void disconnect_from_cloud();
+void connect_to_cloud();
 void output_test_readings(BrevitestTestRecord *t);
 void run_test();
 void clear_state();
@@ -739,7 +739,7 @@ int scan_barcode()
 void turn_on_buzzer_for_duration(int duration, int frequency)
 {
     tone(pinBuzzer, frequency, duration);
-    delayMicroseconds(duration * 1000);
+    delay(duration);
 }
 
 void check_buzzer()
@@ -756,37 +756,37 @@ void check_buzzer()
 
 void turn_on_buzzer_alert()
 {
-    if (!buzzer_alert_running)
-    {
-        buzzer_problem_running = false;
-        start_problem_buzzer = false;
-        buzzer_alert_running = true;
-        start_alert_buzzer = true;
-        buzzer_timer.changePeriod(BUZZER_ALERT_PERIOD);
-        buzzer_timer.reset();
-    }
+    buzzer_problem_running = false;
+    start_problem_buzzer = false;
+    buzzer_alert_running = true;
+    start_alert_buzzer = true;
+    buzzer_timer.changePeriod(BUZZER_ALERT_PERIOD);
+    buzzer_timer.reset();
 }
 
 void turn_on_buzzer_problem()
 {
-    if (!buzzer_problem_running)
-    {
-        buzzer_problem_running = true;
-        start_problem_buzzer = true;
-        buzzer_alert_running = false;
-        start_alert_buzzer = false;
-        buzzer_timer.changePeriod(BUZZER_PROBLEM_PERIOD);
-        buzzer_timer.reset();
-    }
+    buzzer_problem_running = true;
+    start_problem_buzzer = true;
+    buzzer_alert_running = false;
+    start_alert_buzzer = false;
+    buzzer_timer.changePeriod(BUZZER_PROBLEM_PERIOD);
+    buzzer_timer.reset();
 }
 
 void turn_off_buzzer_timer()
 {
-    buzzer_alert_running = false;
-    start_alert_buzzer = false;
-    buzzer_problem_running = false;
-    start_problem_buzzer = false;
     buzzer_timer.stop();
+    if (buzzer_alert_running)
+    {
+        buzzer_alert_running = false;
+        start_alert_buzzer = false;
+    }
+    if (buzzer_problem_running)
+    {
+        buzzer_problem_running = false;
+        start_problem_buzzer = false;
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -840,7 +840,7 @@ void turn_on_insert_cartridge_LED()
 
 void turn_off_heater()
 {
-    digitalWrite(heater.heater_pin, LOW);
+    analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
     heater.heater_on = false;
     heater.power = 0;
 }
@@ -859,15 +859,13 @@ void turn_on_heater(int power)
         turn_off_heater();
         return;
     }
-    else if (power >= HEATER_MAX_POWER || (heater.temp_C_10X < (heater.target_C_10X - HEATER_READY_TEMP_DELTA)))
+    else if (heater.temp_C_10X < (heater.target_C_10X - HEATER_READY_TEMP_DELTA))
     { // initial heating
-        digitalWrite(heater.heater_pin, HIGH);
+        analogWrite(heater.heater_pin, HEATER_MAX_POWER, HEATER_PWM_FREQUENCY);
     }
     else
     { // steady state heating
-        digitalWrite(heater.heater_pin, HIGH);
-        delayMicroseconds(power * 1000);
-        digitalWrite(heater.heater_pin, LOW);
+        analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
     }
     heater.power = power;
     heater.heater_on = true;
@@ -1465,15 +1463,16 @@ bool all_payloads_received()
         if (len > 0 && len < 512)
         {
             last = i;
+            break;
         }
     }
     if (last == -1)
     {
         return false;
     }
-    for (int i = 0; i < last; i++)
+    for (int i = 0; i <= last; i++)
     {
-        all = all && payload_buffer[i].length() != 0;
+        all = all && (payload_buffer[i].length() > 0);
     }
     return all;
 }
@@ -1484,7 +1483,7 @@ void response_validate_cartridge(CloudEvent validate_event)
     String final_result;
     String name = validate_event.name();
 
-    int index = limit(name.charAt(name.length() - 1) - '0', PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
+    int index = limit(name.substring(name.length() - 1).toInt(), PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
     Log.info("response data size: %d, index: %d", validate_event.data().size(), index);
 
     payload_buffer[index] = validate_event.dataString();
@@ -1500,6 +1499,7 @@ void response_validate_cartridge(CloudEvent validate_event)
 
     cartridge_validation_in_progress = false;
     cartridge_validation_mode = false;
+    detector_on = digitalRead(pinCartridgeDetected) == LOW;
     if (!detector_on)
     {
         cartridge_validated = false;
@@ -1516,12 +1516,14 @@ void response_validate_cartridge(CloudEvent validate_event)
         {
             Log.info("Cartridge %s %s", barcode_uuid, "invalid");
             cartridge_validated = false;
+            turn_on_buzzer_problem();
         }
 
         String errorMessage = json.get("errorMessage").toString();
         if (errorMessage.length() > 0)
         {
             Log.info("Cartridge validation test error: %s", errorMessage.c_str());
+            turn_on_buzzer_alert();
         }
 
         strcpy(test.cartridge_id, json.get("uuid").toString().c_str());
@@ -1549,6 +1551,9 @@ void response_validate_cartridge(CloudEvent validate_event)
         cartridge_validated = cartridge_validated && test_start_mode;
         Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
     }
+    if (!cartridge_validated || !test_start_mode) {
+        turn_on_buzzer_alert();
+}
 }
 
 /////////////////////////////////////////////////////
@@ -1588,6 +1593,7 @@ void response_start_test(CloudEvent start_event)
     Variant json = Variant::fromJSON(start_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
     {
+        detector_on = digitalRead(pinCartridgeDetected) == LOW;
         if (!detector_on)
         {
             Log.info("Start test cancelled");
@@ -1805,32 +1811,11 @@ int BCODE_loop()
     set_heater_power(pid_controller());
     if (digitalRead(pinCartridgeDetected) == HIGH)
     {
-        delayMicroseconds(DETECTOR_DEBOUNCE_DELAY_US);
+        delay(DETECTOR_DEBOUNCE_DELAY);
         test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
     }
 
     return (int)(millis() - total_duration);
-}
-
-void BCODE_delay(int target_duration)
-{
-    int cycles = target_duration / BCODE_MAX_DELAY;
-    int residual = target_duration % BCODE_MAX_DELAY;
-    int loop_time = 0;
-
-    for (int i = 0; i < cycles; i++)
-    {
-        delayMicroseconds(1000 * (BCODE_MAX_DELAY - BCODE_loop()));
-        if (test_cancelled)
-            return;
-    }
-    loop_time = BCODE_loop();
-    if (test_cancelled)
-        return;
-    if (residual > loop_time)
-    {
-        delayMicroseconds(1000 * (residual - loop_time));
-    }
 }
 
 int process_BCODE(int);
@@ -1845,15 +1830,18 @@ int process_one_BCODE_command(int cmd, int index)
     switch (cmd)
     {
     case 0: // Start test()
-        BCODE_delay(1000);
+        Log.info("Start test");
+        delay(1000);
         break;
     case 1: // Delay(milliseconds)
         index = get_BCODE_token(index, &param1);
-        BCODE_delay(param1);
+        Log.info("Delay %d ms", param1);
+        delay(param1);
         break;
     case 2:                                      // Move Microns(microns, microseconds)
         index = get_BCODE_token(index, &param1); // microns to move
         index = get_BCODE_token(index, &param2); // step_delay_us
+        Log.info("Move %d microns, %d µs", param1, param2);
         move_stage(param1, param2);
         BCODE_loop();
         break;
@@ -1861,6 +1849,7 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // microns to move
         index = get_BCODE_token(index, &param2); // step_delay_us
         index = get_BCODE_token(index, &param3); // number of cycles
+        Log.info("Oscillate %d microns, %d µs, %d cycles", param1, param2, param3);
         oscillate_stage(param1, param2, param3, true);
         BCODE_loop();
         break;
@@ -1868,18 +1857,21 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // gain
         index = get_BCODE_token(index, &param2); // step
         index = get_BCODE_token(index, &param3); // integration time
+        Log.info("Set sensor params: %X %X %X", param1, param2, param3);
         test.again = param1;
         test.astep = param2;
         test.atime = param3;
         break;
     case 11:                                     // Baseline scans
         index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
+        Log.info("Baseline scans: %d", param1);
         position = stage_position;
         spectrophotometer_reading(true, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
     case 14:                                     // Test scans
         index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
+        Log.info("Test scans: %d", param1);
         position = stage_position;
         spectrophotometer_reading(false, param1);
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
@@ -1889,6 +1881,7 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param2); // gain
         index = get_BCODE_token(index, &param3); // step
         index = get_BCODE_token(index, &param4); // integration
+        Log.info("Take sensor readings: %d %d %d %d", param1, param2, param3, param4);
         test.again = param2;
         test.astep = param3;
         test.atime = param4;
@@ -1897,6 +1890,7 @@ int process_one_BCODE_command(int cmd, int index)
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
+        Log.info("Repeat start: %d", param1);
         start_index = index + 1;
         for (int i = 0; i < param1; i += 1)
         {
@@ -1906,11 +1900,14 @@ int process_one_BCODE_command(int cmd, int index)
         }
         break;
     case 21: // Repeat end
+        Log.info("Repeat end");
         return -index;
         break;
     case 99: // Finish test
+        Log.info("Finish test");
         break;
     default:
+        Log.info("Unknown command: %d  %d", cmd, index);
         BCODE_loop();
     }
 
@@ -2549,6 +2546,25 @@ void disconnect_from_cloud()
     Log.info("Disconnected from cloud");
 }
 
+void connect_to_cloud()
+{
+    int tries = 5;
+    Log.info("Connecting to cloud...");
+    while (!Particle.connected() && tries-- > 0)
+    {
+        Particle.connect();
+        delay(PARTICLE_CLOUD_DELAY);
+    }
+    if (Particle.connected())
+    {
+        Log.info("Connected to cloud");
+    }
+    else
+    {
+        Log.info("Failed to connect to cloud");
+    }
+}
+
 void output_test_readings(BrevitestTestRecord *t)
 {
     if (t->number_of_readings > 0)
@@ -2571,14 +2587,16 @@ void output_test_readings(BrevitestTestRecord *t)
 
 void run_test()
 {
+    disconnect_from_cloud();
+
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
 
-    disconnect_from_cloud();
     stop_temperature_control();
 
     memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH);
+    eeprom.running_test_uuid[BARCODE_UUID_LENGTH] = '\0';
     EEPROM.put(0, eeprom);
 
     test.number_of_readings = 0;
@@ -2586,26 +2604,35 @@ void run_test()
     test.test_scans = 0;
     memset(test.reading, 0, sizeof(test.reading));
 
-    SINGLE_THREADED_BLOCK()
+    Log.info("Running test %s", test.cartridge_id);
+    test.start_time = millis();
+    process_BCODE(0);
+    test.duration = (millis() - test.start_time) / 1000;
+    Log.info("Test %s finished, duration: %d sec", test.cartridge_id, test.duration / 1000);
+
+    if (test_cancelled)
     {
-        test.start_time = millis();
-        process_BCODE(0);
-        test.duration = (millis() - test.start_time) / 1000;
+        Log.info("Test cancelled");
+        test_cancel_mode = true;
+        test_cancel_in_progress = false;
     }
-
-    write_test_to_file();
-    eeprom.running_test_uuid[0] = '\0';
-    EEPROM.put(0, eeprom);
-    output_test_readings(&test);
-
-    start_temperature_control();
-    Particle.connect();
+    else
+    {
+        Log.info("Test completed successfully");
+        write_test_to_file();
+        output_test_readings(&test);
+        eeprom.running_test_uuid[0] = '\0';
+        EEPROM.put(0, eeprom);
+        test_upload_mode = true;
+        test_upload_in_progress = false;
+    }
 
     reset_stage(true);
     reset_globals();
 
-    test_upload_mode = true;
-    test_upload_in_progress = false;
+    connect_to_cloud();
+
+    turn_on_buzzer_alert();
 }
 
 /////////////////////////////////////////////////////////////
@@ -2778,6 +2805,7 @@ void setup()
 
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
+    buzzer_timer.start();
 
     reset_globals();
     clear_state();
@@ -2867,15 +2895,16 @@ void set_device_indicators()
         turn_on_remove_cartridge_LED();
         turn_on_buzzer_alert();
     }
-    else if (detector_on)
-    {
-        turn_on_remove_cartridge_LED();
-        turn_off_buzzer_timer();
-    }
     else
     {
-        turn_on_insert_cartridge_LED();
-        turn_off_buzzer_timer();
+        if (detector_on)
+        {
+            turn_on_remove_cartridge_LED();
+        }
+        else
+        {
+            turn_on_insert_cartridge_LED();
+        }
     }
 }
 
@@ -2991,7 +3020,7 @@ void hardware_loop()
     else if (detector_changed)
     {
         detector_debouncing = true;
-        detector_debouncing_time = millis() + (DETECTOR_DEBOUNCE_DELAY_US / 1000);
+        detector_debouncing_time = millis() + (DETECTOR_DEBOUNCE_DELAY);
     }
 
     previous_heater_ready = heater_ready;
