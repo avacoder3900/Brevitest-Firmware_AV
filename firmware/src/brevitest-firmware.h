@@ -131,6 +131,9 @@
 #define HEATER_DEFAULT_TEMP_TARGET 370
 #define HEATER_READY_TEMP_DELTA 10
 #define HEATER_READY_DEBOUNCE_DELAY 5000
+#define HEATER_MAX_RAW_READING 640
+#define HEATER_MIN_RAW_READING 550
+#define HEATER_FAILSAFE_TIMING 2000
 
 // laser
 #define LASER_MAX_POWER 255
@@ -179,7 +182,6 @@ int microns_error = 0;
 int serial_buffer_index = 0;
 char serial_buffer[SERIAL_COMMAND_BUFFER_SIZE];
 bool serial_messaging_on = false;
-bool spectrophotometer_read_in_progress = false;
 bool motor_awake = false;
 
 // device LED
@@ -304,6 +306,8 @@ unsigned long heater_debounce_time;
 bool heater_ready = false;
 bool previous_heater_ready = false;
 int current_temperature = 0;
+void heater_failsafe(void);
+Timer heater_failsafe_timer(HEATER_FAILSAFE_TIMING, heater_failsafe);
 
 // lasers
 struct Laser

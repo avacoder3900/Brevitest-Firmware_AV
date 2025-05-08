@@ -78,6 +78,7 @@ int get_heater_temperature();
 int pid_controller();
 void start_temperature_control();
 void stop_temperature_control();
+void heater_failsafe();
 void response_error(CloudEvent event);
 void publish_validate_cartridge();
 void clear_payload_buffer();
@@ -876,8 +877,7 @@ int set_heater_power(int power)
     unsigned long start = millis();
     if (power != 0)
     {
-        if (!spectrophotometer_read_in_progress)
-            turn_on_heater(power);
+        turn_on_heater(power);
     }
     else
     {
@@ -1082,14 +1082,21 @@ void init_spectrophotometer_switch()
 
 void set_spectrophotometer_power(byte code)
 {
-    Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
-    Wire.write(SPECTRO_SWITCH_OUTPUT_COMMAND);
-    Wire.write(code);
-    byte result = Wire.endTransmission();
-    if (result != 0)
+    int count = 5;
+    do
     {
-        Serial.printlnf("Error setting spectrophotometer power: %X", result);
-    }
+        Wire.beginTransmission(SPECTRO_SWITCH_ADDR);
+        Wire.write(SPECTRO_SWITCH_OUTPUT_COMMAND);
+        Wire.write(code);
+        byte result = Wire.endTransmission();
+        if (result == 0)
+        {
+            break;
+        }
+        Log.info("Error setting spectrophotometer power: %X", result);
+        Wire.reset();
+        delayMicroseconds(10000);
+    } while (count-- > 0);
 }
 
 bool power_on_spectrophotometer(char channel)
@@ -1118,6 +1125,7 @@ void power_off_all_spectrophotometers()
 {
     // Turn off all sensors.
     set_spectrophotometer_power(SPECTRO_SWITCH_TURN_OFF_ALL);
+    delayMicroseconds(5000); // Wait for sensors to power off.
 }
 
 bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341)
@@ -1160,7 +1168,7 @@ void spectroMeasure(char channel, DFRobot_AS7341 *as7341, DFRobot_AS7341::eChCho
     {
         delayMicroseconds(100);
     }
-    if (millis() - startTime < SPECTRO_TIMEOUT)
+    if (as7341->measureComplete())
     {
         if (mode == as7341->eF1F4ClearNIR)
         {
@@ -1284,7 +1292,7 @@ void stress_test_read_spectrophotometer()
 /////////////////////////////////////////////////////////////
 
 #define HEATER_READINGS 20
-#define HEATER_BAND_PASS_TAIL 3
+#define HEATER_BAND_PASS_TAIL 4
 int heater_reads[HEATER_READINGS];
 int get_heater_temperature()
 {
@@ -1387,6 +1395,19 @@ void stop_temperature_control()
     temperature_control_on = false;
     set_heater_power(0);
     Log.info("Temperature control system stopped");
+}
+
+void heater_failsafe()
+{
+    int raw = analogRead(heater.thermistor_pin);
+    if (raw > HEATER_MAX_RAW_READING) {
+        Log.info("Raw = %d, Heater failsafe triggered, turning off heater and temperature control", raw);
+        pinResetFast(heater.heater_pin);
+        temperature_control_on = false;
+    } else if (raw < HEATER_MIN_RAW_READING) {
+        Log.info("Raw = %d, Heater failsafe triggered, restarting temperature control", raw);
+        temperature_control_on = true;
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -1551,9 +1572,10 @@ void response_validate_cartridge(CloudEvent validate_event)
         cartridge_validated = cartridge_validated && test_start_mode;
         Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
     }
-    if (!cartridge_validated || !test_start_mode) {
+    if (!cartridge_validated || !test_start_mode)
+    {
         turn_on_buzzer_alert();
-}
+    }
 }
 
 /////////////////////////////////////////////////////
@@ -2519,7 +2541,6 @@ void reset_globals()
 {
     test_underway = false;
     cartridge_validated = false;
-    spectrophotometer_read_in_progress = false;
 
     barcode_uuid[0] = '\0';
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
@@ -2771,7 +2792,7 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
 
     Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), response_error);
@@ -2806,6 +2827,8 @@ void setup()
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
     buzzer_timer.start();
+
+    heater_failsafe_timer.start();
 
     reset_globals();
     clear_state();
@@ -3028,7 +3051,7 @@ void hardware_loop()
 
     set_device_indicators();
 
-    if (temperature_control_on && !spectrophotometer_read_in_progress)
+    if (temperature_control_on)
     {
         set_heater_power(pid_controller());
     }
