@@ -1239,6 +1239,9 @@ void take_one_reading(uint8_t number, int chan_num)
 {
     char channel;
 
+    analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
+    delayMicroseconds(1000);
+
     if (chan_num == 0)
     {
         for (int i = 0; i < 3; i++)
@@ -1251,6 +1254,8 @@ void take_one_reading(uint8_t number, int chan_num)
         channel = channels[(limit(chan_num, 3, 1) - 1)];
         single_reading(number, channel);
     }
+
+    analogWrite(heater.heater_pin, heater.power, HEATER_PWM_FREQUENCY);
 }
 
 void spectrophotometer_reading(bool baseline, int scans, bool log = false)
@@ -1298,6 +1303,8 @@ int get_heater_temperature()
 {
     int raw = 0;
 
+    analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
+    delayMicroseconds(5000);
     for (int i = 0; i < HEATER_READINGS; i++)
     {
         heater_reads[i] = analogRead(heater.thermistor_pin);
@@ -1400,13 +1407,10 @@ void stop_temperature_control()
 void heater_failsafe()
 {
     int raw = analogRead(heater.thermistor_pin);
-    if (raw > HEATER_MAX_RAW_READING) {
-        Log.info("Raw = %d, Heater failsafe triggered, turning off heater and temperature control", raw);
-        pinResetFast(heater.heater_pin);
+    if (raw > HEATER_MAX_RAW_READING)
+    {
+        Log.info("Heater reading above threshold, turning off heater and temperature control (raw = %d)", raw);
         temperature_control_on = false;
-    } else if (raw < HEATER_MIN_RAW_READING) {
-        Log.info("Raw = %d, Heater failsafe triggered, restarting temperature control", raw);
-        temperature_control_on = true;
     }
 }
 
@@ -1733,11 +1737,19 @@ void response_upload_test(CloudEvent upload_event)
     test_upload_mode = false;
 
     Variant json = Variant::fromJSON(upload_event.dataString());
+    String cartridgeId = json.get("cartridgeId").toString();
     if (json.get("status").toString() == "SUCCESS")
     {
         test_invalid = false;
-        unlink(cached_filename);
-        Log.info("Uploaded test successful");
+        if (cartridgeId.length() == BARCODE_UUID_LENGTH)
+        {
+            unlink("/cache/" + cartridgeId);
+            Log.info("Uploaded test successful, %s removed from cache", cartridgeId.c_str());
+        }
+        else
+        {
+            Log.info("Uploaded test successful, but %s not removed from cache", cartridgeId.c_str());
+        }
     }
     else
     {
@@ -1888,14 +1900,18 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
         Log.info("Baseline scans: %d", param1);
         position = stage_position;
+        noInterrupts();
         spectrophotometer_reading(true, param1);
+        interrupts();
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
     case 14:                                     // Test scans
         index = get_BCODE_token(index, &param1); // number of scans (3 readings per scan)
         Log.info("Test scans: %d", param1);
         position = stage_position;
+        noInterrupts();
         spectrophotometer_reading(false, param1);
+        interrupts();
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
     case 15:                                     // take sensor readings
@@ -1908,7 +1924,9 @@ int process_one_BCODE_command(int cmd, int index)
         test.astep = param3;
         test.atime = param4;
         number = param1 == 0 ? test.number_of_readings / 3 : test.number_of_readings;
+        noInterrupts();
         take_one_reading(number, param1);
+        interrupts();
         break;
     case 20: // Repeat begin(number of iterations)
         index = get_BCODE_token(index, &param1);
@@ -2610,6 +2628,12 @@ void run_test()
 {
     disconnect_from_cloud();
 
+    if (Particle.connected())
+    {
+        test_start_in_progress = true;
+        return;
+    }
+
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
@@ -2630,6 +2654,8 @@ void run_test()
     process_BCODE(0);
     test.duration = (millis() - test.start_time) / 1000;
     Log.info("Test %s finished, duration: %d sec", test.cartridge_id, test.duration / 1000);
+
+    start_temperature_control();
 
     if (test_cancelled)
     {
@@ -2666,7 +2692,6 @@ void clear_state()
 {
     cartridge_validation_in_progress = false;
     test_start_in_progress = false;
-    // test_upload_in_progress = false;
 
     magnetometer_inserted = false;
     stress_test_cartridge_inserted = false;
@@ -2677,7 +2702,9 @@ void clear_state()
     test_start_mode = false;
     test_underway = false;
     cached_filename[0] = '\0';
-    // test_upload_mode = test_in_cache();
+    test_upload_mode = test_in_cache();
+    test_upload_in_progress = false;
+
     magnet_validation_mode = false;
 
     test_invalid = false;
@@ -2734,11 +2761,16 @@ bool startI2C()
 
 void setup()
 {
+    Serial.begin(115200); // standard serial port
+    waitFor(Serial.isConnected, 15000);
+    delayMicroseconds(100000);
+    Log.info("====== Serial Connected, Begin Setup ======");
+
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
     detector_on = digitalRead(pinCartridgeDetected) == LOW;
     if (detector_on)
     {
-        cartridge_inserted = true;
+        cartridge_inserted = true; 
         turn_on_remove_cartridge_LED();
     }
     else
@@ -2746,11 +2778,6 @@ void setup()
         cartridge_inserted = false;
         turn_on_dont_touch_LED();
     }
-
-    Serial.begin(115200); // standard serial port
-    waitFor(Serial.isConnected, 15000);
-    delayMicroseconds(100000);
-    Log.info("====== Serial Connected, Begin Setup ======");
 
     init_analog_pin(pinBuzzer, OUTPUT, 0);
 
@@ -2842,7 +2869,7 @@ void setup()
     Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
     Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
-    Log.info("Cached test ? %c", test_in_cache() ? 'Y' : 'N');
+    Log.info("Cached test ? %c", test_upload_mode ? 'Y' : 'N');
 
     if (test_interrupted)
     {
