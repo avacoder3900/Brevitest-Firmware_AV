@@ -1093,7 +1093,7 @@ void print_spectrophotometer_heading()
     Serial.println("channel\tposition\ttime ms\tpreheat cycles\tpower cycles\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
 }
 
-void single_reading(uint8_t number, char channel)
+void single_reading(uint8_t number, char channel, bool lasers_on)
 {
     DFRobot_AS7341 as7341(&Wire);
     if (power_on_spectrophotometer(channel))
@@ -1105,8 +1105,11 @@ void single_reading(uint8_t number, char channel)
             reading->channel = channel;
             reading->temperature = heater.temp_C_10X;
             reading->position = stage_position;
-            turn_on_laser(channel);
-            delayMicroseconds(LASER_PWM_ON_US);
+            if (lasers_on)
+            {
+                turn_on_laser(channel);
+                delayMicroseconds(LASER_PWM_ON_US);
+            }
             reading->laser_output = analogRead(get_laser(channel)->value_pin);
             take_spectrophotometer_reading(channel, &as7341, reading);
             turn_off_all_lasers();
@@ -1116,7 +1119,7 @@ void single_reading(uint8_t number, char channel)
     power_off_all_spectrophotometers();
 }
 
-void take_one_reading(uint8_t number, int chan_num)
+void take_one_reading(uint8_t number, int chan_num, bool lasers_on = true)
 {
     char channel;
 
@@ -1127,13 +1130,13 @@ void take_one_reading(uint8_t number, int chan_num)
     {
         for (int i = 0; i < 3; i++)
         {
-            single_reading(number, channels[i]);
+            single_reading(number, channels[i], lasers_on);
         }
     }
     else
     {
         channel = channels[(limit(chan_num, 3, 1) - 1)];
-        single_reading(number, channel);
+        single_reading(number, channel, lasers_on);
     }
 
     analogWrite(heater.heater_pin, heater.power, HEATER_PWM_FREQUENCY);
@@ -2377,6 +2380,24 @@ int particle_command(String arg)
         output_test_readings(&test);
         result = test.number_of_readings;
         break;
+    case 310:                                                 // take readings without lasers
+        indx = get_next_command_param(arg, indx, &param1, 5); // count
+        indx = get_next_command_param(arg, indx, &param2, 0); // channel (0 = all, 1 = A, 2 = B, 3 = C)
+        indx = get_next_command_param(arg, indx, &param3, SPECTRO_ASTEP_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param4, SPECTRO_ATIME_DEFAULT);
+        indx = get_next_command_param(arg, indx, &param5, SPECTRO_AGAIN_DEFAULT);
+        param1 = limit(param1, param2 == 0 ? SPECTRO_RAW_MAX_CYCLES / 3 : SPECTRO_RAW_MAX_CYCLES, 1);
+        test.astep = param3;
+        test.atime = param4;
+        test.again = param5;
+        test.number_of_readings = 0;
+        for (int i = 0; i < param1; i++)
+        {
+            take_one_reading(i, param2, false);
+        }
+        output_test_readings(&test);
+        result = test.number_of_readings;
+        break;
         //
         //  CLOUD FUNCTIONS
         //
@@ -2651,7 +2672,7 @@ void setup()
     detector_on = digitalRead(pinCartridgeDetected) == LOW;
     if (detector_on)
     {
-        cartridge_inserted = true; 
+        cartridge_inserted = true;
         turn_on_remove_cartridge_LED();
     }
     else
