@@ -813,25 +813,151 @@ int BLE_scan()
     return count;
 }
 
-void check_magnets_in_one_well(int well)
+int load_latest_magnet_validation(bool serial_output = true)
+{
+    int latest = 0;
+    DIR *validation = opendir("/validation");
+    int count = 0;
+    int bytes_read = 0;
+    Log.info("Validation file directory");
+    do
+    {
+        validation_entry = readdir(validation);
+        if (validation_entry == NULL)
+        {
+            break;
+        }
+        if (validation_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        count++;
+        String filename = String(validation_entry->d_name);
+        int timestamp = filename.substring(7, filename.length() - 4).toInt();
+        if (timestamp > latest)
+        {
+            latest = timestamp;
+        }
+    } while (validation_entry != NULL && count <= MAGNETOMETER_MAX_FILES);
+    closedir(validation);
+    if (latest > 0)
+    {
+        magnet_validation_filename = magnet_file_path + String(latest) + ".txt";
+        int fd = open(magnet_validation_filename, O_RDONLY);
+        if (fd < 0)
+        {
+            Log.error("Failed to open latest validation file: %s, errno: %d", magnet_validation_filename.c_str(), errno);
+            return -1;
+        }
+        bytes_read = read(fd, magnet_validation_data, MAGNETOMETER_BUFFER_SIZE);
+        close(fd);
+        Log.info("Latest validation file: %s, bytes: %d", magnet_validation_filename.c_str(), bytes_read);
+        if (serial_output) {
+            Serial.println(magnet_validation_data);
+        }
+    }
+    else
+    {
+        Log.info("No validation files found");
+    }
+    return bytes_read;
+}
+
+int list_validation_files()
+{
+    DIR *validation = opendir("/validation");
+    int count = 0;
+    Log.info("Validation file directory");
+    do
+    {
+        validation_entry = readdir(validation);
+        if (validation_entry == NULL)
+        {
+            break;
+        }
+        if (validation_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        count++;
+        Log.info("  %s", validation_entry->d_name);
+    } while (validation_entry != NULL && count <= MAGNETOMETER_MAX_FILES);
+    closedir(validation);
+    return count;
+}
+
+int clear_validation_files()
+{
+    DIR *validation = opendir("/validation");
+    int count = 0;
+    Log.info("Clearing validation files");
+    do
+    {
+        validation_entry = readdir(validation);
+        if (validation_entry == NULL)
+        {
+            break;
+        }
+        if (validation_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        String filename = "/validation/"+ String(validation_entry->d_name);
+        if (unlink(filename) == 0)
+        {
+            count++;
+            Log.info("  %s", validation_entry->d_name);
+        }
+        else
+        {
+            Log.error("Failed to delete %s", validation_entry->d_name);
+        }
+    } while (validation_entry != NULL && count <= MAGNETOMETER_MAX_FILES);
+    closedir(validation);
+    magnet_validation_data[0] = '\0';
+    return count;
+}
+
+int create_magnet_validation_file()
+{
+    magnet_validation_filename = magnet_file_path + String(Time.now()) + ".txt";
+    int fd = open(magnet_validation_filename, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND);
+    String magnet_title_0 = magnet_validation_filename + "\r\n";
+    write(fd, magnet_title_0.c_str(), magnet_title_0.length());
+    return fd;
+}
+
+void close_magnet_validation_file(int fd)
+{
+    struct stat statbuf;
+
+    close(fd);
+    stat(magnet_validation_filename, &statbuf);
+    Log.info("write_magnet_validation_to_file, test size: %d, event data size: %d, file size: %ld", sizeof test, event.data().size(), statbuf.st_size);
+}
+
+void check_magnets_in_one_well(int well, int fd)
 {
     BleCharacteristic characteristic;
+    String result, out_str;
 
     move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
     if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well]))
     {
-        String result;
         characteristic.getValue(result);
-        Log.info("Magnetometer data for well %d: %s", well + 1, result.c_str());
     }
     else
     {
-        Log.info("Could not find magnetometer data for well %d", well + 1);
+        result = "Could not find magnetometer data";
     }
+    out_str = String::format("%d\t%s\r\n", (well + 1), result.c_str());
+    Serial.print(out_str.c_str());
+    write(fd, out_str.c_str(), out_str.length());
 }
 
 int validate_magnets()
 {
+    int tries = 10;
     if (detector_on)
     {
         magnet_validation_in_progress = true;
@@ -842,17 +968,26 @@ int validate_magnets()
             Log.info("Magnetometer found, connecting...");
             magnetometer = BLE.connect(magnetometer_address);
             Log.info("Connecting to magnetometer %s", barcode_uuid);
-            delay(MAGNETOMETER_CONNECT_DELAY);
+            while (tries-- > 0 && !magnetometer.connected())
+            {
+                delay(MAGNETOMETER_CONNECT_DELAY);
+            }
             if (magnetometer.connected())
             {
                 Log.info("Connected to magnetometer");
                 strncpy(particle_register, barcode_uuid, 32);
                 reset_stage(false);
                 move_stage_to_magnetometer_start_position();
+                int fd = create_magnet_validation_file();
+                write(fd, magnet_title_1.c_str(), magnet_title_1.length());
+                write(fd, magnet_title_2.c_str(), magnet_title_2.length());
+                Serial.print(magnet_title_1.c_str());
+                Serial.print(magnet_title_2.c_str());
                 for (int i = 0; i < MAGNETOMETER_NUMBER_OF_WELLS; i++)
                 {
-                    check_magnets_in_one_well(i);
+                    check_magnets_in_one_well(i, fd);
                 }
+                close_magnet_validation_file(fd);
                 magnetometer.disconnect();
                 reset_stage(true);
                 return 1;
@@ -1649,36 +1784,6 @@ void response_upload_test(CloudEvent upload_event)
     Log.info("Upload test: cartridge %s", json.get("cartridgeId").toString().c_str());
 }
 
-/////////////////////////////////////////////////////
-//                VALIDATE MAGNETS                 //
-/////////////////////////////////////////////////////
-
-void publish_upload_magnet_validation()
-{
-    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
-    {
-        lastPublish = millis();
-        magnet_validation_in_progress = true;
-        magnet_validation_mode = false;
-
-        event.name("validate-magnets");
-        event.contentType(ContentType::TEXT);
-        event.data(String(device_id));
-        if (event.canPublish(sizeof(event)))
-        {
-            Particle.publish(event);
-        }
-    }
-}
-
-void response_upload_magnet_validation(CloudEvent magnet_event)
-{
-    Variant json = Variant::fromJSON(magnet_event.dataString());
-    Log.info("Magnet validation: %s", json.get("status").toString().c_str());
-    delay(2000);
-    System.reset();
-}
-
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                          BCODE                          //
@@ -2267,6 +2372,15 @@ int particle_command(String arg)
     case 70: // validate magnets
         result = validate_magnets();
         break;
+    case 71: // list magnet validation files
+        result = list_validation_files();
+        break;
+    case 72: // clear magnet validation files
+        result = clear_validation_files();
+        break;
+    case 73: // load latest magnet validation file
+        result = load_latest_magnet_validation();
+        break;
         //
         //  STRESS TEST
         //
@@ -2286,16 +2400,6 @@ int particle_command(String arg)
     case 93: // stop stress test
         stress_test_stop_flag = true;
         result = 1;
-        break;
-        //
-        //  VALIDATION
-        //
-    case 100: // validate magnets
-        result = validate_magnets();
-        if (result == 1)
-        {
-            publish_upload_magnet_validation();
-        }
         break;
         //
         //  BLUETOOTH LE
@@ -2587,11 +2691,10 @@ void clear_state()
     cartridge_validation_in_progress = false;
     test_start_in_progress = false;
 
-    magnetometer_inserted = false;
     stress_test_cartridge_inserted = false;
+    stress_test_mode = false;
 
     barcode_scan_mode = false;
-    stress_test_mode = false;
     cartridge_validation_mode = false;
     test_start_mode = false;
     test_underway = false;
@@ -2600,6 +2703,7 @@ void clear_state()
     test_upload_in_progress = false;
 
     magnet_validation_mode = false;
+    magnetometer_inserted = false;
 
     test_invalid = false;
     barcode_invalid = false;
@@ -2703,6 +2807,7 @@ void setup()
     Log.info("Device ID: %s", device_id.c_str());
 
     Particle.variable("temperature", current_temperature);
+    Particle.variable("magnet_validation", magnet_validation_data);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
 
@@ -2710,17 +2815,16 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
-    Particle.subscribe(String(device_id + "/hook-response/validate-magnets/"), response_upload_magnet_validation);
 
     Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-magnets/"), response_error);
 
     setup_eeprom();
     create_dir_if_not_exists("/cache");
     create_dir_if_not_exists("/buffer");
+    create_dir_if_not_exists("/validation");
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
@@ -2771,6 +2875,8 @@ void setup()
     }
 
     start_temperature_control();
+
+    load_latest_magnet_validation(false);
 
     Log.info("Setup complete");
 }
@@ -2917,7 +3023,6 @@ void magnet_validation_loop()
     if (validate_magnets())
     {
         magnet_validation_mode = false;
-        publish_upload_magnet_validation();
     }
 }
 

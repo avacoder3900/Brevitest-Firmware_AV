@@ -120,7 +120,7 @@
 #define STAGE_MICRONS_TO_INITIAL_POSITION 1000
 #define STAGE_MICRONS_TO_TEST_START_POSITION 7860
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
-#define STAGE_MICRONS_TO_MAGNETOMETER_START_POSITION 11000
+#define STAGE_MICRONS_TO_MAGNETOMETER_START_POSITION 12800
 
 // heater
 #define HEATER_MAX_POWER 255
@@ -155,6 +155,8 @@
 // magnetometer
 #define MAGNETOMETER_NUMBER_OF_WELLS 5
 #define MAGNETOMETER_CONNECT_DELAY 3000
+#define MAGNETOMETER_MAX_FILES 50
+#define MAGNETOMETER_BUFFER_SIZE 1024
 
 // stress test
 #define STRESS_TEST_MAXIMUM_RECORDS 15
@@ -197,6 +199,8 @@ SerialLogHandler logHandler;
 // file system
 struct dirent* cache_entry;
 char cached_filename[300];
+struct dirent* validation_entry;
+char validation_filename[300];
 
 //
 //    DEVICE STATE
@@ -435,4 +439,8 @@ int well_move[5] = { -8000, 8000, 8000, 8000, 8000 };
 BleAddress magnetometer_address;
 BlePeerDevice magnetometer;
 bool magnetometer_found = false;
-
+String magnet_file_path = "/validation/magnet-";
+String magnet_validation_filename;
+char magnet_validation_data[MAGNETOMETER_BUFFER_SIZE];
+String magnet_title_1 = "\t Channel A\t\t\t Channel B\t\t\t Channel C\r\n";
+String magnet_title_2 = "Well\t T\t X\t Y\t  Z\t T\t X\t Y\t  Z\t T\t X\t Y\t  Z\r\n";

@@ -5,8 +5,7 @@
 		}
 	],
 	"settings": {
-		"extensions.ignoreRecommendations": true,
-		"cortex-debug.openocdPath": "${command:particle.getDebuggerOpenocdPath}",
+        "extensions.ignoreRecommendations": true,
 		"files.associations": {
 			"*.ino": "cpp",
 			"__bit_reference": "cpp",
