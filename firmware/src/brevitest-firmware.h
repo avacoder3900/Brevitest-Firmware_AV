@@ -120,11 +120,12 @@
 #define STAGE_MICRONS_TO_INITIAL_POSITION 1000
 #define STAGE_MICRONS_TO_TEST_START_POSITION 7860
 #define STAGE_SHIPPING_BOLT_LOCATION 28000
+#define STAGE_MICRONS_TO_MAGNETOMETER_START_POSITION 11000
 
 // heater
 #define HEATER_MAX_POWER 255
 #define HEATER_DEFAULT_POWER 64
-#define HEATER_PWM_FREQUENCY 50
+#define HEATER_PWM_FREQUENCY 150
 #define HEATER_MAX_TEMPERATURE 500
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
@@ -134,6 +135,7 @@
 #define HEATER_MAX_RAW_READING 640
 #define HEATER_MIN_RAW_READING 550
 #define HEATER_FAILSAFE_TIMING 2000
+#define HEATER_STABILIZATION_TIME_US 5000
 
 // laser
 #define LASER_MAX_POWER 255
@@ -151,8 +153,8 @@
 #define PUBSUB_RETRY_DELAY 22000
 
 // magnetometer
-#define MAGNETOMETER_HEATING_DELAY 3000
-#define MAGNETOMETER_INITIAL_HEATING_DELAY 60000
+#define MAGNETOMETER_NUMBER_OF_WELLS 5
+#define MAGNETOMETER_CONNECT_DELAY 3000
 
 // stress test
 #define STRESS_TEST_MAXIMUM_RECORDS 15
@@ -242,8 +244,6 @@ bool test_upload_in_progress = false;
 
 // magnet validation
 bool magnetometer_inserted = false;
-int magnetometer_initial_heating_delay = MAGNETOMETER_INITIAL_HEATING_DELAY;
-int magnetometer_heating_delay = MAGNETOMETER_HEATING_DELAY;
 bool magnet_validation_mode = false;
 bool magnet_validation_in_progress = false;
 
@@ -290,10 +290,10 @@ struct HeatingElement
         previous_error = 0;
         integral = 0;
         target_C_10X = HEATER_DEFAULT_TEMP_TARGET;
-        k_p_num = 50;
-        k_p_den = 5;
+        k_p_num = 80;
+        k_p_den = 4;
         k_i_num = 1;
-        k_i_den = 50000;
+        k_i_den = 5000;
         k_d_num = 1;
         k_d_den = 5;
     }

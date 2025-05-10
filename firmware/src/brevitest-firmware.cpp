@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -55,7 +55,7 @@ void turn_on_heater(int power);
 int set_heater_power(int power);
 void scanResultCallback(const BleScanResult &scanResult, void *context);
 int BLE_scan();
-int check_magnets_in_one_well(int well, int mark);
+void check_magnets_in_one_well(int well);
 int validate_magnets();
 Laser *get_laser(char channel);
 void turn_on_laser(char channel);
@@ -125,7 +125,7 @@ void magnet_validation_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3linbeck/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 
@@ -841,6 +841,7 @@ void turn_on_insert_cartridge_LED()
 void turn_off_heater()
 {
     analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
+    delayMicroseconds(HEATER_STABILIZATION_TIME_US);
     heater.heater_on = false;
     heater.power = 0;
 }
@@ -859,16 +860,12 @@ void turn_on_heater(int power)
         turn_off_heater();
         return;
     }
-    else if (heater.temp_C_10X < (heater.target_C_10X - HEATER_READY_TEMP_DELTA))
-    { // initial heating
-        analogWrite(heater.heater_pin, HEATER_MAX_POWER, HEATER_PWM_FREQUENCY);
-    }
     else
-    { // steady state heating
+    {
         analogWrite(heater.heater_pin, power, HEATER_PWM_FREQUENCY);
+        heater.power = power;
+        heater.heater_on = true;
     }
-    heater.power = power;
-    heater.heater_on = true;
 }
 
 int set_heater_power(int power)
@@ -929,66 +926,67 @@ int BLE_scan()
     return count;
 }
 
-int check_magnets_in_one_well(int well, int mark)
+void check_magnets_in_one_well(int well)
 {
     BleCharacteristic characteristic;
 
     move_stage(well_move[well], MOTOR_SLOW_STEP_DELAY);
-    delay(magnetometer_heating_delay);
     if (magnetometer.getCharacteristicByUUID(characteristic, bleCharUuid[well]))
     {
         String result;
         characteristic.getValue(result);
-        int len = sprintf(&particle_register[mark], "%d\t%s\n", well + 1, result.c_str());
-        return len + mark;
+        Log.info("Magnetometer data for well %d: %s", well + 1, result.c_str());
     }
     else
     {
         Log.info("Could not find magnetometer data for well %d", well + 1);
-        return -1;
     }
 }
 
 int validate_magnets()
 {
-    magnet_validation_in_progress = true;
-    magnetometer_found = false;
-    BLE_scan();
-    if (magnetometer_found)
+    if (detector_on)
     {
-        Log.info("Magnetometer found, connecting...");
-        magnetometer = BLE.connect(magnetometer_address);
-        if (magnetometer.connected())
+        magnet_validation_in_progress = true;
+        magnetometer_found = false;
+        BLE_scan();
+        if (magnetometer_found)
         {
-            delay(magnetometer_initial_heating_delay);
-            int mark = 32;
-            Log.info("Connected to magnetometer");
-            strncpy(particle_register, barcode_uuid, 32);
-            particle_register[mark++] = '\n';
-            reset_stage(false);
-            move_stage_to_test_start_position();
-            for (int i = 0; i < 5; i++)
+            Log.info("Magnetometer found, connecting...");
+            magnetometer = BLE.connect(magnetometer_address);
+            Log.info("Connecting to magnetometer %s", barcode_uuid);
+            delay(MAGNETOMETER_CONNECT_DELAY);
+            if (magnetometer.connected())
             {
-                mark = check_magnets_in_one_well(i, mark);
-                if (mark > PARTICLE_REGISTER_SIZE || mark == -1)
+                Log.info("Connected to magnetometer");
+                strncpy(particle_register, barcode_uuid, 32);
+                reset_stage(false);
+                move_stage_to_test_start_position();
+                for (int i = 0; i < MAGNETOMETER_NUMBER_OF_WELLS; i++)
                 {
-                    return 0;
+                    Log.info("Checking well %d", i + 1);
+                    check_magnets_in_one_well(i);
                 }
+                magnetometer.disconnect();
+                reset_stage(true);
+                return 1;
             }
-            magnetometer.disconnect();
-            reset_stage(true);
-            particle_register[mark] = '\0';
-            return 1;
+            else
+            {
+                Log.info("Could not connect to magnetometer %s", barcode_uuid);
+                return 0;
+            }
         }
         else
         {
-            Log.info("Could not connect to magnetometer %s", barcode_uuid);
+            Log.info("Magnetometer not found");
             return 0;
         }
     }
     else
     {
-        Log.info("Magnetometer not found");
+        Log.info("Magnetometer check cancelled");
+        magnet_validation_mode = false;
         return 0;
     }
 }
@@ -1208,7 +1206,7 @@ void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, Brevit
 
 void print_spectrophotometer_heading()
 {
-    Serial.println("channel\tposition\ttime ms\tpreheat cycles\tpower cycles\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\tClear\t\tNIR");
+    Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
 }
 
 void single_reading(uint8_t number, char channel, bool lasers_on)
@@ -1242,7 +1240,7 @@ void take_one_reading(uint8_t number, int chan_num, bool lasers_on = true)
     char channel;
 
     analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
-    delayMicroseconds(1000);
+    delayMicroseconds(HEATER_STABILIZATION_TIME_US);
 
     if (chan_num == 0)
     {
@@ -1306,15 +1304,13 @@ int get_heater_temperature()
     int raw = 0;
 
     analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
-    delayMicroseconds(5000);
+    delayMicroseconds(HEATER_STABILIZATION_TIME_US);
     for (int i = 0; i < HEATER_READINGS; i++)
     {
         heater_reads[i] = analogRead(heater.thermistor_pin);
-        raw += heater_reads[i];
     }
 
     std::sort(heater_reads, heater_reads + HEATER_READINGS);
-    raw = 0;
     for (int i = HEATER_BAND_PASS_TAIL; i < HEATER_READINGS - HEATER_BAND_PASS_TAIL; i++)
     {
         if (heater_reads[i] == 0)
@@ -2385,14 +2381,6 @@ int particle_command(String arg)
     case 70: // validate magnets
         result = validate_magnets();
         break;
-    case 71: // set initial heating delay
-        indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_INITIAL_HEATING_DELAY);
-        magnetometer_initial_heating_delay = param1;
-        break;
-    case 72: // set initial heating delay
-        indx = get_next_command_param(arg, indx, &param1, MAGNETOMETER_HEATING_DELAY);
-        magnetometer_heating_delay = param1;
-        break;
         //
         //  STRESS TEST
         //
@@ -2631,7 +2619,7 @@ void output_test_readings(BrevitestTestRecord *t)
         Serial.printlnf("Test %s", t->cartridge_id);
         Serial.printlnf("Data format: %c, assay: %s, duration: %d, start_time: %lu", t->data_format_code, t->assay_id, t->duration, t->start_time);
         Serial.printlnf("astep: %d, atime: %d, again: %d, baseline_scans: %d, test_scans: %d, number_of_readings: %d", t->astep, t->atime, t->again, t->baseline_scans, t->test_scans, t->number_of_readings);
-        Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
+        print_spectrophotometer_heading();
         for (int i = 0; i < t->number_of_readings; i++)
         {
             BrevitestSpectrophotometerReading *r = &(t->reading[i]);
@@ -3042,13 +3030,8 @@ void magnet_validation_loop()
 {
     if (validate_magnets())
     {
-        if (Particle.connected())
-            publish_upload_magnet_validation();
-    }
-    else
-    {
-        magnet_validation_in_progress = false;
         magnet_validation_mode = false;
+        publish_upload_magnet_validation();
     }
 }
 
