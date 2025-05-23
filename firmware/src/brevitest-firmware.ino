@@ -852,7 +852,8 @@ int load_latest_magnet_validation(bool serial_output = true)
         bytes_read = read(fd, magnet_validation_data, MAGNETOMETER_BUFFER_SIZE);
         close(fd);
         Log.info("Latest validation file: %s, bytes: %d", magnet_validation_filename.c_str(), bytes_read);
-        if (serial_output) {
+        if (serial_output)
+        {
             Serial.println(magnet_validation_data);
         }
     }
@@ -902,7 +903,7 @@ int clear_validation_files()
         {
             continue;
         }
-        String filename = "/validation/"+ String(validation_entry->d_name);
+        String filename = "/validation/" + String(validation_entry->d_name);
         if (unlink(filename) == 0)
         {
             count++;
@@ -3116,40 +3117,31 @@ void loop()
     {
         stress_test_loop();
     }
-    else if (Particle.connected())
+    else if (test_cancel_mode && !test_cancel_in_progress)
     {
-        particle_connect_timeout = 0;
-        if (test_cancel_mode && !test_cancel_in_progress)
-        {
-            publish_cancel_test();
-        }
-        else if (heater_debounced())
-        {
-            if (test_start_mode && !test_start_in_progress)
-            {
-                publish_start_test();
-            }
-            else if (cartridge_validation_mode && !cartridge_validation_in_progress)
-            {
-                publish_validate_cartridge();
-            }
-            else if (magnet_validation_mode)
-            {
-                magnet_validation_loop();
-            }
-            else if (barcode_scan_mode)
-            {
-                barcode_scan_loop();
-            }
-            else if (test_upload_mode && !test_upload_in_progress)
-            {
-                publish_upload_test();
-            }
-        }
+        publish_cancel_test();
     }
-    else if (millis() > particle_connect_timeout)
+    else if (heater_debounced())
     {
-        particle_connect_timeout = millis() + PARTICLE_CLOUD_DELAY;
-        Particle.connect();
+        if (test_start_mode && !test_start_in_progress)
+        {
+            publish_start_test();
+        }
+        else if (cartridge_validation_mode && !cartridge_validation_in_progress)
+        {
+            publish_validate_cartridge();
+        }
+        else if (magnet_validation_mode)
+        {
+            magnet_validation_loop();
+        }
+        else if (barcode_scan_mode)
+        {
+            barcode_scan_loop();
+        }
+        else if (test_upload_mode && !test_upload_in_progress)
+        {
+            publish_upload_test();
+        }
     }
 }
