@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 34         
+#define FIRMWARE_VERSION 35         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
@@ -297,7 +297,7 @@ struct HeatingElement
         k_p_num = 80;
         k_p_den = 4;
         k_i_num = 1;
-        k_i_den = 5000;
+        k_i_den = 50000;
         k_d_num = 1;
         k_d_den = 5;
     }
