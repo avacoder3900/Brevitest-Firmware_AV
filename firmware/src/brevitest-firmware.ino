@@ -2826,6 +2826,7 @@ void setup()
     create_dir_if_not_exists("/cache");
     create_dir_if_not_exists("/buffer");
     create_dir_if_not_exists("/validation");
+    create_dir_if_not_exists("/assay");
 
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
