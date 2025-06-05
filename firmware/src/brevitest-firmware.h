@@ -82,7 +82,7 @@
 #define BUZZER_PROBLEM_PERIOD 400
 
 // BCODE
-#define BCODE_CAPACITY 2000
+#define BCODE_CAPACITY 5000
 #define BCODE_MAX_DELAY 500
 
 // particle
@@ -158,6 +158,9 @@
 #define MAGNETOMETER_MAX_FILES 50
 #define MAGNETOMETER_BUFFER_SIZE 1024
 
+// assay cache
+#define ASSAY_MAX_FILES 50
+
 // stress test
 #define STRESS_TEST_MAXIMUM_RECORDS 15
 
@@ -201,6 +204,8 @@ struct dirent* cache_entry;
 char cached_filename[300];
 struct dirent* validation_entry;
 char validation_filename[300];
+struct dirent* assay_entry;
+char assay_filename[300];
 
 //
 //    DEVICE STATE
@@ -397,11 +402,11 @@ struct BrevitestTestRecord
 struct BrevitestAssay
 {
     char id[ASSAY_UUID_LENGTH + 1];
-    uint8_t BCODE_version;
     int duration;
     uint16_t BCODE_length;
     char BCODE[BCODE_CAPACITY];
 } assay;
+char assay_buffer[BCODE_CAPACITY + 40];
 
 struct Particle_EEPROM
 {

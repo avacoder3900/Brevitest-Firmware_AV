@@ -366,6 +366,138 @@ void output_cache()
     closedir(cache);
 }
 
+bool save_assay_to_file()
+{
+    struct stat statbuf;
+
+    if (assay.id[0] == '\0')
+    {
+        Log.error("save_assay_to_file, assay.id is empty");
+        return false;
+    }
+
+    String filename = "/assay/" + String(assay.id);
+    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND);
+    if (fd < 0)
+    {
+        Log.error("save_assay_to_file, failed to open file %s, errno: %d", filename.c_str(), errno);
+        return false;
+    }
+    String assay_data = String(assay.id) + "\n" +
+                        String(assay.duration) + "\n" +
+                        String(assay.BCODE);
+    write(fd, assay_data.c_str(), assay_data.length());
+    close(fd);
+
+    stat(filename, &statbuf);
+    Log.info("save_assay_to_file, assay data size: %d, file size: %ld", assay_data.length(), statbuf.st_size);
+    return true;
+}
+
+bool load_assay_from_file(String assay_id, uint32_t BCODE_checksum = 0)
+{
+    int bytes_read;
+    int index = 0;
+    char *mark;
+    uint32_t checksum_value;
+
+    if (assay_id.length() == 0)
+    {
+        Log.error("load_assay_from_file, assay.id is empty");
+        return false;
+    }
+
+    String filename = "/assay/" + assay_id;
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0)
+    {
+        Log.error("load_assay_from_file, failed to open file %s, errno: %d", filename.c_str(), errno);
+        return false;
+    }
+
+    bytes_read = read(fd, assay_buffer, sizeof assay_buffer - 1);
+    assay_buffer[bytes_read] = '\0'; // null-terminate the string
+    close(fd);
+
+    index = strcspn(assay_buffer, "\n");
+    if (strncmp(assay.id, assay_buffer, index) != 0)
+    {
+        assay_buffer[index] = '\0'; // null-terminate the assay id
+        Log.error("load_assay_from_file, assay id doesn't match file data - assay id: %s, filename: %s", assay.id, assay_buffer);
+        assay.id[0] = '\0'; // reset assay id
+        return false;
+    }
+    mark = &assay_buffer[index + 1];
+    index = strcspn(mark, "\n");
+    assay.duration = extract_int_from_string(mark, 0, index);
+    mark += index + 1;
+    index = strcspn(mark, "\n");
+    strncpy(assay.BCODE, mark, index);
+    mark[index] = '\0'; // null-terminate the BCODE string
+    checksum_value = checksum(assay.BCODE, index);
+    if (BCODE_checksum != 0 && checksum_value != BCODE_checksum)
+    {
+        Log.error("load_assay_from_file, BCODE checksum mismatch - expected: %lu, actual: %lu", BCODE_checksum, checksum_value);
+        assay.id[0] = '\0'; // reset assay id
+        return false;
+    }
+    return true;
+}
+
+int list_assay_files()
+{
+    DIR *assay_dir = opendir("/assay");
+    int count = 0;
+    Log.info("Assay file directory");
+    do
+    {
+        assay_entry = readdir(assay_dir);
+        if (assay_entry == NULL)
+        {
+            break;
+        }
+        if (assay_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        count++;
+        Log.info("  %s", assay_entry->d_name);
+    } while (assay_entry != NULL && count <= ASSAY_MAX_FILES);
+    closedir(assay_dir);
+    return count;
+}
+
+int clear_assay_files()
+{
+    DIR *assay_dir = opendir("/assay");
+    int count = 0;
+    Log.info("Clearing assay files");
+    do
+    {
+        assay_entry = readdir(assay_dir);
+        if (assay_entry == NULL)
+        {
+            break;
+        }
+        if (assay_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        String filename = "/assay/" + String(assay_entry->d_name);
+        if (unlink(filename) == 0)
+        {
+            count++;
+            Log.info("  %s", assay_entry->d_name);
+        }
+        else
+        {
+            Log.error("Failed to delete %s", assay_entry->d_name);
+        }
+    } while (assay_entry != NULL && count <= ASSAY_MAX_FILES);
+    closedir(assay_dir);
+    return count;
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                       DETECTOR                          //
@@ -1482,6 +1614,67 @@ void publish_validate_cartridge()
     }
 }
 
+void response_validate_cartridge(CloudEvent cancel_event)
+{
+    test_cancel_in_progress = false;
+
+    Variant json = Variant::fromJSON(cancel_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
+    {
+        if (load_assay_from_file(json.get("assay_id").toString(), json.get("checksum").toUInt()))
+        {
+            cartridge_validated = true;
+            test_underway = true;
+            run_test();
+        }
+        else
+        {
+            cartridge_validated = false;
+            test_underway = false;
+            Log.info("Cartridge validation failed: could not load assay from file");
+        }
+    }
+    else
+    {
+        cartridge_validated = false;
+        test_underway = false;
+        Log.info("Cartridge validation failed");
+        String errorMessage = json.get("errorMessage").toString();
+        if (errorMessage.length() > 0)
+        {
+            Log.info("Cartridge validation error: %s", errorMessage.c_str());
+        }
+    }
+}
+
+/////////////////////////////////////////////////////
+//                   LOAD ASSAY                    //
+/////////////////////////////////////////////////////
+
+void publish_load_assay(String assay_to_load)
+{
+    particle::Variant data;
+
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        Variant data;
+
+        lastPublish = millis();
+
+        clear_payload_buffer();
+        event.name("load-assay");
+        event.contentType(ContentType::STRUCTURED);
+        data.set("assay_id", assay_to_load);
+        event.data(data);
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing load assay, %s", assay_to_load.c_str());
+            Particle.publish(event);
+        }
+        assay_to_load = ""; // reset assay_to_load after publishing
+    }
+}
+
 void clear_payload_buffer()
 {
     for (int i = 0; i < PARTICLE_PAYLOAD_BUFFER_SIZE; i++)
@@ -1522,16 +1715,16 @@ bool all_payloads_received()
     return all;
 }
 
-void response_validate_cartridge(CloudEvent validate_event)
+void response_load_assay(CloudEvent load_assay_event)
 {
-    Log.info("response_validate_cartridge event: name=%s, size=%d, content type=%d", validate_event.name(), validate_event.data().size(), (int)validate_event.contentType());
+    Log.info("response_load_assay event: name=%s, size=%d, content type=%d", load_assay_event.name(), load_assay_event.data().size(), (int)load_assay_event.contentType());
     String final_result;
-    String name = validate_event.name();
+    String name = load_assay_event.name();
 
     int index = limit(name.substring(name.length() - 1).toInt(), PARTICLE_PAYLOAD_BUFFER_SIZE - 1, 0);
-    Log.info("response data size: %d, index: %d", validate_event.data().size(), index);
+    Log.info("response_load_assay data size: %d, index: %d", load_assay_event.data().size(), index);
 
-    payload_buffer[index] = validate_event.dataString();
+    payload_buffer[index] = load_assay_event.dataString();
     if (!all_payloads_received())
         return;
 
@@ -1540,49 +1733,17 @@ void response_validate_cartridge(CloudEvent validate_event)
         if (payload_buffer[ii].length() > 0)
             final_result += payload_buffer[ii];
     }
-    Log.info("response_validate_cartridge: %s", final_result.c_str());
+    Log.info("response_load_assay: %s", final_result.c_str());
 
-    cartridge_validation_in_progress = false;
-    cartridge_validation_mode = false;
-    detector_on = digitalRead(pinCartridgeDetected) == LOW;
-    if (!detector_on)
+    Variant json = Variant::fromJSON(final_result);
+    if (json.get("status").toString() == "SUCCESS")
     {
-        cartridge_validated = false;
-    }
-    else
-    {
-        Variant json = Variant::fromJSON(final_result);
-        if (json.get("status").toString() == "SUCCESS")
-        {
-            Log.info("Cartridge %s %s", barcode_uuid, "validated");
-            cartridge_validated = true;
-        }
-        else
-        {
-            Log.info("Cartridge %s %s", barcode_uuid, "invalid");
-            cartridge_validated = false;
-            turn_on_buzzer_problem();
-        }
-
-        String errorMessage = json.get("errorMessage").toString();
-        if (errorMessage.length() > 0)
-        {
-            Log.info("Cartridge validation test error: %s", errorMessage.c_str());
-            turn_on_buzzer_alert();
-        }
-
-        strcpy(test.cartridge_id, json.get("uuid").toString().c_str());
-        Log.info("Cartridge ID: %s", test.cartridge_id);
-
         strcpy(assay.id, json.get("assayId").toString().c_str());
         strcpy(test.assay_id, assay.id);
         Log.info("Assay ID: %s", assay.id);
 
-        int crc_loaded = json.get("checksum").toInt();
+        int crc_loaded = json.get("checksum").toUInt();
         Log.info("checksum: %d", crc_loaded);
-
-        assay.BCODE_version = json.get("version").toInt();
-        Log.info("BCODE version: %d", assay.BCODE_version);
 
         strcpy(assay.BCODE, json.get("bcode").toString().c_str());
         assay.BCODE_length = strlen(assay.BCODE);
@@ -1592,83 +1753,27 @@ void response_validate_cartridge(CloudEvent validate_event)
         Log.info("duration: %d", assay.duration);
 
         int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
-        test_start_mode = cartridge_validated && crc_calculated && crc_loaded && crc_loaded == crc_calculated;
-        cartridge_validated = cartridge_validated && test_start_mode;
         Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
-    }
-    if (!cartridge_validated || !test_start_mode)
-    {
-        turn_on_buzzer_alert();
-    }
-}
-
-/////////////////////////////////////////////////////
-//                   START TEST                    //
-/////////////////////////////////////////////////////
-
-void publish_start_test()
-{
-    particle::Variant data;
-
-    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
-    {
-        if (test_underway)
+        if (crc_loaded == crc_calculated)
         {
-            return;
-        }
-        lastPublish = millis();
-        test_start_in_progress = true;
-        test_underway = false;
-
-        event.name("start-test");
-        event.contentType(ContentType::TEXT);
-        event.data(String(barcode_uuid));
-        if (event.canPublish(event.size()))
-        {
-            Log.info("Publishing start test, %s", barcode_uuid);
-            Particle.publish(event);
-        }
-    }
-}
-
-void response_start_test(CloudEvent start_event)
-{
-    test_start_in_progress = false;
-    test_start_mode = false;
-
-    Variant json = Variant::fromJSON(start_event.dataString());
-    if (json.get("status").toString() == "SUCCESS")
-    {
-        detector_on = digitalRead(pinCartridgeDetected) == LOW;
-        if (!detector_on)
-        {
-            Log.info("Start test cancelled");
-            test_underway = false;
-            test_cancelled = true;
-            test_cancel_mode = true;
+            if (save_assay_to_file())
+            {
+                Log.info("Assay %s %s", assay.id, "loaded successfully");
+            }
+            else
+            {
+                Log.info("Assay %s %s", assay.id, "saved to file failed");
+            }
         }
         else
         {
-            test_underway = true;
+            Log.info("Assay %s %s", assay.id, "loaded but checksum mismatch");
+            Log.info("CRC loaded: %d, CRC calculated: %d", crc_loaded, crc_calculated);
         }
     }
     else
     {
-        Log.info("Test failed to start");
-        test_underway = false;
-        cartridge_validated = false;
-    }
-
-    String errorMessage = json.get("errorMessage").toString();
-    if (errorMessage.length() > 0)
-    {
-        Log.info("Start test error: %s", errorMessage.c_str());
-    }
-
-    if (test_underway)
-    {
-        Log.info("Test underway");
-        run_test();
+        Log.info("Assay %s %s", assay.id, "loading failed");
     }
 }
 
@@ -2548,6 +2653,20 @@ int test_runner(String cartridgeId)
     }
 }
 
+int load_assay(String assayId)
+{
+    if (assayId.length() == ASSAY_UUID_LENGTH)
+    {
+        publish_load_assay(assayId);
+        return 0;
+    }
+    else
+    {
+        Log.info("Invalid assay ID: %s", assayId.c_str());
+        return assayId.length();
+    }
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           TESTS                         //
@@ -2809,17 +2928,19 @@ void setup()
 
     Particle.variable("temperature", current_temperature);
     Particle.variable("magnet_validation", magnet_validation_data);
+
+    Particle.function("load_assay", load_assay);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
 
-    Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
+    Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
-    Particle.subscribe(String(device_id + "/hook-response/start-test/"), response_start_test);
+    Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
 
-    Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/start-test/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
 
     setup_eeprom();
@@ -3124,11 +3245,7 @@ void loop()
     }
     else if (heater_debounced())
     {
-        if (test_start_mode && !test_start_in_progress)
-        {
-            publish_start_test();
-        }
-        else if (cartridge_validation_mode && !cartridge_validation_in_progress)
+        if (cartridge_validation_mode && !cartridge_validation_in_progress)
         {
             publish_validate_cartridge();
         }
