@@ -510,7 +510,7 @@ bool save_assay_to_file()
     }
     String assay_data = String(assay.id) + "\n" +
                         String(assay.duration) + "\n" +
-                        String(assay.BCODE);
+                        String(assay.BCODE) + "\n";
     write(fd, assay_data.c_str(), assay_data.length());
     close(fd);
 
@@ -519,12 +519,12 @@ bool save_assay_to_file()
     return true;
 }
 
-bool load_assay_from_file(String assay_id, uint32_t BCODE_checksum = 0)
+bool load_assay_from_file(String assay_id, int BCODE_checksum = 0)
 {
     int bytes_read;
     int index = 0;
     char *mark;
-    uint32_t checksum_value;
+    int checksum_value;
 
     if (assay_id.length() == 0)
     {
@@ -541,16 +541,20 @@ bool load_assay_from_file(String assay_id, uint32_t BCODE_checksum = 0)
     }
 
     bytes_read = read(fd, assay_buffer, sizeof assay_buffer - 1);
-    assay_buffer[bytes_read] = '\0'; // null-terminate the string
     close(fd);
 
-    index = strcspn(assay_buffer, "\n");
-    if (strncmp(assay.id, assay_buffer, index) != 0)
+    assay_buffer[bytes_read] = '\0'; // null-terminate the string
+
+    index = 8;
+    if (strncmp(assay_id, assay_buffer, index) != 0)
     {
         assay_buffer[index] = '\0'; // null-terminate the assay id
-        Log.error("load_assay_from_file, assay id doesn't match file data - assay id: %s, filename: %s", assay.id, assay_buffer);
+        Log.error("load_assay_from_file, assay id doesn't match file data - assay id: %s, filename: %s", assay_id.c_str(), assay_buffer);
         assay.id[0] = '\0'; // reset assay id
         return false;
+    }
+    else {
+        strcpy(assay.id, assay_id.c_str());
     }
     mark = &assay_buffer[index + 1];
     index = strcspn(mark, "\n");
@@ -558,11 +562,11 @@ bool load_assay_from_file(String assay_id, uint32_t BCODE_checksum = 0)
     mark += index + 1;
     index = strcspn(mark, "\n");
     strncpy(assay.BCODE, mark, index);
-    mark[index] = '\0'; // null-terminate the BCODE string
-    checksum_value = checksum(assay.BCODE, index);
+    assay.BCODE[index] = '\0'; // null-terminate the BCODE string
+    checksum_value = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
     if (BCODE_checksum != 0 && checksum_value != BCODE_checksum)
     {
-        Log.error("load_assay_from_file, BCODE checksum mismatch - expected: %lu, actual: %lu", BCODE_checksum, checksum_value);
+        Log.error("load_assay_from_file, BCODE checksum mismatch - expected: %d, actual: %d", BCODE_checksum, checksum_value);
         assay.id[0] = '\0'; // reset assay id
         return false;
     }
@@ -1746,10 +1750,14 @@ void response_validate_cartridge(CloudEvent cancel_event)
     Variant json = Variant::fromJSON(cancel_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
     {
-        if (load_assay_from_file(json.get("assay_id").toString(), json.get("checksum").toUInt()))
+        String assay_id = json.get("assayId").toString();
+        int checksum_value = json.get("checksum").toInt();
+        Log.info("Cartridge validation successful, assay ID: %s, checksum: %d", assay_id.c_str(), checksum_value);
+        if (load_assay_from_file(assay_id, checksum_value))
         {
             cartridge_validated = true;
             test_underway = true;
+            strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
             run_test();
         }
         else
@@ -1878,7 +1886,7 @@ void response_load_assay(CloudEvent load_assay_event)
         Log.info("duration: %d", assay.duration);
 
         int crc_calculated = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
-        Log.info("crc_loaded: %d, crc_calculated: %d, test_start_mode: %c", crc_loaded, crc_calculated, test_start_mode ? 'T' : 'F');
+        Log.info("crc_loaded: %d, crc_calculated: %d", crc_loaded, crc_calculated);
         if (crc_loaded == crc_calculated)
         {
             if (save_assay_to_file())
@@ -2743,6 +2751,12 @@ int particle_command(String arg)
         test_upload_in_progress = false;
         result = 1;
         break;
+    case 404: // check assay files
+        result = list_assay_files();
+        break;
+    case 405: // clear assay files
+        result = clear_assay_files();
+        break;
     default:
         result = 0;
     }
@@ -2800,8 +2814,8 @@ int load_assay(String assayId)
 
 void reset_globals()
 {
-    test_underway = false;
     cartridge_validated = false;
+    test_underway = false;
 
     barcode_uuid[0] = '\0';
     barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
@@ -2871,12 +2885,6 @@ void run_test()
 {
     disconnect_from_cloud();
 
-    if (Particle.connected())
-    {
-        test_start_in_progress = true;
-        return;
-    }
-
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
@@ -2933,27 +2941,26 @@ void run_test()
 
 void clear_state()
 {
+    cartridge_inserted = false;
     cartridge_validation_in_progress = false;
-    test_start_in_progress = false;
+    cartridge_validated = false;
+    barcode_invalid = false;
+   
+    test_invalid = false;
+    test_underway = false;
+
+    test_upload_mode = test_in_cache();
 
     stress_test_cartridge_inserted = false;
     stress_test_mode = false;
 
     barcode_scan_mode = false;
     cartridge_validation_mode = false;
-    test_start_mode = false;
     test_underway = false;
     cached_filename[0] = '\0';
-    test_upload_mode = test_in_cache();
-    test_upload_in_progress = false;
 
     magnet_validation_mode = false;
     magnetometer_inserted = false;
-
-    test_invalid = false;
-    barcode_invalid = false;
-    cartridge_validated = false;
-    cartridge_inserted = false;
 }
 
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
@@ -3176,7 +3183,7 @@ void set_device_indicators()
             turn_on_dont_touch_LED();
         }
     }
-    else if (barcode_scan_mode || cartridge_validation_mode || test_start_mode || test_underway || magnet_validation_mode)
+    else if (barcode_scan_mode || cartridge_validation_mode || test_underway || magnet_validation_mode)
     {
         turn_on_dont_touch_LED();
     }

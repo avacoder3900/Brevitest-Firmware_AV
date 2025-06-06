@@ -6,7 +6,7 @@
 // GLOBAL VARIABLES AND DEFINES
 
 // general constants
-#define FIRMWARE_VERSION 36         
+#define FIRMWARE_VERSION 37         
 #define DATA_FORMAT_VERSION 39
 
 #define TEST_DATA_FORMAT_CODE 'J'
@@ -79,7 +79,7 @@
 #define BUZZER_ALERT_PERIOD 4000
 #define BUZZER_PROBLEM_FREQUENCY 620
 #define BUZZER_PROBLEM_DURATION 200
-#define BUZZER_PROBLEM_PERIOD 400
+#define BUZZER_PROBLEM_PERIOD 1000
 
 // BCODE
 #define BCODE_CAPACITY 5000
@@ -194,7 +194,7 @@ bool motor_awake = false;
 // device LED
 LEDStatus indicatorDontTouch(RGB_COLOR_RED, LED_PATTERN_SOLID, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 LEDStatus indicatorInsert(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus indicatorRemove(RGB_COLOR_YELLOW, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
+LEDStatus indicatorRemove(RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_SLOW, LED_PRIORITY_IMPORTANT);
 
 // logging
 SerialLogHandler logHandler;
@@ -236,8 +236,6 @@ bool cartridge_validation_in_progress = false;
 bool cartridge_validated = false;
 
 // start test
-bool test_start_mode = false;
-bool test_start_in_progress = false;
 bool test_underway = false;
 bool test_completed = false;
 bool test_cancelled = false;
