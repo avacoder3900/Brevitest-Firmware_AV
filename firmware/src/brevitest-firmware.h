@@ -235,10 +235,14 @@ bool cartridge_validation_mode = false;
 bool cartridge_validation_in_progress = false;
 bool cartridge_validated = false;
 
-// start test
+// reset cartridge
+bool cartridge_reset_mode = false;
+bool cartridge_reset_in_progress = false;
+
+// test state
 bool test_underway = false;
+bool bcode_cancelled = false;
 bool test_completed = false;
-bool test_cancelled = false;
 bool test_invalid = false;
 
 // cancel test
@@ -347,6 +351,7 @@ int test_percent_complete;
 
 // uuids
 char barcode_uuid[BARCODE_UUID_LENGTH + 1];
+char reset_uuid[BARCODE_UUID_LENGTH + 1];
 char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 
@@ -415,6 +420,7 @@ struct Particle_EEPROM
     int stress_test_cycles = 0;
     int stress_test_reading_count = 0;
     char running_test_uuid[BARCODE_UUID_LENGTH + 1];
+    char running_assay_id[ASSAY_UUID_LENGTH + 1];
 } eeprom;
 
 // BLE magnetometer

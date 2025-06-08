@@ -428,7 +428,8 @@ bool load_assay_from_file(String assay_id, int BCODE_checksum = 0)
         assay.id[0] = '\0'; // reset assay id
         return false;
     }
-    else {
+    else
+    {
         strcpy(assay.id, assay_id.c_str());
     }
     mark = &assay_buffer[index + 1];
@@ -660,7 +661,7 @@ void move_stage_to_position(int position, int step_delay)
     }
 }
 
-int BCODE_loop(void);
+void BCODE_loop(void);
 void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 {
     int i;
@@ -673,7 +674,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
         move_stage(-amplitude, step_delay);
         if (inBCODE)
             BCODE_loop();
-        if (test_cancelled)
+        if (bcode_cancelled)
             return;
     }
 }
@@ -1620,7 +1621,7 @@ void publish_validate_cartridge()
 
 void response_validate_cartridge(CloudEvent cancel_event)
 {
-    test_cancel_in_progress = false;
+    cartridge_validation_in_progress = false;
 
     Variant json = Variant::fromJSON(cancel_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
@@ -1639,7 +1640,10 @@ void response_validate_cartridge(CloudEvent cancel_event)
         {
             cartridge_validated = false;
             test_underway = false;
-            Log.info("Cartridge validation failed: could not load assay from file");
+            Log.info("Cartridge validation failed: could not load assay from file due to checksum mismatch");
+            memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
+            cartridge_reset_mode = true; // set cartridge reset mode to true if validation fails
+            cartridge_reset_in_progress = false;
         }
     }
     else
@@ -1652,6 +1656,57 @@ void response_validate_cartridge(CloudEvent cancel_event)
         {
             Log.info("Cartridge validation error: %s", errorMessage.c_str());
         }
+    }
+}
+
+/////////////////////////////////////////////////////
+//                RESET CARTRIDGE                  //
+/////////////////////////////////////////////////////
+
+void publish_reset_cartridge()
+{
+    particle::Variant data;
+
+    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
+    {
+        Variant data;
+
+        lastPublish = millis();
+        cartridge_reset_in_progress = true;
+        cartridge_reset_mode = false; // reset cartridge reset mode to false
+
+        event.name("reset-cartridge");
+        event.contentType(ContentType::STRUCTURED);
+        data.set("uuid", reset_uuid);
+        event.data(data);
+        if (event.canPublish(event.size()))
+        {
+            Log.info("Publishing reset cartridge, %s", reset_uuid);
+            Particle.publish(event);
+        }
+    }
+}
+
+void response_reset_cartridge(CloudEvent reset_event)
+{
+    cartridge_reset_in_progress = false;
+
+    Variant json = Variant::fromJSON(reset_event.dataString());
+    if (json.get("status").toString() == "SUCCESS")
+    {
+        String cartridge_id = json.get("cartridgeId").toString();
+        Log.info("Cartridge reset successful: %s, checksum: %d", cartridge_id.c_str());
+        memset(reset_uuid, 0, BARCODE_UUID_LENGTH + 1); // clear reset_uuid after successful reset
+    }
+    else
+    {
+        Log.info("Cartridge reset failed");
+        String errorMessage = json.get("errorMessage").toString();
+        if (errorMessage.length() > 0)
+        {
+            Log.info("Cartridge validation error: %s", errorMessage.c_str());
+        }
+        cartridge_reset_mode = true; // retry cartridge reset if it fails
     }
 }
 
@@ -1786,57 +1841,6 @@ void response_load_assay(CloudEvent load_assay_event)
 }
 
 /////////////////////////////////////////////////////
-//                  CANCEL TEST                    //
-/////////////////////////////////////////////////////
-
-void publish_cancel_test()
-{
-    particle::Variant data;
-
-    if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
-    {
-        lastPublish = millis();
-        test_cancel_in_progress = true;
-        test_cancelled = false;
-
-        event.name("cancel-test");
-        event.contentType(ContentType::TEXT);
-        event.data(String(eeprom.running_test_uuid));
-        if (event.canPublish(event.size()))
-        {
-            Log.info("Publishing cancel test, %s", barcode_uuid);
-            Particle.publish(event);
-        }
-    }
-}
-
-void response_cancel_test(CloudEvent cancel_event)
-{
-    test_cancel_in_progress = false;
-
-    Variant json = Variant::fromJSON(cancel_event.dataString());
-    if (json.get("status").toString() == "SUCCESS")
-    {
-        test_cancelled = true;
-        test_cancel_mode = false;
-        test_underway = false;
-        eeprom.running_test_uuid[0] = '\0';
-        EEPROM.put(0, eeprom);
-        Log.info("Test cancelled");
-    }
-    else
-    {
-        Log.info("Test failed to cancel");
-    }
-
-    String errorMessage = json.get("errorMessage").toString();
-    if (errorMessage.length() > 0)
-    {
-        Log.info("Cancel test error: %s", errorMessage.c_str());
-    }
-}
-
-/////////////////////////////////////////////////////
 //                  UPLOAD TEST                    //
 /////////////////////////////////////////////////////
 
@@ -1909,7 +1913,7 @@ int get_BCODE_token(int index, int *token)
     int i;
     char *bcode = assay.BCODE;
 
-    if (test_cancelled)
+    if (bcode_cancelled)
         return index;
 
     // end of string so return end of string location
@@ -1941,18 +1945,18 @@ int get_BCODE_token(int index, int *token)
     return i;
 }
 
-int BCODE_loop()
+void BCODE_loop()
 {
-    unsigned long total_duration = millis();
-
     set_heater_power(pid_controller());
-    if (digitalRead(pinCartridgeDetected) == HIGH)
+    if (digitalRead(pinCartridgeDetected) == HIGH) // cartridge removal detected, debounce
     {
         delay(DETECTOR_DEBOUNCE_DELAY);
-        test_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
+        bcode_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
+        if (bcode_cancelled)
+        {
+            Log.info("Cartridge removed, cancelling test");
+        }
     }
-
-    return (int)(millis() - total_duration);
 }
 
 int process_BCODE(int);
@@ -1961,9 +1965,10 @@ int process_one_BCODE_command(int cmd, int index)
     int param1, param2, param3, param4, start_index, position;
     uint8_t number;
 
-    if (test_cancelled)
+    if (bcode_cancelled)
         return index;
 
+    BCODE_loop();
     switch (cmd)
     {
     case 0: // Start test()
@@ -1980,7 +1985,6 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param2); // step_delay_us
         Log.info("Move %d microns, %d µs", param1, param2);
         move_stage(param1, param2);
-        BCODE_loop();
         break;
     case 3:                                      // Oscillate Stage(microns, microseconds, cycles)
         index = get_BCODE_token(index, &param1); // microns to move
@@ -1988,7 +1992,6 @@ int process_one_BCODE_command(int cmd, int index)
         index = get_BCODE_token(index, &param3); // number of cycles
         Log.info("Oscillate %d microns, %d µs, %d cycles", param1, param2, param3);
         oscillate_stage(param1, param2, param3, true);
-        BCODE_loop();
         break;
     case 10:                                     // Set sensor params
         index = get_BCODE_token(index, &param1); // gain
@@ -2037,7 +2040,7 @@ int process_one_BCODE_command(int cmd, int index)
         start_index = index + 1;
         for (int i = 0; i < param1; i += 1)
         {
-            if (test_cancelled)
+            if (bcode_cancelled)
                 break;
             index = process_BCODE(start_index);
         }
@@ -2051,7 +2054,6 @@ int process_one_BCODE_command(int cmd, int index)
         break;
     default:
         Log.info("Unknown command: %d  %d", cmd, index);
-        BCODE_loop();
     }
 
     return index + 1;
@@ -2064,7 +2066,7 @@ int process_BCODE(int start_index)
     index = get_BCODE_token(start_index, &cmd);
     if ((start_index == 0) && (cmd != 0))
     { // first command
-        test_cancelled = true;
+        bcode_cancelled = true;
         return -1;
     }
     else
@@ -2072,7 +2074,7 @@ int process_BCODE(int start_index)
         index = process_one_BCODE_command(cmd, index);
     }
 
-    while ((cmd != 99) && (index > 0) && !test_cancelled)
+    while ((cmd != 99) && (index > 0) && !bcode_cancelled)
     {
         index = get_BCODE_token(index, &cmd);
         index = process_one_BCODE_command(cmd, index);
@@ -2681,6 +2683,21 @@ int load_assay(String assayId)
     }
 }
 
+int reset_cartridge(String cartridgeId)
+{
+    if (cartridgeId.length() == BARCODE_UUID_LENGTH)
+    {
+        memcpy(reset_uuid, cartridgeId.c_str(), BARCODE_UUID_LENGTH + 1);
+        publish_reset_cartridge();
+        return 0;
+    }
+    else
+    {
+        Log.info("Invalid cartridge ID: %s", cartridgeId.c_str());
+        return cartridgeId.length();
+    }
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           TESTS                         //
@@ -2766,8 +2783,9 @@ void run_test()
 
     stop_temperature_control();
 
-    memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH);
-    eeprom.running_test_uuid[BARCODE_UUID_LENGTH] = '\0';
+    bcode_cancelled = false;
+    memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH + 1);
+    memcpy(eeprom.running_assay_id, test.assay_id, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
 
     test.number_of_readings = 0;
@@ -2783,22 +2801,24 @@ void run_test()
 
     start_temperature_control();
 
-    if (test_cancelled)
+    if (bcode_cancelled)
     {
         Log.info("Test cancelled");
-        test_cancel_mode = true;
-        test_cancel_in_progress = false;
+        test.number_of_readings = 0;
+        bcode_cancelled = false;
     }
     else
     {
         Log.info("Test completed successfully");
-        write_test_to_file();
-        output_test_readings(&test);
-        eeprom.running_test_uuid[0] = '\0';
-        EEPROM.put(0, eeprom);
-        test_upload_mode = true;
-        test_upload_in_progress = false;
     }
+
+    write_test_to_file();
+    output_test_readings(&test);
+    memset(eeprom.running_test_uuid, 0, BARCODE_UUID_LENGTH + 1);
+    memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
+    EEPROM.put(0, eeprom);
+    test_upload_mode = true;
+    test_upload_in_progress = false;
 
     reset_stage(true);
     reset_globals();
@@ -2820,7 +2840,7 @@ void clear_state()
     cartridge_validation_in_progress = false;
     cartridge_validated = false;
     barcode_invalid = false;
-   
+
     test_invalid = false;
     test_underway = false;
 
@@ -2939,15 +2959,16 @@ void setup()
     Particle.function("load_assay", load_assay);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
-
+    Particle.function("reset_cartridge", reset_cartridge);
+    
     Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
-    Particle.subscribe(String(device_id + "/hook-response/cancel-test/"), response_cancel_test);
+    Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
 
     Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/cancel-test/"), response_error);
+    Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
 
     setup_eeprom();
@@ -2985,10 +3006,21 @@ void setup()
 
     heater_failsafe_timer.start();
 
+    test_upload_in_progress = false;
+    bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
+    if (test_interrupted)
+    {
+        Log.info("Test interrupted: %s (Assay %s) - saving cancelled test to file", eeprom.running_test_uuid, eeprom.running_assay_id);
+        memcpy(test.cartridge_id, eeprom.running_test_uuid, BARCODE_UUID_LENGTH + 1);
+        memcpy(test.assay_id, eeprom.running_assay_id, ASSAY_UUID_LENGTH + 1);
+        write_test_to_file();
+        memset(eeprom.running_test_uuid, 0, BARCODE_UUID_LENGTH + 1);
+        memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
+        EEPROM.put(0, eeprom);
+    }
+
     reset_globals();
     clear_state();
-
-    bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
 
     Log.info("device id: %s", device_id.c_str());
     Log.info("Firmware version: %d", eeprom.firmware_version);
@@ -2998,11 +3030,6 @@ void setup()
     Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
     Log.info("Cached test ? %c", test_upload_mode ? 'Y' : 'N');
-
-    if (test_interrupted)
-    {
-        test_cancel_mode = true;
-    }
 
     start_temperature_control();
 
@@ -3065,7 +3092,7 @@ void set_device_indicators()
     else if (cartridge_validated && (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted))
     {
         turn_on_dont_touch_LED();
-        if (test_completed || test_cancelled)
+        if (test_completed)
         {
             turn_on_buzzer_alert();
         }
@@ -3246,9 +3273,13 @@ void loop()
     {
         stress_test_loop();
     }
-    else if (test_cancel_mode && !test_cancel_in_progress)
+    else if (cartridge_reset_mode && !cartridge_reset_in_progress)
     {
-        publish_cancel_test();
+        publish_reset_cartridge();
+    }
+    else if (test_upload_mode && !test_upload_in_progress)
+    {
+        publish_upload_test();
     }
     else if (heater_debounced())
     {
@@ -3263,10 +3294,6 @@ void loop()
         else if (barcode_scan_mode)
         {
             barcode_scan_loop();
-        }
-        else if (test_upload_mode && !test_upload_in_progress)
-        {
-            publish_upload_test();
         }
     }
 }
