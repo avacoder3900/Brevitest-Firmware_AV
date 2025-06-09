@@ -78,8 +78,8 @@
 #define BUZZER_ALERT_DURATION 500
 #define BUZZER_ALERT_PERIOD 4000
 #define BUZZER_PROBLEM_FREQUENCY 620
-#define BUZZER_PROBLEM_DURATION 200
-#define BUZZER_PROBLEM_PERIOD 1000
+#define BUZZER_PROBLEM_DURATION 100
+#define BUZZER_PROBLEM_PERIOD 777
 
 // BCODE
 #define BCODE_CAPACITY 5000
@@ -92,9 +92,8 @@
 #define PARTICLE_PAYLOAD_BUFFER_SIZE 10
 
 // barcode scanner
-#define BARCODE_DELAY_AFTER_POWER_ON_MS 1000
-#define BARCODE_DELAY_AFTER_TRIGGER_MS 50
-#define BARCODE_READ_TIMEOUT 5000
+#define BARCODE_DELAY_US 100000
+#define BARCODE_READ_TIMEOUT 1000
 #define BARCODE_TYPE_CARTRIDGE 1
 #define BARCODE_TYPE_MAGNETOMETER 2
 #define BARCODE_TYPE_OPTICAL 3
@@ -220,51 +219,40 @@ bool detector_on = false;
 // particle cloud connect
 unsigned long particle_connect_timeout = 0;
 
-// scan barcode
+// scan barcode - synchronous
 bool barcode_scan_mode = false;
-bool barcode_scan_in_progress = false;
-bool barcode_read_cartridge = false;
-bool barcode_read_validate_device = false;
-bool barcode_read_invalid = false;
-bool barcode_read_error = false;
 bool barcode_invalid = false;
 
-// validate cartridge
+// validate cartridge - asynchronous
 bool cartridge_inserted = false;
 bool cartridge_validation_mode = false;
 bool cartridge_validation_in_progress = false;
 bool cartridge_validated = false;
 
-// reset cartridge
+// reset cartridge - asynchronous
 bool cartridge_reset_mode = false;
 bool cartridge_reset_in_progress = false;
 
-// test state
-bool test_underway = false;
-bool bcode_cancelled = false;
-bool test_completed = false;
-bool test_invalid = false;
-
-// cancel test
-bool test_cancel_mode = false;
-bool test_cancel_in_progress = false;
-
-// upload test
+// upload test - asynchronous
 bool test_upload_mode = false;
 bool test_upload_in_progress = false;
 
-// magnet validation
+// magnet validation - synchronous
 bool magnetometer_inserted = false;
 bool magnet_validation_mode = false;
-bool magnet_validation_in_progress = false;
 
-// stress test
+// stress test - asynchronous
 bool stress_test_cartridge_inserted = false;
 bool stress_test_mode = false;
 bool stress_test_stop_flag = false;
 int stress_test_step = 0;
 int stress_test_limit = 0;
 int stress_test_LED_power = 0;
+
+// test state
+bool test_underway = false;
+bool bcode_cancelled = false;
+bool test_completed = false;
 
 // cloud communication
 CloudEvent event;
@@ -356,7 +344,6 @@ char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 
 // particle messaging
-char particle_register[PARTICLE_REGISTER_SIZE + 1];
 String payload_buffer[PARTICLE_PAYLOAD_BUFFER_SIZE];
 
 // spectrophotometer data structure

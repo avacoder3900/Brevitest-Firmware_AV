@@ -174,14 +174,24 @@ int integerSqrt(int n)
 
 int set_wifi_credentials(String params)
 {
-    String ssid, password;
-    int indx = params.indexOf(":::");
-    ssid = params.substring(0, indx);
-    password = params.substring(indx + 3);
-    Log.info("set_wifi_credentials, ssid = %s, password = %s", ssid.c_str(), password.c_str());
-    WiFi.setCredentials(ssid, password);
-    WiFi.connect();
-    return 0;
+    if (params.length() == 0)
+    {
+        Log.error("Clearing WiFi credentials");
+        WiFi.clearCredentials();
+        WiFi.disconnect();
+        return -1;
+    }
+    else
+    {
+        String ssid, password;
+        int indx = params.indexOf(":::");
+        ssid = params.substring(0, indx);
+        password = params.substring(indx + 3);
+        Log.info("set_wifi_credentials, ssid = %s, password = %s", ssid.c_str(), password.c_str());
+        WiFi.setCredentials(ssid, password);
+        WiFi.connect();
+        return 0;
+    }
 }
 
 ////////////////////////////////////////////////////////////
@@ -685,7 +695,6 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-#define BARCODE_DELAY_US 100000 // delay between reads
 int scan_barcode()
 {
     int buf;               // a little buffer for reading barcode (we will coerce into character)
@@ -734,7 +743,6 @@ int scan_barcode()
     {                         // find out what this barcode is
     case BARCODE_UUID_LENGTH: // is the barcode a test cartridge?
         return BARCODE_TYPE_CARTRIDGE;
-        break;
     case MAGNETOMETER_UUID_LENGTH: // is the barcode a validation cartridge? if so, check the validation prefix
         if (strncmp(barcode_uuid, MAGNETOMETER_PREFIX, BARCODE_PREFIX_LENGTH) == 0)
         { // is it a magnetometer?
@@ -780,6 +788,8 @@ void check_buzzer()
 
 void turn_on_buzzer_alert()
 {
+    if (buzzer_alert_running)
+        return;
     buzzer_problem_running = false;
     start_problem_buzzer = false;
     buzzer_alert_running = true;
@@ -790,6 +800,8 @@ void turn_on_buzzer_alert()
 
 void turn_on_buzzer_problem()
 {
+    if (buzzer_problem_running)
+        return;
     buzzer_problem_running = true;
     start_problem_buzzer = true;
     buzzer_alert_running = false;
@@ -1098,7 +1110,6 @@ int validate_magnets()
     int tries = 10;
     if (detector_on)
     {
-        magnet_validation_in_progress = true;
         magnetometer_found = false;
         BLE_scan();
         if (magnetometer_found)
@@ -1113,7 +1124,6 @@ int validate_magnets()
             if (magnetometer.connected())
             {
                 Log.info("Connected to magnetometer");
-                strncpy(particle_register, barcode_uuid, 32);
                 reset_stage(false);
                 move_stage_to_magnetometer_start_position();
                 int fd = create_magnet_validation_file();
@@ -1598,6 +1608,7 @@ void publish_validate_cartridge()
     {
         Variant data;
 
+        cartridge_validation_mode = false;
         if (cartridge_validated)
         {
             return;
@@ -1640,6 +1651,7 @@ void response_validate_cartridge(CloudEvent cancel_event)
         {
             cartridge_validated = false;
             test_underway = false;
+            barcode_invalid = true; // set barcode_invalid to true if validation fails
             Log.info("Cartridge validation failed: could not load assay from file due to checksum mismatch");
             memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
             cartridge_reset_mode = true; // set cartridge reset mode to true if validation fails
@@ -1650,6 +1662,7 @@ void response_validate_cartridge(CloudEvent cancel_event)
     {
         cartridge_validated = false;
         test_underway = false;
+        barcode_invalid = true; // set barcode_invalid to true if validation fails
         Log.info("Cartridge validation failed");
         String errorMessage = json.get("errorMessage").toString();
         if (errorMessage.length() > 0)
@@ -1695,7 +1708,7 @@ void response_reset_cartridge(CloudEvent reset_event)
     if (json.get("status").toString() == "SUCCESS")
     {
         String cartridge_id = json.get("cartridgeId").toString();
-        Log.info("Cartridge reset successful: %s, checksum: %d", cartridge_id.c_str());
+        Log.info("Cartridge reset successful: %s", cartridge_id.c_str());
         memset(reset_uuid, 0, BARCODE_UUID_LENGTH + 1); // clear reset_uuid after successful reset
     }
     else
@@ -1704,9 +1717,8 @@ void response_reset_cartridge(CloudEvent reset_event)
         String errorMessage = json.get("errorMessage").toString();
         if (errorMessage.length() > 0)
         {
-            Log.info("Cartridge validation error: %s", errorMessage.c_str());
+            Log.info("Cartridge reset error: %s", errorMessage.c_str());
         }
-        cartridge_reset_mode = true; // retry cartridge reset if it fails
     }
 }
 
@@ -1877,11 +1889,11 @@ void response_upload_test(CloudEvent upload_event)
     String cartridgeId = json.get("cartridgeId").toString();
     if (json.get("status").toString() == "SUCCESS")
     {
-        test_invalid = false;
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
         {
             unlink("/cache/" + cartridgeId);
             Log.info("Uploaded test successful, %s removed from cache", cartridgeId.c_str());
+            test_upload_mode = test_in_cache();
         }
         else
         {
@@ -1890,7 +1902,6 @@ void response_upload_test(CloudEvent upload_event)
     }
     else
     {
-        test_invalid = true;
         Log.info("Uploaded test invalid");
     }
     String errorMessage = json.get("errorMessage").toString();
@@ -1898,8 +1909,6 @@ void response_upload_test(CloudEvent upload_event)
     {
         Log.info("Cancel test error: %s", errorMessage.c_str());
     }
-
-    Log.info("Upload test: cartridge %s", json.get("cartridgeId").toString().c_str());
 }
 
 /////////////////////////////////////////////////////////////
@@ -2706,32 +2715,30 @@ int reset_cartridge(String cartridgeId)
 
 void reset_globals()
 {
-    cartridge_validated = false;
-    test_underway = false;
-
-    barcode_uuid[0] = '\0';
-    barcode_uuid[BARCODE_UUID_LENGTH] = '\0';
-    test.cartridge_id[0] = '\0';
-    test.cartridge_id[BARCODE_UUID_LENGTH] = '\0';
-    test.assay_id[0] = '\0';
-    test.assay_id[ASSAY_UUID_LENGTH] = '\0';
-    assay.id[0] = '\0';
-    assay.id[ASSAY_UUID_LENGTH] = '\0';
-
-    particle_register[0] = '\0';
-    particle_register[PARTICLE_REGISTER_SIZE] = '\0';
+    memset(barcode_uuid, 0, BARCODE_UUID_LENGTH + 1);
+    memset(test.cartridge_id, 0, BARCODE_UUID_LENGTH + 1);
+    memset(test.assay_id, 0, ASSAY_UUID_LENGTH + 1);
+    memset(assay.id, 0, ASSAY_UUID_LENGTH + 1);
 }
 
 void disconnect_from_cloud()
 {
+    int tries = 5;
     Log.info("Disconnecting from cloud...");
     Particle.disconnect();
-    while (Particle.connected())
+    while (Particle.connected() && tries-- > 0)
     {
         Particle.disconnect();
         delay(PARTICLE_CLOUD_DELAY);
     }
-    Log.info("Disconnected from cloud");
+    if (!Particle.connected())
+    {
+        Log.info("Disconnected from the cloud");
+    }
+    else
+    {
+        Log.info("Failed to disconnect from the cloud");
+    }
 }
 
 void connect_to_cloud()
@@ -2777,9 +2784,11 @@ void run_test()
 {
     disconnect_from_cloud();
 
+    turn_on_dont_touch_LED();
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
+    turn_off_buzzer_timer();
 
     stop_temperature_control();
 
@@ -2817,8 +2826,11 @@ void run_test()
     memset(eeprom.running_test_uuid, 0, BARCODE_UUID_LENGTH + 1);
     memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
+    
+    cartridge_validated = false;
     test_upload_mode = true;
     test_upload_in_progress = false;
+    test_underway = false;
 
     reset_stage(true);
     reset_globals();
@@ -2833,30 +2845,6 @@ void run_test()
 //                          SETUP                          //
 //                                                         //
 /////////////////////////////////////////////////////////////
-
-void clear_state()
-{
-    cartridge_inserted = false;
-    cartridge_validation_in_progress = false;
-    cartridge_validated = false;
-    barcode_invalid = false;
-
-    test_invalid = false;
-    test_underway = false;
-
-    test_upload_mode = test_in_cache();
-
-    stress_test_cartridge_inserted = false;
-    stress_test_mode = false;
-
-    barcode_scan_mode = false;
-    cartridge_validation_mode = false;
-    test_underway = false;
-    cached_filename[0] = '\0';
-
-    magnet_validation_mode = false;
-    magnetometer_inserted = false;
-}
 
 void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value)
 {
@@ -2960,7 +2948,7 @@ void setup()
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
     Particle.function("reset_cartridge", reset_cartridge);
-    
+
     Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
@@ -2972,6 +2960,8 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
 
     setup_eeprom();
+    Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
+
     create_dir_if_not_exists("/cache");
     create_dir_if_not_exists("/buffer");
     create_dir_if_not_exists("/validation");
@@ -2990,8 +2980,6 @@ void setup()
     init_spectrophotometer_switch();
     power_off_all_spectrophotometers();
 
-    Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
-
     Log.info("Resetting stage");
     reset_stage(true);
 
@@ -3006,7 +2994,9 @@ void setup()
 
     heater_failsafe_timer.start();
 
+    test_upload_mode = test_in_cache();
     test_upload_in_progress = false;
+
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
     if (test_interrupted)
     {
@@ -3020,7 +3010,6 @@ void setup()
     }
 
     reset_globals();
-    clear_state();
 
     Log.info("device id: %s", device_id.c_str());
     Log.info("Firmware version: %d", eeprom.firmware_version);
@@ -3074,6 +3063,11 @@ void set_device_indicators()
     {
         turn_on_dont_touch_LED();
     }
+    else if (barcode_invalid)
+    {
+        turn_on_remove_cartridge_LED();
+        turn_on_buzzer_problem();
+    }
     else if (!heater_debounced() || !Particle.connected())
     {
         if (detector_on)
@@ -3085,7 +3079,7 @@ void set_device_indicators()
             turn_on_dont_touch_LED();
         }
     }
-    else if (barcode_scan_mode || cartridge_validation_mode || test_underway || magnet_validation_mode)
+    else if (barcode_scan_mode || cartridge_validation_mode || cartridge_validation_in_progress || test_underway || magnet_validation_mode)
     {
         turn_on_dont_touch_LED();
     }
@@ -3097,16 +3091,12 @@ void set_device_indicators()
             turn_on_buzzer_alert();
         }
     }
-    else if (barcode_invalid)
-    {
-        turn_on_remove_cartridge_LED();
-        turn_on_buzzer_alert();
-    }
     else
     {
         if (detector_on)
         {
             turn_on_remove_cartridge_LED();
+            turn_on_buzzer_alert();
         }
         else
         {
@@ -3128,8 +3118,7 @@ void barcode_scan_loop()
     {
         if (barcode_scan_mode)
         {
-            barcode_scan_in_progress = true;
-            cartridge_inserted = cartridge_validation_mode = false;
+            cartridge_inserted = cartridge_validation_mode = cartridge_validated = false;
             magnetometer_inserted = magnet_validation_mode = false;
             switch (scan_barcode())
             {
@@ -3153,7 +3142,6 @@ void barcode_scan_loop()
                 barcode_invalid = true;
                 Log.info("Unknown barcode format");
             }
-            barcode_scan_in_progress = false;
             barcode_scan_mode = false;
         }
     }
@@ -3185,6 +3173,9 @@ void magnet_validation_loop()
 
 void hardware_loop()
 {
+    previous_heater_ready = heater_ready;
+    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
+
     if (detector_debouncing)
     {
         if (millis() > detector_debouncing_time)
@@ -3212,9 +3203,11 @@ void hardware_loop()
             }
             else
             {
-                turn_off_buzzer_timer();
-                clear_state();
                 reset_stage(true);
+                turn_off_buzzer_timer();
+                cartridge_inserted = false;
+                barcode_scan_mode = false;
+                barcode_invalid = false;
             }
         }
     }
@@ -3223,9 +3216,6 @@ void hardware_loop()
         detector_debouncing = true;
         detector_debouncing_time = millis() + (DETECTOR_DEBOUNCE_DELAY);
     }
-
-    previous_heater_ready = heater_ready;
-    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
 
     set_device_indicators();
 
