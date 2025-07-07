@@ -140,7 +140,7 @@
 #define LASER_MAX_POWER 255
 #define LASER_DEFAULT_POWER 128
 #define LASER_PWM_FREQUENCY 500
-#define LASER_PWM_ON_US 100
+#define LASER_PWM_ON_US 20000
 #define LASER_PWM_TOTAL_US 2000
 
 // thermistors
@@ -164,23 +164,23 @@
 #define STRESS_TEST_MAXIMUM_RECORDS 15
 
 // pin definitions
-int pinBuzzer = A0;
-int pinPhotoA = A2;
-int pinPhotoB = A3;
-int pinPhotoC = A4;
-int pinHeaterThermistor = A6;
-int pinCartridgeDetected = D3;
-int pinHeater = D4;
-int pinLaserA = D5;
-int pinLaserB = D6;
-int pinLaserC = D7;
-int pinMotorDir = D8;
-int pinMotorReset = D11;
-int pinMotorSleep = D12;
-int pinMotorStep = D13;
-int pinBarcodeReady = D22;
-int pinBarcodeTrigger = D23;
-int pinStageLimit = D26;
+hal_pin_t pinBuzzer = A0;
+uint16_t pinPhotoA = A2;
+uint16_t pinPhotoB = A3;
+uint16_t pinPhotoC = A4;
+hal_pin_t pinHeaterThermistor = A6;
+hal_pin_t pinCartridgeDetected = D3;
+hal_pin_t pinHeater = D4;
+hal_pin_t pinLaserA = D5;
+hal_pin_t pinLaserB = D6;
+hal_pin_t pinLaserC = D7;
+hal_pin_t pinMotorDir = D8;
+hal_pin_t pinMotorReset = D11;
+hal_pin_t pinMotorSleep = D12;
+hal_pin_t pinMotorStep = D13;
+hal_pin_t pinBarcodeReady = D22;
+hal_pin_t pinBarcodeTrigger = D23;
+hal_pin_t pinStageLimit = D26;
 
 // global variables
 int stage_position = 0;
@@ -311,10 +311,10 @@ Timer heater_failsafe_timer(HEATER_FAILSAFE_TIMING, heater_failsafe);
 // lasers
 struct Laser
 {
-    int power_pin;
-    int value_pin;
+    hal_pin_t power_pin;
+    uint16_t value_pin;
     bool power_on;
-    int power;
+    uint32_t power;
     Laser()
     {
         power = 0;

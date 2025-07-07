@@ -1187,7 +1187,8 @@ void turn_on_laser(char channel)
     Laser *laser = get_laser(channel);
 
     laser->power = 255;
-    digitalWrite(laser->power_pin, HIGH);
+    // digitalWrite(laser->power_pin, HIGH);
+    analogWrite(laser->power_pin, laser->power);
     laser->power_on = true;
 }
 
@@ -1195,7 +1196,8 @@ void turn_off_laser(char channel)
 {
     Laser *laser = get_laser(channel);
 
-    digitalWrite(laser->power_pin, LOW);
+    // digitalWrite(laser->power_pin, LOW);
+    analogWrite(laser->power_pin, 0);
     laser->power_on = false;
     laser->power = 0;
 }
@@ -1378,7 +1380,7 @@ void print_spectrophotometer_heading()
     Serial.println("number\tchannel\tposition\ttemp C\ttime ms\tlaser power\tF1(405-425nm)\tF2(435-455nm)\tF3(470-490nm)\tF4(505-525nm)\tF5(545-565nm)\tF6(580-600nm)\tF7(620-640nm)\tF8(670-690nm)\t\tClear\t\tNIR");
 }
 
-void single_reading(uint8_t number, char channel, bool lasers_on)
+void single_reading(uint8_t number, char channel, bool lasers_on, bool log)
 {
     DFRobot_AS7341 as7341(&Wire);
     if (power_on_spectrophotometer(channel))
@@ -1399,12 +1401,16 @@ void single_reading(uint8_t number, char channel, bool lasers_on)
             take_spectrophotometer_reading(channel, &as7341, reading);
             turn_off_all_lasers();
             test.number_of_readings++;
+            if (log)
+            {
+                Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", reading->number, reading->channel, reading->position, reading->temperature, reading->msec, reading->laser_output, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+            }
         }
     }
     power_off_all_spectrophotometers();
 }
 
-void take_one_reading(uint8_t number, int chan_num, bool lasers_on = true)
+void take_one_reading(uint8_t number, int chan_num, bool lasers_on, bool log)
 {
     char channel;
 
@@ -1415,22 +1421,20 @@ void take_one_reading(uint8_t number, int chan_num, bool lasers_on = true)
     {
         for (int i = 0; i < 3; i++)
         {
-            single_reading(number, channels[i], lasers_on);
+            single_reading(number, channels[i], lasers_on, log);
         }
     }
     else
     {
         channel = channels[(limit(chan_num, 3, 1) - 1)];
-        single_reading(number, channel, lasers_on);
+        single_reading(number, channel, lasers_on, log);
     }
 
     analogWrite(heater.heater_pin, heater.power, HEATER_PWM_FREQUENCY);
 }
 
-void spectrophotometer_reading(bool baseline, int scans, bool log = false)
+void spectrophotometer_reading(bool baseline, int scans, bool log)
 {
-    BrevitestSpectrophotometerReading *r;
-
     if (baseline)
     {
         test.baseline_scans = scans;
@@ -1443,12 +1447,7 @@ void spectrophotometer_reading(bool baseline, int scans, bool log = false)
     for (int i = 0; i < scans; i++)
     {
         move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION + i * (SPECTRO_WELL_LENGTH / (SPECTRO_NUMBER_OF_READINGS - 1)), MOTOR_SLOW_STEP_DELAY);
-        take_one_reading(i, 0);
-        r = &(test.reading[i]);
-        if (log)
-        {
-            Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", r->number, r->channel, r->position, r->temperature, r->msec, r->laser_output, r->f1, r->f2, r->f3, r->f4, r->f5, r->f6, r->f7, r->f8, r->clear, r->nir);
-        }
+        take_one_reading(i, 0, true, log);
     }
 }
 
@@ -2016,7 +2015,7 @@ int process_one_BCODE_command(int cmd, int index)
         Log.info("Baseline scans: %d", param1);
         position = stage_position;
         noInterrupts();
-        spectrophotometer_reading(true, param1);
+        spectrophotometer_reading(true, param1, false);
         interrupts();
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
@@ -2025,7 +2024,7 @@ int process_one_BCODE_command(int cmd, int index)
         Log.info("Test scans: %d", param1);
         position = stage_position;
         noInterrupts();
-        spectrophotometer_reading(false, param1);
+        spectrophotometer_reading(false, param1, false);
         interrupts();
         move_stage_to_position(position, MOTOR_SLOW_STEP_DELAY);
         break;
@@ -2040,7 +2039,7 @@ int process_one_BCODE_command(int cmd, int index)
         test.atime = param4;
         number = param1 == 0 ? test.number_of_readings / 3 : test.number_of_readings;
         noInterrupts();
-        take_one_reading(number, param1);
+        take_one_reading(number, param1, true, false);
         interrupts();
         break;
     case 20: // Repeat begin(number of iterations)
@@ -2592,7 +2591,7 @@ int particle_command(String arg)
         test.number_of_readings = 0;
         for (int i = 0; i < param1; i++)
         {
-            take_one_reading(i, param2);
+            take_one_reading(i, param2, true, false);
         }
         output_test_readings(&test);
         result = test.number_of_readings;
@@ -2614,7 +2613,7 @@ int particle_command(String arg)
         test.number_of_readings = 0;
         for (int i = 0; i < param1; i++)
         {
-            take_one_reading(i, param2, false);
+            take_one_reading(i, param2, false, false);
         }
         output_test_readings(&test);
         result = test.number_of_readings;
@@ -2826,7 +2825,7 @@ void run_test()
     memset(eeprom.running_test_uuid, 0, BARCODE_UUID_LENGTH + 1);
     memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
-    
+
     cartridge_validated = false;
     test_upload_mode = true;
     test_upload_in_progress = false;
@@ -2919,16 +2918,22 @@ void setup()
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
 
-    init_digital_pin(pinLaserA, OUTPUT, LOW);
+    // init_digital_pin(pinLaserA, OUTPUT, LOW);
+    init_analog_pin(pinLaserA, OUTPUT, 0);
     laserA.power_pin = pinLaserA;
+    init_analog_pin(pinPhotoA, INPUT);
     laserA.value_pin = pinPhotoA;
 
-    init_digital_pin(pinLaserB, OUTPUT, LOW);
+    // init_digital_pin(pinLaserB, OUTPUT, LOW);
+    init_analog_pin(pinLaserB, OUTPUT, 0);
     laserB.power_pin = pinLaserB;
+    init_analog_pin(pinPhotoB, INPUT);
     laserB.value_pin = pinPhotoB;
 
-    init_digital_pin(pinLaserC, OUTPUT, LOW);
+    // init_digital_pin(pinLaserC, OUTPUT, LOW);
+    init_analog_pin(pinLaserC, OUTPUT, 0);
     laserC.power_pin = pinLaserC;
+    init_analog_pin(pinPhotoC, INPUT);
     laserC.value_pin = pinPhotoC;
 
     init_digital_pin(pinHeater, OUTPUT, LOW);
