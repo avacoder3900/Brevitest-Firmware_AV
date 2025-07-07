@@ -3280,10 +3280,7 @@ void stress_test_loop()
     }
     else
     {
-        SINGLE_THREADED_BLOCK()
-        {
-            do_stress_test_step(stress_test_step);
-        }
+        do_stress_test_step(stress_test_step);
         stress_test_step++;
     }
 }
