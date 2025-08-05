@@ -1,5 +1,5 @@
 {
     "particle.targetPlatform": "msom",
-    "particle.firmwareVersion": "6.3.2",
+    "particle.firmwareVersion": "6.3.3",
     "particle.targetDevice": ""
 }

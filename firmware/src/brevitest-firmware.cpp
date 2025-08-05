@@ -87,7 +87,6 @@ int get_heater_temperature();
 int pid_controller();
 void start_temperature_control();
 void stop_temperature_control();
-void heater_failsafe();
 void response_error(CloudEvent event);
 void publish_validate_cartridge();
 void response_validate_cartridge(CloudEvent cancel_event);
@@ -1313,9 +1312,7 @@ void turn_on_laser(char channel)
 {
     Laser *laser = get_laser(channel);
 
-    laser->power = 255;
-    // digitalWrite(laser->power_pin, HIGH);
-    analogWrite(laser->power_pin, laser->power);
+    digitalWrite(laser->power_pin, HIGH);
     laser->power_on = true;
 }
 
@@ -1323,10 +1320,8 @@ void turn_off_laser(char channel)
 {
     Laser *laser = get_laser(channel);
 
-    // digitalWrite(laser->power_pin, LOW);
-    analogWrite(laser->power_pin, 0);
+    digitalWrite(laser->power_pin, LOW);
     laser->power_on = false;
-    laser->power = 0;
 }
 
 void turn_off_all_lasers()
@@ -1695,16 +1690,6 @@ void stop_temperature_control()
     temperature_control_on = false;
     set_heater_power(0);
     Log.info("Temperature control system stopped");
-}
-
-void heater_failsafe()
-{
-    int raw = analogRead(heater.thermistor_pin);
-    if (raw > HEATER_MAX_RAW_READING)
-    {
-        Log.info("Heater reading above threshold, turning off heater and temperature control (raw = %d)", raw);
-        temperature_control_on = false;
-    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -2094,10 +2079,12 @@ void BCODE_loop()
     }
 }
 
+#define BCODE_DELAY_UNIT 1000 // milliseconds
 int process_BCODE(int);
 int process_one_BCODE_command(int cmd, int index)
 {
-    int param1, param2, param3, param4, start_index, position;
+    int param1, param2, param3, param4, start_index, position, remainder;
+    unsigned long start_time;
     uint8_t number;
 
     if (bcode_cancelled)
@@ -2113,7 +2100,18 @@ int process_one_BCODE_command(int cmd, int index)
     case 1: // Delay(milliseconds)
         index = get_BCODE_token(index, &param1);
         Log.info("Delay %d ms", param1);
-        delay(param1);
+        start_time = millis();
+        for (int i = 0; i < (param1 / BCODE_DELAY_UNIT - 1); i++)
+        {
+            BCODE_loop();
+            delay(BCODE_DELAY_UNIT);
+        }
+        remainder = param1 - (int)(millis() - start_time);
+        if (remainder > 0)
+        {
+            BCODE_loop();
+            delay(remainder < BCODE_DELAY_UNIT ? remainder : BCODE_DELAY_UNIT);
+        }
         break;
     case 2:                                      // Move Microns(microns, microseconds)
         index = get_BCODE_token(index, &param1); // microns to move
@@ -3045,20 +3043,17 @@ void setup()
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
 
-    // init_digital_pin(pinLaserA, OUTPUT, LOW);
-    init_analog_pin(pinLaserA, OUTPUT, 0);
+    init_digital_pin(pinLaserA, OUTPUT, LOW);
     laserA.power_pin = pinLaserA;
     init_analog_pin(pinPhotoA, INPUT);
     laserA.value_pin = pinPhotoA;
 
-    // init_digital_pin(pinLaserB, OUTPUT, LOW);
-    init_analog_pin(pinLaserB, OUTPUT, 0);
+    init_digital_pin(pinLaserB, OUTPUT, LOW);
     laserB.power_pin = pinLaserB;
     init_analog_pin(pinPhotoB, INPUT);
     laserB.value_pin = pinPhotoB;
 
-    // init_digital_pin(pinLaserC, OUTPUT, LOW);
-    init_analog_pin(pinLaserC, OUTPUT, 0);
+    init_digital_pin(pinLaserC, OUTPUT, LOW);
     laserC.power_pin = pinLaserC;
     init_analog_pin(pinPhotoC, INPUT);
     laserC.value_pin = pinPhotoC;
@@ -3123,8 +3118,6 @@ void setup()
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
     buzzer_timer.start();
-
-    heater_failsafe_timer.start();
 
     test_upload_mode = test_in_cache();
     test_upload_in_progress = false;

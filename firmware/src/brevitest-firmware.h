@@ -125,10 +125,10 @@
 #define HEATER_MAX_POWER 255
 #define HEATER_DEFAULT_POWER 64
 #define HEATER_PWM_FREQUENCY 150
-#define HEATER_MAX_TEMPERATURE 500
+#define HEATER_MAX_TEMPERATURE 550
 #define HEATER_CONTROL_INTERVAL 1000
 #define HEATER_PULSE_DURATION 800
-#define HEATER_DEFAULT_TEMP_TARGET 420
+#define HEATER_DEFAULT_TEMP_TARGET 450
 #define HEATER_READY_TEMP_DELTA 10
 #define HEATER_READY_DEBOUNCE_DELAY 5000
 #define HEATER_MAX_RAW_READING 890
@@ -305,8 +305,6 @@ unsigned long heater_debounce_time;
 bool heater_ready = false;
 bool previous_heater_ready = false;
 int current_temperature = 0;
-void heater_failsafe(void);
-Timer heater_failsafe_timer(HEATER_FAILSAFE_TIMING, heater_failsafe);
 
 // lasers
 struct Laser
