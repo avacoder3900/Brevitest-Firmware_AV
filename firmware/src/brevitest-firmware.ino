@@ -515,6 +515,142 @@ int clear_assay_files()
 
 /////////////////////////////////////////////////////////////
 //                                                         //
+//                 COMMUNICATIONS STATUS                   //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+void disableAllRadios()
+{
+    WiFi.disconnect();
+    WiFi.off();
+    Cellular.disconnect();
+    Cellular.off();
+    BLE.off();
+
+    radios.wifi = false;
+    radios.cellular = false;
+    radios.bluetooth = false;
+}
+
+void enableAllRadios()
+{
+    WiFi.on();
+    Cellular.on();
+    BLE.on();
+
+    radios.wifi = true;
+    radios.cellular = true;
+    radios.bluetooth = true;
+}
+
+void testWiFiOnly()
+{
+    Serial.println("➜ TEST MODE: WiFi Only");
+    disableAllRadios();
+    delay(500);
+    WiFi.on();
+    radios.wifi = true;
+    Serial.println("✓ WiFi ON, All others OFF");
+}
+
+void testCellularOnly()
+{
+    Serial.println("➜ TEST MODE: Cellular Only");
+    disableAllRadios();
+    delay(500);
+    Cellular.on();
+    radios.cellular = true;
+    Serial.println("✓ Cellular ON, All others OFF");
+}
+
+void testBluetoothOnly()
+{
+    Serial.println("➜ TEST MODE: Bluetooth Only");
+    disableAllRadios();
+    delay(500);
+    BLE.on();
+    radios.bluetooth = true;
+    Serial.println("✓ Bluetooth ON, All others OFF");
+}
+
+void emissionCheck()
+{
+    Serial.println("\n╔════════════════════════════════╗");
+    Serial.println("║     EMISSION CHECK REPORT      ║");
+    Serial.println("╠════════════════════════════════╣");
+
+    if (!radios.wifi && !radios.cellular && !radios.bluetooth)
+    {
+        Serial.println("║  🔇 RADIO SILENCE CONFIRMED    ║");
+        Serial.println("║  No emissions detected         ║");
+    }
+    else
+    {
+        Serial.println("║  📡 EMISSIONS ACTIVE:          ║");
+        if (radios.wifi)
+            Serial.println("║     • WiFi transmitting        ║");
+        if (radios.cellular)
+            Serial.println("║     • Cellular transmitting    ║");
+        if (radios.bluetooth)
+            Serial.println("║     • Bluetooth transmitting   ║");
+    }
+
+    Serial.println("╚════════════════════════════════╝");
+}
+
+void displayStatus()
+{
+    Serial.println("\n┌─────────────────────────┐");
+    Serial.println("│     RADIO STATUS        │");
+    Serial.println("├─────────────────────────┤");
+    Serial.print("│ WiFi:      ");
+    Serial.print(radios.wifi ? "ON " : "OFF");
+    Serial.println("         │");
+    Serial.print("│ Cellular:  ");
+    Serial.print(radios.cellular ? "ON " : "OFF");
+    Serial.println("         │");
+    Serial.print("│ Bluetooth: ");
+    Serial.print(radios.bluetooth ? "ON " : "OFF");
+    Serial.println("         │");
+    Serial.println("└─────────────────────────┘");
+}
+
+void displayHelp()
+{
+    Serial.println("\n╔═══════════════════════════════════════╗");
+    Serial.println("║    8000 SERIES COMMAND REFERENCE      ║");
+    Serial.println("╠═══════════════════════════════════════╣");
+    Serial.println("║ GENERAL:                              ║");
+    Serial.println("║   8000 - Display this help            ║");
+    Serial.println("║   8001 - Show radio status            ║");
+    Serial.println("║                                       ║");
+    Serial.println("║ WIFI CONTROL:                         ║");
+    Serial.println("║   8100 - WiFi OFF                     ║");
+    Serial.println("║   8101 - WiFi ON                      ║");
+    Serial.println("║                                       ║");
+    Serial.println("║ CELLULAR CONTROL:                     ║");
+    Serial.println("║   8200 - Cellular OFF                 ║");
+    Serial.println("║   8201 - Cellular ON                  ║");
+    Serial.println("║                                       ║");
+    Serial.println("║ BLUETOOTH CONTROL:                    ║");
+    Serial.println("║   8300 - Bluetooth OFF                ║");
+    Serial.println("║   8301 - Bluetooth ON                 ║");
+    Serial.println("║                                       ║");
+    Serial.println("║ TEST MODES:                           ║");
+    Serial.println("║   8500 - Test WiFi only               ║");
+    Serial.println("║   8501 - Test Cellular only           ║");
+    Serial.println("║   8502 - Test Bluetooth only          ║");
+    Serial.println("║                                       ║");
+    Serial.println("║ MASTER CONTROL:                       ║");
+    Serial.println("║   8900 - ALL radios OFF               ║");
+    Serial.println("║   8901 - ALL radios ON                ║");
+    Serial.println("║   8999 - Emission check report        ║");
+    Serial.println("╚═══════════════════════════════════════╝");
+    Serial.println("\nType command number and press Enter");
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
 //                       DETECTOR                          //
 //                                                         //
 /////////////////////////////////////////////////////////////
@@ -2641,6 +2777,91 @@ int particle_command(String arg)
     case 405: // clear assay files
         result = clear_assay_files();
         break;
+    // ===== COMMUNICATION COMMANDS =====
+    case 8000:
+        displayHelp();
+        break;
+    case 8001:
+        displayStatus();
+        break;
+    // ===== WIFI COMMANDS =====
+    case 8100:
+        Serial.println("➜ WiFi OFF");
+        WiFi.disconnect();
+        WiFi.off();
+        radios.wifi = false;
+        Serial.println("✓ WiFi DISABLED");
+        break;
+
+    case 8101:
+        Serial.println("➜ WiFi ON");
+        WiFi.on();
+        radios.wifi = true;
+        Serial.println("✓ WiFi ENABLED");
+        break;
+
+    // ===== CELLULAR COMMANDS =====
+    case 8200:
+        Serial.println("➜ Cellular OFF");
+        Cellular.disconnect();
+        Cellular.off();
+        radios.cellular = false;
+        Serial.println("✓ Cellular DISABLED");
+        break;
+
+    case 8201:
+        Serial.println("➜ Cellular ON");
+        Cellular.on();
+        radios.cellular = true;
+        Serial.println("✓ Cellular ENABLED");
+        break;
+
+    // ===== BLUETOOTH COMMANDS =====
+    case 8300:
+        Serial.println("➜ Bluetooth OFF");
+        BLE.off();
+        radios.bluetooth = false;
+        Serial.println("✓ Bluetooth DISABLED");
+        break;
+
+    case 8301:
+        Serial.println("➜ Bluetooth ON");
+        BLE.on();
+        radios.bluetooth = true;
+        Serial.println("✓ Bluetooth ENABLED");
+        break;
+
+    // ===== MASTER COMMANDS =====
+    case 8900:
+        Serial.println("➜ ALL RADIOS OFF");
+        disableAllRadios();
+        Serial.println("✓ RADIO SILENCE ACTIVE");
+        break;
+
+    case 8901:
+        Serial.println("➜ ALL RADIOS ON");
+        enableAllRadios();
+        Serial.println("✓ ALL RADIOS ENABLED");
+        break;
+
+    // ===== TEST MODES =====
+    case 8500:
+        testWiFiOnly();
+        break;
+
+    case 8501:
+        testCellularOnly();
+        break;
+
+    case 8502:
+        testBluetoothOnly();
+        break;
+
+    // ===== EMISSION CHECK =====
+    case 8999:
+        emissionCheck();
+        break;
+
     default:
         result = 0;
     }

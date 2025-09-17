@@ -408,6 +408,13 @@ struct Particle_EEPROM
     char running_assay_id[ASSAY_UUID_LENGTH + 1];
 } eeprom;
 
+// communication status state
+struct RadioState {
+    bool wifi = false;
+    bool cellular = false;
+    bool bluetooth = false;
+} radios;
+
 // BLE magnetometer
 #define BLE_TYPE BleCharacteristicProperty::READ
 BleAdvertisingData advertData, scanResponse;
