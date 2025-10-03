@@ -44,24 +44,35 @@ def asphere_sag(r, c, k, a2 = 0, a4 = 0):
     """
     return (c * r**2) / (1 + math.sqrt(1 - (1 + k) * c**2 * r**2)) + a2 * r**4 + a4 * r**6
 
-# Parameters for lens (from optimization)
-c_l = -0.28  # mm^-1
-k_l = -2.4
-a2_l = 0.00015  # mm^-3
-a4_l = -0.000008  # mm^-5
-theta_l = 20  # degrees
-v_z_l = -2.65  # mm (vertex z-position)
-v_z_min = -3.25  # mm, minimum z value to avoid NaNs
-def lens_y(x=0):
-    sag = asphere_sag(x, c_l, k_l)
-    return v_z_l + sag
+theta  = deg(14.5) # rotation (deg to radians)
+lens_radius_mm = 2.5  # mm
+lens_base = -3.25  # mm (base of lens, z at r=0)
+def lens_surface_optimal(x, y):
+    # Optimal parameters
+    c      = 0.28       # curvature [1/mm]
+    k      = -2.4       # conic constant
+    A2     = 0.00015    # [mm^-3]
+    A4     = -0.000008  # [mm^-5]
+    z0     = -2.65      # vertex z [mm]
 
-def create_lens_sketch(root):
+    # Rotation around x-axis for y coordinate
+    y_rot = y * math.cos(theta) - (z0 + 1) * math.sin(theta)
+    r_sq = x**2 + y_rot**2
+
+    # Aspheric sag equation
+    discrim = 1 - (1 + k) * c**2 * r_sq
+    if discrim < 0:
+        return None  # Outside valid region
+    z_sag = (c * r_sq) / (1 + math.sqrt(discrim))
+    z_sag += A2 * r_sq**2 + A4 * r_sq**3
+    return z_sag + z0
+
+def create_lens_sketch(root, x_mm=0):
     # --- 1) Construction plane offset from XY at Z=0 ---
     planes = root.constructionPlanes
     pl_in  = planes.createInput()
-    offset_val = adsk.core.ValueInput.createByReal(0)  # 0 mm -> 0 cm
-    pl_in.setByOffset(root.yZConstructionPlane, offset_val)
+    offset_val = adsk.core.ValueInput.createByReal(x_mm * MM_TO_CM)  # 0 mm -> 0 cm
+    pl_in.setByOffset(root.xYConstructionPlane, offset_val)
     cplane = planes.add(pl_in)
 
     # --- 2) New sketch on that plane ---
@@ -70,17 +81,17 @@ def create_lens_sketch(root):
 
     # --- 3) Build points for y = lens(x) (10 points, x ∈ [-2, 2] mm) ---
     n_pts = 20
-    x_min_mm, x_max_mm = 0, 1.5
     if n_pts < 2:
         raise ValueError("Need at least 2 points for a spline.")
-    step = (x_max_mm - x_min_mm) / (n_pts - 1)
+    y_mm_max = lens_radius_mm * math.sin(math.acos(x_mm / lens_radius_mm))
+    y_mm_min = -y_mm_max
+    step = (y_mm_max - y_mm_min) / (n_pts - 1)
 
     pts = adsk.core.ObjectCollection.create()
-    xs_mm = [x_min_mm + i*step for i in range(n_pts)]
-    for x_mm in xs_mm:
-        y_mm = lens_y(x_mm)  # y = lens(x) (mm)
-        # In sketch space, z=0 because sketch lies on the construction plane
-        pts.add(adsk.core.Point3D.create(-y_mm * MM_TO_CM, x_mm * MM_TO_CM, 0.0))
+    ys_mm = [y_mm_min + i*step for i in range(n_pts)]
+    for y_mm in ys_mm:
+        z = lens_surface_optimal(x_mm, y_mm)  # z = lens(x, y) (mm)
+        pts.add(adsk.core.Point3D.create(y_mm * MM_TO_CM, z * MM_TO_CM, 0))
 
     # --- 4) Create a fitted spline through the points ---
     spline = sk.sketchCurves.sketchFittedSplines.add(pts)
@@ -89,20 +100,20 @@ def create_lens_sketch(root):
     start_sp = spline.startSketchPoint
     end_sp   = spline.endSketchPoint
 
-    # ---- Foot points on the x-axis (y = 0) with SAME x as endpoints ----
-    #  Typically the intent is dropping verticals: same y, y=0.)
-    start_y = start_sp.geometry.y
-    end_y  = end_sp.geometry.y
-    foot_start = adsk.core.Point3D.create(-v_z_min * MM_TO_CM, start_y, 0.0)
-    foot_end   = adsk.core.Point3D.create(-v_z_min * MM_TO_CM, end_y, 0.0)
+    # # ---- Foot points on the x-axis (y = 0) with SAME x as endpoints ----
+    # #  Typically the intent is dropping verticals: same y, y=0.)
+    # start_y = start_sp.geometry.y
+    # end_y  = end_sp.geometry.y
+    # foot_start = adsk.core.Point3D.create(lens_base * MM_TO_CM, start_y, 0.0)
+    # foot_end   = adsk.core.Point3D.create(lens_base * MM_TO_CM, end_y, 0.0)
 
-    # ---- Draw the two vertical lines from endpoints to the x-axis ----
-    lines = sk.sketchCurves.sketchLines
-    lines.addByTwoPoints(start_sp, foot_start)
-    lines.addByTwoPoints(end_sp,   foot_end)
+    # # ---- Draw the two vertical lines from endpoints to the x-axis ----
+    # lines = sk.sketchCurves.sketchLines
+    # lines.addByTwoPoints(start_sp, foot_start)
+    # lines.addByTwoPoints(end_sp,   foot_end)
 
-    # # ---- Draw the base line along the x-axis joining the two feet ----
-    lines.addByTwoPoints(foot_start, foot_end)
+    # # # ---- Draw the base line along the x-axis joining the two feet ----
+    # lines.addByTwoPoints(foot_start, foot_end)
 
     # Optional: make axes visible in the sketch for clarity
     sk.isAxesVisible = True
@@ -198,38 +209,49 @@ def run(context):
         root = design.rootComponent
 
         # Create the lens
-        lens_sketch = create_lens_sketch(root)
-        lens_profile = lens_sketch.profiles.item(0)
+        
+        n_pts = 2
+        x_mm_max = lens_radius_mm
+        x_mm_min = -lens_radius_mm
+        step = (x_mm_max - x_mm_min) / (n_pts - 1)
 
-        # # --- Create a 360° revolve about the global Y axis ---
-        revolves = root.features.revolveFeatures
-        # # New Body result
-        revInput = revolves.createInput(
-            lens_profile,
-            root.zConstructionAxis,  # revolve axis
-            adsk.fusion.FeatureOperations.NewBodyFeatureOperation
-        )
-        # # Angle: 360 degrees
-        angle = adsk.core.ValueInput.createByString('360 deg')
-        revInput.setAngleExtent(False, angle)  # False = one-side extent
-        # # (revInput.isSolid is True by default for closed profiles, but it's okay to set explicitly)
-        revInput.isSolid = True
+        lens_sketches = []
+        xs_mm = [x_mm_min + i*step for i in range(n_pts)]
+        for x_mm in xs_mm:
+            lens_sketch = create_lens_sketch(root, x_mm)
+            lens_sketches.append(lens_sketch)
 
-        lens = revolves.add(revInput)
-        lens_sketch.deleteMe()  # Clean up the sketch
+        # lens_profile = lens_sketch.profiles.item(0)
 
-        sel = adsk.core.ObjectCollection.create()
-        sel.add(lens.bodies.item(0))
+        # # # --- Create a 360° revolve about the global Y axis ---
+        # revolves = root.features.revolveFeatures
+        # # # New Body result
+        # revInput = revolves.createInput(
+        #     lens_profile,
+        #     root.zConstructionAxis,  # revolve axis
+        #     adsk.fusion.FeatureOperations.NewBodyFeatureOperation
+        # )
+        # # # Angle: 360 degrees
+        # angle = adsk.core.ValueInput.createByString('360 deg')
+        # revInput.setAngleExtent(False, angle)  # False = one-side extent
+        # # # (revInput.isSolid is True by default for closed profiles, but it's okay to set explicitly)
+        # revInput.isSolid = True
 
-        # Rotate the lens to point toward the target
-        pivot = adsk.core.Point3D.create(v_z_l, 0, 0)  # rotate about global origin
-        Rx = make_rotation(adsk.core.Vector3D.create(1,0,0), theta_l, pivot)
-        T = adsk.core.Matrix3D.create()
-        T.translation = adsk.core.Vector3D.create(target_x, target_y, target_z - v_z_l * MM_TO_CM)  # sets the translation part
-        Rx.transformBy(T)
-        moveFeats = root.features.moveFeatures
-        moveInput = moveFeats.createInput(sel, Rx) 
-        moveFeats.add(moveInput)
+        # lens = revolves.add(revInput)
+        # lens_sketch.deleteMe()  # Clean up the sketch
+
+        # sel = adsk.core.ObjectCollection.create()
+        # sel.add(lens.bodies.item(0))
+
+        # # Rotate the lens to point toward the target
+        # pivot = adsk.core.Point3D.create(v_z_l, 0, 0)  # rotate about global origin
+        # Rx = make_rotation(adsk.core.Vector3D.create(1,0,0), theta_l, pivot)
+        # T = adsk.core.Matrix3D.create()
+        # T.translation = adsk.core.Vector3D.create(target_x, target_y, target_z - v_z_l * MM_TO_CM)  # sets the translation part
+        # Rx.transformBy(T)
+        # moveFeats = root.features.moveFeatures
+        # moveInput = moveFeats.createInput(sel, Rx) 
+        # moveFeats.add(moveInput)
 
         # # Create the TIRM
         # n_sketches = 20
