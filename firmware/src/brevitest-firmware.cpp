@@ -1,3 +1,9 @@
+/******************************************************/
+//       THIS IS A GENERATED FILE - DO NOT EDIT       //
+/******************************************************/
+
+#include "Particle.h"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -8,6 +14,134 @@
 #include "brevitest-firmware.h"
 #include "DFRobot_AS7341.h"
 
+int raw_table_lookup(int raw);
+int limit(int value, int max, int min);
+int extract_int_from_string(char *str, int pos, int len);
+int extract_int_from_delimited_string(char *str, int *indx, char delim);
+uint32_t checksum(char *buf, int size);
+int integerSqrt(int n);
+int set_wifi_credentials(String params);
+void reset_eeprom();
+void setup_eeprom();
+bool create_dir_if_not_exists(const char *path);
+void write_test_to_file();
+void clear_cache();
+void load_cached_test(char *filename);
+bool test_in_cache();
+void output_cache();
+bool save_assay_to_file();
+int list_assay_files();
+int clear_assay_files();
+void disableAllRadios();
+void enableAllRadios();
+void testWiFiOnly();
+void testCellularOnly();
+void testBluetoothOnly();
+void emissionCheck();
+void displayStatus();
+void displayHelp();
+void detector_changed_interrupt();
+void sleep_motor();
+void wake_motor();
+bool move_one_eighth_step(int dir, int step_delay);
+void move_stage(int microns, int step_delay);
+void move_stage_until_proximal_limit(int step_delay);
+void reset_stage(bool sleep);
+void move_stage_to_optical_read_position();
+void move_stage_to_test_start_position();
+void move_stage_to_magnetometer_start_position();
+void move_stage_to_position(int position, int step_delay);
+void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE);
+int scan_barcode();
+void turn_on_buzzer_for_duration(int duration, int frequency);
+void check_buzzer();
+void turn_on_buzzer_alert();
+void turn_on_buzzer_problem();
+void turn_off_buzzer_timer();
+void turn_off_indicator_LEDs();
+void turn_on_remove_cartridge_LED();
+void turn_on_dont_touch_LED();
+void turn_on_insert_cartridge_LED();
+void turn_off_heater();
+void turn_on_heater(int power);
+int set_heater_power(int power);
+void scanResultCallback(const BleScanResult &scanResult, void *context);
+int BLE_scan();
+int list_validation_files();
+int clear_validation_files();
+int create_magnet_validation_file();
+void close_magnet_validation_file(int fd);
+void check_magnets_in_one_well(int well, int fd);
+int validate_magnets();
+Laser *get_laser(char channel);
+void turn_on_laser(char channel);
+void turn_off_laser(char channel);
+void turn_off_all_lasers();
+void turn_on_laser_for_duration(char channel, int duration);
+void turn_on_all_lasers_for_duration(int duration);
+void init_spectrophotometer_switch();
+void set_spectrophotometer_power(byte code);
+bool power_on_spectrophotometer(char channel);
+void power_off_all_spectrophotometers();
+bool reset_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
+bool init_spectrophotometer(char channel, DFRobot_AS7341 *as7341);
+void take_spectrophotometer_reading(char channel, DFRobot_AS7341 *as7341, BrevitestSpectrophotometerReading *reading);
+void print_spectrophotometer_heading();
+void single_reading(uint8_t number, char channel, bool lasers_on, bool log);
+void take_one_reading(uint8_t number, int chan_num, bool lasers_on, bool log);
+void spectrophotometer_reading(bool baseline, int scans, bool log);
+void stress_test_read_spectrophotometer();
+int get_heater_temperature();
+int pid_controller();
+void start_temperature_control();
+void stop_temperature_control();
+void response_error(CloudEvent event);
+void publish_validate_cartridge();
+void response_validate_cartridge(CloudEvent cancel_event);
+void publish_reset_cartridge();
+void response_reset_cartridge(CloudEvent reset_event);
+void publish_load_assay(String assay_to_load);
+void clear_payload_buffer();
+void output_payload_buffer();
+bool all_payloads_received();
+void response_load_assay(CloudEvent load_assay_event);
+void publish_upload_test();
+void response_upload_test(CloudEvent upload_event);
+int get_BCODE_token(int index, int *token);
+void BCODE_loop();
+int process_one_BCODE_command(int cmd, int index);
+int process_BCODE(int start_index);
+int start_stress_test(int limit, int led_power);
+void stop_stress_test();
+int stress_test_loop_time();
+void stress_test_delay(int target_duration);
+void stress_test_oscillate_stage(int amplitude, int step_delay, int cycles);
+void do_stress_test_step(int step);
+int get_next_command_param(String arg, int indx, int *param, int def);
+int particle_command(String arg);
+int test_runner(String cartridgeId);
+int load_assay(String assayId);
+int reset_cartridge(String cartridgeId);
+void reset_globals();
+void disconnect_from_cloud();
+void connect_to_cloud();
+void output_test_readings(BrevitestTestRecord *t);
+void run_test();
+void init_analog_pin(uint16_t pin, PinMode mode, uint8_t value);
+void init_analog_pin(uint16_t pin, PinMode mode);
+void init_digital_pin(uint16_t pin, PinMode mode, uint8_t value);
+void init_digital_pin(uint16_t pin, PinMode mode);
+bool startI2C();
+void setup();
+bool heater_debounced();
+void set_device_indicators();
+void barcode_scan_loop();
+void stress_test_loop();
+void magnet_validation_loop();
+void hardware_loop();
+void process_serial_port();
+void loop();
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 

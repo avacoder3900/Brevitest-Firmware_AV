@@ -1,5 +1,5 @@
 {
-    "particle.targetPlatform": "argon",
-    "particle.firmwareVersion": "4.1.0",
-    "particle.targetDevice": "e00fce689fca5fc6dcd060ab"
+    "particle.targetPlatform": "msom",
+    "particle.firmwareVersion": "6.3.3",
+    "particle.targetDevice": "0a10aced202194944a0719d4"
 }

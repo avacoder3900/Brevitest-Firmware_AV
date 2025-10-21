@@ -4,6 +4,40 @@
 			"path": "."
 		}
 	],
-	"settings": {
+    "settings": {
+        "files.associations": {
+            "__locale": "cpp",
+            "ostream": "cpp",
+            "istream": "cpp",
+            "__bit_reference": "cpp",
+            "array": "cpp",
+            "initializer_list": "cpp",
+            "string": "cpp",
+            "string_view": "cpp",
+            "__hash_table": "cpp",
+            "__split_buffer": "cpp",
+            "unordered_map": "cpp",
+            "vector": "cpp",
+            "limits": "cpp",
+            "ratio": "cpp",
+            "algorithm": "cpp",
+            "print": "cpp",
+            "bitset": "cpp",
+            "deque": "cpp",
+            "queue": "cpp",
+            "stack": "cpp",
+            "forward_list": "cpp",
+            "ios": "cpp",
+            "__node_handle": "cpp",
+            "stdexcept": "cpp",
+            "typeinfo": "cpp",
+            "chrono": "cpp",
+            "optional": "cpp",
+            "complex": "cpp",
+            "memory": "cpp",
+            "locale": "cpp",
+            "variant": "cpp"
+        },
+        "particle.enablePre-releaseDeviceOSBuilds": true
 	}
 }
