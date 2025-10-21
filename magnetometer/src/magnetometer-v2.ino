@@ -12,7 +12,6 @@
 #include <math.h>
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_ID(12430);
 PRODUCT_VERSION(4);
 
 // Return values of endTransmission in the Wire library
