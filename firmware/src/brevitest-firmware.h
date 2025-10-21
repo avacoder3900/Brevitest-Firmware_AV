@@ -208,8 +208,14 @@ struct dirent* assay_entry;
 char assay_filename[300];
 
 //
-//    DEVICE STATE
+//    DEVICE STATE MANAGEMENT
 //
+// This section replaces the previous 26+ scattered boolean flags with a
+// centralized state machine that provides:
+// - Validated state transitions
+// - Clear state visibility  
+// - Race condition prevention
+// - Comprehensive error tracking
 
 // Centralized state machine (replaces 26+ scattered boolean flags)
 DeviceStateMachine device_state;

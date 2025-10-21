@@ -1748,19 +1748,33 @@ void publish_validate_cartridge()
     }
 }
 
+/**
+ * @brief Handle cartridge validation response from cloud
+ * 
+ * This function processes the cloud server's response to cartridge
+ * validation requests. It updates the state machine based on whether
+ * the cartridge is valid or invalid, and loads the appropriate assay.
+ * 
+ * @param cancel_event The cloud event containing the validation response
+ */
 void response_validate_cartridge(CloudEvent cancel_event)
 {
+    // === END CLOUD OPERATION TRACKING ===
     device_state.end_cloud_operation();
 
+    // === PARSE CLOUD RESPONSE ===
     Variant json = Variant::fromJSON(cancel_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
     {
+        // === CARTRIDGE VALIDATION SUCCESSFUL ===
         String assay_id = json.get("assayId").toString();
         int checksum_value = json.get("checksum").toInt();
         Log.info("Cartridge validation successful, assay ID: %s, checksum: %d", assay_id.c_str(), checksum_value);
         
+        // === LOAD ASSAY FROM FILE ===
         if (load_assay_from_file(assay_id, checksum_value))
         {
+            // === ASSAY LOADED SUCCESSFULLY ===
             device_state.cartridge_state = CartridgeState::VALIDATED;
             device_state.test_state = TestState::NOT_STARTED;
             strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
@@ -1769,6 +1783,7 @@ void response_validate_cartridge(CloudEvent cancel_event)
         }
         else
         {
+            // === ASSAY LOAD FAILED ===
             device_state.cartridge_state = CartridgeState::INVALID;
             device_state.set_error("Could not load assay from file due to checksum mismatch");
             Log.info("Cartridge validation failed: could not load assay from file due to checksum mismatch");
@@ -1778,9 +1793,12 @@ void response_validate_cartridge(CloudEvent cancel_event)
     }
     else
     {
+        // === CARTRIDGE VALIDATION FAILED ===
         device_state.cartridge_state = CartridgeState::INVALID;
         device_state.set_error("Cartridge validation failed");
         Log.info("Cartridge validation failed");
+        
+        // === GET ERROR MESSAGE IF AVAILABLE ===
         String errorMessage = json.get("errorMessage").toString();
         if (errorMessage.length() > 0)
         {
@@ -1793,19 +1811,30 @@ void response_validate_cartridge(CloudEvent cancel_event)
 //                RESET CARTRIDGE                  //
 /////////////////////////////////////////////////////
 
+/**
+ * @brief Publish cartridge reset request to cloud
+ * 
+ * This function sends a reset request to the cloud server for the
+ * specified cartridge UUID. It uses the state machine to track
+ * the cloud operation and prevent duplicate requests.
+ */
 void publish_reset_cartridge()
 {
     particle::Variant data;
 
+    // === CHECK IF WE CAN PUBLISH ===
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
         lastPublish = millis();
         device_state.start_cloud_operation();
 
+        // === PREPARE CLOUD EVENT ===
         event.name("reset-cartridge");
         event.contentType(ContentType::STRUCTURED);
         data.set("uuid", reset_uuid);
         event.data(data);
+        
+        // === PUBLISH IF POSSIBLE ===
         if (event.canPublish(event.size()))
         {
             Log.info("Publishing reset cartridge, %s", reset_uuid);
@@ -1814,13 +1843,25 @@ void publish_reset_cartridge()
     }
 }
 
+/**
+ * @brief Handle cartridge reset response from cloud
+ * 
+ * This function processes the cloud server's response to cartridge
+ * reset requests. It updates the state machine based on whether
+ * the reset was successful or failed.
+ * 
+ * @param reset_event The cloud event containing the reset response
+ */
 void response_reset_cartridge(CloudEvent reset_event)
 {
+    // === END CLOUD OPERATION TRACKING ===
     device_state.end_cloud_operation();
 
+    // === PARSE CLOUD RESPONSE ===
     Variant json = Variant::fromJSON(reset_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
     {
+        // === CARTRIDGE RESET SUCCESSFUL ===
         String cartridge_id = json.get("cartridgeId").toString();
         Log.info("Cartridge reset successful: %s", cartridge_id.c_str());
         memset(reset_uuid, 0, BARCODE_UUID_LENGTH + 1);
@@ -1828,6 +1869,7 @@ void response_reset_cartridge(CloudEvent reset_event)
     }
     else
     {
+        // === CARTRIDGE RESET FAILED ===
         Log.info("Cartridge reset failed");
         String errorMessage = json.get("errorMessage").toString();
         if (errorMessage.length() > 0)
@@ -1972,22 +2014,35 @@ void response_load_assay(CloudEvent load_assay_event)
 //                  UPLOAD TEST                    //
 /////////////////////////////////////////////////////
 
+/**
+ * @brief Publish test upload request to cloud
+ * 
+ * This function sends a test result file to the cloud server for
+ * processing. It uses the state machine to track the cloud operation
+ * and prevent duplicate requests.
+ */
 void publish_upload_test()
 {
     particle::Variant data;
 
+    // === CHECK IF WE CAN PUBLISH ===
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
+        // === CHECK IF TEST IS IN CACHE ===
         if (!test_in_cache())
         {
             return;
         }
+        
+        // === PREPARE CLOUD EVENT ===
         lastPublish = millis();
         device_state.start_cloud_operation();
 
         event.name("upload-test");
         event.contentType(ContentType::BINARY);
         event.loadData(cached_filename);
+        
+        // === PUBLISH IF POSSIBLE ===
         if (event.canPublish(event.size()))
         {
             Log.info("Publishing upload test, %s (%d bytes)", cached_filename, event.size());
@@ -1996,16 +2051,29 @@ void publish_upload_test()
     }
 }
 
+/**
+ * @brief Handle test upload response from cloud
+ * 
+ * This function processes the cloud server's response to test
+ * upload requests. It updates the state machine based on whether
+ * the upload was successful or failed, and manages cache cleanup.
+ * 
+ * @param upload_event The cloud event containing the upload response
+ */
 void response_upload_test(CloudEvent upload_event)
 {
+    // === END CLOUD OPERATION TRACKING ===
     device_state.end_cloud_operation();
 
+    // === PARSE CLOUD RESPONSE ===
     Variant json = Variant::fromJSON(upload_event.dataString());
     String cartridgeId = json.get("cartridgeId").toString();
     if (json.get("status").toString() == "SUCCESS")
     {
+        // === TEST UPLOAD SUCCESSFUL ===
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
         {
+            // === CLEAN UP CACHE ===
             unlink("/cache/" + cartridgeId);
             Log.info("Uploaded test successful, %s removed from cache", cartridgeId.c_str());
             device_state.test_state = TestState::UPLOADED;
@@ -2018,9 +2086,11 @@ void response_upload_test(CloudEvent upload_event)
     }
     else
     {
+        // === TEST UPLOAD FAILED ===
         Log.info("Uploaded test invalid");
         device_state.set_error("Test upload failed");
     }
+    // === GET ERROR MESSAGE IF AVAILABLE ===
     String errorMessage = json.get("errorMessage").toString();
     if (errorMessage.length() > 0)
     {
@@ -3004,37 +3074,55 @@ void output_test_readings(BrevitestTestRecord *t)
     }
 }
 
+/**
+ * @brief Run the main test execution
+ * 
+ * This function initiates the test execution process. It sets up
+ * the hardware, disconnects from cloud to avoid interference,
+ * and starts the BCODE test execution.
+ */
 void run_test()
 {
+    // === SET TEST STATE ===
     device_state.test_state = TestState::RUNNING;
     
+    // === DISCONNECT FROM CLOUD ===
+    // Avoid cloud interference during test execution
     disconnect_from_cloud();
 
+    // === SETUP HARDWARE ===
     turn_on_dont_touch_LED();
     reset_stage(false);
     move_stage_to_test_start_position();
     turn_on_buzzer_for_duration(1000, 600);
     turn_off_buzzer_timer();
 
+    // === STOP TEMPERATURE CONTROL ===
+    // Avoid interference during test execution
     stop_temperature_control();
 
+    // === SAVE TEST INFO TO EEPROM ===
     memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH + 1);
     memcpy(eeprom.running_assay_id, test.assay_id, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
 
+    // === INITIALIZE TEST DATA ===
     test.number_of_readings = 0;
     test.baseline_scans = 0;
     test.test_scans = 0;
     memset(test.reading, 0, sizeof(test.reading));
 
+    // === EXECUTE TEST ===
     Log.info("Running test %s", test.cartridge_id);
     test.start_time = millis();
     process_BCODE(0);
     test.duration = (millis() - test.start_time) / 1000;
     Log.info("Test %s finished, duration: %d sec", test.cartridge_id, test.duration / 1000);
 
+    // === RESTART TEMPERATURE CONTROL ===
     start_temperature_control();
 
+    // === CHECK TEST COMPLETION STATUS ===
     if (device_state.test_state == TestState::CANCELLED)
     {
         Log.info("Test cancelled");
@@ -3046,21 +3134,24 @@ void run_test()
         device_state.test_state = TestState::COMPLETED;
     }
 
+    // === SAVE TEST RESULTS ===
     write_test_to_file();
     output_test_readings(&test);
+    
+    // === CLEAR EEPROM TEST INFO ===
     memset(eeprom.running_test_uuid, 0, BARCODE_UUID_LENGTH + 1);
     memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
 
+    // === TRANSITION TO UPLOAD MODE ===
     device_state.cartridge_state = CartridgeState::TEST_COMPLETE;
     device_state.test_state = TestState::UPLOAD_PENDING;
     device_state.transition_to(DeviceMode::UPLOADING_RESULTS);
 
+    // === CLEANUP AND RECONNECT ===
     reset_stage(true);
     reset_device_state();
-
     connect_to_cloud();
-
     turn_on_buzzer_alert();
 }
 
@@ -3116,13 +3207,22 @@ bool startI2C()
     return Wire.isEnabled();
 }
 
+/**
+ * @brief Device setup and initialization
+ * 
+ * This function initializes the device hardware, sets up the state machine,
+ * and prepares the device for operation. It replaces the previous scattered
+ * initialization with a structured approach using the state machine.
+ */
 void setup()
 {
+    // === SERIAL COMMUNICATION SETUP ===
     Serial.begin(115200); // standard serial port
     waitFor(Serial.isConnected, 15000);
     delayMicroseconds(100000);
     Log.info("====== Serial Connected, Begin Setup ======");
 
+    // === CARTRIDGE DETECTOR INITIALIZATION ===
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
     device_state.detector_on = digitalRead(pinCartridgeDetected) == LOW;
     if (device_state.detector_on)
@@ -3132,17 +3232,18 @@ void setup()
     }
     else
     {
+        // === NO CARTRIDGE DETECTED ===
         device_state.cartridge_state = CartridgeState::NOT_INSERTED;
         turn_on_dont_touch_LED();
     }
 
+    // === HARDWARE PIN INITIALIZATION ===
     init_analog_pin(pinBuzzer, OUTPUT, 0);
-
     init_digital_pin(pinStageLimit, INPUT_PULLUP);
-
     init_digital_pin(pinBarcodeTrigger, OUTPUT, HIGH);
     init_digital_pin(pinBarcodeReady, INPUT_PULLUP);
 
+    // === LASER SYSTEM INITIALIZATION ===
     init_digital_pin(pinLaserA, OUTPUT, LOW);
     laserA.power_pin = pinLaserA;
     init_analog_pin(pinPhotoA, INPUT);
@@ -3158,44 +3259,54 @@ void setup()
     init_analog_pin(pinPhotoC, INPUT);
     laserC.value_pin = pinPhotoC;
 
+    // === HEATER AND MOTOR INITIALIZATION ===
     init_digital_pin(pinHeater, OUTPUT, LOW);
-
     init_digital_pin(pinMotorReset, OUTPUT, HIGH);
     init_digital_pin(pinMotorSleep, OUTPUT, LOW);
     init_digital_pin(pinMotorStep, OUTPUT, LOW);
     init_digital_pin(pinMotorDir, OUTPUT, LOW);
 
+    // === DEVICE ID AND LOGGING ===
     device_id = System.deviceID();
     Log.info("Device ID: %s", device_id.c_str());
 
+    // === PARTICLE CLOUD VARIABLES ===
     Particle.variable("temperature", current_temperature);
     Particle.variable("magnet_validation", magnet_validation_data);
 
+    // === PARTICLE CLOUD FUNCTIONS ===
     Particle.function("load_assay", load_assay);
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
     Particle.function("reset_cartridge", reset_cartridge);
 
+    // === PARTICLE CLOUD SUBSCRIPTIONS ===
+    // Success responses
     Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
     Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
 
+    // Error responses
     Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
     Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
 
+    // === EEPROM SETUP ===
     setup_eeprom();
     Log.info("Size of eeprom: %d", sizeof(Particle_EEPROM));
 
+    // === DIRECTORY CREATION ===
     create_dir_if_not_exists("/cache");
     create_dir_if_not_exists("/buffer");
     create_dir_if_not_exists("/validation");
     create_dir_if_not_exists("/assay");
 
+    // === INTERRUPT SETUP ===
     attachInterrupt(pinCartridgeDetected, detector_changed_interrupt, CHANGE);
 
+    // === I2C BUS INITIALIZATION ===
     if (startI2C())
     {
         Log.info("I2C bus started");
@@ -3204,27 +3315,33 @@ void setup()
     {
         Log.info("Could not start I2C bus");
     }
+    
+    // === SPECTROPHOTOMETER INITIALIZATION ===
     init_spectrophotometer_switch();
     power_off_all_spectrophotometers();
 
+    // === STAGE RESET ===
     Log.info("Resetting stage");
     reset_stage(true);
 
+    // === LED TESTING ===
     Log.info("Testing LEDs");
     turn_on_laser_for_duration('A', 250);
     turn_on_laser_for_duration('B', 250);
     turn_on_laser_for_duration('C', 250);
 
+    // === BUZZER TESTING ===
     Log.info("Buzzing");
     turn_on_buzzer_for_duration(250, 330);
     buzzer_timer.start();
 
-    // Initialize state machine
+    // === STATE MACHINE INITIALIZATION ===
     device_state.mode = DeviceMode::INITIALIZING;
     device_state.test_state = TestState::NOT_STARTED;
     device_state.cartridge_state = CartridgeState::NOT_INSERTED;
     device_state.cloud_operation_pending = false;
 
+    // === CHECK FOR INTERRUPTED TEST ===
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
     if (test_interrupted)
     {
@@ -3237,8 +3354,10 @@ void setup()
         EEPROM.put(0, eeprom);
     }
 
+    // === FINAL STATE RESET ===
     reset_device_state();
 
+    // === LOGGING ===
     Log.info("device id: %s", device_id.c_str());
     Log.info("Firmware version: %d", eeprom.firmware_version);
     Log.info("Data format version: %d", eeprom.data_format_version);
@@ -3248,11 +3367,14 @@ void setup()
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
     Log.info("Cached test ? %c", test_in_cache() ? 'Y' : 'N');
 
+    // === START TEMPERATURE CONTROL ===
     start_temperature_control();
 
+    // === LOAD MAGNETOMETER VALIDATION ===
     load_latest_magnet_validation(false);
 
-    // Transition to IDLE state after setup complete
+    // === TRANSITION TO IDLE STATE ===
+    // Setup complete - device is ready for operation
     device_state.transition_to(DeviceMode::IDLE);
     
     Log.info("Setup complete");
@@ -3288,6 +3410,13 @@ bool heater_debounced()
     return heater_ready;
 }
 
+/**
+ * @brief Set device indicators based on state machine
+ * 
+ * This function replaces the previous complex boolean flag checking
+ * with a clear switch statement based on the device state machine.
+ * Each state has appropriate LED and buzzer indicators.
+ */
 void set_device_indicators()
 {
     switch (device_state.mode) {
@@ -3296,41 +3425,56 @@ void set_device_indicators()
         case DeviceMode::BARCODE_SCANNING:
         case DeviceMode::VALIDATING_CARTRIDGE:
         case DeviceMode::VALIDATING_MAGNETOMETER:
+            // === ACTIVE OPERATION STATES ===
+            // Device is busy - don't touch
             turn_on_dont_touch_LED();
             break;
             
         case DeviceMode::ERROR_STATE:
+            // === ERROR STATE ===
             if (device_state.is_cartridge_invalid()) {
+                // Invalid cartridge - remove it
                 turn_on_remove_cartridge_LED();
                 turn_on_buzzer_problem();
             } else {
+                // Other error - don't touch
                 turn_on_dont_touch_LED();
             }
             break;
             
         case DeviceMode::HEATING:
+            // === HEATING STATE ===
             if (device_state.detector_on) {
+                // Cartridge inserted while heating - remove it
                 turn_on_remove_cartridge_LED();
             } else {
+                // Heating up - don't touch
                 turn_on_dont_touch_LED();
             }
             break;
             
         case DeviceMode::IDLE:
+            // === IDLE STATE ===
             if (device_state.detector_on) {
+                // Cartridge present but not processed - remove it
                 turn_on_remove_cartridge_LED();
                 turn_on_buzzer_alert();
             } else {
+                // Ready for cartridge insertion
                 turn_on_insert_cartridge_LED();
             }
             break;
             
         case DeviceMode::UPLOADING_RESULTS:
         case DeviceMode::RESETTING_CARTRIDGE:
+            // === CLOUD OPERATION STATES ===
+            // Device is communicating with cloud - don't touch
             turn_on_dont_touch_LED();
             break;
             
         case DeviceMode::INITIALIZING:
+            // === INITIALIZATION STATE ===
+            // Device is starting up - don't touch
             turn_on_dont_touch_LED();
             break;
     }
@@ -3342,31 +3486,47 @@ void set_device_indicators()
 //                                                         //
 /////////////////////////////////////////////////////////////
 
+/**
+ * @brief Barcode scanning loop - processes scanned barcodes
+ * 
+ * This function handles barcode scanning when the device is in
+ * BARCODE_SCANNING mode. It determines the type of cartridge/magnetometer
+ * inserted and transitions to the appropriate validation state.
+ */
 void barcode_scan_loop()
 {
     int max_cycles;
+    
+    // Only scan if cartridge is detected and we're in barcode scanning mode
     if (device_state.detector_on && device_state.mode == DeviceMode::BARCODE_SCANNING)
     {
         switch (scan_barcode())
         {
         case BARCODE_TYPE_CARTRIDGE:
+            // === REGULAR CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             Log.info("Cartridge inserted");
             break;
+            
         case BARCODE_TYPE_MAGNETOMETER:
+            // === MAGNETOMETER DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
             device_state.transition_to(DeviceMode::VALIDATING_MAGNETOMETER);
             Log.info("Magnetometer inserted");
             break;
+            
         case BARCODE_TYPE_STRESS_TEST:
+            // === STRESS TEST CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
             max_cycles = atoi(&barcode_uuid[12]);
             start_stress_test(max_cycles, LED_DEFAULT_POWER);
             device_state.transition_to(DeviceMode::STRESS_TESTING);
             Log.info("Stress test started, max_cycles = %d", max_cycles);
             break;
+            
         default:
+            // === UNKNOWN BARCODE FORMAT ===
             device_state.cartridge_state = CartridgeState::INVALID;
             device_state.set_error("Unknown barcode format");
             Log.info("Unknown barcode format");
@@ -3395,16 +3555,27 @@ void magnet_validation_loop()
     }
 }
 
+/**
+ * @brief Hardware loop - handles physical hardware state changes
+ * 
+ * This function manages the physical hardware state and coordinates
+ * with the state machine for cartridge insertion/removal detection.
+ * It replaces the previous scattered boolean flag management with
+ * centralized state machine transitions.
+ */
 void hardware_loop()
 {
+    // === HEATER TEMPERATURE MONITORING ===
     previous_heater_ready = heater_ready;
     heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
     device_state.heater_ready = heater_ready;
 
+    // === CARTRIDGE DETECTION DEBOUNCING ===
     if (detector_debouncing)
     {
         if (millis() > detector_debouncing_time)
         {
+            // Debouncing period complete - process the state change
             detector_debouncing_time = 0;
             detector_debouncing = false;
             detector_changed = false;
@@ -3415,11 +3586,12 @@ void hardware_loop()
             
             if (new_detector_state)
             {
-                // Cartridge inserted
+                // === CARTRIDGE INSERTED ===
                 reset_stage(false);
                 move_stage_to_test_start_position();
                 sleep_motor();
                 
+                // Check if we can start barcode scanning (heater ready + valid transition)
                 if (heater_ready && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
                 {
                     device_state.cartridge_state = CartridgeState::DETECTED;
@@ -3428,13 +3600,15 @@ void hardware_loop()
                 }
                 else
                 {
+                    // Heater not ready - set error state
                     device_state.cartridge_state = CartridgeState::DETECTED;
                     device_state.set_error("Heater not ready for cartridge insertion");
                 }
             }
             else
             {
-                // Cartridge removed - reset to idle state
+                // === CARTRIDGE REMOVED ===
+                // Reset everything to IDLE state
                 reset_stage(true);
                 turn_off_buzzer_timer();
                 device_state.reset_to_idle();
@@ -3443,17 +3617,22 @@ void hardware_loop()
     }
     else if (detector_changed)
     {
+        // Start debouncing period to avoid false triggers
         detector_debouncing = true;
         detector_debouncing_time = millis() + (DETECTOR_DEBOUNCE_DELAY);
     }
 
+    // === UPDATE DEVICE INDICATORS ===
+    // LED and buzzer states are now determined by the state machine
     set_device_indicators();
 
+    // === TEMPERATURE CONTROL ===
     if (temperature_control_on)
     {
         set_heater_power(pid_controller());
     }
 
+    // === BUZZER MANAGEMENT ===
     if (start_problem_buzzer)
     {
         start_problem_buzzer = false;
@@ -3484,41 +3663,63 @@ void process_serial_port()
     }
 }
 
+/**
+ * @brief Main loop - state machine driven operation
+ * 
+ * This is the core of the state machine implementation. Instead of
+ * scattered boolean flags and complex if-else chains, the main loop
+ * now uses a clear switch statement based on the current device mode.
+ * Each state has specific actions that are appropriate for that mode.
+ */
 void loop()
 {
-    process_serial_port();
-    hardware_loop();
+    // === ALWAYS RUN THESE ===
+    process_serial_port();  // Handle serial commands
+    hardware_loop();        // Handle hardware state changes
 
+    // === STATE-DRIVEN OPERATION ===
+    // Each device mode has specific actions that are appropriate for that state
     switch (device_state.mode) {
         case DeviceMode::STRESS_TESTING:
+            // === STRESS TEST MODE ===
             stress_test_loop();
             break;
             
         case DeviceMode::RESETTING_CARTRIDGE:
+            // === CARTRIDGE RESET MODE ===
+            // Only publish if not already waiting for response
             if (!device_state.cloud_operation_pending) {
                 publish_reset_cartridge();
             }
             break;
             
         case DeviceMode::UPLOADING_RESULTS:
+            // === TEST UPLOAD MODE ===
+            // Only publish if not already waiting for response
             if (!device_state.cloud_operation_pending) {
                 publish_upload_test();
             }
             break;
             
         case DeviceMode::BARCODE_SCANNING:
+            // === BARCODE SCANNING MODE ===
+            // Only scan if heater is ready (debounced)
             if (heater_debounced()) {
                 barcode_scan_loop();
             }
             break;
             
         case DeviceMode::VALIDATING_CARTRIDGE:
+            // === CARTRIDGE VALIDATION MODE ===
+            // Only validate if heater ready and not already waiting for response
             if (heater_debounced() && !device_state.cloud_operation_pending) {
                 publish_validate_cartridge();
             }
             break;
             
         case DeviceMode::VALIDATING_MAGNETOMETER:
+            // === MAGNETOMETER VALIDATION MODE ===
+            // Only validate if heater ready
             if (heater_debounced()) {
                 magnet_validation_loop();
             }
@@ -3526,19 +3727,27 @@ void loop()
             
         case DeviceMode::IDLE:
         case DeviceMode::HEATING:
+            // === IDLE/HEATING MODES ===
             // Wait for state changes from hardware_loop
+            // No specific actions needed - hardware_loop handles transitions
             break;
             
         case DeviceMode::ERROR_STATE:
-            // Handle error state - could add recovery logic here
+            // === ERROR STATE ===
+            // Could add recovery logic here in the future
+            // For now, error state is handled by set_device_indicators()
             break;
             
         case DeviceMode::RUNNING_TEST:
+            // === TEST EXECUTION MODE ===
             // Test is running in BCODE - no additional action needed in main loop
+            // BCODE execution is handled by process_BCODE() function
             break;
             
         case DeviceMode::INITIALIZING:
+            // === INITIALIZATION MODE ===
             // Device startup - handled in setup()
+            // Should not reach here in normal operation
             break;
     }
 }
