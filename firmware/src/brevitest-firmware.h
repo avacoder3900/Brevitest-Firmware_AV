@@ -1,6 +1,7 @@
 #include "application.h"
 #include <fcntl.h>
 #include <dirent.h>
+#include "DeviceState.h"
 
 //
 // GLOBAL VARIABLES AND DEFINES
@@ -210,49 +211,21 @@ char assay_filename[300];
 //    DEVICE STATE
 //
 
-// detector
+// Centralized state machine (replaces 26+ scattered boolean flags)
+DeviceStateMachine device_state;
+
+// Hardware detector state (kept for interrupt handling)
 volatile bool detector_changed = false;
 bool detector_debouncing = false;
 unsigned long detector_debouncing_time = 0;
-bool detector_on = false;
 
-// particle cloud connect
+// Particle cloud connect
 unsigned long particle_connect_timeout = 0;
 
-// scan barcode - synchronous
-bool barcode_scan_mode = false;
-bool barcode_invalid = false;
-
-// validate cartridge - asynchronous
-bool cartridge_inserted = false;
-bool cartridge_validation_mode = false;
-bool cartridge_validation_in_progress = false;
-bool cartridge_validated = false;
-
-// reset cartridge - asynchronous
-bool cartridge_reset_mode = false;
-bool cartridge_reset_in_progress = false;
-
-// upload test - asynchronous
-bool test_upload_mode = false;
-bool test_upload_in_progress = false;
-
-// magnet validation - synchronous
-bool magnetometer_inserted = false;
-bool magnet_validation_mode = false;
-
-// stress test - asynchronous
-bool stress_test_cartridge_inserted = false;
-bool stress_test_mode = false;
-bool stress_test_stop_flag = false;
+// Stress test specific variables (not part of main state machine)
 int stress_test_step = 0;
 int stress_test_limit = 0;
 int stress_test_LED_power = 0;
-
-// test state
-bool test_underway = false;
-bool bcode_cancelled = false;
-bool test_completed = false;
 
 // cloud communication
 CloudEvent event;

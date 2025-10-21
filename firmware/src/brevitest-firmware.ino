@@ -820,7 +820,7 @@ void oscillate_stage(int amplitude, int step_delay, int cycles, bool inBCODE)
         move_stage(-amplitude, step_delay);
         if (inBCODE)
             BCODE_loop();
-        if (bcode_cancelled)
+        if (device_state.test_state == TestState::CANCELLED)
             return;
     }
 }
@@ -1291,7 +1291,7 @@ int validate_magnets()
     else
     {
         Log.info("Magnetometer check cancelled");
-        magnet_validation_mode = false;
+        device_state.transition_to(DeviceMode::IDLE);
         return 0;
     }
 }
@@ -1727,16 +1727,13 @@ void publish_validate_cartridge()
 
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
-        Variant data;
-
-        cartridge_validation_mode = false;
-        if (cartridge_validated)
+        if (device_state.is_cartridge_validated())
         {
             return;
         }
+        
         lastPublish = millis();
-        cartridge_validation_in_progress = true;
-        cartridge_validated = false;
+        device_state.start_cloud_operation();
 
         clear_payload_buffer();
         event.name("validate-cartridge");
@@ -1753,7 +1750,7 @@ void publish_validate_cartridge()
 
 void response_validate_cartridge(CloudEvent cancel_event)
 {
-    cartridge_validation_in_progress = false;
+    device_state.end_cloud_operation();
 
     Variant json = Variant::fromJSON(cancel_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
@@ -1761,29 +1758,28 @@ void response_validate_cartridge(CloudEvent cancel_event)
         String assay_id = json.get("assayId").toString();
         int checksum_value = json.get("checksum").toInt();
         Log.info("Cartridge validation successful, assay ID: %s, checksum: %d", assay_id.c_str(), checksum_value);
+        
         if (load_assay_from_file(assay_id, checksum_value))
         {
-            cartridge_validated = true;
-            test_underway = true;
+            device_state.cartridge_state = CartridgeState::VALIDATED;
+            device_state.test_state = TestState::NOT_STARTED;
             strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
+            device_state.transition_to(DeviceMode::RUNNING_TEST);
             run_test();
         }
         else
         {
-            cartridge_validated = false;
-            test_underway = false;
-            barcode_invalid = true; // set barcode_invalid to true if validation fails
+            device_state.cartridge_state = CartridgeState::INVALID;
+            device_state.set_error("Could not load assay from file due to checksum mismatch");
             Log.info("Cartridge validation failed: could not load assay from file due to checksum mismatch");
             memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
-            cartridge_reset_mode = true; // set cartridge reset mode to true if validation fails
-            cartridge_reset_in_progress = false;
+            device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
         }
     }
     else
     {
-        cartridge_validated = false;
-        test_underway = false;
-        barcode_invalid = true; // set barcode_invalid to true if validation fails
+        device_state.cartridge_state = CartridgeState::INVALID;
+        device_state.set_error("Cartridge validation failed");
         Log.info("Cartridge validation failed");
         String errorMessage = json.get("errorMessage").toString();
         if (errorMessage.length() > 0)
@@ -1803,11 +1799,8 @@ void publish_reset_cartridge()
 
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
-        Variant data;
-
         lastPublish = millis();
-        cartridge_reset_in_progress = true;
-        cartridge_reset_mode = false; // reset cartridge reset mode to false
+        device_state.start_cloud_operation();
 
         event.name("reset-cartridge");
         event.contentType(ContentType::STRUCTURED);
@@ -1823,14 +1816,15 @@ void publish_reset_cartridge()
 
 void response_reset_cartridge(CloudEvent reset_event)
 {
-    cartridge_reset_in_progress = false;
+    device_state.end_cloud_operation();
 
     Variant json = Variant::fromJSON(reset_event.dataString());
     if (json.get("status").toString() == "SUCCESS")
     {
         String cartridge_id = json.get("cartridgeId").toString();
         Log.info("Cartridge reset successful: %s", cartridge_id.c_str());
-        memset(reset_uuid, 0, BARCODE_UUID_LENGTH + 1); // clear reset_uuid after successful reset
+        memset(reset_uuid, 0, BARCODE_UUID_LENGTH + 1);
+        device_state.transition_to(DeviceMode::IDLE);
     }
     else
     {
@@ -1840,6 +1834,7 @@ void response_reset_cartridge(CloudEvent reset_event)
         {
             Log.info("Cartridge reset error: %s", errorMessage.c_str());
         }
+        device_state.set_error("Cartridge reset failed");
     }
 }
 
@@ -1988,7 +1983,7 @@ void publish_upload_test()
             return;
         }
         lastPublish = millis();
-        test_upload_in_progress = true;
+        device_state.start_cloud_operation();
 
         event.name("upload-test");
         event.contentType(ContentType::BINARY);
@@ -2003,8 +1998,7 @@ void publish_upload_test()
 
 void response_upload_test(CloudEvent upload_event)
 {
-    test_upload_in_progress = false;
-    test_upload_mode = false;
+    device_state.end_cloud_operation();
 
     Variant json = Variant::fromJSON(upload_event.dataString());
     String cartridgeId = json.get("cartridgeId").toString();
@@ -2014,16 +2008,18 @@ void response_upload_test(CloudEvent upload_event)
         {
             unlink("/cache/" + cartridgeId);
             Log.info("Uploaded test successful, %s removed from cache", cartridgeId.c_str());
-            test_upload_mode = test_in_cache();
+            device_state.test_state = TestState::UPLOADED;
         }
         else
         {
             Log.info("Uploaded test successful, but %s not removed from cache", cartridgeId.c_str());
         }
+        device_state.transition_to(DeviceMode::IDLE);
     }
     else
     {
         Log.info("Uploaded test invalid");
+        device_state.set_error("Test upload failed");
     }
     String errorMessage = json.get("errorMessage").toString();
     if (errorMessage.length() > 0)
@@ -2043,7 +2039,7 @@ int get_BCODE_token(int index, int *token)
     int i;
     char *bcode = assay.BCODE;
 
-    if (bcode_cancelled)
+    if (device_state.test_state == TestState::CANCELLED)
         return index;
 
     // end of string so return end of string location
@@ -2081,8 +2077,11 @@ void BCODE_loop()
     if (digitalRead(pinCartridgeDetected) == HIGH) // cartridge removal detected, debounce
     {
         delay(DETECTOR_DEBOUNCE_DELAY);
-        bcode_cancelled = digitalRead(pinCartridgeDetected) == HIGH;
-        if (bcode_cancelled)
+        if (digitalRead(pinCartridgeDetected) == HIGH)
+        {
+            device_state.test_state = TestState::CANCELLED;
+        }
+        if (device_state.test_state == TestState::CANCELLED)
         {
             Log.info("Cartridge removed, cancelling test");
         }
@@ -2097,7 +2096,7 @@ int process_one_BCODE_command(int cmd, int index)
     unsigned long start_time;
     uint8_t number;
 
-    if (bcode_cancelled)
+    if (device_state.test_state == TestState::CANCELLED)
         return index;
 
     BCODE_loop();
@@ -2183,7 +2182,7 @@ int process_one_BCODE_command(int cmd, int index)
         start_index = index + 1;
         for (int i = 0; i < param1; i += 1)
         {
-            if (bcode_cancelled)
+            if (device_state.test_state == TestState::CANCELLED)
                 break;
             index = process_BCODE(start_index);
         }
@@ -2209,7 +2208,7 @@ int process_BCODE(int start_index)
     index = get_BCODE_token(start_index, &cmd);
     if ((start_index == 0) && (cmd != 0))
     { // first command
-        bcode_cancelled = true;
+        device_state.test_state = TestState::CANCELLED;
         return -1;
     }
     else
@@ -2217,7 +2216,7 @@ int process_BCODE(int start_index)
         index = process_one_BCODE_command(cmd, index);
     }
 
-    while ((cmd != 99) && (index > 0) && !bcode_cancelled)
+    while ((cmd != 99) && (index > 0) && (device_state.test_state != TestState::CANCELLED))
     {
         index = get_BCODE_token(index, &cmd);
         index = process_one_BCODE_command(cmd, index);
@@ -2234,22 +2233,20 @@ int process_BCODE(int start_index)
 
 int start_stress_test(int limit, int led_power)
 {
-    stress_test_mode = true;
+    device_state.transition_to(DeviceMode::STRESS_TESTING);
     eeprom.stress_test_cycles = 0;
     eeprom.stress_test_reading_count = 0;
     EEPROM.put(0, eeprom);
     stress_test_limit = limit;
     stress_test_LED_power = led_power;
     stress_test_step = 0;
-    stress_test_stop_flag = false;
     Particle.disconnect();
     return 1;
 }
 
 void stop_stress_test()
 {
-    stress_test_mode = false;
-    stress_test_stop_flag = false;
+    device_state.transition_to(DeviceMode::IDLE);
 }
 
 int stress_test_loop_time()
@@ -2268,7 +2265,7 @@ void stress_test_delay(int target_duration)
     for (int i = 0; i < cycles; i++)
     {
         delayMicroseconds(1000 * (BCODE_MAX_DELAY - stress_test_loop_time()));
-        if (stress_test_stop_flag)
+        if (device_state.mode != DeviceMode::STRESS_TESTING)
             return;
     }
     loop_time = stress_test_loop_time();
@@ -2365,7 +2362,7 @@ void do_stress_test_step(int step)
         EEPROM.put(0, eeprom);
         if (stress_test_limit != 0 && eeprom.stress_test_cycles >= stress_test_limit)
         {
-            stress_test_stop_flag = true;
+            device_state.transition_to(DeviceMode::IDLE);
             reset_stage(true);
         }
         break;
@@ -2657,7 +2654,7 @@ int particle_command(String arg)
         result = start_stress_test(param1, param2);
         break;
     case 93: // stop stress test
-        stress_test_stop_flag = true;
+        device_state.transition_to(DeviceMode::IDLE);
         result = 1;
         break;
         //
@@ -2767,8 +2764,7 @@ int particle_command(String arg)
         output_cache();
         break;
     case 403: // upload test
-        test_upload_mode = true;
-        test_upload_in_progress = false;
+        device_state.transition_to(DeviceMode::UPLOADING_RESULTS);
         result = 1;
         break;
     case 404: // check assay files
@@ -2875,23 +2871,23 @@ int test_runner(String cartridgeId)
 {
     if (detector_on)
     {
-        cartridge_inserted = true;
+        device_state.cartridge_state = CartridgeState::DETECTED;
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
         {
             strcpy(barcode_uuid, cartridgeId.c_str());
-            cartridge_validation_mode = true;
+            device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             return 0;
         }
         else
         {
-            cartridge_validation_mode = false;
+            device_state.transition_to(DeviceMode::IDLE);
             Log.info("Invalid cartridge ID: %s", cartridgeId.c_str());
             return cartridgeId.length();
         }
     }
     else
     {
-        cartridge_inserted = false;
+        device_state.cartridge_state = CartridgeState::NOT_INSERTED;
         Log.info("Cartridge not inserted");
         return -1;
     }
@@ -2932,12 +2928,21 @@ int reset_cartridge(String cartridgeId)
 //                                                         //
 /////////////////////////////////////////////////////////////
 
-void reset_globals()
+void reset_device_state()
 {
+    device_state.reset_to_idle();
+    device_state.test_state = TestState::NOT_STARTED;
+    device_state.cartridge_state = CartridgeState::NOT_INSERTED;
+    device_state.cloud_operation_pending = false;
+    device_state.last_error = "";
+    
+    // Clear UUIDs
     memset(barcode_uuid, 0, BARCODE_UUID_LENGTH + 1);
     memset(test.cartridge_id, 0, BARCODE_UUID_LENGTH + 1);
     memset(test.assay_id, 0, ASSAY_UUID_LENGTH + 1);
     memset(assay.id, 0, ASSAY_UUID_LENGTH + 1);
+    
+    Log.info("Device state reset to IDLE");
 }
 
 void disconnect_from_cloud()
@@ -3001,6 +3006,8 @@ void output_test_readings(BrevitestTestRecord *t)
 
 void run_test()
 {
+    device_state.test_state = TestState::RUNNING;
+    
     disconnect_from_cloud();
 
     turn_on_dont_touch_LED();
@@ -3011,7 +3018,6 @@ void run_test()
 
     stop_temperature_control();
 
-    bcode_cancelled = false;
     memcpy(eeprom.running_test_uuid, test.cartridge_id, BARCODE_UUID_LENGTH + 1);
     memcpy(eeprom.running_assay_id, test.assay_id, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
@@ -3029,15 +3035,15 @@ void run_test()
 
     start_temperature_control();
 
-    if (bcode_cancelled)
+    if (device_state.test_state == TestState::CANCELLED)
     {
         Log.info("Test cancelled");
         test.number_of_readings = 0;
-        bcode_cancelled = false;
     }
     else
     {
         Log.info("Test completed successfully");
+        device_state.test_state = TestState::COMPLETED;
     }
 
     write_test_to_file();
@@ -3046,13 +3052,12 @@ void run_test()
     memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
     EEPROM.put(0, eeprom);
 
-    cartridge_validated = false;
-    test_upload_mode = true;
-    test_upload_in_progress = false;
-    test_underway = false;
+    device_state.cartridge_state = CartridgeState::TEST_COMPLETE;
+    device_state.test_state = TestState::UPLOAD_PENDING;
+    device_state.transition_to(DeviceMode::UPLOADING_RESULTS);
 
     reset_stage(true);
-    reset_globals();
+    reset_device_state();
 
     connect_to_cloud();
 
@@ -3119,15 +3124,15 @@ void setup()
     Log.info("====== Serial Connected, Begin Setup ======");
 
     init_digital_pin(pinCartridgeDetected, INPUT_PULLUP);
-    detector_on = digitalRead(pinCartridgeDetected) == LOW;
-    if (detector_on)
+    device_state.detector_on = digitalRead(pinCartridgeDetected) == LOW;
+    if (device_state.detector_on)
     {
-        cartridge_inserted = true;
+        device_state.cartridge_state = CartridgeState::DETECTED;
         turn_on_remove_cartridge_LED();
     }
     else
     {
-        cartridge_inserted = false;
+        device_state.cartridge_state = CartridgeState::NOT_INSERTED;
         turn_on_dont_touch_LED();
     }
 
@@ -3214,8 +3219,11 @@ void setup()
     turn_on_buzzer_for_duration(250, 330);
     buzzer_timer.start();
 
-    test_upload_mode = test_in_cache();
-    test_upload_in_progress = false;
+    // Initialize state machine
+    device_state.mode = DeviceMode::INITIALIZING;
+    device_state.test_state = TestState::NOT_STARTED;
+    device_state.cartridge_state = CartridgeState::NOT_INSERTED;
+    device_state.cloud_operation_pending = false;
 
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
     if (test_interrupted)
@@ -3229,7 +3237,7 @@ void setup()
         EEPROM.put(0, eeprom);
     }
 
-    reset_globals();
+    reset_device_state();
 
     Log.info("device id: %s", device_id.c_str());
     Log.info("Firmware version: %d", eeprom.firmware_version);
@@ -3238,12 +3246,15 @@ void setup()
     Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
     Log.info("Last stress test cycles: %d", eeprom.stress_test_cycles);
     Log.info("Interrupted test ? %c", test_interrupted ? 'Y' : 'N');
-    Log.info("Cached test ? %c", test_upload_mode ? 'Y' : 'N');
+    Log.info("Cached test ? %c", test_in_cache() ? 'Y' : 'N');
 
     start_temperature_control();
 
     load_latest_magnet_validation(false);
 
+    // Transition to IDLE state after setup complete
+    device_state.transition_to(DeviceMode::IDLE);
+    
     Log.info("Setup complete");
 }
 
@@ -3279,49 +3290,49 @@ bool heater_debounced()
 
 void set_device_indicators()
 {
-    if (stress_test_mode)
-    {
-        turn_on_dont_touch_LED();
-    }
-    else if (barcode_invalid)
-    {
-        turn_on_remove_cartridge_LED();
-        turn_on_buzzer_problem();
-    }
-    else if (!heater_debounced() || !Particle.connected())
-    {
-        if (detector_on)
-        {
-            turn_on_remove_cartridge_LED();
-        }
-        else
-        {
+    switch (device_state.mode) {
+        case DeviceMode::STRESS_TESTING:
+        case DeviceMode::RUNNING_TEST:
+        case DeviceMode::BARCODE_SCANNING:
+        case DeviceMode::VALIDATING_CARTRIDGE:
+        case DeviceMode::VALIDATING_MAGNETOMETER:
             turn_on_dont_touch_LED();
-        }
-    }
-    else if (barcode_scan_mode || cartridge_validation_mode || cartridge_validation_in_progress || test_underway || magnet_validation_mode)
-    {
-        turn_on_dont_touch_LED();
-    }
-    else if (cartridge_validated && (cartridge_inserted || magnetometer_inserted || stress_test_cartridge_inserted))
-    {
-        turn_on_dont_touch_LED();
-        if (test_completed)
-        {
-            turn_on_buzzer_alert();
-        }
-    }
-    else
-    {
-        if (detector_on)
-        {
-            turn_on_remove_cartridge_LED();
-            turn_on_buzzer_alert();
-        }
-        else
-        {
-            turn_on_insert_cartridge_LED();
-        }
+            break;
+            
+        case DeviceMode::ERROR_STATE:
+            if (device_state.is_cartridge_invalid()) {
+                turn_on_remove_cartridge_LED();
+                turn_on_buzzer_problem();
+            } else {
+                turn_on_dont_touch_LED();
+            }
+            break;
+            
+        case DeviceMode::HEATING:
+            if (device_state.detector_on) {
+                turn_on_remove_cartridge_LED();
+            } else {
+                turn_on_dont_touch_LED();
+            }
+            break;
+            
+        case DeviceMode::IDLE:
+            if (device_state.detector_on) {
+                turn_on_remove_cartridge_LED();
+                turn_on_buzzer_alert();
+            } else {
+                turn_on_insert_cartridge_LED();
+            }
+            break;
+            
+        case DeviceMode::UPLOADING_RESULTS:
+        case DeviceMode::RESETTING_CARTRIDGE:
+            turn_on_dont_touch_LED();
+            break;
+            
+        case DeviceMode::INITIALIZING:
+            turn_on_dont_touch_LED();
+            break;
     }
 }
 
@@ -3334,42 +3345,38 @@ void set_device_indicators()
 void barcode_scan_loop()
 {
     int max_cycles;
-    if (detector_on)
+    if (device_state.detector_on && device_state.mode == DeviceMode::BARCODE_SCANNING)
     {
-        if (barcode_scan_mode)
+        switch (scan_barcode())
         {
-            cartridge_inserted = cartridge_validation_mode = cartridge_validated = false;
-            magnetometer_inserted = magnet_validation_mode = false;
-            switch (scan_barcode())
-            {
-            case BARCODE_TYPE_CARTRIDGE:
-                cartridge_inserted = true;
-                cartridge_validation_mode = true;
-                Log.info("Cartridge inserted");
-                break;
-            case BARCODE_TYPE_MAGNETOMETER:
-                magnetometer_inserted = true;
-                magnet_validation_mode = true;
-                Log.info("Magnetometer inserted");
-                break;
-            case BARCODE_TYPE_STRESS_TEST:
-                stress_test_cartridge_inserted = true;
-                max_cycles = atoi(&barcode_uuid[12]);
-                start_stress_test(max_cycles, LED_DEFAULT_POWER);
-                Log.info("Stress test started, max_cycles = %d", max_cycles);
-                break;
-            default:
-                barcode_invalid = true;
-                Log.info("Unknown barcode format");
-            }
-            barcode_scan_mode = false;
+        case BARCODE_TYPE_CARTRIDGE:
+            device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
+            Log.info("Cartridge inserted");
+            break;
+        case BARCODE_TYPE_MAGNETOMETER:
+            device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.transition_to(DeviceMode::VALIDATING_MAGNETOMETER);
+            Log.info("Magnetometer inserted");
+            break;
+        case BARCODE_TYPE_STRESS_TEST:
+            device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            max_cycles = atoi(&barcode_uuid[12]);
+            start_stress_test(max_cycles, LED_DEFAULT_POWER);
+            device_state.transition_to(DeviceMode::STRESS_TESTING);
+            Log.info("Stress test started, max_cycles = %d", max_cycles);
+            break;
+        default:
+            device_state.cartridge_state = CartridgeState::INVALID;
+            device_state.set_error("Unknown barcode format");
+            Log.info("Unknown barcode format");
         }
     }
 }
 
 void stress_test_loop()
 {
-    if (stress_test_stop_flag)
+    if (device_state.mode != DeviceMode::STRESS_TESTING)
     {
         stop_stress_test();
     }
@@ -3384,7 +3391,7 @@ void magnet_validation_loop()
 {
     if (validate_magnets())
     {
-        magnet_validation_mode = false;
+        device_state.transition_to(DeviceMode::IDLE);
     }
 }
 
@@ -3392,6 +3399,7 @@ void hardware_loop()
 {
     previous_heater_ready = heater_ready;
     heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
+    device_state.heater_ready = heater_ready;
 
     if (detector_debouncing)
     {
@@ -3400,31 +3408,36 @@ void hardware_loop()
             detector_debouncing_time = 0;
             detector_debouncing = false;
             detector_changed = false;
-            detector_on = digitalRead(pinCartridgeDetected) == LOW;
-            Log.info("%s detected", detector_on ? "Insertion" : "Removal");
-            if (detector_on)
+            bool new_detector_state = digitalRead(pinCartridgeDetected) == LOW;
+            device_state.detector_on = new_detector_state;
+            
+            Log.info("%s detected", new_detector_state ? "Insertion" : "Removal");
+            
+            if (new_detector_state)
             {
+                // Cartridge inserted
                 reset_stage(false);
                 move_stage_to_test_start_position();
                 sleep_motor();
-                if (heater_ready)
+                
+                if (heater_ready && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
                 {
+                    device_state.cartridge_state = CartridgeState::DETECTED;
+                    device_state.transition_to(DeviceMode::BARCODE_SCANNING);
                     turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
-                    barcode_scan_mode = true;
-                    barcode_invalid = false;
                 }
                 else
                 {
-                    barcode_invalid = true;
+                    device_state.cartridge_state = CartridgeState::DETECTED;
+                    device_state.set_error("Heater not ready for cartridge insertion");
                 }
             }
             else
             {
+                // Cartridge removed - reset to idle state
                 reset_stage(true);
                 turn_off_buzzer_timer();
-                cartridge_inserted = false;
-                barcode_scan_mode = false;
-                barcode_invalid = false;
+                device_state.reset_to_idle();
             }
         }
     }
@@ -3476,31 +3489,56 @@ void loop()
     process_serial_port();
     hardware_loop();
 
-    if (stress_test_mode)
-    {
-        stress_test_loop();
-    }
-    else if (cartridge_reset_mode && !cartridge_reset_in_progress)
-    {
-        publish_reset_cartridge();
-    }
-    else if (test_upload_mode && !test_upload_in_progress)
-    {
-        publish_upload_test();
-    }
-    else if (heater_debounced())
-    {
-        if (cartridge_validation_mode && !cartridge_validation_in_progress)
-        {
-            publish_validate_cartridge();
-        }
-        else if (magnet_validation_mode)
-        {
-            magnet_validation_loop();
-        }
-        else if (barcode_scan_mode)
-        {
-            barcode_scan_loop();
-        }
+    switch (device_state.mode) {
+        case DeviceMode::STRESS_TESTING:
+            stress_test_loop();
+            break;
+            
+        case DeviceMode::RESETTING_CARTRIDGE:
+            if (!device_state.cloud_operation_pending) {
+                publish_reset_cartridge();
+            }
+            break;
+            
+        case DeviceMode::UPLOADING_RESULTS:
+            if (!device_state.cloud_operation_pending) {
+                publish_upload_test();
+            }
+            break;
+            
+        case DeviceMode::BARCODE_SCANNING:
+            if (heater_debounced()) {
+                barcode_scan_loop();
+            }
+            break;
+            
+        case DeviceMode::VALIDATING_CARTRIDGE:
+            if (heater_debounced() && !device_state.cloud_operation_pending) {
+                publish_validate_cartridge();
+            }
+            break;
+            
+        case DeviceMode::VALIDATING_MAGNETOMETER:
+            if (heater_debounced()) {
+                magnet_validation_loop();
+            }
+            break;
+            
+        case DeviceMode::IDLE:
+        case DeviceMode::HEATING:
+            // Wait for state changes from hardware_loop
+            break;
+            
+        case DeviceMode::ERROR_STATE:
+            // Handle error state - could add recovery logic here
+            break;
+            
+        case DeviceMode::RUNNING_TEST:
+            // Test is running in BCODE - no additional action needed in main loop
+            break;
+            
+        case DeviceMode::INITIALIZING:
+            // Device startup - handled in setup()
+            break;
     }
 }
