@@ -1244,7 +1244,7 @@ void check_magnets_in_one_well(int well, int fd)
 int validate_magnets()
 {
     int tries = 10;
-    if (detector_on)
+    if (device_state.detector_on)
     {
         magnetometer_found = false;
         BLE_scan();
@@ -2939,7 +2939,7 @@ int particle_command(String arg)
 
 int test_runner(String cartridgeId)
 {
-    if (detector_on)
+    if (device_state.detector_on)
     {
         device_state.cartridge_state = CartridgeState::DETECTED;
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
