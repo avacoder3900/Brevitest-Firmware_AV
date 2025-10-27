@@ -1378,7 +1378,7 @@ void check_magnets_in_one_well(int well, int fd)
 int validate_magnets()
 {
     int tries = 10;
-    if (detector_on)
+    if (device_state.detector_on)
     {
         magnetometer_found = false;
         BLE_scan();
@@ -3073,7 +3073,7 @@ int particle_command(String arg)
 
 int test_runner(String cartridgeId)
 {
-    if (detector_on)
+    if (device_state.detector_on)
     {
         device_state.cartridge_state = CartridgeState::DETECTED;
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
@@ -3825,6 +3825,11 @@ void loop()
             if (!device_state.cloud_operation_pending) {
                 publish_reset_cartridge();
             }
+            // Check for timeout if we're waiting for a response
+            else if (device_state.cloud_operation_pending && device_state.is_cloud_operation_timeout(30000)) {
+                Log.error("Cartridge reset timeout - no response from cloud");
+                device_state.set_error("Cartridge reset timeout");
+            }
             break;
             
         case DeviceMode::UPLOADING_RESULTS:
@@ -3832,6 +3837,11 @@ void loop()
             // Only publish if not already waiting for response
             if (!device_state.cloud_operation_pending) {
                 publish_upload_test();
+            }
+            // Check for timeout if we're waiting for a response
+            else if (device_state.cloud_operation_pending && device_state.is_cloud_operation_timeout(30000)) {
+                Log.error("Test upload timeout - no response from cloud");
+                device_state.set_error("Test upload timeout");
             }
             break;
             
@@ -3845,9 +3855,20 @@ void loop()
             
         case DeviceMode::VALIDATING_CARTRIDGE:
             // === CARTRIDGE VALIDATION MODE ===
+            // Check cloud connection first
+            if (!Particle.connected()) {
+                Log.error("Not connected to Particle cloud - cannot validate cartridge");
+                device_state.set_error("No cloud connection");
+                break;
+            }
             // Only validate if heater ready and not already waiting for response
             if (heater_debounced() && !device_state.cloud_operation_pending) {
                 publish_validate_cartridge();
+            }
+            // Check for timeout if we're waiting for a response
+            else if (device_state.cloud_operation_pending && device_state.is_cloud_operation_timeout(30000)) {
+                Log.error("Cartridge validation timeout - no response from cloud");
+                device_state.set_error("Cartridge validation timeout");
             }
             break;
             
