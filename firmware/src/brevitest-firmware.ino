@@ -573,6 +573,13 @@ void testBluetoothOnly()
     Serial.println("✓ Bluetooth ON, All others OFF");
 }
 
+void testFCCCompliance()
+{
+    Serial.println("➜ TEST MODE: FCC Compliance (All Radios)");
+    enableAllRadios();
+    Serial.println("✓ WiFi, Cellular, and Bluetooth ON");
+}
+
 void emissionCheck()
 {
     Serial.println("\n╔════════════════════════════════╗");
@@ -640,6 +647,7 @@ void displayHelp()
     Serial.println("║   8500 - Test WiFi only               ║");
     Serial.println("║   8501 - Test Cellular only           ║");
     Serial.println("║   8502 - Test Bluetooth only          ║");
+    Serial.println("║   8503 - FCC compliance (all radios)  ║");
     Serial.println("║                                       ║");
     Serial.println("║ MASTER CONTROL:                       ║");
     Serial.println("║   8900 - ALL radios OFF               ║");
@@ -2855,6 +2863,10 @@ int particle_command(String arg)
 
     case 8502:
         testBluetoothOnly();
+        break;
+
+    case 8503:
+        testFCCCompliance();
         break;
 
     // ===== EMISSION CHECK =====
