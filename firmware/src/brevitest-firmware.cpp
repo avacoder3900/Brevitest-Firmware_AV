@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "c:/Users/jacobq/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -141,7 +141,7 @@ void magnet_validation_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "c:/Users/jacobq/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 
@@ -2216,7 +2216,20 @@ void response_upload_test(CloudEvent upload_event)
         {
             Log.info("Uploaded test successful, but %s not removed from cache", cartridgeId.c_str());
         }
-        device_state.transition_to(DeviceMode::IDLE);
+        
+        // === CHECK FOR MORE CACHED TESTS ===
+        // Stay in UPLOADING_RESULTS if more tests need to be uploaded
+        if (test_in_cache())
+        {
+            Log.info("More cached tests found, continuing upload");
+            // Stay in UPLOADING_RESULTS mode - don't transition to IDLE yet
+        }
+        else
+        {
+            // No more cached tests - safe to transition to IDLE
+            Log.info("All cached tests uploaded");
+            device_state.transition_to(DeviceMode::IDLE);
+        }
     }
     else
     {
@@ -3284,7 +3297,6 @@ void run_test()
 
     // === CLEANUP AND RECONNECT ===
     reset_stage(true);
-    reset_device_state();
     connect_to_cloud();
     turn_on_buzzer_alert();
 }
