@@ -1723,8 +1723,18 @@ void spectrophotometer_reading_continuous(bool baseline, int scans, bool log)
         test.test_scans = scans;
     }
 
-    // Calculate step delay once at start using test.atime and test.astep
-    int step_delay = calculate_step_delay_for_integration_time(test.atime, test.astep);
+    // Calculate read time in microseconds: 2.78 * (ASTEP+1) * (ATIME+1)
+    unsigned long read_time_us = calculate_integration_time_us(test.atime, test.astep);
+    
+    // Calculate reading_distance: distance stage travels during one reading
+    // Step delay = MOTOR_SENSOR_STEP_DELAY (1000 us)
+    // Each step duration = 2 * step_delay = 2000 us
+    // Distance per step = MOTOR_MICRONS_PER_EIGHTH_STEP (25 microns)
+    // reading_distance = (read_time_us / (2 * MOTOR_SENSOR_STEP_DELAY)) * MOTOR_MICRONS_PER_EIGHTH_STEP
+    int reading_distance = (int)((read_time_us / (2 * MOTOR_SENSOR_STEP_DELAY)) * MOTOR_MICRONS_PER_EIGHTH_STEP);
+    
+    // Calculate number of segments needed to cover well length
+    int num_segments = (SPECTRO_WELL_LENGTH + reading_distance - 1) / reading_distance; // Ceiling division
 
     for (int i = 0; i < scans; i++)
     {
@@ -1732,10 +1742,125 @@ void spectrophotometer_reading_continuous(bool baseline, int scans, bool log)
         analogWrite(heater.heater_pin, 0, HEATER_PWM_FREQUENCY);
         delayMicroseconds(HEATER_STABILIZATION_TIME_US);
 
+        // Move stage to starting position
+        move_stage_to_position(SPECTRO_STARTING_STAGE_POSITION, MOTOR_FAST_STEP_DELAY);
+
         // Read each channel (A, B, C) sequentially
         for (int j = 0; j < 3; j++)
         {
-            single_continuous_reading(i, channels[j], true, log, step_delay);
+            char channel = channels[j];
+            DFRobot_AS7341 as7341(&Wire);
+            
+            if (power_on_spectrophotometer(channel))
+            {
+                if (init_spectrophotometer(channel, &as7341))
+                {
+                    // Turn on laser once for all segments of this channel
+                    turn_on_laser(channel);
+                    delay(10); // 10ms warmup delay
+                    
+                    // For each segment
+                    for (int seg = 0; seg < num_segments; seg++)
+                    {
+                        // Calculate segment start and end positions
+                        int segment_start = SPECTRO_STARTING_STAGE_POSITION + seg * reading_distance;
+                        int segment_end = segment_start + reading_distance;
+                        
+                        // Last segment may be shorter
+                        if (segment_end > SPECTRO_STARTING_STAGE_POSITION + SPECTRO_WELL_LENGTH)
+                        {
+                            segment_end = SPECTRO_STARTING_STAGE_POSITION + SPECTRO_WELL_LENGTH;
+                        }
+                        
+                        int segment_length = segment_end - segment_start;
+                        
+                        // Move to segment start position
+                        move_stage_to_position(segment_start, MOTOR_FAST_STEP_DELAY);
+                        
+                        // Read laser output for this segment
+                        uint16_t laser_output = analogRead(get_laser(channel)->value_pin);
+                        
+                        // Create reading for this segment
+                        BrevitestSpectrophotometerReading *reading = &(test.reading[test.number_of_readings]);
+                        reading->number = i;
+                        reading->channel = channel;
+                        reading->temperature = heater.temp_C_10X;
+                        reading->position = segment_start; // Set to segment start position
+                        reading->laser_output = laser_output; // Read laser output for this segment
+                        
+                        // Start F1F4ClearNIR measurement
+                        unsigned long startTime = millis();
+                        as7341.startMeasure(as7341.eF1F4ClearNIR);
+                        
+                        // Move stage through segment while sensor integrates
+                        move_stage(segment_length, MOTOR_SENSOR_STEP_DELAY);
+                        
+                        // Wait for F1F4ClearNIR measurement to complete
+                        while (!as7341.measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
+                        {
+                            delayMicroseconds(100);
+                        }
+                        
+                        if (as7341.measureComplete())
+                        {
+                            DFRobot_AS7341::sModeOneData_t data1;
+                            data1 = as7341.readSpectralDataOne();
+                            reading->f1 = data1.ADF1;
+                            reading->f2 = data1.ADF2;
+                            reading->f3 = data1.ADF3;
+                            reading->f4 = data1.ADF4;
+                            reading->clear = data1.ADCLEAR;
+                            reading->nir = data1.ADNIR;
+                        }
+                        else
+                        {
+                            Log.info("F1F4ClearNIR measurement timed out");
+                        }
+                        
+                        reading->msec = millis();
+                        
+                        // Move back to segment start for F5-F8 measurement
+                        move_stage_to_position(segment_start, MOTOR_FAST_STEP_DELAY);
+                        
+                        // Start F5F8ClearNIR measurement
+                        startTime = millis();
+                        as7341.startMeasure(as7341.eF5F8ClearNIR);
+                        
+                        // Move stage through segment again while sensor integrates
+                        move_stage(segment_length, MOTOR_SENSOR_STEP_DELAY);
+                        
+                        // Wait for F5F8ClearNIR measurement to complete
+                        while (!as7341.measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT)
+                        {
+                            delayMicroseconds(100);
+                        }
+                        
+                        if (as7341.measureComplete())
+                        {
+                            DFRobot_AS7341::sModeTwoData_t data2;
+                            data2 = as7341.readSpectralDataTwo();
+                            reading->f5 = data2.ADF5;
+                            reading->f6 = data2.ADF6;
+                            reading->f7 = data2.ADF7;
+                            reading->f8 = data2.ADF8;
+                        }
+                        else
+                        {
+                            Log.info("F5F8ClearNIR measurement timed out");
+                        }
+                        
+                        test.number_of_readings++;
+                        if (log)
+                        {
+                            Serial.printlnf("%d\t%c\t\t%d\t\t%d\t%lu\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d", reading->number, reading->channel, reading->position, reading->temperature, reading->msec, reading->laser_output, reading->f1, reading->f2, reading->f3, reading->f4, reading->f5, reading->f6, reading->f7, reading->f8, reading->clear, reading->nir);
+                        }
+                    }
+                    
+                    // Turn off laser after all segments for this channel
+                    turn_off_all_lasers();
+                }
+            }
+            power_off_all_spectrophotometers();
         }
 
         // Restore heater power
