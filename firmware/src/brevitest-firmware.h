@@ -305,6 +305,12 @@ int pulsesC = 10;
 // buzzer
 void check_buzzer(void);
 Timer buzzer_timer(BUZZER_ALERT_PERIOD, check_buzzer);
+
+// continuous scanning spectrophotometer functions
+unsigned long calculate_integration_time_us(uint8_t atime, uint16_t astep);
+int calculate_step_delay_for_integration_time(uint8_t atime, uint16_t astep);
+void single_continuous_reading(uint8_t number, char channel, bool lasers_on, bool log, int step_delay);
+void spectrophotometer_reading_continuous(bool baseline, int scans, bool log);
 bool start_alert_buzzer = false;
 bool buzzer_alert_running = false;
 bool start_problem_buzzer = false;
