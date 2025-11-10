@@ -3150,7 +3150,6 @@ void run_test()
 
     // === CLEANUP AND RECONNECT ===
     reset_stage(true);
-    reset_device_state();
     connect_to_cloud();
     turn_on_buzzer_alert();
 }
