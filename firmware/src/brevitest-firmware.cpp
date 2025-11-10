@@ -2216,7 +2216,20 @@ void response_upload_test(CloudEvent upload_event)
         {
             Log.info("Uploaded test successful, but %s not removed from cache", cartridgeId.c_str());
         }
-        device_state.transition_to(DeviceMode::IDLE);
+        
+        // === CHECK FOR MORE CACHED TESTS ===
+        // Stay in UPLOADING_RESULTS if more tests need to be uploaded
+        if (test_in_cache())
+        {
+            Log.info("More cached tests found, continuing upload");
+            // Stay in UPLOADING_RESULTS mode - don't transition to IDLE yet
+        }
+        else
+        {
+            // No more cached tests - safe to transition to IDLE
+            Log.info("All cached tests uploaded");
+            device_state.transition_to(DeviceMode::IDLE);
+        }
     }
     else
     {
