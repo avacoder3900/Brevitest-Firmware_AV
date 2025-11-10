@@ -13,7 +13,7 @@
  * @url https://github.com/DFRobot/DFRobot_AS7341
  */
 
-#include "application.h"
+#include "Particle.h"
 
 #ifndef DFROBOT_AS7341_H
 #define DFROBOT_AS7341_H

@@ -12,11 +12,11 @@
 #ifndef DEVICE_STATE_H
 #define DEVICE_STATE_H
 
-#include "application.h"
+#include "Particle.h"
 
 /**
  * @brief Primary device operational states
- * 
+ *
  * These represent the main operational modes of the device. Only one
  * DeviceMode can be active at a time, and transitions between modes
  * are validated to prevent invalid state combinations.
