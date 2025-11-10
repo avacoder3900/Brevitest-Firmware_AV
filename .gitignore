@@ -6,3 +6,4 @@ production/brevitest_v1_0/.vscode/settings.json
 node_modules/*
 firmware/wifi-test/
 firmware/src/brevitest-firmware.cpp
+msom_firmware*.*
