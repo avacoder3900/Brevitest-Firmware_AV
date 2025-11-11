@@ -3947,7 +3947,9 @@ void hardware_loop()
 {
     // === HEATER TEMPERATURE MONITORING ===
     previous_heater_ready = heater_ready;
-    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
+    int temp_delta = heater.target_C_10X - heater.temp_C_10X;
+    // Check that temperature is within range AND positive (temp must be below target)
+    heater_ready = (temp_delta >= 0 && temp_delta < HEATER_READY_TEMP_DELTA);
     device_state.heater_ready = heater_ready;
 
     // === CARTRIDGE DETECTION DEBOUNCING ===
