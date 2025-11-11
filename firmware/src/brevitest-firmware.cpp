@@ -1752,6 +1752,8 @@ void spectrophotometer_reading(bool baseline, int scans, bool log)
 
 void spectrophotometer_reading_continuous(bool baseline, int starting_position, int distance_to_scan, int step_delay_us, bool log)
 {
+    int previous_position = stage_position;
+
     if (baseline)
     {
         test.baseline_scans = 1;
@@ -1895,6 +1897,9 @@ void spectrophotometer_reading_continuous(bool baseline, int starting_position, 
         }
         power_off_all_spectrophotometers();
     }
+    
+    // Return stage to previous position
+    move_stage_to_position(previous_position, MOTOR_FAST_STEP_DELAY);
 
     // Restore heater power
     analogWrite(heater.heater_pin, heater.power, HEATER_PWM_FREQUENCY);
