@@ -3838,10 +3838,15 @@ void set_device_indicators()
             turn_on_remove_cartridge_LED();
             turn_on_buzzer_alert();
         }
+        else if (device_state.heater_ready)
+        {
+            // Heater ready and no cartridge - ready for cartridge insertion
+            turn_on_insert_cartridge_LED();
+        }
         else
         {
-            // Ready for cartridge insertion
-            turn_on_insert_cartridge_LED();
+            // Heater not ready - don't touch
+            turn_on_dont_touch_LED();
         }
         break;
 
