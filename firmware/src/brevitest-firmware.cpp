@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -146,7 +146,7 @@ void magnet_validation_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 
@@ -1811,6 +1811,10 @@ void spectrophotometer_reading_continuous(bool baseline, int starting_position, 
         test.test_scans = 1;
     }
 
+    test.atime = SPECTRO_ATIME_DEFAULT;
+    test.astep = SPECTRO_ASTEP_DEFAULT;
+    test.again = SPECTRO_AGAIN_DEFAULT;
+
     // Calculate read time in microseconds: 2.78 * (ASTEP+1) * (ATIME+1)
     unsigned long read_time_us = calculate_integration_time_us(test.atime, test.astep);
 
@@ -3250,7 +3254,7 @@ int particle_command(String arg)
     case 405: // clear assay files
         result = clear_assay_files();
         break;
-    case 406:
+    case 406: // output assay file param1 = file number
         indx = get_next_command_param(arg, indx, &param1, 1);
         result = output_assay_file(param1);
         break;

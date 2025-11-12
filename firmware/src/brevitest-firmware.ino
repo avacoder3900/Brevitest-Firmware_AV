@@ -1672,6 +1672,10 @@ void spectrophotometer_reading_continuous(bool baseline, int starting_position, 
         test.test_scans = 1;
     }
 
+    test.atime = SPECTRO_ATIME_DEFAULT;
+    test.astep = SPECTRO_ASTEP_DEFAULT;
+    test.again = SPECTRO_AGAIN_DEFAULT;
+
     // Calculate read time in microseconds: 2.78 * (ASTEP+1) * (ATIME+1)
     unsigned long read_time_us = calculate_integration_time_us(test.atime, test.astep);
 
