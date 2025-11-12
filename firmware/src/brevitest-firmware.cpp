@@ -3492,49 +3492,116 @@ int reset_cartridge(String cartridgeId)
 
 /**
  * @brief Get current device state via Particle Cloud
- * @param params Optional parameters (ignored)
+ * @param params "?" or "help" for usage info, "" for state
  * @return Current device state as integer (0-10 representing DeviceMode enum)
  * 
  * Particle Cloud function to query the current device state remotely.
  * Returns the enum value of the current DeviceMode.
+ * 
+ * Usage:
+ * - Call with "" (empty) to get current state number
+ * - Call with "?" or "help" to see state meanings
+ * - Also publishes state name as event for easy reading
  */
 int get_device_state(String params)
 {
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("state_help", 
+            "get_state: Returns device state as number. "
+            "States: 0=IDLE, 1=INIT, 2=HEATING, 3=BARCODE_SCAN, 4=VALIDATING, "
+            "5=VALID_MAG, 6=RUNNING_TEST, 7=UPLOADING, 8=RESETTING, 9=STRESS_TEST, 10=ERROR. "
+            "Call with empty '' to get current state.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
     int state_value = static_cast<int>(device_state.mode);
-    Log.info("Cloud query: device state = %s (%d)", 
-             device_mode_to_string(device_state.mode).c_str(), 
-             state_value);
+    String state_name = device_mode_to_string(device_state.mode);
+    
+    // Publish state name as event for easy reading in Console
+    Particle.publish("device_state", 
+                    String::format("State: %s (value: %d)", state_name.c_str(), state_value), 
+                    PRIVATE);
+    
+    Log.info("Cloud query: device state = %s (%d)", state_name.c_str(), state_value);
     return state_value;
 }
 
 /**
  * @brief Get state transition count via Particle Cloud
- * @param params Optional parameters (ignored)
+ * @param params "?" or "help" for usage info, "" for count
  * @return Number of state transitions logged
  * 
  * Particle Cloud function to query how many state transitions have been logged.
+ * 
+ * Usage:
+ * - Call with "" (empty) to get transition count
+ * - Call with "?" or "help" for usage info
  */
 int get_transition_count_cloud(String params)
 {
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("trans_count_help", 
+            "get_trans_count: Returns total number of state transitions logged. "
+            "Max 50 transitions stored (circular buffer). "
+            "Call with empty '' to get count.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
     int count = device_state.get_transition_count();
+    
+    // Publish user-friendly message
+    Particle.publish("trans_count", 
+                    String::format("Total transitions: %d (max 50 stored)", count), 
+                    PRIVATE);
+    
     Log.info("Cloud query: transition count = %d", count);
     return count;
 }
 
 /**
  * @brief Get state transition history via Particle Cloud
- * @param params Number of transitions to include (default 10, max 20)
+ * @param params Number of transitions (1-20), "?" for help, "" for default 10
  * @return Length of history string (actual data published as event)
  * 
  * Particle Cloud function to retrieve state transition history.
  * The actual history is published as a separate event due to size constraints.
+ * 
+ * Usage:
+ * - Call with "" (empty) to get last 10 transitions
+ * - Call with "5" to get last 5 transitions
+ * - Call with "20" to get last 20 transitions (max)
+ * - Call with "?" or "help" for usage info
+ * - History published as "state_history" event - check Events tab!
  */
 int get_state_history(String params)
 {
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("history_help", 
+            "get_history: Retrieves state transition history with timestamps. "
+            "Usage: Call with number 1-20 (default 10). Example: '5' for last 5 transitions. "
+            "History published as 'state_history' event. Check Events tab to see data! "
+            "Format: DateTime@Uptime:FROM>TO", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Parse count parameter
     int count = 10; // Default
     if (params.length() > 0) {
         count = params.toInt();
-        count = (count > 0 && count <= 20) ? count : 10;
+        if (count <= 0 || count > 20) {
+            // Invalid input - publish helpful message
+            Particle.publish("history_error", 
+                String::format("Invalid count '%s'. Use 1-20 (default 10). Call with '?' for help.", 
+                              params.c_str()), 
+                PRIVATE);
+            return -2; // Indicates error
+        }
     }
     
     String history = device_state.get_transition_history_string(count);
@@ -3543,56 +3610,131 @@ int get_state_history(String params)
     // Publish as event since it may be too large for function return
     Particle.publish("state_history", history, PRIVATE);
     
+    // Also publish a friendly summary
+    Particle.publish("history_info", 
+                    String::format("Retrieved %d transitions. Check 'state_history' event for data.", count), 
+                    PRIVATE);
+    
     return history.length();
 }
 
 /**
  * @brief Clear state transition history via Particle Cloud
- * @param params Optional parameters (ignored)
- * @return 1 on success
+ * @param params "?" for help, "yes" to confirm, anything else for help
+ * @return 1 on success, -1 for help, -2 for no confirmation
  * 
  * Particle Cloud function to clear the state transition history buffer.
+ * 
+ * Usage:
+ * - Call with "yes" to clear history
+ * - Call with "?" or "help" for usage info
+ * - Requires confirmation to prevent accidental clearing
  */
 int clear_state_history(String params)
 {
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("clear_help", 
+            "clear_history: Clears all state transition history (up to 50 entries). "
+            "WARNING: This is permanent! "
+            "Usage: Call with 'yes' to confirm clearing. "
+            "Call with '?' for help.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Require confirmation
+    if (params != "yes" && params != "YES" && params != "confirm") {
+        Particle.publish("clear_confirm", 
+            "Clear history requires confirmation. Call with 'yes' to clear, or '?' for help.", 
+            PRIVATE);
+        return -2; // Indicates confirmation needed
+    }
+    
+    int count_before = device_state.get_transition_count();
     device_state.clear_transition_history();
-    Log.info("Cloud command: state history cleared");
+    
+    Particle.publish("clear_success", 
+                    String::format("History cleared! Deleted %d transitions.", count_before), 
+                    PRIVATE);
+    
+    Log.info("Cloud command: state history cleared (%d transitions)", count_before);
     return 1;
 }
 
 /**
  * @brief Force state transition via Particle Cloud (DANGEROUS - use with caution)
- * @param params Target state as integer (0-10)
- * @return 1 on success, -1 on invalid transition
+ * @param params "?" for help, state number (0-10), or state name
+ * @return 1 on success, negative on error
  * 
  * WARNING: This function allows forcing state transitions remotely.
  * Use with extreme caution as invalid transitions may cause device malfunction.
  * Only use for recovery from error states or testing.
+ * 
+ * Usage:
+ * - Call with "?" or "help" to see available states
+ * - Call with "0" to force to IDLE (most common recovery)
+ * - Call with state number 0-10
+ * - Only valid transitions are allowed
  */
 int force_state_transition(String params)
 {
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("force_help", 
+            "force_state: DANGEROUS! Forces state transition. "
+            "States: 0=IDLE, 1=INIT, 2=HEATING, 3=BARCODE_SCAN, 4=VALIDATING, "
+            "5=VALID_MAG, 6=RUNNING_TEST, 7=UPLOADING, 8=RESETTING, 9=STRESS_TEST, 10=ERROR. "
+            "Common: Use '0' to force IDLE for recovery. Only valid transitions allowed.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
     if (params.length() == 0) {
+        Particle.publish("force_error", 
+            "No state provided. Call with state number 0-10, or '?' for help.", 
+            PRIVATE);
         Log.warn("Cloud command: force state transition - no state provided");
-        return -1;
+        return -2;
     }
     
     int target_state_int = params.toInt();
     if (target_state_int < 0 || target_state_int > 10) {
+        Particle.publish("force_error", 
+            String::format("Invalid state '%s'. Use 0-10. Call with '?' for help.", params.c_str()), 
+            PRIVATE);
         Log.warn("Cloud command: invalid state value %d", target_state_int);
-        return -1;
+        return -3;
     }
     
     DeviceMode target_state = static_cast<DeviceMode>(target_state_int);
+    String target_name = device_mode_to_string(target_state);
+    String current_name = device_mode_to_string(device_state.mode);
     
     if (!device_state.can_transition_to(target_state)) {
-        Log.warn("Cloud command: invalid transition to %s", 
-                device_mode_to_string(target_state).c_str());
-        return -1;
+        Particle.publish("force_invalid", 
+            String::format("Cannot transition from %s to %s. Transition not allowed by state machine.", 
+                          current_name.c_str(), target_name.c_str()), 
+            PRIVATE);
+        Log.warn("Cloud command: invalid transition %s -> %s", 
+                current_name.c_str(), target_name.c_str());
+        return -4;
     }
     
-    Log.warn("Cloud command: FORCING state transition to %s", 
-            device_mode_to_string(target_state).c_str());
+    // Successful transition
+    Particle.publish("force_warning", 
+                    String::format("WARNING: Forcing transition %s -> %s", 
+                                  current_name.c_str(), target_name.c_str()), 
+                    PRIVATE);
+    
+    Log.warn("Cloud command: FORCING state transition %s -> %s", 
+            current_name.c_str(), target_name.c_str());
+    
     device_state.transition_to(target_state);
+    
+    Particle.publish("force_success", 
+                    String::format("State changed to %s", target_name.c_str()), 
+                    PRIVATE);
     
     return 1;
 }

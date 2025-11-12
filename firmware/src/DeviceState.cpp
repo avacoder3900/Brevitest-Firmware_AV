@@ -124,7 +124,10 @@ void DeviceStateMachine::transition_to(DeviceMode new_mode) {
     transition_history[history_index].from_mode = mode;
     transition_history[history_index].to_mode = new_mode;
     transition_history[history_index].timestamp = Time.now();  // Unix timestamp (seconds since epoch)
-    transition_history[history_index].millis_timestamp = millis();  // Milliseconds since boot
+    
+    // Copy current barcode to this transition
+    strncpy(transition_history[history_index].barcode_id, current_barcode, 36);
+    transition_history[history_index].barcode_id[36] = '\0';  // Ensure null termination
     
     // Update circular buffer index
     history_index = (history_index + 1) % TRANSITION_HISTORY_SIZE;
@@ -301,6 +304,150 @@ String cartridge_state_to_string(CartridgeState state) {
     }
 }
 
+// === BARCODE TRACKING METHODS ===
+
+/**
+ * @brief Set the current barcode being processed
+ * 
+ * @param barcode The barcode UUID string (up to 36 characters)
+ * 
+ * Call this when a barcode is scanned. All subsequent state transitions
+ * will be associated with this barcode until it's cleared.
+ */
+void DeviceStateMachine::set_current_barcode(const char* barcode) {
+    if (barcode && barcode[0] != '\0') {
+        strncpy(current_barcode, barcode, 36);
+        current_barcode[36] = '\0';  // Ensure null termination
+        Log.info("Barcode set: %s", current_barcode);
+    }
+}
+
+/**
+ * @brief Clear the current barcode
+ * 
+ * Call this when a cartridge is removed or test is complete.
+ * Subsequent transitions will have no barcode association.
+ */
+void DeviceStateMachine::clear_current_barcode() {
+    current_barcode[0] = '\0';
+    Log.info("Barcode cleared");
+}
+
+/**
+ * @brief Get transitions associated with a specific barcode
+ * 
+ * @param barcode The barcode UUID to search for
+ * @param results Array to store matching transition indices (most recent first)
+ * @param max_results Maximum number of results to return
+ * @return Number of matching transitions found
+ * 
+ * Searches through the transition history and returns indices of all
+ * transitions that match the given barcode.
+ */
+int DeviceStateMachine::get_transitions_for_barcode(const char* barcode, int* results, int max_results) const {
+    if (!barcode || barcode[0] == '\0' || max_results <= 0) {
+        return 0;
+    }
+    
+    int found = 0;
+    
+    // Search from most recent to oldest
+    for (int i = 0; i < history_count && found < max_results; i++) {
+        const StateTransitionEntry* entry = get_transition(i);
+        if (entry && strcmp(entry->barcode_id, barcode) == 0) {
+            results[found++] = i;
+        }
+    }
+    
+    return found;
+}
+
+/**
+ * @brief Print state transition history for a specific barcode
+ * 
+ * @param barcode The barcode UUID to filter by
+ * 
+ * Prints a formatted table showing only transitions associated with
+ * the specified barcode. Includes transitions before the barcode scan
+ * if they occurred in the same session.
+ */
+void DeviceStateMachine::print_barcode_history(const char* barcode) const {
+    if (!barcode || barcode[0] == '\0') {
+        Serial.println("ERROR: No barcode specified");
+        return;
+    }
+    
+    // Find all transitions for this barcode
+    int results[TRANSITION_HISTORY_SIZE];
+    int count = get_transitions_for_barcode(barcode, results, TRANSITION_HISTORY_SIZE);
+    
+    Serial.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+    Serial.printlnf("║                     STATE TRANSITIONS FOR BARCODE: %-46s║", barcode);
+    Serial.println("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣");
+    Serial.printlnf("║ Total Matching Transitions: %-77d║", count);
+    Serial.println("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣");
+    
+    if (count == 0) {
+        Serial.println("║ No transitions found for this barcode                                                                ║");
+    } else {
+        Serial.println("║  #  │ Date & Time             │ From State            │ To State                                   ║");
+        Serial.println("╟─────┼─────────────────────────┼───────────────────────┼────────────────────────────────────────────╢");
+        
+        // Print in chronological order (reverse of search order)
+        for (int i = count - 1; i >= 0; i--) {
+            const StateTransitionEntry* entry = get_transition(results[i]);
+            if (entry) {
+                String time_str = Time.format(entry->timestamp, "%Y-%m-%d %H:%M:%S");
+                Serial.printlnf("║ %3d │ %s │ %-21s │ %-42s ║", 
+                    count - i,
+                    time_str.c_str(),
+                    device_mode_to_string(entry->from_mode).c_str(),
+                    device_mode_to_string(entry->to_mode).c_str());
+            }
+        }
+    }
+    
+    Serial.println("╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝\n");
+}
+
+/**
+ * @brief Get formatted history string for a specific barcode
+ * 
+ * @param barcode The barcode UUID to filter by
+ * @return Formatted string with barcode-specific history
+ * 
+ * Returns a compact string suitable for Particle Cloud events.
+ * Format: Barcode:UUID|Total:N|DateTime:FROM>TO;DateTime:FROM>TO;...
+ */
+String DeviceStateMachine::get_barcode_history_string(const char* barcode) const {
+    if (!barcode || barcode[0] == '\0') {
+        return "Error:No barcode specified";
+    }
+    
+    // Find all transitions for this barcode
+    int results[TRANSITION_HISTORY_SIZE];
+    int count = get_transitions_for_barcode(barcode, results, TRANSITION_HISTORY_SIZE);
+    
+    String result = String::format("Barcode:%s|Total:%d|", barcode, count);
+    
+    if (count > 0) {
+        // Add transitions in chronological order
+        for (int i = count - 1; i >= 0; i--) {
+            const StateTransitionEntry* entry = get_transition(results[i]);
+            if (entry) {
+                if (i < count - 1) result += ";";
+                String time_str = Time.format(entry->timestamp, "%Y-%m-%d %H:%M:%S");
+                result += String::format("%s:%s>%s", 
+                    time_str.c_str(),
+                    device_mode_to_string(entry->from_mode).c_str(),
+                    device_mode_to_string(entry->to_mode).c_str());
+            }
+        }
+    }
+    
+    return result;
+}
+
 // === STATE TRANSITION HISTORY METHODS ===
 
 /**
@@ -347,18 +494,18 @@ const StateTransitionEntry* DeviceStateMachine::get_transition(int index) const 
 void DeviceStateMachine::print_transition_history(int count) const {
     int num_to_print = (count == 0 || count > history_count) ? history_count : count;
     
-    Serial.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════╗");
-    Serial.println("║                    DEVICE STATE TRANSITION HISTORY                                    ║");
-    Serial.println("╠═══════════════════════════════════════════════════════════════════════════════════════╣");
-    Serial.printlnf("║ Total Transitions: %-71d║", history_count);
-    Serial.printlnf("║ Showing: %-79d║", num_to_print);
-    Serial.println("╠═══════════════════════════════════════════════════════════════════════════════════════╣");
+    Serial.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+    Serial.println("║                           DEVICE STATE TRANSITION HISTORY                                            ║");
+    Serial.println("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣");
+    Serial.printlnf("║ Total Transitions: %-86d║", history_count);
+    Serial.printlnf("║ Showing: %-94d║", num_to_print);
+    Serial.println("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣");
     
     if (num_to_print == 0) {
-        Serial.println("║ No transitions recorded yet                                                           ║");
+        Serial.println("║ No transitions recorded yet                                                                          ║");
     } else {
-        Serial.println("║  #  │ Date & Time             │ From State            │ To State          │ Uptime(ms) ║");
-        Serial.println("╟─────┼─────────────────────────┼───────────────────────┼───────────────────┼────────────╢");
+        Serial.println("║  #  │ Date & Time             │ From State            │ To State          │ Barcode            ║");
+        Serial.println("╟─────┼─────────────────────────┼───────────────────────┼───────────────────┼────────────────────╢");
         
         for (int i = 0; i < num_to_print; i++) {
             const StateTransitionEntry* entry = get_transition(i);
@@ -366,17 +513,25 @@ void DeviceStateMachine::print_transition_history(int count) const {
                 // Format time as "YYYY-MM-DD HH:MM:SS"
                 String time_str = Time.format(entry->timestamp, "%Y-%m-%d %H:%M:%S");
                 
-                Serial.printlnf("║ %3d │ %s │ %-21s │ %-17s │ %10lu ║", 
+                // Truncate barcode for display if too long
+                String barcode_display = String(entry->barcode_id);
+                if (barcode_display.length() == 0) {
+                    barcode_display = "(none)";
+                } else if (barcode_display.length() > 18) {
+                    barcode_display = barcode_display.substring(0, 15) + "...";
+                }
+                
+                Serial.printlnf("║ %3d │ %s │ %-21s │ %-17s │ %-18s ║", 
                     i + 1,
                     time_str.c_str(),
                     device_mode_to_string(entry->from_mode).c_str(),
                     device_mode_to_string(entry->to_mode).c_str(),
-                    entry->millis_timestamp);
+                    barcode_display.c_str());
             }
         }
     }
     
-    Serial.println("╚═══════════════════════════════════════════════════════════════════════════════════════╝\n");
+    Serial.println("╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝\n");
 }
 
 /**
@@ -409,13 +564,17 @@ String DeviceStateMachine::get_transition_history_string(int count) const {
         const StateTransitionEntry* entry = get_transition(i);
         if (entry) {
             if (i > 0) result += ";";
-            // Format: DateTime@Uptime:FROM>TO
+            // Format: DateTime:FROM>TO[Barcode]
             String time_str = Time.format(entry->timestamp, "%Y-%m-%d %H:%M:%S");
-            result += String::format("%s@%lu:%s>%s", 
+            String barcode = String(entry->barcode_id);
+            if (barcode.length() == 0) {
+                barcode = "none";
+            }
+            result += String::format("%s:%s>%s[%s]", 
                 time_str.c_str(),
-                entry->millis_timestamp,
                 device_mode_to_string(entry->from_mode).c_str(),
-                device_mode_to_string(entry->to_mode).c_str());
+                device_mode_to_string(entry->to_mode).c_str(),
+                barcode.c_str());
         }
     }
     

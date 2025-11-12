@@ -3277,6 +3277,50 @@ int particle_command(String arg)
         result = device_state.get_transition_count();
         break;
 
+    // ===== BARCODE TRACKING COMMANDS (9030 series) =====
+    case 9030:
+        // Display barcode tracking help
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║       BARCODE TRACKING COMMAND REFERENCE                      ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.println("║ BARCODE QUERIES:                                              ║");
+        Serial.println("║   9030 - Display this help                                    ║");
+        Serial.println("║   9031 - Show current barcode                                 ║");
+        Serial.println("║   9032 <barcode> - Show history for specific barcode          ║");
+        Serial.println("║                                                               ║");
+        Serial.println("║ USAGE EXAMPLES:                                               ║");
+        Serial.println("║   9031                - Show current tracked barcode          ║");
+        Serial.println("║   9032 ABC123...      - Show all transitions for ABC123...    ║");
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝");
+        Serial.println("\nType command number and barcode (if needed) and press Enter");
+        break;
+
+    case 9031:
+        // Show current barcode
+        if (device_state.current_barcode[0] != '\0') {
+            Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+            Serial.println("║                    CURRENT BARCODE                            ║");
+            Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+            Serial.printlnf("║ Barcode: %-52s ║", device_state.current_barcode);
+            Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        } else {
+            Serial.println("No barcode currently tracked (no cartridge inserted)");
+        }
+        result = strlen(device_state.current_barcode);
+        break;
+
+    case 9032:
+        // Show history for specific barcode (requires barcode parameter in arg)
+        if (arg.length() > 0) {
+            device_state.print_barcode_history(arg.c_str());
+            result = 1;
+        } else {
+            Serial.println("ERROR: Barcode required. Usage: 9032 <barcode>");
+            Serial.println("Example: 9032 ABC123-DEF456-GHI789");
+            result = -1;
+        }
+        break;
+
     default:
         result = 0;
     }
@@ -3596,6 +3640,66 @@ int force_state_transition(String params)
     return 1;
 }
 
+/**
+ * @brief Get state transition history for a specific barcode via Particle Cloud
+ * @param params Barcode UUID string, "?" for help
+ * @return Number of matching transitions, negative for error/help
+ * 
+ * Particle Cloud function to retrieve state transition history for a specific barcode.
+ * Shows all transitions associated with that cartridge/test.
+ * 
+ * Usage:
+ * - Call with barcode UUID to get history for that cartridge
+ * - Call with "?" or "help" for usage info
+ * - History published as "barcode_history" event
+ */
+int get_barcode_history(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("barcode_help", 
+            "get_barcode_history: Retrieves state transitions for a specific barcode. "
+            "Usage: Call with barcode UUID (36 characters). Example: 'ABC123-DEF456...'. "
+            "History published as 'barcode_history' event. Check Events tab for data! "
+            "Shows all transitions for that cartridge from insertion to removal.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Validate barcode parameter
+    if (params.length() == 0) {
+        Particle.publish("barcode_error", 
+            "No barcode provided. Call with barcode UUID, or '?' for help.", 
+            PRIVATE);
+        return -2;
+    }
+    
+    // Get history for this barcode
+    String history = device_state.get_barcode_history_string(params.c_str());
+    
+    // Check if barcode was found
+    int results[DeviceStateMachine::TRANSITION_HISTORY_SIZE];
+    int count = device_state.get_transitions_for_barcode(params.c_str(), results, DeviceStateMachine::TRANSITION_HISTORY_SIZE);
+    
+    if (count == 0) {
+        Particle.publish("barcode_not_found", 
+            String::format("No transitions found for barcode: %s", params.c_str()), 
+            PRIVATE);
+        return 0;
+    }
+    
+    // Publish history
+    Particle.publish("barcode_history", history, PRIVATE);
+    
+    // Publish summary
+    Particle.publish("barcode_info", 
+                    String::format("Found %d transitions for barcode. Check 'barcode_history' event for data.", count), 
+                    PRIVATE);
+    
+    Log.info("Cloud query: barcode history for %s (%d transitions)", params.c_str(), count);
+    return count;
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           TESTS                         //
@@ -3889,6 +3993,7 @@ void setup()
     Particle.function("get_history", get_state_history);
     Particle.function("clear_history", clear_state_history);
     Particle.function("force_state", force_state_transition);
+    Particle.function("get_barcode_hist", get_barcode_history);
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
     // Success responses
@@ -4130,6 +4235,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_CARTRIDGE:
             // === REGULAR CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             Log.info("Cartridge inserted");
             break;
@@ -4137,6 +4243,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_MAGNETOMETER:
             // === MAGNETOMETER DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             device_state.transition_to(DeviceMode::VALIDATING_MAGNETOMETER);
             Log.info("Magnetometer inserted");
             break;
@@ -4144,6 +4251,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_STRESS_TEST:
             // === STRESS TEST CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             max_cycles = atoi(&barcode_uuid[12]);
             start_stress_test(max_cycles, LED_DEFAULT_POWER);
             device_state.transition_to(DeviceMode::STRESS_TESTING);
@@ -4238,6 +4346,7 @@ void hardware_loop()
                 // Reset everything to IDLE state
                 reset_stage(true);
                 turn_off_buzzer_timer();
+                device_state.clear_current_barcode();  // Clear barcode tracking
                 device_state.reset_to_idle();
             }
         }

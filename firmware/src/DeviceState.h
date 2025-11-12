@@ -70,17 +70,19 @@ enum class CartridgeState {
  * @brief State transition history entry
  * 
  * Stores information about a single state transition for diagnostic purposes.
+ * Includes barcode association to track transitions for specific test cartridges.
  */
 struct StateTransitionEntry {
     DeviceMode from_mode;           // State transitioned from
     DeviceMode to_mode;             // State transitioned to
     time_t timestamp;               // Unix timestamp when transition occurred (seconds since epoch)
-    unsigned long millis_timestamp; // Milliseconds since boot (for relative timing)
+    char barcode_id[37];            // Associated barcode UUID (36 chars + null terminator)
     
     StateTransitionEntry() : from_mode(DeviceMode::INITIALIZING), 
                             to_mode(DeviceMode::INITIALIZING), 
-                            timestamp(0),
-                            millis_timestamp(0) {}
+                            timestamp(0) {
+        barcode_id[0] = '\0';  // Empty string by default
+    }
 };
 
 /**
@@ -120,6 +122,9 @@ struct DeviceStateMachine {
     // === ERROR TRACKING ===
     String last_error;                  // Most recent error message
     
+    // === BARCODE TRACKING ===
+    char current_barcode[37];           // Currently scanned barcode UUID (36 chars + null)
+    
     /**
      * @brief Constructor - initializes state machine to safe defaults
      * 
@@ -138,6 +143,7 @@ struct DeviceStateMachine {
         last_error = "";
         history_index = 0;
         history_count = 0;
+        current_barcode[0] = '\0';  // Initialize to empty string
     }
     
     // === STATE TRANSITION METHODS ===
@@ -252,6 +258,41 @@ struct DeviceStateMachine {
      * @return Formatted string with transition history
      */
     String get_transition_history_string(int count = 0) const;
+    
+    // === BARCODE TRACKING ===
+    
+    /**
+     * @brief Set the current barcode being processed
+     * @param barcode The barcode UUID string (up to 36 characters)
+     */
+    void set_current_barcode(const char* barcode);
+    
+    /**
+     * @brief Clear the current barcode (e.g., when cartridge removed)
+     */
+    void clear_current_barcode();
+    
+    /**
+     * @brief Get transitions associated with a specific barcode
+     * @param barcode The barcode UUID to search for
+     * @param results Array to store matching transition indices
+     * @param max_results Maximum number of results to return
+     * @return Number of matching transitions found
+     */
+    int get_transitions_for_barcode(const char* barcode, int* results, int max_results) const;
+    
+    /**
+     * @brief Print state transition history for a specific barcode
+     * @param barcode The barcode UUID to filter by
+     */
+    void print_barcode_history(const char* barcode) const;
+    
+    /**
+     * @brief Get formatted history string for a specific barcode
+     * @param barcode The barcode UUID to filter by
+     * @return Formatted string with barcode-specific history
+     */
+    String get_barcode_history_string(const char* barcode) const;
     
     // === ERROR HANDLING ===
     
