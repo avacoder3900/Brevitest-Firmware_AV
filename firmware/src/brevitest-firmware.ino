@@ -3208,6 +3208,166 @@ int particle_command(String arg)
         emissionCheck();
         break;
 
+    // ===== STATE MANAGEMENT COMMANDS (9000 series) =====
+    case 9000:
+        // Display state management help
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║          STATE MANAGEMENT COMMAND REFERENCE                   ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.println("║ STATE INFORMATION:                                            ║");
+        Serial.println("║   9000 - Display this help                                    ║");
+        Serial.println("║   9001 - Show current device state                            ║");
+        Serial.println("║   9002 - Show detailed state information                      ║");
+        Serial.println("║                                                               ║");
+        Serial.println("║ TRANSITION HISTORY:                                           ║");
+        Serial.println("║   9010 - Show all state transitions                           ║");
+        Serial.println("║   9011 - Show last 10 transitions                             ║");
+        Serial.println("║   9012 - Show last 20 transitions                             ║");
+        Serial.println("║   9013 - Clear transition history                             ║");
+        Serial.println("║                                                               ║");
+        Serial.println("║ STATE QUERIES:                                                ║");
+        Serial.println("║   9020 - Get transition count                                 ║");
+        Serial.println("║   9021 - Get compact history string (Particle Cloud format)   ║");
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝");
+        Serial.println("\nType command number and press Enter");
+        break;
+
+    case 9001:
+        // Show current device state
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║                 CURRENT DEVICE STATE                          ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.printlnf("║ Device Mode:      %-43s ║", device_mode_to_string(device_state.mode).c_str());
+        Serial.printlnf("║ Previous Mode:    %-43s ║", device_mode_to_string(device_state.previous_mode).c_str());
+        Serial.printlnf("║ Test State:       %-43s ║", test_state_to_string(device_state.test_state).c_str());
+        Serial.printlnf("║ Cartridge State:  %-43s ║", cartridge_state_to_string(device_state.cartridge_state).c_str());
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        result = 1;
+        break;
+
+    case 9002:
+        // Show detailed state information
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║              DETAILED DEVICE STATE INFORMATION                ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.println("║ PRIMARY STATE:                                                ║");
+        Serial.printlnf("║   Device Mode:      %-41s ║", device_mode_to_string(device_state.mode).c_str());
+        Serial.printlnf("║   Previous Mode:    %-41s ║", device_mode_to_string(device_state.previous_mode).c_str());
+        Serial.println("║                                                               ║");
+        Serial.println("║ SUB-STATES:                                                   ║");
+        Serial.printlnf("║   Test State:       %-41s ║", test_state_to_string(device_state.test_state).c_str());
+        Serial.printlnf("║   Cartridge State:  %-41s ║", cartridge_state_to_string(device_state.cartridge_state).c_str());
+        Serial.println("║                                                               ║");
+        Serial.println("║ HARDWARE STATE:                                               ║");
+        Serial.printlnf("║   Detector On:      %-41s ║", device_state.detector_on ? "YES" : "NO");
+        Serial.printlnf("║   Heater Ready:     %-41s ║", device_state.heater_ready ? "YES" : "NO");
+        Serial.println("║                                                               ║");
+        Serial.println("║ CLOUD OPERATIONS:                                             ║");
+        Serial.printlnf("║   Operation Pending: %-40s ║", device_state.cloud_operation_pending ? "YES" : "NO");
+        if (device_state.cloud_operation_pending) {
+            unsigned long elapsed = millis() - device_state.cloud_operation_start_time;
+            Serial.printlnf("║   Time Elapsed:     %-37lu ms ║", elapsed);
+        }
+        Serial.println("║                                                               ║");
+        Serial.println("║ ERROR TRACKING:                                               ║");
+        if (device_state.last_error.length() > 0) {
+            Serial.printlnf("║   Last Error:       %-41s ║", device_state.last_error.c_str());
+        } else {
+            Serial.println("║   Last Error:       (none)                                    ║");
+        }
+        Serial.println("║                                                               ║");
+        Serial.println("║ TRANSITION HISTORY:                                           ║");
+        Serial.printlnf("║   Total Transitions: %-40d ║", device_state.get_transition_count());
+        Serial.printlnf("║   History Size:      %-40d ║", DeviceStateMachine::TRANSITION_HISTORY_SIZE);
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        result = 1;
+        break;
+
+    case 9010:
+        // Show all state transitions
+        device_state.print_transition_history(0);
+        result = device_state.get_transition_count();
+        break;
+
+    case 9011:
+        // Show last 10 transitions
+        device_state.print_transition_history(10);
+        result = device_state.get_transition_count();
+        break;
+
+    case 9012:
+        // Show last 20 transitions
+        device_state.print_transition_history(20);
+        result = device_state.get_transition_count();
+        break;
+
+    case 9013:
+        // Clear transition history
+        device_state.clear_transition_history();
+        Serial.println("✓ State transition history cleared");
+        result = 1;
+        break;
+
+    case 9020:
+        // Get transition count
+        result = device_state.get_transition_count();
+        Serial.printlnf("Total state transitions logged: %d", result);
+        break;
+
+    case 9021:
+        // Get compact history string (Particle Cloud format)
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║          COMPACT TRANSITION HISTORY (Cloud Format)            ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.println(device_state.get_transition_history_string(10).c_str());
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        result = device_state.get_transition_count();
+        break;
+
+    // ===== BARCODE TRACKING COMMANDS (9030 series) =====
+    case 9030:
+        // Display barcode tracking help
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║       BARCODE TRACKING COMMAND REFERENCE                      ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.println("║ BARCODE QUERIES:                                              ║");
+        Serial.println("║   9030 - Display this help                                    ║");
+        Serial.println("║   9031 - Show current barcode                                 ║");
+        Serial.println("║   9032 <barcode> - Show history for specific barcode          ║");
+        Serial.println("║                                                               ║");
+        Serial.println("║ USAGE EXAMPLES:                                               ║");
+        Serial.println("║   9031                - Show current tracked barcode          ║");
+        Serial.println("║   9032 ABC123...      - Show all transitions for ABC123...    ║");
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝");
+        Serial.println("\nType command number and barcode (if needed) and press Enter");
+        break;
+
+    case 9031:
+        // Show current barcode
+        if (device_state.current_barcode[0] != '\0') {
+            Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+            Serial.println("║                    CURRENT BARCODE                            ║");
+            Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+            Serial.printlnf("║ Barcode: %-52s ║", device_state.current_barcode);
+            Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        } else {
+            Serial.println("No barcode currently tracked (no cartridge inserted)");
+        }
+        result = strlen(device_state.current_barcode);
+        break;
+
+    case 9032:
+        // Show history for specific barcode (requires barcode parameter in arg)
+        if (arg.length() > 0) {
+            device_state.print_barcode_history(arg.c_str());
+            result = 1;
+        } else {
+            Serial.println("ERROR: Barcode required. Usage: 9032 <barcode>");
+            Serial.println("Example: 9032 ABC123-DEF456-GHI789");
+            result = -1;
+        }
+        break;
+
     default:
         result = 0;
     }
@@ -3270,6 +3430,321 @@ int reset_cartridge(String cartridgeId)
         Log.info("Invalid cartridge ID: %s", cartridgeId.c_str());
         return cartridgeId.length();
     }
+}
+
+/////////////////////////////////////////////////////////////
+//                                                         //
+//           STATE MANAGEMENT PARTICLE FUNCTIONS           //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+/**
+ * @brief Get current device state via Particle Cloud
+ * @param params "?" or "help" for usage info, "" for state
+ * @return Current device state as integer (0-10 representing DeviceMode enum)
+ * 
+ * Particle Cloud function to query the current device state remotely.
+ * Returns the enum value of the current DeviceMode.
+ * 
+ * Usage:
+ * - Call with "" (empty) to get current state number
+ * - Call with "?" or "help" to see state meanings
+ * - Also publishes state name as event for easy reading
+ */
+int get_device_state(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("state_help", 
+            "get_state: Returns device state as number. "
+            "States: 0=IDLE, 1=INIT, 2=HEATING, 3=BARCODE_SCAN, 4=VALIDATING, "
+            "5=VALID_MAG, 6=RUNNING_TEST, 7=UPLOADING, 8=RESETTING, 9=STRESS_TEST, 10=ERROR. "
+            "Call with empty '' to get current state.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    int state_value = static_cast<int>(device_state.mode);
+    String state_name = device_mode_to_string(device_state.mode);
+    
+    // Publish state name as event for easy reading in Console
+    Particle.publish("device_state", 
+                    String::format("State: %s (value: %d)", state_name.c_str(), state_value), 
+                    PRIVATE);
+    
+    Log.info("Cloud query: device state = %s (%d)", state_name.c_str(), state_value);
+    return state_value;
+}
+
+/**
+ * @brief Get state transition count via Particle Cloud
+ * @param params "?" or "help" for usage info, "" for count
+ * @return Number of state transitions logged
+ * 
+ * Particle Cloud function to query how many state transitions have been logged.
+ * 
+ * Usage:
+ * - Call with "" (empty) to get transition count
+ * - Call with "?" or "help" for usage info
+ */
+int get_transition_count_cloud(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("trans_count_help", 
+            "get_trans_count: Returns total number of state transitions logged. "
+            "Max 50 transitions stored (circular buffer). "
+            "Call with empty '' to get count.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    int count = device_state.get_transition_count();
+    
+    // Publish user-friendly message
+    Particle.publish("trans_count", 
+                    String::format("Total transitions: %d (max 50 stored)", count), 
+                    PRIVATE);
+    
+    Log.info("Cloud query: transition count = %d", count);
+    return count;
+}
+
+/**
+ * @brief Get state transition history via Particle Cloud
+ * @param params Number of transitions (1-20), "?" for help, "" for default 10
+ * @return Length of history string (actual data published as event)
+ * 
+ * Particle Cloud function to retrieve state transition history.
+ * The actual history is published as a separate event due to size constraints.
+ * 
+ * Usage:
+ * - Call with "" (empty) to get last 10 transitions
+ * - Call with "5" to get last 5 transitions
+ * - Call with "20" to get last 20 transitions (max)
+ * - Call with "?" or "help" for usage info
+ * - History published as "state_history" event - check Events tab!
+ */
+int get_state_history(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("history_help", 
+            "get_history: Retrieves state transition history with timestamps. "
+            "Usage: Call with number 1-20 (default 10). Example: '5' for last 5 transitions. "
+            "History published as 'state_history' event. Check Events tab to see data! "
+            "Format: DateTime@Uptime:FROM>TO", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Parse count parameter
+    int count = 10; // Default
+    if (params.length() > 0) {
+        count = params.toInt();
+        if (count <= 0 || count > 20) {
+            // Invalid input - publish helpful message
+            Particle.publish("history_error", 
+                String::format("Invalid count '%s'. Use 1-20 (default 10). Call with '?' for help.", 
+                              params.c_str()), 
+                PRIVATE);
+            return -2; // Indicates error
+        }
+    }
+    
+    String history = device_state.get_transition_history_string(count);
+    Log.info("Cloud query: state history (last %d transitions)", count);
+    
+    // Publish as event since it may be too large for function return
+    Particle.publish("state_history", history, PRIVATE);
+    
+    // Also publish a friendly summary
+    Particle.publish("history_info", 
+                    String::format("Retrieved %d transitions. Check 'state_history' event for data.", count), 
+                    PRIVATE);
+    
+    return history.length();
+}
+
+/**
+ * @brief Clear state transition history via Particle Cloud
+ * @param params "?" for help, "yes" to confirm, anything else for help
+ * @return 1 on success, -1 for help, -2 for no confirmation
+ * 
+ * Particle Cloud function to clear the state transition history buffer.
+ * 
+ * Usage:
+ * - Call with "yes" to clear history
+ * - Call with "?" or "help" for usage info
+ * - Requires confirmation to prevent accidental clearing
+ */
+int clear_state_history(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("clear_help", 
+            "clear_history: Clears all state transition history (up to 50 entries). "
+            "WARNING: This is permanent! "
+            "Usage: Call with 'yes' to confirm clearing. "
+            "Call with '?' for help.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Require confirmation
+    if (params != "yes" && params != "YES" && params != "confirm") {
+        Particle.publish("clear_confirm", 
+            "Clear history requires confirmation. Call with 'yes' to clear, or '?' for help.", 
+            PRIVATE);
+        return -2; // Indicates confirmation needed
+    }
+    
+    int count_before = device_state.get_transition_count();
+    device_state.clear_transition_history();
+    
+    Particle.publish("clear_success", 
+                    String::format("History cleared! Deleted %d transitions.", count_before), 
+                    PRIVATE);
+    
+    Log.info("Cloud command: state history cleared (%d transitions)", count_before);
+    return 1;
+}
+
+/**
+ * @brief Force state transition via Particle Cloud (DANGEROUS - use with caution)
+ * @param params "?" for help, state number (0-10), or state name
+ * @return 1 on success, negative on error
+ * 
+ * WARNING: This function allows forcing state transitions remotely.
+ * Use with extreme caution as invalid transitions may cause device malfunction.
+ * Only use for recovery from error states or testing.
+ * 
+ * Usage:
+ * - Call with "?" or "help" to see available states
+ * - Call with "0" to force to IDLE (most common recovery)
+ * - Call with state number 0-10
+ * - Only valid transitions are allowed
+ */
+int force_state_transition(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("force_help", 
+            "force_state: DANGEROUS! Forces state transition. "
+            "States: 0=IDLE, 1=INIT, 2=HEATING, 3=BARCODE_SCAN, 4=VALIDATING, "
+            "5=VALID_MAG, 6=RUNNING_TEST, 7=UPLOADING, 8=RESETTING, 9=STRESS_TEST, 10=ERROR. "
+            "Common: Use '0' to force IDLE for recovery. Only valid transitions allowed.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    if (params.length() == 0) {
+        Particle.publish("force_error", 
+            "No state provided. Call with state number 0-10, or '?' for help.", 
+            PRIVATE);
+        Log.warn("Cloud command: force state transition - no state provided");
+        return -2;
+    }
+    
+    int target_state_int = params.toInt();
+    if (target_state_int < 0 || target_state_int > 10) {
+        Particle.publish("force_error", 
+            String::format("Invalid state '%s'. Use 0-10. Call with '?' for help.", params.c_str()), 
+            PRIVATE);
+        Log.warn("Cloud command: invalid state value %d", target_state_int);
+        return -3;
+    }
+    
+    DeviceMode target_state = static_cast<DeviceMode>(target_state_int);
+    String target_name = device_mode_to_string(target_state);
+    String current_name = device_mode_to_string(device_state.mode);
+    
+    if (!device_state.can_transition_to(target_state)) {
+        Particle.publish("force_invalid", 
+            String::format("Cannot transition from %s to %s. Transition not allowed by state machine.", 
+                          current_name.c_str(), target_name.c_str()), 
+            PRIVATE);
+        Log.warn("Cloud command: invalid transition %s -> %s", 
+                current_name.c_str(), target_name.c_str());
+        return -4;
+    }
+    
+    // Successful transition
+    Particle.publish("force_warning", 
+                    String::format("WARNING: Forcing transition %s -> %s", 
+                                  current_name.c_str(), target_name.c_str()), 
+                    PRIVATE);
+    
+    Log.warn("Cloud command: FORCING state transition %s -> %s", 
+            current_name.c_str(), target_name.c_str());
+    
+    device_state.transition_to(target_state);
+    
+    Particle.publish("force_success", 
+                    String::format("State changed to %s", target_name.c_str()), 
+                    PRIVATE);
+    
+    return 1;
+}
+
+/**
+ * @brief Get state transition history for a specific barcode via Particle Cloud
+ * @param params Barcode UUID string, "?" for help
+ * @return Number of matching transitions, negative for error/help
+ * 
+ * Particle Cloud function to retrieve state transition history for a specific barcode.
+ * Shows all transitions associated with that cartridge/test.
+ * 
+ * Usage:
+ * - Call with barcode UUID to get history for that cartridge
+ * - Call with "?" or "help" for usage info
+ * - History published as "barcode_history" event
+ */
+int get_barcode_history(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("barcode_help", 
+            "get_barcode_history: Retrieves state transitions for a specific barcode. "
+            "Usage: Call with barcode UUID (36 characters). Example: 'ABC123-DEF456...'. "
+            "History published as 'barcode_history' event. Check Events tab for data! "
+            "Shows all transitions for that cartridge from insertion to removal.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Validate barcode parameter
+    if (params.length() == 0) {
+        Particle.publish("barcode_error", 
+            "No barcode provided. Call with barcode UUID, or '?' for help.", 
+            PRIVATE);
+        return -2;
+    }
+    
+    // Get history for this barcode
+    String history = device_state.get_barcode_history_string(params.c_str());
+    
+    // Check if barcode was found
+    int results[DeviceStateMachine::TRANSITION_HISTORY_SIZE];
+    int count = device_state.get_transitions_for_barcode(params.c_str(), results, DeviceStateMachine::TRANSITION_HISTORY_SIZE);
+    
+    if (count == 0) {
+        Particle.publish("barcode_not_found", 
+            String::format("No transitions found for barcode: %s", params.c_str()), 
+            PRIVATE);
+        return 0;
+    }
+    
+    // Publish history
+    Particle.publish("barcode_history", history, PRIVATE);
+    
+    // Publish summary
+    Particle.publish("barcode_info", 
+                    String::format("Found %d transitions for barcode. Check 'barcode_history' event for data.", count), 
+                    PRIVATE);
+    
+    Log.info("Cloud query: barcode history for %s (%d transitions)", params.c_str(), count);
+    return count;
 }
 
 /////////////////////////////////////////////////////////////
@@ -3558,6 +4033,14 @@ void setup()
     Particle.function("set_wifi_credentials", set_wifi_credentials);
     Particle.function("run_test", test_runner);
     Particle.function("reset_cartridge", reset_cartridge);
+    
+    // State management functions
+    Particle.function("get_state", get_device_state);
+    Particle.function("get_trans_count", get_transition_count_cloud);
+    Particle.function("get_history", get_state_history);
+    Particle.function("clear_history", clear_state_history);
+    Particle.function("force_state", force_state_transition);
+    Particle.function("get_barcode_hist", get_barcode_history);
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
     // Success responses
@@ -3747,10 +4230,15 @@ void set_device_indicators()
             turn_on_remove_cartridge_LED();
             turn_on_buzzer_alert();
         }
+        else if (device_state.heater_ready)
+        {
+            // Heater ready and no cartridge - ready for cartridge insertion
+            turn_on_insert_cartridge_LED();
+        }
         else
         {
-            // Ready for cartridge insertion
-            turn_on_insert_cartridge_LED();
+            // Heater not ready - don't touch
+            turn_on_dont_touch_LED();
         }
         break;
 
@@ -3794,6 +4282,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_CARTRIDGE:
             // === REGULAR CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             Log.info("Cartridge inserted");
             break;
@@ -3801,6 +4290,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_MAGNETOMETER:
             // === MAGNETOMETER DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             device_state.transition_to(DeviceMode::VALIDATING_MAGNETOMETER);
             Log.info("Magnetometer inserted");
             break;
@@ -3808,6 +4298,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_STRESS_TEST:
             // === STRESS TEST CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             max_cycles = atoi(&barcode_uuid[12]);
             start_stress_test(max_cycles, LED_DEFAULT_POWER);
             device_state.transition_to(DeviceMode::STRESS_TESTING);
@@ -3856,7 +4347,9 @@ void hardware_loop()
 {
     // === HEATER TEMPERATURE MONITORING ===
     previous_heater_ready = heater_ready;
-    heater_ready = (heater.target_C_10X - heater.temp_C_10X) < HEATER_READY_TEMP_DELTA;
+    int temp_delta = heater.target_C_10X - heater.temp_C_10X;
+    // Check that temperature is within range AND positive (temp must be below target)
+    heater_ready = (temp_delta >= 0 && temp_delta < HEATER_READY_TEMP_DELTA);
     device_state.heater_ready = heater_ready;
 
     // === CARTRIDGE DETECTION DEBOUNCING ===
@@ -3900,6 +4393,7 @@ void hardware_loop()
                 // Reset everything to IDLE state
                 reset_stage(true);
                 turn_off_buzzer_timer();
+                device_state.clear_current_barcode();  // Clear barcode tracking
                 device_state.reset_to_idle();
             }
         }
