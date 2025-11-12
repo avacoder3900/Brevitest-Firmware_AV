@@ -79,17 +79,17 @@ Displays the complete transition history (up to 50 entries).
 
 **Output:**
 ```
-╔═══════════════════════════════════════════════════════════════╗
-║           DEVICE STATE TRANSITION HISTORY                     ║
-╠═══════════════════════════════════════════════════════════════╣
-║ Total Transitions: 15                                         ║
-║ Showing: 15                                                   ║
-╠═══════════════════════════════════════════════════════════════╣
-║  #  │ Timestamp (ms) │ From State            │ To State          ║
-╟─────┼────────────────┼───────────────────────┼───────────────────╢
-║   1 │      123456789 │ INITIALIZING          │ IDLE             ║
-║   2 │      123459012 │ IDLE                  │ BARCODE_SCANNING ║
-║   3 │      123465234 │ BARCODE_SCANNING      │ VALIDATING_CARTRIDGE ║
+╔═══════════════════════════════════════════════════════════════════════════════════════╗
+║                    DEVICE STATE TRANSITION HISTORY                                    ║
+╠═══════════════════════════════════════════════════════════════════════════════════════╣
+║ Total Transitions: 15                                                                 ║
+║ Showing: 15                                                                           ║
+╠═══════════════════════════════════════════════════════════════════════════════════════╣
+║  #  │ Date & Time             │ From State            │ To State          │ Uptime(ms) ║
+╟─────┼─────────────────────────┼───────────────────────┼───────────────────┼────────────╢
+║   1 │ 2025-01-15 10:30:45     │ INITIALIZING          │ IDLE             │  123456789 ║
+║   2 │ 2025-01-15 10:30:48     │ IDLE                  │ BARCODE_SCANNING │  123459012 ║
+║   3 │ 2025-01-15 10:30:54     │ BARCODE_SCANNING      │ VALIDATING_CARTRIDGE │  123465234 ║
 ...
 ```
 
@@ -145,9 +145,11 @@ Displays the transition history in compact format (suitable for Particle Cloud).
 ╔═══════════════════════════════════════════════════════════════╗
 ║          COMPACT TRANSITION HISTORY (Cloud Format)            ║
 ╠═══════════════════════════════════════════════════════════════╣
-Total:15|123456789:INITIALIZING>IDLE;123459012:IDLE>BARCODE_SCANNING;...
+Total:15|2025-01-15 10:30:45@123456789:INITIALIZING>IDLE;2025-01-15 10:30:48@123459012:IDLE>BARCODE_SCANNING;...
 ╚═══════════════════════════════════════════════════════════════╝
 ```
+
+**Format:** `DateTime@Uptime(ms):FROM>TO`
 
 ---
 
@@ -232,11 +234,16 @@ particle subscribe state_history
 
 **Parsing the output:**
 ```
-Total:15|123456789:INITIALIZING>IDLE;123459012:IDLE>BARCODE_SCANNING
-         ^         ^             ^    ^
-         |         |             |    |
-      Count    Timestamp      From  To
+Total:15|2025-01-15 10:30:45@123456789:INITIALIZING>IDLE;2025-01-15 10:30:48@123459012:IDLE>BARCODE_SCANNING
+         ^                   ^         ^             ^    ^
+         |                   |         |             |    |
+      Count             DateTime    Uptime(ms)     From  To
 ```
+
+**Format Details:**
+- `Total:N` - Total number of transitions
+- Each transition: `YYYY-MM-DD HH:MM:SS@uptime_ms:FROM_STATE>TO_STATE`
+- Transitions separated by semicolon (`;`)
 
 ---
 
@@ -418,14 +425,47 @@ particle call <device-name> get_history "10"
 
 ## Technical Details
 
+### Timestamps and Time Zones
+
+**Timestamp Format:**
+- **Date/Time:** Uses Particle Time API (`Time.now()`) for Unix timestamps
+- **Format:** `YYYY-MM-DD HH:MM:SS` (e.g., "2025-01-15 10:30:45")
+- **Uptime:** Also stores milliseconds since boot for relative timing
+
+**Setting Timezone:**
+The device uses UTC by default. You can set your timezone via Particle Cloud:
+
+```bash
+# Set timezone to US Central Time (CST/CDT)
+particle call <device-name> set_timezone "-6,0"
+
+# Set timezone to US Eastern Time (EST/EDT)
+particle call <device-name> set_timezone "-5,0"
+
+# Set timezone to US Pacific Time (PST/PDT)
+particle call <device-name> set_timezone "-8,0"
+```
+
+Or in your device code:
+```cpp
+// In setup()
+Time.zone(-6);  // Central Time (UTC-6)
+```
+
+**Time Synchronization:**
+- Particle devices automatically sync time with cloud when connected
+- Time persists across reboots (backed up by RTC)
+- If device boots without cloud connection, time may be incorrect until first sync
+
 ### Data Structure
 
 **StateTransitionEntry:**
 ```cpp
 struct StateTransitionEntry {
-    DeviceMode from_mode;       // State transitioned from
-    DeviceMode to_mode;         // State transitioned to
-    unsigned long timestamp;    // Timestamp in milliseconds
+    DeviceMode from_mode;           // State transitioned from
+    DeviceMode to_mode;             // State transitioned to
+    time_t timestamp;               // Unix timestamp (seconds since epoch)
+    unsigned long millis_timestamp; // Milliseconds since boot
 };
 ```
 
@@ -437,9 +477,10 @@ struct StateTransitionEntry {
 
 ### Memory Usage
 
-- **Per entry:** ~12 bytes
-- **Total buffer:** ~600 bytes
-- **Additional overhead:** ~20 bytes
+- **Per entry:** ~16 bytes (2 enums + time_t + unsigned long)
+- **Total buffer:** ~800 bytes (50 entries)
+- **Additional overhead:** ~20 bytes (indices and counters)
+- **Total:** ~820 bytes
 
 ### Performance Impact
 
@@ -484,12 +525,18 @@ struct StateTransitionEntry {
 
 ```
 # Serial output from 9010
-║   1 │      1234567890 │ IDLE                 │ BARCODE_SCANNING    ║
-║   2 │      1234570123 │ BARCODE_SCANNING     │ VALIDATING_CARTRIDGE║
-║   3 │      1234575456 │ VALIDATING_CARTRIDGE │ RUNNING_TEST        ║
-║   4 │      1234680789 │ RUNNING_TEST         │ UPLOADING_RESULTS   ║
-║   5 │      1234685012 │ UPLOADING_RESULTS    │ IDLE                ║
+║   1 │ 2025-01-15 10:30:45     │ IDLE                 │ BARCODE_SCANNING    │ 1234567890 ║
+║   2 │ 2025-01-15 10:30:48     │ BARCODE_SCANNING     │ VALIDATING_CARTRIDGE│ 1234570123 ║
+║   3 │ 2025-01-15 10:30:54     │ VALIDATING_CARTRIDGE │ RUNNING_TEST        │ 1234575456 ║
+║   4 │ 2025-01-15 10:32:39     │ RUNNING_TEST         │ UPLOADING_RESULTS   │ 1234680789 ║
+║   5 │ 2025-01-15 10:32:44     │ UPLOADING_RESULTS    │ IDLE                │ 1234685012 ║
 ```
+
+**Analysis:**
+- Device was in IDLE at 10:30:45
+- Cartridge inserted at 10:30:48
+- Test ran from 10:30:54 to 10:32:39 (105 seconds)
+- Results uploaded by 10:32:44
 
 ### Example 2: Error Recovery
 
@@ -534,12 +581,27 @@ done
 ### Issue: Particle function times out
 **Solution:** Device may not be connected to cloud. Check network status.
 
-### Issue: Timestamps seem wrong
-**Solution:** Timestamps are milliseconds since boot. They will reset on device restart.
+### Issue: Timestamps show wrong time
+**Solution:** 
+- Device may not be connected to cloud for time sync
+- Check timezone setting: `Time.zone()` in device code or use Particle Console
+- Time is in UTC by default - set timezone for local time
+
+### Issue: Timestamps all show year 2000 or 1970
+**Solution:** Device has not synced time with cloud yet. Connect to Particle Cloud to sync time.
+
+### Issue: Uptime counter reset to low value
+**Solution:** Device rebooted. Check for power issues or firmware crashes. Compare uptime values to detect reboots.
 
 ---
 
 ## Version History
+
+- **v1.1** (2025-01-15): Added real date/time timestamps
+  - Changed from milliseconds-only to Unix timestamps with date/time
+  - Added uptime (milliseconds) alongside date/time
+  - Format: `YYYY-MM-DD HH:MM:SS` with uptime column
+  - Better diagnostics with actual timestamps
 
 - **v1.0** (2025-01-15): Initial implementation
   - State transition logging with circular buffer

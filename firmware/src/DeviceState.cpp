@@ -123,7 +123,8 @@ void DeviceStateMachine::transition_to(DeviceMode new_mode) {
     // === STORE TRANSITION IN HISTORY ===
     transition_history[history_index].from_mode = mode;
     transition_history[history_index].to_mode = new_mode;
-    transition_history[history_index].timestamp = millis();
+    transition_history[history_index].timestamp = Time.now();  // Unix timestamp (seconds since epoch)
+    transition_history[history_index].millis_timestamp = millis();  // Milliseconds since boot
     
     // Update circular buffer index
     history_index = (history_index + 1) % TRANSITION_HISTORY_SIZE;
@@ -346,32 +347,36 @@ const StateTransitionEntry* DeviceStateMachine::get_transition(int index) const 
 void DeviceStateMachine::print_transition_history(int count) const {
     int num_to_print = (count == 0 || count > history_count) ? history_count : count;
     
-    Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
-    Serial.println("║           DEVICE STATE TRANSITION HISTORY                     ║");
-    Serial.println("╠═══════════════════════════════════════════════════════════════╣");
-    Serial.printlnf("║ Total Transitions: %-43d║", history_count);
-    Serial.printlnf("║ Showing: %-51d║", num_to_print);
-    Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+    Serial.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════╗");
+    Serial.println("║                    DEVICE STATE TRANSITION HISTORY                                    ║");
+    Serial.println("╠═══════════════════════════════════════════════════════════════════════════════════════╣");
+    Serial.printlnf("║ Total Transitions: %-71d║", history_count);
+    Serial.printlnf("║ Showing: %-79d║", num_to_print);
+    Serial.println("╠═══════════════════════════════════════════════════════════════════════════════════════╣");
     
     if (num_to_print == 0) {
-        Serial.println("║ No transitions recorded yet                                   ║");
+        Serial.println("║ No transitions recorded yet                                                           ║");
     } else {
-        Serial.println("║  #  │ Timestamp (ms) │ From State            │ To State          ║");
-        Serial.println("╟─────┼────────────────┼───────────────────────┼───────────────────╢");
+        Serial.println("║  #  │ Date & Time             │ From State            │ To State          │ Uptime(ms) ║");
+        Serial.println("╟─────┼─────────────────────────┼───────────────────────┼───────────────────┼────────────╢");
         
         for (int i = 0; i < num_to_print; i++) {
             const StateTransitionEntry* entry = get_transition(i);
             if (entry) {
-                Serial.printlnf("║ %3d │ %14lu │ %-21s │ %-17s ║", 
+                // Format time as "YYYY-MM-DD HH:MM:SS"
+                String time_str = Time.format(entry->timestamp, "%Y-%m-%d %H:%M:%S");
+                
+                Serial.printlnf("║ %3d │ %s │ %-21s │ %-17s │ %10lu ║", 
                     i + 1,
-                    entry->timestamp,
+                    time_str.c_str(),
                     device_mode_to_string(entry->from_mode).c_str(),
-                    device_mode_to_string(entry->to_mode).c_str());
+                    device_mode_to_string(entry->to_mode).c_str(),
+                    entry->millis_timestamp);
             }
         }
     }
     
-    Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+    Serial.println("╚═══════════════════════════════════════════════════════════════════════════════════════╝\n");
 }
 
 /**
@@ -404,8 +409,11 @@ String DeviceStateMachine::get_transition_history_string(int count) const {
         const StateTransitionEntry* entry = get_transition(i);
         if (entry) {
             if (i > 0) result += ";";
-            result += String::format("%lu:%s>%s", 
-                entry->timestamp,
+            // Format: DateTime@Uptime:FROM>TO
+            String time_str = Time.format(entry->timestamp, "%Y-%m-%d %H:%M:%S");
+            result += String::format("%s@%lu:%s>%s", 
+                time_str.c_str(),
+                entry->millis_timestamp,
                 device_mode_to_string(entry->from_mode).c_str(),
                 device_mode_to_string(entry->to_mode).c_str());
         }

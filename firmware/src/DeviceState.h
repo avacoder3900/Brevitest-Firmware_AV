@@ -74,11 +74,13 @@ enum class CartridgeState {
 struct StateTransitionEntry {
     DeviceMode from_mode;           // State transitioned from
     DeviceMode to_mode;             // State transitioned to
-    unsigned long timestamp;        // Timestamp when transition occurred (millis())
+    time_t timestamp;               // Unix timestamp when transition occurred (seconds since epoch)
+    unsigned long millis_timestamp; // Milliseconds since boot (for relative timing)
     
     StateTransitionEntry() : from_mode(DeviceMode::INITIALIZING), 
                             to_mode(DeviceMode::INITIALIZING), 
-                            timestamp(0) {}
+                            timestamp(0),
+                            millis_timestamp(0) {}
 };
 
 /**

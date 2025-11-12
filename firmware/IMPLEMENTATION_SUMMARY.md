@@ -7,7 +7,9 @@ A complete state transition logging and monitoring system has been implemented f
 
 ### ✅ 1. State Transition History Buffer (DeviceState.h)
 - **Added `StateTransitionEntry` struct** to store individual transitions
-  - Captures from_mode, to_mode, and timestamp
+  - Captures from_mode, to_mode, Unix timestamp, and uptime
+  - Uses `time_t` for real date/time (e.g., "2025-01-15 10:30:45")
+  - Also stores `millis()` for relative timing
 - **Added circular buffer** to DeviceStateMachine
   - Stores up to 50 transitions
   - Automatically overwrites oldest entries when full
@@ -17,15 +19,16 @@ A complete state transition logging and monitoring system has been implemented f
 
 ### ✅ 2. Transition Logging Methods (DeviceState.cpp)
 - **Enhanced `transition_to()` method** to automatically log all transitions
-  - Stores timestamp (millis())
+  - Stores Unix timestamp (`Time.now()`) for real date/time
+  - Stores uptime (`millis()`) for relative timing
   - Updates circular buffer
   - Maintains transition count
 - **Implemented query methods:**
   - `get_transition_count()`: Returns number of logged transitions
   - `get_transition(index)`: Retrieves specific transition entry
-  - `print_transition_history(count)`: Prints formatted table to Serial
+  - `print_transition_history(count)`: Prints formatted table to Serial with date/time
   - `clear_transition_history()`: Clears the history buffer
-  - `get_transition_history_string(count)`: Returns compact string format
+  - `get_transition_history_string(count)`: Returns compact string format with timestamps
 
 ### ✅ 3. Serial Command Interface (brevitest-firmware.ino)
 Added complete 9000 series commands for state management:
@@ -146,26 +149,28 @@ particle call <device-name> get_history "10"
 
 ### Serial Command 9010
 ```
-╔═══════════════════════════════════════════════════════════════╗
-║           DEVICE STATE TRANSITION HISTORY                     ║
-╠═══════════════════════════════════════════════════════════════╣
-║ Total Transitions: 5                                          ║
-║ Showing: 5                                                    ║
-╠═══════════════════════════════════════════════════════════════╣
-║  #  │ Timestamp (ms) │ From State            │ To State          ║
-╟─────┼────────────────┼───────────────────────┼───────────────────╢
-║   1 │      123456789 │ INITIALIZING          │ IDLE             ║
-║   2 │      123459012 │ IDLE                  │ BARCODE_SCANNING ║
-║   3 │      123465234 │ BARCODE_SCANNING      │ VALIDATING_CARTRIDGE ║
-║   4 │      123475567 │ VALIDATING_CARTRIDGE  │ RUNNING_TEST     ║
-║   5 │      123580890 │ RUNNING_TEST          │ UPLOADING_RESULTS║
-╚═══════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════════════════════════════╗
+║                    DEVICE STATE TRANSITION HISTORY                                    ║
+╠═══════════════════════════════════════════════════════════════════════════════════════╣
+║ Total Transitions: 5                                                                  ║
+║ Showing: 5                                                                            ║
+╠═══════════════════════════════════════════════════════════════════════════════════════╣
+║  #  │ Date & Time             │ From State            │ To State          │ Uptime(ms) ║
+╟─────┼─────────────────────────┼───────────────────────┼───────────────────┼────────────╢
+║   1 │ 2025-01-15 10:30:45     │ INITIALIZING          │ IDLE             │  123456789 ║
+║   2 │ 2025-01-15 10:30:48     │ IDLE                  │ BARCODE_SCANNING │  123459012 ║
+║   3 │ 2025-01-15 10:30:54     │ BARCODE_SCANNING      │ VALIDATING_CARTRIDGE │  123465234 ║
+║   4 │ 2025-01-15 10:31:04     │ VALIDATING_CARTRIDGE  │ RUNNING_TEST     │  123475567 ║
+║   5 │ 2025-01-15 10:32:49     │ RUNNING_TEST          │ UPLOADING_RESULTS│  123580890 ║
+╚═══════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
 ### Particle Cloud get_history Event
 ```
-state_history: Total:5|123456789:INITIALIZING>IDLE;123459012:IDLE>BARCODE_SCANNING;123465234:BARCODE_SCANNING>VALIDATING_CARTRIDGE;123475567:VALIDATING_CARTRIDGE>RUNNING_TEST;123580890:RUNNING_TEST>UPLOADING_RESULTS
+state_history: Total:5|2025-01-15 10:30:45@123456789:INITIALIZING>IDLE;2025-01-15 10:30:48@123459012:IDLE>BARCODE_SCANNING;2025-01-15 10:30:54@123465234:BARCODE_SCANNING>VALIDATING_CARTRIDGE;2025-01-15 10:31:04@123475567:VALIDATING_CARTRIDGE>RUNNING_TEST;2025-01-15 10:32:49@123580890:RUNNING_TEST>UPLOADING_RESULTS
 ```
+
+**Format:** Each entry is `DateTime@Uptime(ms):FROM_STATE>TO_STATE`
 
 ## Benefits
 
@@ -185,9 +190,11 @@ state_history: Total:5|123456789:INITIALIZING>IDLE;123459012:IDLE>BARCODE_SCANNI
 - **Integration**: Easy integration with monitoring systems via webhooks
 
 ## Memory Usage
-- **History Buffer**: ~600 bytes (50 entries × 12 bytes)
+- **History Buffer**: ~800 bytes (50 entries × 16 bytes)
+  - Each entry: 2 enums (8 bytes) + time_t (4 bytes) + unsigned long (4 bytes)
 - **Code Size**: ~3KB (methods and commands)
 - **Performance Impact**: < 1ms per transition
+- **Total RAM**: ~820 bytes including overhead
 
 ## Safety Features
 - **Validation**: All transitions validated before applying
