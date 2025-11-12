@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -38,6 +38,7 @@ void enableAllRadios();
 void testWiFiOnly();
 void testCellularOnly();
 void testBluetoothOnly();
+void testFCCCompliance();
 void emissionCheck();
 void displayStatus();
 void displayHelp();
@@ -145,7 +146,7 @@ void magnet_validation_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 
@@ -749,6 +750,13 @@ void testBluetoothOnly()
     Serial.println("✓ Bluetooth ON, All others OFF");
 }
 
+void testFCCCompliance()
+{
+    Serial.println("➜ TEST MODE: FCC Compliance (All Radios)");
+    enableAllRadios();
+    Serial.println("✓ WiFi, Cellular, and Bluetooth ON");
+}
+
 void emissionCheck()
 {
     Serial.println("\n╔════════════════════════════════╗");
@@ -816,6 +824,7 @@ void displayHelp()
     Serial.println("║   8500 - Test WiFi only               ║");
     Serial.println("║   8501 - Test Cellular only           ║");
     Serial.println("║   8502 - Test Bluetooth only          ║");
+    Serial.println("║   8503 - FCC compliance (all radios)  ║");
     Serial.println("║                                       ║");
     Serial.println("║ MASTER CONTROL:                       ║");
     Serial.println("║   8900 - ALL radios OFF               ║");
@@ -2443,7 +2452,20 @@ void response_upload_test(CloudEvent upload_event)
         {
             Log.info("Uploaded test successful, but %s not removed from cache", cartridgeId.c_str());
         }
-        device_state.transition_to(DeviceMode::IDLE);
+        
+        // === CHECK FOR MORE CACHED TESTS ===
+        // Stay in UPLOADING_RESULTS if more tests need to be uploaded
+        if (test_in_cache())
+        {
+            Log.info("More cached tests found, continuing upload");
+            // Stay in UPLOADING_RESULTS mode - don't transition to IDLE yet
+        }
+        else
+        {
+            // No more cached tests - safe to transition to IDLE
+            Log.info("All cached tests uploaded");
+            device_state.transition_to(DeviceMode::IDLE);
+        }
     }
     else
     {
@@ -3312,6 +3334,10 @@ int particle_command(String arg)
         testBluetoothOnly();
         break;
 
+    case 8503:
+        testFCCCompliance();
+        break;
+
     // ===== EMISSION CHECK =====
     case 8999:
         emissionCheck();
@@ -3539,7 +3565,6 @@ void run_test()
 
     // === CLEANUP AND RECONNECT ===
     reset_stage(true);
-    reset_device_state();
     connect_to_cloud();
     turn_on_buzzer_alert();
 }

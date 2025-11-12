@@ -9,7 +9,7 @@
  */
 
 SYSTEM_THREAD(ENABLED);
-PRODUCT_VERSION(5);
+PRODUCT_VERSION(6);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
@@ -20,8 +20,8 @@ PRODUCT_VERSION(5);
 SerialLogHandler logHandler;
 
 int pinLED = D7;
-int pinXDetect = A1;
-int pinYDetect = A0;
+int pinXDetect = A0;
+int pinYDetect = A1;
 bool monitoringX = false;
 bool monitoringY = false;
 char dir;

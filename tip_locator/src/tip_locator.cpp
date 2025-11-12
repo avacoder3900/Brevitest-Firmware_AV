@@ -3,13 +3,13 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3linbeck/github/brevitest-device/tip_locator/src/tip_locator.ino"
+#line 1 "c:/Users/jacobq/Documents/GitHub/brevitest-device/tip_locator/src/tip_locator.ino"
 /*
  *    Code to locate and calibrate tip location on an Opentrons pipetting robot.
  *
  *    Written by Leo Linbeck III
  *
- *    Copyright 2021 by Brevitest Technologies, Inc
+ *    Copyright 2021-24 by Brevitest Technologies, Inc
  *    All rights reserved. Distribution, copying, or changes make without prior written consent is forbidden.
  * 
  */
@@ -18,9 +18,9 @@ int save_calibration(String params);
 void load_calibration_string();
 void setup();
 void loop();
-#line 11 "/Users/leo3linbeck/github/brevitest-device/tip_locator/src/tip_locator.ino"
+#line 11 "c:/Users/jacobq/Documents/GitHub/brevitest-device/tip_locator/src/tip_locator.ino"
 SYSTEM_THREAD(ENABLED);
-PRODUCT_VERSION(5);
+PRODUCT_VERSION(6);
 
 #define DEBOUNCE_TIME_MS 20
 #define BLINK_TIME_MS 800
@@ -31,8 +31,8 @@ PRODUCT_VERSION(5);
 SerialLogHandler logHandler;
 
 int pinLED = D7;
-int pinXDetect = A1;
-int pinYDetect = A0;
+int pinXDetect = A0;
+int pinYDetect = A1;
 bool monitoringX = false;
 bool monitoringY = false;
 char dir;
