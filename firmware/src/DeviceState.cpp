@@ -120,6 +120,17 @@ void DeviceStateMachine::transition_to(DeviceMode new_mode) {
         return; // Don't perform invalid transition
     }
     
+    // === STORE TRANSITION IN HISTORY ===
+    transition_history[history_index].from_mode = mode;
+    transition_history[history_index].to_mode = new_mode;
+    transition_history[history_index].timestamp = millis();
+    
+    // Update circular buffer index
+    history_index = (history_index + 1) % TRANSITION_HISTORY_SIZE;
+    if (history_count < TRANSITION_HISTORY_SIZE) {
+        history_count++;
+    }
+    
     // === PERFORM TRANSITION ===
     previous_mode = mode;  // Store previous state for logging
     mode = new_mode;       // Update current state
@@ -287,4 +298,118 @@ String cartridge_state_to_string(CartridgeState state) {
         case CartridgeState::TEST_COMPLETE: return "TEST_COMPLETE";
         default: return "UNKNOWN";
     }
+}
+
+// === STATE TRANSITION HISTORY METHODS ===
+
+/**
+ * @brief Get the number of state transitions logged
+ * 
+ * @return Number of transitions in history (up to TRANSITION_HISTORY_SIZE)
+ * 
+ * Returns the total number of transitions stored. This will be less than
+ * or equal to TRANSITION_HISTORY_SIZE.
+ */
+int DeviceStateMachine::get_transition_count() const {
+    return history_count;
+}
+
+/**
+ * @brief Get a specific transition from history
+ * 
+ * @param index Index into history (0 = most recent, 1 = second most recent, etc.)
+ * @return Pointer to transition entry, or NULL if index out of bounds
+ * 
+ * This method allows you to retrieve specific transitions from the history
+ * buffer. Index 0 is the most recent transition, 1 is the second most recent,
+ * and so on.
+ */
+const StateTransitionEntry* DeviceStateMachine::get_transition(int index) const {
+    if (index < 0 || index >= history_count) {
+        return NULL;  // Index out of bounds
+    }
+    
+    // Calculate the actual position in the circular buffer
+    // Most recent is at (history_index - 1), going backwards from there
+    int actual_index = (history_index - 1 - index + TRANSITION_HISTORY_SIZE) % TRANSITION_HISTORY_SIZE;
+    return &transition_history[actual_index];
+}
+
+/**
+ * @brief Print state transition history to Serial
+ * 
+ * @param count Number of most recent transitions to print (0 = all)
+ * 
+ * Prints a formatted table of state transitions to the Serial port.
+ * Useful for debugging and diagnostics.
+ */
+void DeviceStateMachine::print_transition_history(int count) const {
+    int num_to_print = (count == 0 || count > history_count) ? history_count : count;
+    
+    Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+    Serial.println("║           DEVICE STATE TRANSITION HISTORY                     ║");
+    Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+    Serial.printlnf("║ Total Transitions: %-43d║", history_count);
+    Serial.printlnf("║ Showing: %-51d║", num_to_print);
+    Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+    
+    if (num_to_print == 0) {
+        Serial.println("║ No transitions recorded yet                                   ║");
+    } else {
+        Serial.println("║  #  │ Timestamp (ms) │ From State            │ To State          ║");
+        Serial.println("╟─────┼────────────────┼───────────────────────┼───────────────────╢");
+        
+        for (int i = 0; i < num_to_print; i++) {
+            const StateTransitionEntry* entry = get_transition(i);
+            if (entry) {
+                Serial.printlnf("║ %3d │ %14lu │ %-21s │ %-17s ║", 
+                    i + 1,
+                    entry->timestamp,
+                    device_mode_to_string(entry->from_mode).c_str(),
+                    device_mode_to_string(entry->to_mode).c_str());
+            }
+        }
+    }
+    
+    Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+}
+
+/**
+ * @brief Clear state transition history
+ * 
+ * Resets the transition history buffer. Useful when you want to start
+ * fresh tracking from a specific point in time.
+ */
+void DeviceStateMachine::clear_transition_history() {
+    history_index = 0;
+    history_count = 0;
+    Log.info("State transition history cleared");
+}
+
+/**
+ * @brief Get formatted state transition history as String
+ * 
+ * @param count Number of most recent transitions to include (0 = all)
+ * @return Formatted string with transition history
+ * 
+ * Returns the transition history as a formatted string suitable for
+ * Particle Cloud variable or function response. Format is compact
+ * to fit within Particle Cloud constraints.
+ */
+String DeviceStateMachine::get_transition_history_string(int count) const {
+    int num_to_include = (count == 0 || count > history_count) ? history_count : count;
+    String result = String::format("Total:%d|", history_count);
+    
+    for (int i = 0; i < num_to_include; i++) {
+        const StateTransitionEntry* entry = get_transition(i);
+        if (entry) {
+            if (i > 0) result += ";";
+            result += String::format("%lu:%s>%s", 
+                entry->timestamp,
+                device_mode_to_string(entry->from_mode).c_str(),
+                device_mode_to_string(entry->to_mode).c_str());
+        }
+    }
+    
+    return result;
 }

@@ -67,6 +67,21 @@ enum class CartridgeState {
 };
 
 /**
+ * @brief State transition history entry
+ * 
+ * Stores information about a single state transition for diagnostic purposes.
+ */
+struct StateTransitionEntry {
+    DeviceMode from_mode;           // State transitioned from
+    DeviceMode to_mode;             // State transitioned to
+    unsigned long timestamp;        // Timestamp when transition occurred (millis())
+    
+    StateTransitionEntry() : from_mode(DeviceMode::INITIALIZING), 
+                            to_mode(DeviceMode::INITIALIZING), 
+                            timestamp(0) {}
+};
+
+/**
  * @brief Centralized device state machine
  * 
  * This struct replaces 26+ scattered boolean flags with a single,
@@ -75,11 +90,18 @@ enum class CartridgeState {
  * - Clear state visibility
  * - Race condition prevention
  * - Comprehensive error tracking
+ * - State transition history logging
  */
 struct DeviceStateMachine {
     // === PRIMARY STATE ===
     DeviceMode mode;                    // Current operational mode
     DeviceMode previous_mode;           // Previous mode (for transition logging)
+    
+    // === STATE TRANSITION HISTORY ===
+    static const int TRANSITION_HISTORY_SIZE = 50;  // Number of transitions to keep
+    StateTransitionEntry transition_history[50];     // Circular buffer of transitions
+    int history_index;                              // Current position in circular buffer
+    int history_count;                              // Total number of transitions logged
     
     // === SUB-STATE MACHINES ===
     TestState test_state;               // Current test execution state
@@ -112,6 +134,8 @@ struct DeviceStateMachine {
         cloud_operation_pending = false;
         cloud_operation_start_time = 0;
         last_error = "";
+        history_index = 0;
+        history_count = 0;
     }
     
     // === STATE TRANSITION METHODS ===
@@ -193,6 +217,39 @@ struct DeviceStateMachine {
      * @return true if operation has timed out
      */
     bool is_cloud_operation_timeout(unsigned long timeout_ms = 30000) const;
+    
+    // === STATE TRANSITION HISTORY ===
+    
+    /**
+     * @brief Get the number of state transitions logged
+     * @return Number of transitions in history (up to TRANSITION_HISTORY_SIZE)
+     */
+    int get_transition_count() const;
+    
+    /**
+     * @brief Get a specific transition from history
+     * @param index Index into history (0 = most recent, 1 = second most recent, etc.)
+     * @return Pointer to transition entry, or NULL if index out of bounds
+     */
+    const StateTransitionEntry* get_transition(int index) const;
+    
+    /**
+     * @brief Print state transition history to Serial
+     * @param count Number of most recent transitions to print (0 = all)
+     */
+    void print_transition_history(int count = 0) const;
+    
+    /**
+     * @brief Clear state transition history
+     */
+    void clear_transition_history();
+    
+    /**
+     * @brief Get formatted state transition history as String
+     * @param count Number of most recent transitions to include (0 = all)
+     * @return Formatted string with transition history
+     */
+    String get_transition_history_string(int count = 0) const;
     
     // === ERROR HANDLING ===
     
