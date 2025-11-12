@@ -482,6 +482,44 @@ int list_assay_files()
     return count;
 }
 
+int output_assay_file(int file_number)
+{
+    DIR *assay_dir = opendir("/assay");
+    int count = 0;
+    Log.info("Assay file directory");
+    do
+    {
+        assay_entry = readdir(assay_dir);
+        if (assay_entry == NULL)
+        {
+            break;
+        }
+        if (assay_entry->d_type != DT_REG)
+        {
+            continue;
+        }
+        count++;
+        if (count == file_number)
+        {
+            // read the file results and output them to log
+            String filename = "/assay/" + String(assay_entry->d_name);
+            int fd = open(filename, O_RDONLY);
+            if (fd < 0)
+            {
+                Log.error("output_assay_file, failed to open file %s, errno: %d", filename.c_str(), errno);
+                return false;
+            }
+            int bytes_read = read(fd, assay_buffer, sizeof(assay_buffer) - 1);
+            close(fd);
+            assay_buffer[bytes_read] = '\0'; // null-terminate the string
+            Log.info("Assay file contents (%s):\n%s", filename.c_str(), assay_buffer);
+            return true;
+        }
+    } while (assay_entry != NULL && count <= ASSAY_MAX_FILES);
+    closedir(assay_dir);
+    return false;
+}
+
 int clear_assay_files()
 {
     DIR *assay_dir = opendir("/assay");
@@ -1760,7 +1798,7 @@ void spectrophotometer_reading_continuous(bool baseline, int starting_position, 
         }
         power_off_all_spectrophotometers();
     }
-    
+
     // Return stage to previous position
     move_stage_to_position(previous_position, MOTOR_FAST_STEP_DELAY);
 
@@ -3017,16 +3055,17 @@ int particle_command(String arg)
         output_test_readings(&test);
         result = test.number_of_readings;
         break;
-    case 311: // baseline continuou sscan
+    case 311: // baseline continuous scan
         indx = get_next_command_param(arg, indx, &param1, 1);
         indx = get_next_command_param(arg, indx, &param2, SPECTRO_STARTING_STAGE_POSITION); // channel (0 = all, 1 = A, 2 = B, 3 = C)
         indx = get_next_command_param(arg, indx, &param3, SPECTRO_WELL_LENGTH);
         indx = get_next_command_param(arg, indx, &param4, MOTOR_SENSOR_STEP_DELAY);
+        test.number_of_readings = 0;
         reset_stage(false);
         print_spectrophotometer_heading();
         spectrophotometer_reading_continuous(param1 == 1, param2, param3, param4, true);
         sleep_motor();
-        result = stage_position;
+        result = test.number_of_readings;
         break;
         //
         //  CLOUD FUNCTIONS
@@ -3050,6 +3089,10 @@ int particle_command(String arg)
         break;
     case 405: // clear assay files
         result = clear_assay_files();
+        break;
+    case 406: // output assay file param1 = file number
+        indx = get_next_command_param(arg, indx, &param1, 1);
+        result = output_assay_file(param1);
         break;
     // ===== COMMUNICATION COMMANDS =====
     case 8000:
