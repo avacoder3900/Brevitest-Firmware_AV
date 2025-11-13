@@ -18,10 +18,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <cstdlib>
 
 // Test suite runners (declared in respective files)
-extern void run_serial_commands_test_suite(void);
-extern void run_state_transitions_test_suite(void);
+extern void run_serial_commands(void);
+extern void run_state_transitions(void);
 
 // Command line arguments
 typedef struct {
@@ -116,11 +117,11 @@ int main(int argc, char* argv[]) {
     
     // Run selected test suites
     if (options.run_all || options.run_serial_commands) {
-        run_serial_commands_test_suite();
+        run_serial_commands();
     }
     
     if (options.run_all || options.run_state_transitions) {
-        run_state_transitions_test_suite();
+        run_state_transitions();
     }
     
     // Print summary

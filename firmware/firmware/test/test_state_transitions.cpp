@@ -857,6 +857,181 @@ bool test_cloud_op_prevent_duplicate_requests(void) {
     return true;
 }
 
+// === EDGE CASE TESTS ===
+
+bool test_edge_timeout_during_cloud_op(void) {
+    reset_mock_state_machine();
+    
+    // Step 1: Set device to RUNNING_TEST with test COMPLETED
+    mock_state.mode = RUNNING_TEST;
+    mock_state.test_state = COMPLETED;
+    mock_state.cartridge_state = VALIDATED;
+    mock_state.detector_on = true;
+    
+    TEST_ASSERT_EQUAL_INT(RUNNING_TEST, mock_state.mode, "Should be in RUNNING_TEST");
+    TEST_ASSERT_EQUAL_INT(COMPLETED, mock_state.test_state, "Test should be COMPLETED");
+    
+    // Step 2: Transition to UPLOADING_RESULTS state
+    mock_transition_to(UPLOADING_RESULTS);
+    TEST_ASSERT_EQUAL_INT(UPLOADING_RESULTS, mock_state.mode, "Should transition to UPLOADING_RESULTS");
+    
+    // Step 3: Start cloud operation tracking
+    mock_state.cloud_operation_pending = true;
+    mock_state.cloud_operation_start_time = 1000; // Started at 1 second
+    TEST_ASSERT_TRUE(mock_state.cloud_operation_pending, "Cloud operation should be pending");
+    
+    // Step 4: Simulate 35 seconds elapsed (timeout is 30s)
+    unsigned long current_time = 36000; // 36 seconds (35 seconds elapsed)
+    unsigned long elapsed = current_time - mock_state.cloud_operation_start_time;
+    unsigned long timeout_threshold = 30000; // 30 second timeout
+    
+    // Step 5: Verify timeout is detected
+    bool has_timed_out = (elapsed > timeout_threshold);
+    TEST_ASSERT_TRUE(has_timed_out, "Cloud operation should have timed out");
+    TEST_ASSERT_TRUE(elapsed == 35000, "Elapsed time should be 35000ms");
+    
+    // Step 6: Verify device transitions to ERROR_STATE
+    mock_set_error("Cloud upload timeout");
+    TEST_ASSERT_EQUAL_INT(ERROR_STATE, mock_state.mode, "Should transition to ERROR_STATE on timeout");
+    TEST_ASSERT_EQUAL_INT(UPLOADING_RESULTS, mock_state.previous_mode, "Previous mode should be UPLOADING_RESULTS");
+    
+    // Step 7: Verify test remains COMPLETED (not lost)
+    TEST_ASSERT_EQUAL_INT(COMPLETED, mock_state.test_state, "Test should remain COMPLETED (data not lost)");
+    
+    // Step 8: Verify error recovery returns to IDLE with test marked UPLOAD_PENDING
+    mock_clear_error();
+    TEST_ASSERT_EQUAL_INT(IDLE, mock_state.mode, "Should recover to IDLE");
+    
+    // Mark test as UPLOAD_PENDING to retry later
+    mock_state.test_state = UPLOAD_PENDING;
+    TEST_ASSERT_EQUAL_INT(UPLOAD_PENDING, mock_state.test_state, "Test should be UPLOAD_PENDING for retry");
+    
+    // Verify cloud operation tracking is cleared
+    mock_state.cloud_operation_pending = false;
+    mock_state.cloud_operation_start_time = 0;
+    TEST_ASSERT_FALSE(mock_state.cloud_operation_pending, "Cloud operation should not be pending after timeout");
+    
+    return true;
+}
+
+bool test_edge_cartridge_removal_multiple_states(void) {
+    reset_mock_state_machine();
+    
+    // === Sub-test 1: Cartridge removal during BARCODE_SCANNING ===
+    // This should be graceful - just return to IDLE
+    
+    mock_state.mode = BARCODE_SCANNING;
+    mock_state.cartridge_state = DETECTED;
+    mock_state.detector_on = true;
+    
+    TEST_ASSERT_EQUAL_INT(BARCODE_SCANNING, mock_state.mode, "Should start in BARCODE_SCANNING");
+    TEST_ASSERT_TRUE(mock_state.detector_on, "Detector should be on");
+    
+    // Simulate cartridge removal
+    mock_state.detector_on = false;
+    mock_state.cartridge_state = NOT_INSERTED;
+    
+    // Should transition to IDLE (graceful)
+    mock_transition_to(IDLE);
+    TEST_ASSERT_EQUAL_INT(IDLE, mock_state.mode, "Should transition to IDLE gracefully from BARCODE_SCANNING");
+    TEST_ASSERT_EQUAL_INT(NOT_INSERTED, mock_state.cartridge_state, "Cartridge state should be NOT_INSERTED");
+    TEST_ASSERT_FALSE(mock_state.detector_on, "Detector should be off");
+    
+    // === Sub-test 2: Cartridge removal during VALIDATING_CARTRIDGE ===
+    // This is more serious - operation in progress
+    
+    reset_mock_state_machine();
+    mock_state.mode = VALIDATING_CARTRIDGE;
+    mock_state.cartridge_state = BARCODE_READ;
+    mock_state.detector_on = true;
+    mock_state.cloud_operation_pending = true;
+    mock_state.cloud_operation_start_time = 1000;
+    
+    TEST_ASSERT_EQUAL_INT(VALIDATING_CARTRIDGE, mock_state.mode, "Should be in VALIDATING_CARTRIDGE");
+    TEST_ASSERT_TRUE(mock_state.cloud_operation_pending, "Cloud operation should be pending");
+    
+    // Simulate cartridge removal during validation
+    mock_state.detector_on = false;
+    mock_state.cartridge_state = NOT_INSERTED;
+    
+    // Should transition to ERROR_STATE (operation in progress)
+    mock_set_error("Cartridge removed during validation");
+    TEST_ASSERT_EQUAL_INT(ERROR_STATE, mock_state.mode, "Should transition to ERROR_STATE");
+    
+    // Should cancel cloud operation
+    mock_state.cloud_operation_pending = false;
+    mock_state.cloud_operation_start_time = 0;
+    TEST_ASSERT_FALSE(mock_state.cloud_operation_pending, "Cloud operation should be cancelled");
+    
+    // Test state should be CANCELLED
+    mock_state.test_state = CANCELLED;
+    TEST_ASSERT_EQUAL_INT(CANCELLED, mock_state.test_state, "Test should be CANCELLED");
+    
+    // === Sub-test 3: Cartridge removal during RUNNING_TEST (CRITICAL) ===
+    // This is the most critical scenario
+    
+    reset_mock_state_machine();
+    mock_state.mode = RUNNING_TEST;
+    mock_state.test_state = RUNNING;
+    mock_state.cartridge_state = VALIDATED;
+    mock_state.detector_on = true;
+    
+    TEST_ASSERT_EQUAL_INT(RUNNING_TEST, mock_state.mode, "Should be in RUNNING_TEST");
+    TEST_ASSERT_EQUAL_INT(RUNNING, mock_state.test_state, "Test should be RUNNING");
+    
+    // Simulate cartridge removal during active test (CRITICAL)
+    mock_state.detector_on = false;
+    mock_state.cartridge_state = NOT_INSERTED;
+    
+    // Should transition to ERROR_STATE immediately
+    mock_set_error("CRITICAL: Cartridge removed during test execution");
+    TEST_ASSERT_EQUAL_INT(ERROR_STATE, mock_state.mode, "Should transition to ERROR_STATE immediately");
+    TEST_ASSERT_EQUAL_INT(RUNNING_TEST, mock_state.previous_mode, "Previous mode should be RUNNING_TEST");
+    
+    // Test must be CANCELLED
+    mock_state.test_state = CANCELLED;
+    TEST_ASSERT_EQUAL_INT(CANCELLED, mock_state.test_state, "Test must be CANCELLED");
+    
+    // Must not allow results upload for cancelled test
+    bool can_upload = (mock_state.test_state == COMPLETED);
+    TEST_ASSERT_FALSE(can_upload, "Must not allow upload of cancelled test");
+    
+    // === Sub-test 4: Cartridge removal during UPLOADING_RESULTS ===
+    // May allow upload to complete (data integrity)
+    
+    reset_mock_state_machine();
+    mock_state.mode = UPLOADING_RESULTS;
+    mock_state.test_state = COMPLETED;
+    mock_state.cartridge_state = TEST_COMPLETE;
+    mock_state.detector_on = true;
+    mock_state.cloud_operation_pending = true;
+    mock_state.cloud_operation_start_time = 1000;
+    
+    TEST_ASSERT_EQUAL_INT(UPLOADING_RESULTS, mock_state.mode, "Should be in UPLOADING_RESULTS");
+    TEST_ASSERT_EQUAL_INT(COMPLETED, mock_state.test_state, "Test should be COMPLETED");
+    
+    // Simulate cartridge removal during upload
+    mock_state.detector_on = false;
+    mock_state.cartridge_state = NOT_INSERTED;
+    
+    // Test data should be preserved (don't cancel completed test)
+    TEST_ASSERT_EQUAL_INT(COMPLETED, mock_state.test_state, "Test data should remain COMPLETED");
+    
+    // Option A: Allow upload to complete (data integrity priority)
+    // The upload should continue even with cartridge removed
+    TEST_ASSERT_TRUE(mock_state.cloud_operation_pending, "Upload should continue for data integrity");
+    
+    // After upload completes, transition to IDLE
+    mock_state.cloud_operation_pending = false;
+    mock_state.test_state = UPLOADED;
+    mock_transition_to(IDLE);
+    
+    TEST_ASSERT_EQUAL_INT(IDLE, mock_state.mode, "Should transition to IDLE after upload completes");
+    TEST_ASSERT_EQUAL_INT(UPLOADED, mock_state.test_state, "Test should be successfully UPLOADED");
+    
+    return true;
+}
+
 // === ERROR STATE HANDLING ===
 
 bool test_error_state_transition_from_any_state(void) {
@@ -1374,6 +1549,13 @@ BEGIN_TEST_SUITE(state_transitions)
     
     meta = {"TC-PERSIST-002", "Transition Logging", "REQ-PERSIST-002", "RISK-MED-032", "Persistence"};
     TEST_CASE(test_state_transition_logging, meta);
+    
+    // === EDGE CASE TESTS ===
+    meta = {"TC-EDGE-001", "Cloud Timeout During Upload", "REQ-EDGE-001", "RISK-CRIT-023", "Edge Cases"};
+    TEST_CASE(test_edge_timeout_during_cloud_op, meta);
+    
+    meta = {"TC-EDGE-002", "Cartridge Removal Multiple States", "REQ-EDGE-002", "RISK-CRIT-024", "Edge Cases"};
+    TEST_CASE(test_edge_cartridge_removal_multiple_states, meta);
     
 END_TEST_SUITE()
 

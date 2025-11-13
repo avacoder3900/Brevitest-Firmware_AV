@@ -177,6 +177,7 @@ bool test_boundary_rapid_state_transitions(void);
 bool test_boundary_state_during_power_cycle(void);
 bool test_edge_simultaneous_cartridge_events(void);
 bool test_edge_timeout_during_cloud_op(void);
+bool test_edge_cartridge_removal_multiple_states(void);
 
 // === SAFETY-CRITICAL STATE TESTS ===
 
