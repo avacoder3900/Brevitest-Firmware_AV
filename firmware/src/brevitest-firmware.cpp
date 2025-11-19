@@ -4539,8 +4539,18 @@ void set_device_indicators()
         // === HEATING STATE ===
         if (device_state.detector_on)
         {
-            // Cartridge inserted while heating - remove it
-            turn_on_remove_cartridge_LED();
+            // Cartridge inserted while heating
+            if (pending_barcode_available)
+            {
+                // We already scanned the barcode - signal to remove
+                turn_on_remove_cartridge_LED();
+                turn_on_buzzer_problem();
+            }
+            else
+            {
+                // Cartridge inserted but not scanned yet - will be handled by barcode_scan_loop
+                turn_on_remove_cartridge_LED();
+            }
         }
         else
         {
@@ -4601,14 +4611,59 @@ void barcode_scan_loop()
 {
     int max_cycles;
 
-    // Only scan if cartridge is detected and we're in barcode scanning mode
-    if (device_state.detector_on && device_state.mode == DeviceMode::BARCODE_SCANNING)
+    // Only scan if cartridge is detected and we're in barcode scanning mode or heating mode
+    // (heating mode allows early detection without validation)
+    if (device_state.detector_on && 
+        (device_state.mode == DeviceMode::BARCODE_SCANNING || device_state.mode == DeviceMode::HEATING))
     {
+        // If we're in HEATING mode and already have a pending barcode, don't re-scan
+        if (device_state.mode == DeviceMode::HEATING && pending_barcode_available)
+        {
+            return; // Already scanned, waiting for heater to be ready
+        }
+        
         switch (scan_barcode())
         {
         case BARCODE_TYPE_CARTRIDGE:
             // === REGULAR CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
+            
+            // === CHECK IF HEATER IS READY ===
+            if (!heater_debounced())
+            {
+                // === EARLY DETECTION: Heater not ready ===
+                // Store barcode for later use, but don't validate yet
+                strcpy(pending_barcode_uuid, barcode_uuid);
+                pending_barcode_available = true;
+                
+                Log.info("Cartridge identified during heating: %s", barcode_uuid);
+                Log.info("Heater not ready - please remove cartridge and re-insert when heater is ready");
+                
+                // Signal user to remove cartridge
+                turn_on_remove_cartridge_LED();
+                turn_on_buzzer_problem();
+                
+                // Transition back to HEATING mode (don't validate yet)
+                device_state.transition_to(DeviceMode::HEATING);
+                break;
+            }
+            
+            // === HEATER IS READY - PROCEED WITH VALIDATION ===
+            // Check if this matches a pending barcode from earlier
+            if (pending_barcode_available && strcmp(barcode_uuid, pending_barcode_uuid) == 0)
+            {
+                Log.info("Re-inserted cartridge matches pending barcode: %s", barcode_uuid);
+                pending_barcode_available = false;
+                pending_barcode_uuid[0] = '\0';
+            }
+            else if (pending_barcode_available)
+            {
+                Log.info("Different cartridge inserted - using new barcode: %s (pending was: %s)", 
+                         barcode_uuid, pending_barcode_uuid);
+                pending_barcode_available = false;
+                pending_barcode_uuid[0] = '\0';
+            }
+            
             device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             Log.info("Cartridge inserted");
@@ -4716,9 +4771,17 @@ void hardware_loop()
                     device_state.transition_to(DeviceMode::BARCODE_SCANNING);
                     turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
                 }
+                else if (device_state.mode == DeviceMode::HEATING && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
+                {
+                    // === EARLY DETECTION: Cartridge inserted during heating ===
+                    // Allow barcode scanning but don't validate yet
+                    device_state.cartridge_state = CartridgeState::DETECTED;
+                    device_state.transition_to(DeviceMode::BARCODE_SCANNING);
+                    Log.info("Cartridge detected during heating - will scan barcode but not validate until heater ready");
+                }
                 else
                 {
-                    // Heater not ready - set error state
+                    // Heater not ready and not in heating mode - set error state
                     device_state.cartridge_state = CartridgeState::DETECTED;
                     device_state.set_error("Heater not ready for cartridge insertion");
                 }
@@ -4744,6 +4807,11 @@ void hardware_loop()
                 pending_assay_id[0] = '\0';
                 pending_checksum = 0;
                 pending_cartridge_id[0] = '\0';
+                
+                // === CLEANUP PENDING BARCODE (keep it for reuse if re-inserted) ===
+                // Note: We keep pending_barcode_available = true so if user re-inserts
+                // the same cartridge after heater is ready, we can reuse it
+                // Only clear if explicitly needed (e.g., different cartridge inserted)
                 
                 device_state.reset_to_idle();
             }
@@ -4959,10 +5027,30 @@ void loop()
         break;
 
     case DeviceMode::IDLE:
-    case DeviceMode::HEATING:
-        // === IDLE/HEATING MODES ===
+        // === IDLE MODE ===
         // Wait for state changes from hardware_loop
         // No specific actions needed - hardware_loop handles transitions
+        break;
+        
+    case DeviceMode::HEATING:
+        // === HEATING MODE ===
+        // Check if heater became ready while cartridge with pending barcode is still inserted
+        if (heater_debounced() && device_state.detector_on && pending_barcode_available)
+        {
+            // Heater is now ready and cartridge is still inserted with pending barcode
+            // Transition to barcode scanning to re-scan and validate
+            if (device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
+            {
+                Log.info("Heater ready - re-scanning cartridge with pending barcode: %s", pending_barcode_uuid);
+                device_state.transition_to(DeviceMode::BARCODE_SCANNING);
+            }
+        }
+        // Also allow barcode scanning if cartridge is inserted (for early detection)
+        // This will scan the barcode and store it as pending if heater not ready
+        if (device_state.detector_on)
+        {
+            barcode_scan_loop();
+        }
         break;
 
     case DeviceMode::ERROR_STATE:
