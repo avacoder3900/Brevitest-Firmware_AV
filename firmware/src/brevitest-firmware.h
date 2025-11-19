@@ -153,6 +153,12 @@
 #define PUBSUB_EVENT_MAX_LENGTH 32
 #define PUBSUB_RETRY_DELAY 22000
 
+// cartridge validation
+#define VALIDATION_TIMEOUT_MS 30000        // Default timeout: 30 seconds
+#define VALIDATION_MAX_TIMEOUT_MS 60000    // Maximum timeout: 60 seconds
+#define VALIDATION_MAX_RETRIES 3           // Maximum retry attempts
+#define VALIDATION_RETRY_BACKOFF_BASE 5000 // Base backoff delay: 5 seconds
+
 // magnetometer
 #define MAGNETOMETER_NUMBER_OF_WELLS 5
 #define MAGNETOMETER_CONNECT_DELAY 3000
@@ -324,6 +330,10 @@ int test_percent_complete;
 // uuids
 char barcode_uuid[BARCODE_UUID_LENGTH + 1];
 char reset_uuid[BARCODE_UUID_LENGTH + 1];
+
+// cartridge validation retry tracking
+int validation_retry_count = 0;
+unsigned long validation_retry_delay_until = 0;
 char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 
