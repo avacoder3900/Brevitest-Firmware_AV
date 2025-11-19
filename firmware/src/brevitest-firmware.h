@@ -331,6 +331,10 @@ int test_percent_complete;
 char barcode_uuid[BARCODE_UUID_LENGTH + 1];
 char reset_uuid[BARCODE_UUID_LENGTH + 1];
 
+// early cartridge detection during heating
+char pending_barcode_uuid[BARCODE_UUID_LENGTH + 1];
+bool pending_barcode_available = false;
+
 // cartridge validation retry tracking
 int validation_retry_count = 0;
 unsigned long validation_retry_delay_until = 0;
