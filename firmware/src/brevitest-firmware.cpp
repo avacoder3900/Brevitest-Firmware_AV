@@ -2051,7 +2051,38 @@ void stop_temperature_control()
 
 void response_error(CloudEvent event)
 {
-    Log.info("Webhook error: event = %s, size = %d", event.name(), event.data().size());
+    String event_name = event.name();
+    Log.error("Webhook error: event = %s, size = %d", event_name.c_str(), event.data().size());
+    
+    // === END CLOUD OPERATION TRACKING ===
+    // Check if this is a validation error and handle appropriately
+    if (event_name.indexOf("validate-cartridge") >= 0)
+    {
+        // Validation-specific error handling
+        device_state.end_cloud_operation();
+        
+        // Reset retry tracking on explicit error (don't retry on webhook errors)
+        validation_retry_count = 0;
+        validation_retry_delay_until = 0;
+        
+        // Set error state
+        device_state.cartridge_state = CartridgeState::INVALID;
+        device_state.set_error("Cartridge validation webhook error");
+        
+        // Try to parse error message if available
+        String error_data = event.dataString();
+        if (error_data.length() > 0)
+        {
+            Log.error("Validation webhook error details: %s", error_data.c_str());
+        }
+    }
+    else if (event_name.indexOf("reset-cartridge") >= 0 || 
+             event_name.indexOf("upload-test") >= 0 || 
+             event_name.indexOf("load-assay") >= 0)
+    {
+        // End cloud operation for other webhook errors
+        device_state.end_cloud_operation();
+    }
 }
 
 /////////////////////////////////////////////////////
@@ -2062,26 +2093,86 @@ void publish_validate_cartridge()
 {
     particle::Variant data;
 
+    // === CHECK IF WE CAN PUBLISH ===
     if (!event.isSending() && ((lastPublish == 0) || (millis() - lastPublish >= publishPeriod.count())))
     {
+        // === CHECK IF ALREADY VALIDATED ===
         if (device_state.is_cartridge_validated())
         {
             return;
         }
 
-        lastPublish = millis();
-        device_state.start_cloud_operation();
+        // === CHECK CLOUD CONNECTION ===
+        if (!Particle.connected())
+        {
+            Log.error("Cannot publish validation: not connected to Particle cloud");
+            device_state.set_error("No cloud connection for validation");
+            return;
+        }
 
+        // === CHECK IF WAITING FOR RETRY DELAY ===
+        if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
+        {
+            // Still waiting for retry backoff delay
+            return;
+        }
+
+        // === PREPARE CLOUD EVENT ===
+        lastPublish = millis();
         clear_payload_buffer();
         event.name("validate-cartridge");
         event.contentType(ContentType::STRUCTURED);
         data.set("uuid", barcode_uuid);
         event.data(data);
-        if (event.canPublish(event.size()))
+        
+        // === VERIFY EVENT CAN BE PUBLISHED ===
+        if (!event.canPublish(event.size()))
         {
-            Log.info("Publishing validate cartridge, %s", barcode_uuid);
-            Particle.publish(event);
+            Log.error("Cannot publish validation: event size too large (%d bytes)", event.size());
+            device_state.set_error("Validation event too large");
+            return;
         }
+
+        // === ATTEMPT TO PUBLISH ===
+        Log.info("Publishing validate cartridge, %s (attempt %d/%d)", 
+                 barcode_uuid, validation_retry_count + 1, VALIDATION_MAX_RETRIES + 1);
+        
+        bool publish_success = Particle.publish(event);
+        
+        // === VERIFY PUBLISH SUCCESS ===
+        if (!publish_success)
+        {
+            Log.error("Publish failed for validate cartridge, %s", barcode_uuid);
+            
+            // Increment retry count
+            validation_retry_count++;
+            
+            if (validation_retry_count <= VALIDATION_MAX_RETRIES)
+            {
+                // Calculate exponential backoff delay
+                unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
+                validation_retry_delay_until = millis() + backoff_delay;
+                Log.info("Publish failed, will retry in %lu ms (attempt %d/%d)", 
+                         backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+            }
+            else
+            {
+                // Max retries exceeded
+                Log.error("Publish failed after %d attempts - giving up", VALIDATION_MAX_RETRIES + 1);
+                validation_retry_count = 0;
+                validation_retry_delay_until = 0;
+                device_state.set_error("Validation publish failed after retries");
+            }
+            return;
+        }
+
+        // === PUBLISH SUCCESSFUL - START CLOUD OPERATION TRACKING ===
+        Log.info("Validation publish successful, waiting for response");
+        device_state.start_cloud_operation();
+        
+        // Reset retry tracking on successful publish
+        validation_retry_count = 0;
+        validation_retry_delay_until = 0;
     }
 }
 
@@ -2098,6 +2189,10 @@ void response_validate_cartridge(CloudEvent cancel_event)
 {
     // === END CLOUD OPERATION TRACKING ===
     device_state.end_cloud_operation();
+    
+    // === RESET RETRY TRACKING ON RESPONSE ===
+    validation_retry_count = 0;
+    validation_retry_delay_until = 0;
 
     // === PARSE CLOUD RESPONSE ===
     Variant json = Variant::fromJSON(cancel_event.dataString());
@@ -3482,6 +3577,11 @@ int test_runner(String cartridgeId)
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
         {
             strcpy(barcode_uuid, cartridgeId.c_str());
+            
+            // Reset retry tracking when starting new validation
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
+            
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             return 0;
         }
@@ -4382,6 +4482,15 @@ void barcode_scan_loop()
             device_state.set_current_barcode(barcode_uuid);  // Track this barcode
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             Log.info("Cartridge inserted");
+            
+            // === DIAGNOSTIC LOGGING FOR VALIDATION ===
+            Log.info("Starting cartridge validation for barcode: %s", barcode_uuid);
+            Log.info("Cloud connection status: %s", Particle.connected() ? "CONNECTED" : "DISCONNECTED");
+            Log.info("Validation timeout: %lu ms, max retries: %d", VALIDATION_TIMEOUT_MS, VALIDATION_MAX_RETRIES);
+            
+            // Reset retry tracking when starting new validation
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
             break;
 
         case BARCODE_TYPE_MAGNETOMETER:
@@ -4491,6 +4600,15 @@ void hardware_loop()
                 reset_stage(true);
                 turn_off_buzzer_timer();
                 device_state.clear_current_barcode();  // Clear barcode tracking
+                
+                // === CLEANUP VALIDATION RETRY TRACKING ===
+                validation_retry_count = 0;
+                validation_retry_delay_until = 0;
+                if (device_state.cloud_operation_pending)
+                {
+                    device_state.end_cloud_operation();
+                }
+                
                 device_state.reset_to_idle();
             }
         }
@@ -4610,20 +4728,88 @@ void loop()
         // Check cloud connection first
         if (!Particle.connected())
         {
+            // === HANDLE DISCONNECTION DURING VALIDATION ===
+            if (device_state.cloud_operation_pending)
+            {
+                Log.error("Cloud disconnected during validation - clearing pending operation");
+                device_state.end_cloud_operation();
+                // Don't reset retry count - allow retry when connection restored
+            }
             Log.error("Not connected to Particle cloud - cannot validate cartridge");
             device_state.set_error("No cloud connection");
             break;
         }
+        
+        // === DIAGNOSTIC: LOG STATUS ON FIRST ENTRY ===
+        static unsigned long last_validation_status_log = 0;
+        if (last_validation_status_log == 0 || (millis() - last_validation_status_log) > 30000)
+        {
+            Log.info("Validation status - Barcode: %s, Cloud pending: %s, Retry count: %d", 
+                     barcode_uuid, 
+                     device_state.cloud_operation_pending ? "YES" : "NO",
+                     validation_retry_count);
+            last_validation_status_log = millis();
+        }
+        
+        // === CHECK FOR TIMEOUT IF WAITING FOR RESPONSE ===
+        if (device_state.cloud_operation_pending)
+        {
+            // Use configurable timeout (can be increased for slow networks)
+            unsigned long timeout_ms = VALIDATION_TIMEOUT_MS;
+            
+            // Check if timeout has occurred
+            if (device_state.is_cloud_operation_timeout(timeout_ms))
+            {
+                Log.warn("Cartridge validation timeout - no response from cloud after %lu ms", timeout_ms);
+                
+                // Check if we can retry
+                if (validation_retry_count < VALIDATION_MAX_RETRIES)
+                {
+                    // Increment retry count
+                    validation_retry_count++;
+                    
+                    // Calculate exponential backoff delay
+                    unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
+                    validation_retry_delay_until = millis() + backoff_delay;
+                    
+                    // Clear cloud operation to allow retry
+                    device_state.end_cloud_operation();
+                    
+                    Log.info("Validation timeout, will retry in %lu ms (attempt %d/%d)", 
+                             backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                }
+                else
+                {
+                    // Max retries exceeded - set error
+                    Log.error("Cartridge validation timeout after %d attempts - giving up", 
+                              VALIDATION_MAX_RETRIES + 1);
+                    device_state.set_error("Cartridge validation timeout");
+                    validation_retry_count = 0;
+                    validation_retry_delay_until = 0;
+                }
+            }
+            else
+            {
+                // Still waiting for response - log periodic status
+                static unsigned long last_wait_log = 0;
+                unsigned long elapsed = millis() - device_state.cloud_operation_start_time;
+                if (last_wait_log == 0 || (millis() - last_wait_log) >= 10000) // Log every 10 seconds
+                {
+                    Log.info("Waiting for validation response... (%lu ms elapsed, timeout: %lu ms)", 
+                             elapsed, timeout_ms);
+                    last_wait_log = millis();
+                }
+            }
+        }
+        
+        // === PUBLISH VALIDATION REQUEST ===
         // Only validate if heater ready and not already waiting for response
         if (heater_debounced() && !device_state.cloud_operation_pending)
         {
+            // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
+            Log.info("Preparing to publish validation - Barcode: %s, Cloud connected: %s", 
+                     barcode_uuid, Particle.connected() ? "YES" : "NO");
             publish_validate_cartridge();
-        }
-        // Check for timeout if we're waiting for a response
-        else if (device_state.cloud_operation_pending && device_state.is_cloud_operation_timeout(30000))
-        {
-            Log.error("Cartridge validation timeout - no response from cloud");
-            device_state.set_error("Cartridge validation timeout");
         }
         break;
 

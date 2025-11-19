@@ -4342,7 +4342,7 @@ void barcode_scan_loop()
             // === DIAGNOSTIC LOGGING FOR VALIDATION ===
             Log.info("Starting cartridge validation for barcode: %s", barcode_uuid);
             Log.info("Cloud connection status: %s", Particle.connected() ? "CONNECTED" : "DISCONNECTED");
-            Log.info("Validation timeout: %lu ms, max retries: %d", VALIDATION_TIMEOUT_MS, VALIDATION_MAX_RETRIES);
+            Log.info("Validation timeout: %lu ms, max retries: %d", (unsigned long)VALIDATION_TIMEOUT_MS, VALIDATION_MAX_RETRIES);
             
             // Reset retry tracking when starting new validation
             validation_retry_count = 0;
