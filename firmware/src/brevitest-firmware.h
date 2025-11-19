@@ -334,6 +334,12 @@ char reset_uuid[BARCODE_UUID_LENGTH + 1];
 // cartridge validation retry tracking
 int validation_retry_count = 0;
 unsigned long validation_retry_delay_until = 0;
+
+// assay re-download tracking for checksum mismatch recovery
+bool assay_redownload_pending = false;
+char pending_assay_id[ASSAY_UUID_LENGTH + 1];
+int pending_checksum = 0;
+char pending_cartridge_id[BARCODE_UUID_LENGTH + 1];
 char assay_uuid[ASSAY_UUID_LENGTH + 1];
 String device_id;
 

@@ -1932,9 +1932,28 @@ void response_error(CloudEvent event)
             Log.error("Validation webhook error details: %s", error_data.c_str());
         }
     }
+    else if (event_name.indexOf("load-assay") >= 0)
+    {
+        // Assay download error - handle re-download failure
+        device_state.end_cloud_operation();
+        
+        if (assay_redownload_pending)
+        {
+            Log.error("Assay re-download webhook error");
+            device_state.cartridge_state = CartridgeState::INVALID;
+            device_state.set_error("Assay re-download webhook error");
+            memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
+            device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
+            
+            // Clear re-download tracking
+            assay_redownload_pending = false;
+            pending_assay_id[0] = '\0';
+            pending_checksum = 0;
+            pending_cartridge_id[0] = '\0';
+        }
+    }
     else if (event_name.indexOf("reset-cartridge") >= 0 || 
-             event_name.indexOf("upload-test") >= 0 || 
-             event_name.indexOf("load-assay") >= 0)
+             event_name.indexOf("upload-test") >= 0)
     {
         // End cloud operation for other webhook errors
         device_state.end_cloud_operation();
@@ -2071,12 +2090,32 @@ void response_validate_cartridge(CloudEvent cancel_event)
         }
         else
         {
-            // === ASSAY LOAD FAILED ===
-            device_state.cartridge_state = CartridgeState::INVALID;
-            device_state.set_error("Could not load assay from file due to checksum mismatch");
-            Log.info("Cartridge validation failed: could not load assay from file due to checksum mismatch");
-            memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
-            device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
+            // === ASSAY LOAD FAILED - TRY RE-DOWNLOAD ===
+            Log.warn("Assay file checksum mismatch - attempting to re-download assay");
+            
+            // Delete the corrupted file
+            String filename = "/assay/" + assay_id;
+            if (unlink(filename.c_str()) == 0)
+            {
+                Log.info("Deleted corrupted assay file: %s", filename.c_str());
+            }
+            else
+            {
+                Log.warn("Failed to delete assay file: %s (errno: %d)", filename.c_str(), errno);
+            }
+            
+            // Store validation data for retry after re-download
+            strcpy(pending_assay_id, assay_id.c_str());
+            pending_checksum = checksum_value;
+            strcpy(pending_cartridge_id, json.get("cartridgeId").toString().c_str());
+            assay_redownload_pending = true;
+            
+            // Start cloud operation for assay download
+            device_state.start_cloud_operation();
+            
+            // Trigger assay re-download
+            Log.info("Requesting re-download of assay: %s", assay_id.c_str());
+            publish_load_assay(assay_id);
         }
     }
     else
@@ -2280,21 +2319,112 @@ void response_load_assay(CloudEvent load_assay_event)
             if (save_assay_to_file())
             {
                 Log.info("Assay %s %s", assay.id, "loaded successfully");
+                
+                // === CHECK IF WE NEED TO RETRY VALIDATION AFTER RE-DOWNLOAD ===
+                if (assay_redownload_pending && strcmp(assay.id, pending_assay_id) == 0)
+                {
+                    Log.info("Assay re-downloaded successfully, retrying validation");
+                    
+                    // End cloud operation for assay download
+                    device_state.end_cloud_operation();
+                    
+                    // Try loading the assay again with the expected checksum
+                    if (load_assay_from_file(pending_assay_id, pending_checksum))
+                    {
+                        // === ASSAY LOADED SUCCESSFULLY AFTER RE-DOWNLOAD ===
+                        Log.info("Assay loaded successfully after re-download");
+                        device_state.cartridge_state = CartridgeState::VALIDATED;
+                        device_state.test_state = TestState::NOT_STARTED;
+                        strcpy(test.cartridge_id, pending_cartridge_id);
+                        device_state.transition_to(DeviceMode::RUNNING_TEST);
+                        
+                        // Clear re-download tracking
+                        assay_redownload_pending = false;
+                        pending_assay_id[0] = '\0';
+                        pending_checksum = 0;
+                        pending_cartridge_id[0] = '\0';
+                        
+                        run_test();
+                    }
+                    else
+                    {
+                        // Still failed after re-download
+                        Log.error("Assay still failed to load after re-download");
+                        device_state.cartridge_state = CartridgeState::INVALID;
+                        device_state.set_error("Could not load assay from file after re-download");
+                        memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
+                        device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
+                        
+                        // Clear re-download tracking
+                        assay_redownload_pending = false;
+                        pending_assay_id[0] = '\0';
+                        pending_checksum = 0;
+                        pending_cartridge_id[0] = '\0';
+                    }
+                }
             }
             else
             {
                 Log.info("Assay %s %s", assay.id, "saved to file failed");
+                
+                // If this was a re-download attempt, handle failure
+                if (assay_redownload_pending)
+                {
+                    device_state.end_cloud_operation();
+                    device_state.cartridge_state = CartridgeState::INVALID;
+                    device_state.set_error("Failed to save assay file after re-download");
+                    memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
+                    device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
+                    
+                    // Clear re-download tracking
+                    assay_redownload_pending = false;
+                    pending_assay_id[0] = '\0';
+                    pending_checksum = 0;
+                    pending_cartridge_id[0] = '\0';
+                }
             }
         }
         else
         {
             Log.info("Assay %s %s", assay.id, "loaded but checksum mismatch");
             Log.info("CRC loaded: %d, CRC calculated: %d", crc_loaded, crc_calculated);
+            
+            // If this was a re-download attempt, handle failure
+            if (assay_redownload_pending)
+            {
+                device_state.end_cloud_operation();
+                device_state.cartridge_state = CartridgeState::INVALID;
+                device_state.set_error("Assay checksum mismatch after re-download");
+                memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
+                device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
+                
+                // Clear re-download tracking
+                assay_redownload_pending = false;
+                pending_assay_id[0] = '\0';
+                pending_checksum = 0;
+                pending_cartridge_id[0] = '\0';
+            }
         }
     }
     else
     {
         Log.info("Assay %s %s", assay.id, "loading failed");
+        
+        // If this was a re-download attempt, handle failure
+        if (assay_redownload_pending)
+        {
+            device_state.end_cloud_operation();
+            device_state.cartridge_state = CartridgeState::INVALID;
+            device_state.set_error("Assay download failed");
+            memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
+            device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
+            
+            // Clear re-download tracking
+            assay_redownload_pending = false;
+            pending_assay_id[0] = '\0';
+            pending_checksum = 0;
+            pending_cartridge_id[0] = '\0';
+        }
     }
 }
 
@@ -4464,6 +4594,12 @@ void hardware_loop()
                 {
                     device_state.end_cloud_operation();
                 }
+                
+                // === CLEANUP ASSAY RE-DOWNLOAD TRACKING ===
+                assay_redownload_pending = false;
+                pending_assay_id[0] = '\0';
+                pending_checksum = 0;
+                pending_cartridge_id[0] = '\0';
                 
                 device_state.reset_to_idle();
             }
