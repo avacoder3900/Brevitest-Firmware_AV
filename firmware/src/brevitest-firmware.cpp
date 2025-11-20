@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -152,7 +152,7 @@ void magnet_validation_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "/Users/leo3/github/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 
@@ -1159,6 +1159,11 @@ void turn_on_buzzer_problem()
     start_alert_buzzer = false;
     buzzer_timer.changePeriod(BUZZER_PROBLEM_PERIOD);
     buzzer_timer.reset();
+    // Ensure timer is started
+    if (!buzzer_timer.isActive())
+    {
+        buzzer_timer.start();
+    }
 }
 
 void turn_off_buzzer_timer()
@@ -4593,6 +4598,12 @@ void set_device_indicators()
                 // We already scanned the barcode - signal to remove
                 turn_on_remove_cartridge_LED();
                 turn_on_buzzer_problem();
+                // Ensure buzzer timer is started (turn_on_buzzer_problem should handle this, but double-check)
+                if (!buzzer_timer.isActive())
+                {
+                    buzzer_timer.start();
+                    Log.info("Started buzzer timer for pending barcode removal signal");
+                }
             }
             else
             {
@@ -4667,10 +4678,23 @@ void barcode_scan_loop()
         // If we're in HEATING mode and already have a pending barcode, don't re-scan
         if (device_state.mode == DeviceMode::HEATING && pending_barcode_available)
         {
+            Log.info("Barcode scan loop: Already have pending barcode, skipping scan (mode: %s)", 
+                     device_mode_to_string(device_state.mode).c_str());
             return; // Already scanned, waiting for heater to be ready
         }
         
-        switch (scan_barcode())
+        Log.info("Barcode scan loop: Starting barcode scan (mode: %s, detector_on: %s)", 
+                 device_mode_to_string(device_state.mode).c_str(),
+                 device_state.detector_on ? "YES" : "NO");
+        
+        // Scan the barcode
+        int barcode_type = scan_barcode();
+        Log.info("Barcode scan result: %d (mode: %s, barcode: %s)", 
+                 barcode_type, 
+                 device_mode_to_string(device_state.mode).c_str(),
+                 barcode_uuid);
+        
+        switch (barcode_type)
         {
         case BARCODE_TYPE_CARTRIDGE:
             // === REGULAR CARTRIDGE DETECTED ===
@@ -4690,8 +4714,14 @@ void barcode_scan_loop()
                 // Signal user to remove cartridge
                 turn_on_remove_cartridge_LED();
                 turn_on_buzzer_problem();
+                Log.info("Activated remove cartridge LED and problem buzzer - LED active: %s, Buzzer running: %s", 
+                         indicatorRemove.isActive() ? "YES" : "NO",
+                         buzzer_problem_running ? "YES" : "NO");
+                // Ensure buzzer timer is started
+                buzzer_timer.start();
                 
                 // Transition back to HEATING mode (don't validate yet)
+                Log.info("Transitioning back to HEATING mode - barcode stored for later validation");
                 device_state.transition_to(DeviceMode::HEATING);
                 break;
             }
@@ -4824,8 +4854,9 @@ void hardware_loop()
                     // === EARLY DETECTION: Cartridge inserted during heating ===
                     // Allow barcode scanning but don't validate yet
                     device_state.cartridge_state = CartridgeState::DETECTED;
+                    Log.info("Cartridge detected during heating - transitioning to BARCODE_SCANNING for early detection");
                     device_state.transition_to(DeviceMode::BARCODE_SCANNING);
-                    Log.info("Cartridge detected during heating - will scan barcode but not validate until heater ready");
+                    Log.info("Will scan barcode but not validate until heater ready");
                 }
                 else
                 {
