@@ -1147,6 +1147,11 @@ void turn_on_buzzer_alert()
     start_alert_buzzer = true;
     buzzer_timer.changePeriod(BUZZER_ALERT_PERIOD);
     buzzer_timer.reset();
+    // Ensure timer is started
+    if (!buzzer_timer.isActive())
+    {
+        buzzer_timer.start();
+    }
 }
 
 void turn_on_buzzer_problem()
@@ -4595,8 +4600,8 @@ void set_device_indicators()
             {
                 // We already scanned the barcode - signal to remove
                 turn_on_remove_cartridge_LED();
-                turn_on_buzzer_problem();
-                // Ensure buzzer timer is started (turn_on_buzzer_problem should handle this, but double-check)
+                turn_on_buzzer_alert();
+                // Ensure buzzer timer is started
                 if (!buzzer_timer.isActive())
                 {
                     buzzer_timer.start();
@@ -4607,12 +4612,12 @@ void set_device_indicators()
             {
                 // Cartridge inserted but not scanned yet - signal to remove immediately
                 turn_on_remove_cartridge_LED();
-                turn_on_buzzer_problem();
+                turn_on_buzzer_alert();
                 // Ensure buzzer timer is started
                 if (!buzzer_timer.isActive())
                 {
                     buzzer_timer.start();
-                    Log.info("Activated remove cartridge LED and problem buzzer for cartridge inserted during heating");
+                    Log.info("Activated remove cartridge LED and alert buzzer for cartridge inserted during heating");
                 }
             }
         }
@@ -4719,16 +4724,21 @@ void barcode_scan_loop()
                 
                 // Signal user to remove cartridge
                 turn_on_remove_cartridge_LED();
-                turn_on_buzzer_problem();
-                Log.info("Activated remove cartridge LED and problem buzzer - LED active: %s, Buzzer running: %s", 
+                turn_on_buzzer_alert();
+                Log.info("Activated remove cartridge LED and alert buzzer - LED active: %s, Buzzer running: %s", 
                          indicatorRemove.isActive() ? "YES" : "NO",
-                         buzzer_problem_running ? "YES" : "NO");
+                         buzzer_alert_running ? "YES" : "NO");
                 // Ensure buzzer timer is started
-                buzzer_timer.start();
+                if (!buzzer_timer.isActive())
+                {
+                    buzzer_timer.start();
+                }
                 
                 // Transition back to HEATING mode (don't validate or run test)
                 Log.info("Transitioning back to HEATING mode - cartridge rejected, waiting for removal");
                 device_state.transition_to(DeviceMode::HEATING);
+                // Ensure LED stays active after state transition
+                turn_on_remove_cartridge_LED();
                 break;
             }
             
@@ -4745,16 +4755,21 @@ void barcode_scan_loop()
                 
                 // Signal user to remove cartridge
                 turn_on_remove_cartridge_LED();
-                turn_on_buzzer_problem();
-                Log.info("Activated remove cartridge LED and problem buzzer - LED active: %s, Buzzer running: %s", 
+                turn_on_buzzer_alert();
+                Log.info("Activated remove cartridge LED and alert buzzer - LED active: %s, Buzzer running: %s", 
                          indicatorRemove.isActive() ? "YES" : "NO",
-                         buzzer_problem_running ? "YES" : "NO");
+                         buzzer_alert_running ? "YES" : "NO");
                 // Ensure buzzer timer is started
-                buzzer_timer.start();
+                if (!buzzer_timer.isActive())
+                {
+                    buzzer_timer.start();
+                }
                 
                 // Transition back to HEATING mode (don't validate yet)
                 Log.info("Transitioning back to HEATING mode - barcode stored for later validation");
                 device_state.transition_to(DeviceMode::HEATING);
+                // Ensure LED stays active after state transition
+                turn_on_remove_cartridge_LED();
                 break;
             }
             
