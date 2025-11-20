@@ -4562,6 +4562,33 @@ void barcode_scan_loop()
             // === REGULAR CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
             
+            // === CHECK IF CARTRIDGE WAS INSERTED DURING HEATING ===
+            // If inserted during heating, always reject (don't burn the cartridge)
+            if (device_state.previous_mode == DeviceMode::HEATING)
+            {
+                // === CARTRIDGE INSERTED DURING HEATING - ALWAYS REJECT ===
+                // Store barcode for reference, but don't validate or run test
+                strcpy(pending_barcode_uuid, barcode_uuid);
+                pending_barcode_available = true;
+                
+                Log.info("Cartridge identified during heating: %s", barcode_uuid);
+                Log.info("Cartridge inserted during heating - please remove cartridge and re-insert when heater is ready");
+                
+                // Signal user to remove cartridge
+                turn_on_remove_cartridge_LED();
+                turn_on_buzzer_problem();
+                Log.info("Activated remove cartridge LED and problem buzzer - LED active: %s, Buzzer running: %s", 
+                         indicatorRemove.isActive() ? "YES" : "NO",
+                         buzzer_problem_running ? "YES" : "NO");
+                // Ensure buzzer timer is started
+                buzzer_timer.start();
+                
+                // Transition back to HEATING mode (don't validate or run test)
+                Log.info("Transitioning back to HEATING mode - cartridge rejected, waiting for removal");
+                device_state.transition_to(DeviceMode::HEATING);
+                break;
+            }
+            
             // === CHECK IF HEATER IS READY ===
             if (!heater_debounced())
             {
