@@ -1199,11 +1199,9 @@ void turn_off_indicator_LEDs()
 
 void turn_on_remove_cartridge_LED()
 {
-    if (!indicatorRemove.isActive())
-    {
-        turn_off_indicator_LEDs();
-        indicatorRemove.setActive(true);
-    }
+    turn_off_indicator_LEDs();
+    indicatorRemove.setActive(true);
+    // LED is configured as green blinking (RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_SLOW)
 }
 
 void turn_on_dont_touch_LED()
