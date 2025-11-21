@@ -4313,10 +4313,10 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
 
     // Error responses
-    Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
 
     // === EEPROM SETUP ===
     setup_eeprom();
