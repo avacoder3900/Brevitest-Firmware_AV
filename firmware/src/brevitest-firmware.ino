@@ -2039,7 +2039,23 @@ void publish_validate_cartridge()
         if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
         {
             // Still waiting for retry backoff delay
+            unsigned long remaining_delay = validation_retry_delay_until - millis();
+            static unsigned long last_retry_delay_log = 0;
+            if (last_retry_delay_log == 0 || (millis() - last_retry_delay_log) >= 5000) // Log every 5 seconds
+            {
+                Log.info("Waiting for retry delay - %lu ms remaining (attempt %d/%d)", 
+                         remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                last_retry_delay_log = millis();
+            }
             return;
+        }
+        
+        // === CLEAR RETRY DELAY IF IT HAS ELAPSED ===
+        if (validation_retry_delay_until > 0 && millis() >= validation_retry_delay_until)
+        {
+            Log.info("Retry delay elapsed - proceeding with retry attempt %d/%d", 
+                     validation_retry_count, VALIDATION_MAX_RETRIES);
+            validation_retry_delay_until = 0; // Clear the delay flag
         }
 
         // === PREPARE CLOUD EVENT ===
@@ -2092,11 +2108,20 @@ void publish_validate_cartridge()
         }
 
         // === PUBLISH SUCCESSFUL - START CLOUD OPERATION TRACKING ===
-        Log.info("Validation publish successful, waiting for response");
+        if (validation_retry_count > 0)
+        {
+            Log.info("Validation publish successful (retry attempt %d/%d), waiting for response", 
+                     validation_retry_count, VALIDATION_MAX_RETRIES);
+        }
+        else
+        {
+            Log.info("Validation publish successful, waiting for response");
+        }
         device_state.start_cloud_operation();
         
         // Reset retry tracking on successful publish
-        validation_retry_count = 0;
+        // Note: Don't reset retry_count here - keep it for logging until we get a response
+        // It will be reset in response_validate_cartridge() on success
         validation_retry_delay_until = 0;
     }
 }
@@ -4973,6 +4998,8 @@ void loop()
                     
                     Log.info("Validation timeout, will retry in %lu ms (attempt %d/%d)", 
                              backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                    Log.info("Retry scheduled - delay until: %lu ms (current: %lu ms)", 
+                             validation_retry_delay_until, millis());
                 }
                 else
                 {
@@ -5000,12 +5027,47 @@ void loop()
         
         // === PUBLISH VALIDATION REQUEST ===
         // Only validate if heater ready and not already waiting for response
+        // Also check if we're waiting for retry delay before attempting to publish
         if (heater_debounced() && !device_state.cloud_operation_pending)
         {
-            // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
-            Log.info("Preparing to publish validation - Barcode: %s, Cloud connected: %s", 
-                     barcode_uuid, Particle.connected() ? "YES" : "NO");
-            publish_validate_cartridge();
+            // === CHECK IF WAITING FOR RETRY DELAY ===
+            if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
+            {
+                // Still waiting for retry backoff delay - log periodically
+                unsigned long remaining_delay = validation_retry_delay_until - millis();
+                static unsigned long last_retry_wait_log = 0;
+                if (last_retry_wait_log == 0 || (millis() - last_retry_wait_log) >= 5000) // Log every 5 seconds
+                {
+                    Log.info("Waiting for retry delay before republishing - %lu ms remaining (attempt %d/%d)", 
+                             remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                    last_retry_wait_log = millis();
+                }
+            }
+            else
+            {
+                // Retry delay has elapsed or no retry delay set - proceed with publish
+                if (validation_retry_delay_until > 0 && millis() >= validation_retry_delay_until)
+                {
+                    // Retry delay just elapsed - clear it and log
+                    Log.info("Retry delay elapsed - proceeding with retry attempt %d/%d", 
+                             validation_retry_count, VALIDATION_MAX_RETRIES);
+                    validation_retry_delay_until = 0;
+                }
+                
+                // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
+                if (validation_retry_count > 0)
+                {
+                    Log.info("Preparing to publish validation retry - Barcode: %s, Attempt: %d/%d, Cloud connected: %s", 
+                             barcode_uuid, validation_retry_count, VALIDATION_MAX_RETRIES, 
+                             Particle.connected() ? "YES" : "NO");
+                }
+                else
+                {
+                    Log.info("Preparing to publish validation - Barcode: %s, Cloud connected: %s", 
+                             barcode_uuid, Particle.connected() ? "YES" : "NO");
+                }
+                publish_validate_cartridge();
+            }
         }
         break;
 
