@@ -327,6 +327,12 @@ void load_cached_test(char *filename)
 bool test_in_cache()
 {
     DIR *cache = opendir("/cache");
+    if (cache == NULL)
+    {
+        Log.error("test_in_cache: Failed to open /cache directory, errno: %d", errno);
+        return false;
+    }
+    
     int tries = 50;
     bool test_found = false;
     do
@@ -345,6 +351,7 @@ bool test_in_cache()
             snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
             Log.info("test_in_cache, found file: %s", cached_filename);
             test_found = true;
+            break; // Found a file, no need to continue searching
         }
     } while (cache_entry != NULL && --tries > 0);
     closedir(cache);
@@ -2524,6 +2531,9 @@ void publish_upload_test()
         // === CHECK IF TEST IS IN CACHE ===
         if (!test_in_cache())
         {
+            // No more tests to upload - transition back to IDLE
+            Log.info("No test in cache - transitioning to IDLE");
+            device_state.transition_to(DeviceMode::IDLE);
             return;
         }
 
@@ -4010,6 +4020,50 @@ int get_barcode_history(String params)
     return count;
 }
 
+/**
+ * @brief Upload cached test results to cloud
+ *
+ * This Particle Cloud function triggers the upload of cached test results,
+ * equivalent to serial command 403. It transitions the device to
+ * UPLOADING_RESULTS mode, which will process all cached tests.
+ *
+ * @param params Unused (for consistency with other Particle functions)
+ * @return 1 if upload started, 0 if no test in cache, -1 for help, -2 if not connected
+ */
+int upload_test_results(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("upload_test_help", 
+            "upload_test: Uploads cached test results to cloud. "
+            "This is equivalent to serial command 403. "
+            "Usage: Call with empty '' to start upload. "
+            "Call with '?' for help.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Check if there's a test in cache
+    if (!test_in_cache()) {
+        Particle.publish("upload_test_result", "No test in cache to upload", PRIVATE);
+        Log.info("No test in cache to upload");
+        return 0; // No test to upload (not an error)
+    }
+    
+    // Check if Particle is connected
+    if (!Particle.connected()) {
+        Particle.publish("upload_test_result", "Cannot upload - Particle cloud not connected", PRIVATE);
+        Log.warn("Cannot upload test - Particle cloud not connected");
+        return -2; // Error: not connected
+    }
+    
+    // Transition to UPLOADING_RESULTS mode (same as command 403)
+    device_state.transition_to(DeviceMode::UPLOADING_RESULTS);
+    Particle.publish("upload_test_result", "Upload started - transitioning to UPLOADING_RESULTS", PRIVATE);
+    Log.info("Upload test results triggered via Particle function");
+    return 1; // Success - upload started
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           TESTS                         //
@@ -4304,6 +4358,7 @@ void setup()
     Particle.function("clear_history", clear_state_history);
     Particle.function("force_state", force_state_transition);
     Particle.function("get_barcode_hist", get_barcode_history);
+    Particle.function("upload_test", upload_test_results);
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
     // Success responses

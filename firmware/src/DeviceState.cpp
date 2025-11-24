@@ -48,10 +48,11 @@ bool DeviceStateMachine::can_transition_to(DeviceMode new_mode) {
             return new_mode == DeviceMode::IDLE || new_mode == DeviceMode::HEATING;
             
         case DeviceMode::IDLE:
-            // Can start barcode scanning, stress testing, or heating
+            // Can start barcode scanning, stress testing, heating, or upload cached tests
             return new_mode == DeviceMode::BARCODE_SCANNING || 
                    new_mode == DeviceMode::STRESS_TESTING ||
-                   new_mode == DeviceMode::HEATING;
+                   new_mode == DeviceMode::HEATING ||
+                   new_mode == DeviceMode::UPLOADING_RESULTS;
                    
         case DeviceMode::HEATING:
             // Can go to IDLE (temp ready) or start operations
