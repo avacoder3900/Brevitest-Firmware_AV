@@ -2537,6 +2537,14 @@ void publish_upload_test()
             return;
         }
 
+        // === CHECK CLOUD CONNECTION ===
+        if (!Particle.connected())
+        {
+            Log.error("Cannot publish upload test: not connected to Particle cloud");
+            device_state.set_error("No cloud connection for upload");
+            return;
+        }
+
         // === PREPARE CLOUD EVENT ===
         lastPublish = millis();
         device_state.start_cloud_operation();
@@ -4977,6 +4985,24 @@ void loop()
 
     case DeviceMode::UPLOADING_RESULTS:
         // === TEST UPLOAD MODE ===
+        // Check cloud connection first
+        if (!Particle.connected())
+        {
+            // === HANDLE DISCONNECTION DURING UPLOAD ===
+            if (device_state.cloud_operation_pending)
+            {
+                Log.error("Cloud disconnected during upload - clearing pending operation");
+                device_state.end_cloud_operation();
+            }
+            // Attempt to reconnect if not already waiting for response
+            if (!device_state.cloud_operation_pending)
+            {
+                Log.info("Not connected to Particle cloud - attempting to reconnect");
+                connect_to_cloud();
+            }
+            break;
+        }
+        
         // Only publish if not already waiting for response
         if (!device_state.cloud_operation_pending)
         {
