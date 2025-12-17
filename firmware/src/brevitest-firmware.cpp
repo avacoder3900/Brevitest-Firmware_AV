@@ -133,6 +133,7 @@ int get_state_history(String params);
 int clear_state_history(String params);
 int force_state_transition(String params);
 int get_barcode_history(String params);
+int upload_test_results(String params);
 void reset_device_state();
 void disconnect_from_cloud();
 void connect_to_cloud();
@@ -472,6 +473,12 @@ void load_cached_test(char *filename)
 bool test_in_cache()
 {
     DIR *cache = opendir("/cache");
+    if (cache == NULL)
+    {
+        Log.error("test_in_cache: Failed to open /cache directory, errno: %d", errno);
+        return false;
+    }
+    
     int tries = 50;
     bool test_found = false;
     do
@@ -490,6 +497,7 @@ bool test_in_cache()
             snprintf(cached_filename, sizeof(cached_filename), "/cache/%s", cache_entry->d_name);
             Log.info("test_in_cache, found file: %s", cached_filename);
             test_found = true;
+            break; // Found a file, no need to continue searching
         }
     } while (cache_entry != NULL && --tries > 0);
     closedir(cache);
@@ -2184,7 +2192,23 @@ void publish_validate_cartridge()
         if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
         {
             // Still waiting for retry backoff delay
+            unsigned long remaining_delay = validation_retry_delay_until - millis();
+            static unsigned long last_retry_delay_log = 0;
+            if (last_retry_delay_log == 0 || (millis() - last_retry_delay_log) >= 5000) // Log every 5 seconds
+            {
+                Log.info("Waiting for retry delay - %lu ms remaining (attempt %d/%d)", 
+                         remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                last_retry_delay_log = millis();
+            }
             return;
+        }
+        
+        // === CLEAR RETRY DELAY IF IT HAS ELAPSED ===
+        if (validation_retry_delay_until > 0 && millis() >= validation_retry_delay_until)
+        {
+            Log.info("Retry delay elapsed - proceeding with retry attempt %d/%d", 
+                     validation_retry_count, VALIDATION_MAX_RETRIES);
+            validation_retry_delay_until = 0; // Clear the delay flag
         }
 
         // === PREPARE CLOUD EVENT ===
@@ -2237,11 +2261,20 @@ void publish_validate_cartridge()
         }
 
         // === PUBLISH SUCCESSFUL - START CLOUD OPERATION TRACKING ===
-        Log.info("Validation publish successful, waiting for response");
+        if (validation_retry_count > 0)
+        {
+            Log.info("Validation publish successful (retry attempt %d/%d), waiting for response", 
+                     validation_retry_count, VALIDATION_MAX_RETRIES);
+        }
+        else
+        {
+            Log.info("Validation publish successful, waiting for response");
+        }
         device_state.start_cloud_operation();
         
         // Reset retry tracking on successful publish
-        validation_retry_count = 0;
+        // Note: Don't reset retry_count here - keep it for logging until we get a response
+        // It will be reset in response_validate_cartridge() on success
         validation_retry_delay_until = 0;
     }
 }
@@ -2644,6 +2677,17 @@ void publish_upload_test()
         // === CHECK IF TEST IS IN CACHE ===
         if (!test_in_cache())
         {
+            // No more tests to upload - transition back to IDLE
+            Log.info("No test in cache - transitioning to IDLE");
+            device_state.transition_to(DeviceMode::IDLE);
+            return;
+        }
+
+        // === CHECK CLOUD CONNECTION ===
+        if (!Particle.connected())
+        {
+            Log.error("Cannot publish upload test: not connected to Particle cloud");
+            device_state.set_error("No cloud connection for upload");
             return;
         }
 
@@ -4130,6 +4174,50 @@ int get_barcode_history(String params)
     return count;
 }
 
+/**
+ * @brief Upload cached test results to cloud
+ *
+ * This Particle Cloud function triggers the upload of cached test results,
+ * equivalent to serial command 403. It transitions the device to
+ * UPLOADING_RESULTS mode, which will process all cached tests.
+ *
+ * @param params Unused (for consistency with other Particle functions)
+ * @return 1 if upload started, 0 if no test in cache, -1 for help, -2 if not connected
+ */
+int upload_test_results(String params)
+{
+    // Show help if requested
+    if (params == "?" || params == "help" || params == "h") {
+        Particle.publish("upload_test_help", 
+            "upload_test: Uploads cached test results to cloud. "
+            "This is equivalent to serial command 403. "
+            "Usage: Call with empty '' to start upload. "
+            "Call with '?' for help.", 
+            PRIVATE);
+        return -1; // Indicates help was displayed
+    }
+    
+    // Check if there's a test in cache
+    if (!test_in_cache()) {
+        Particle.publish("upload_test_result", "No test in cache to upload", PRIVATE);
+        Log.info("No test in cache to upload");
+        return 0; // No test to upload (not an error)
+    }
+    
+    // Check if Particle is connected
+    if (!Particle.connected()) {
+        Particle.publish("upload_test_result", "Cannot upload - Particle cloud not connected", PRIVATE);
+        Log.warn("Cannot upload test - Particle cloud not connected");
+        return -2; // Error: not connected
+    }
+    
+    // Transition to UPLOADING_RESULTS mode (same as command 403)
+    device_state.transition_to(DeviceMode::UPLOADING_RESULTS);
+    Particle.publish("upload_test_result", "Upload started - transitioning to UPLOADING_RESULTS", PRIVATE);
+    Log.info("Upload test results triggered via Particle function");
+    return 1; // Success - upload started
+}
+
 /////////////////////////////////////////////////////////////
 //                                                         //
 //                           TESTS                         //
@@ -4424,6 +4512,7 @@ void setup()
     Particle.function("clear_history", clear_state_history);
     Particle.function("force_state", force_state_transition);
     Particle.function("get_barcode_hist", get_barcode_history);
+    Particle.function("upload_test", upload_test_results);
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
     // Success responses
@@ -4433,10 +4522,10 @@ void setup()
     Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
 
     // Error responses
-    Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
-    Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
+    // Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
 
     // === EEPROM SETUP ===
     setup_eeprom();
@@ -4889,36 +4978,37 @@ void hardware_loop()
                 move_stage_to_test_start_position();
                 sleep_motor();
 
-                // Check if we can start barcode scanning (heater ready + valid transition)
-                if (heater_ready && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
-                {
-                    device_state.cartridge_state = CartridgeState::DETECTED;
-                    device_state.transition_to(DeviceMode::BARCODE_SCANNING);
-                    turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
-                }
-                else if (device_state.mode == DeviceMode::HEATING && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
+                // Check if we're in HEATING mode - always scan barcode if inserted during heating
+                if (device_state.mode == DeviceMode::HEATING)
                 {
                     // === EARLY DETECTION: Cartridge inserted during heating ===
-                    // Allow barcode scanning but don't validate yet
+                    // Always scan barcode when inserted during heating, regardless of heater state
                     device_state.cartridge_state = CartridgeState::DETECTED;
                     Log.info("Cartridge detected during heating - transitioning to BARCODE_SCANNING for early detection");
                     device_state.transition_to(DeviceMode::BARCODE_SCANNING);
                     Log.info("Will scan barcode but not validate until heater ready");
                 }
+                // Check if we can start barcode scanning (heater ready + valid transition)
+                else if (heater_ready && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
+                {
+                    device_state.cartridge_state = CartridgeState::DETECTED;
+                    device_state.transition_to(DeviceMode::BARCODE_SCANNING);
+                    turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
+                }
                 else
                 {
-                    // Heater not ready - set error state and activate indicators immediately
+                    // Heater not ready and not in heating mode - set error state and activate indicators immediately
                     device_state.cartridge_state = CartridgeState::DETECTED;
                     device_state.set_error("Heater not ready for cartridge insertion");
                     
                     // Activate buzzer and LED immediately to signal removal
                     turn_on_remove_cartridge_LED();
-                    turn_on_buzzer_problem();
+                    turn_on_buzzer_alert();
                     // Ensure buzzer timer is started
                     if (!buzzer_timer.isActive())
                     {
                         buzzer_timer.start();
-                        Log.info("Activated remove cartridge LED and problem buzzer - heater not ready for cartridge insertion");
+                        Log.info("Activated remove cartridge LED and alert buzzer - heater not ready for cartridge insertion");
                     }
                 }
             }
@@ -5041,6 +5131,24 @@ void loop()
 
     case DeviceMode::UPLOADING_RESULTS:
         // === TEST UPLOAD MODE ===
+        // Check cloud connection first
+        if (!Particle.connected())
+        {
+            // === HANDLE DISCONNECTION DURING UPLOAD ===
+            if (device_state.cloud_operation_pending)
+            {
+                Log.error("Cloud disconnected during upload - clearing pending operation");
+                device_state.end_cloud_operation();
+            }
+            // Attempt to reconnect if not already waiting for response
+            if (!device_state.cloud_operation_pending)
+            {
+                Log.info("Not connected to Particle cloud - attempting to reconnect");
+                connect_to_cloud();
+            }
+            break;
+        }
+        
         // Only publish if not already waiting for response
         if (!device_state.cloud_operation_pending)
         {
@@ -5117,6 +5225,8 @@ void loop()
                     
                     Log.info("Validation timeout, will retry in %lu ms (attempt %d/%d)", 
                              backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                    Log.info("Retry scheduled - delay until: %lu ms (current: %lu ms)", 
+                             validation_retry_delay_until, millis());
                 }
                 else
                 {
@@ -5144,12 +5254,47 @@ void loop()
         
         // === PUBLISH VALIDATION REQUEST ===
         // Only validate if heater ready and not already waiting for response
+        // Also check if we're waiting for retry delay before attempting to publish
         if (heater_debounced() && !device_state.cloud_operation_pending)
         {
-            // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
-            Log.info("Preparing to publish validation - Barcode: %s, Cloud connected: %s", 
-                     barcode_uuid, Particle.connected() ? "YES" : "NO");
-            publish_validate_cartridge();
+            // === CHECK IF WAITING FOR RETRY DELAY ===
+            if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
+            {
+                // Still waiting for retry backoff delay - log periodically
+                unsigned long remaining_delay = validation_retry_delay_until - millis();
+                static unsigned long last_retry_wait_log = 0;
+                if (last_retry_wait_log == 0 || (millis() - last_retry_wait_log) >= 5000) // Log every 5 seconds
+                {
+                    Log.info("Waiting for retry delay before republishing - %lu ms remaining (attempt %d/%d)", 
+                             remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                    last_retry_wait_log = millis();
+                }
+            }
+            else
+            {
+                // Retry delay has elapsed or no retry delay set - proceed with publish
+                if (validation_retry_delay_until > 0 && millis() >= validation_retry_delay_until)
+                {
+                    // Retry delay just elapsed - clear it and log
+                    Log.info("Retry delay elapsed - proceeding with retry attempt %d/%d", 
+                             validation_retry_count, VALIDATION_MAX_RETRIES);
+                    validation_retry_delay_until = 0;
+                }
+                
+                // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
+                if (validation_retry_count > 0)
+                {
+                    Log.info("Preparing to publish validation retry - Barcode: %s, Attempt: %d/%d, Cloud connected: %s", 
+                             barcode_uuid, validation_retry_count, VALIDATION_MAX_RETRIES, 
+                             Particle.connected() ? "YES" : "NO");
+                }
+                else
+                {
+                    Log.info("Preparing to publish validation - Barcode: %s, Cloud connected: %s", 
+                             barcode_uuid, Particle.connected() ? "YES" : "NO");
+                }
+                publish_validate_cartridge();
+            }
         }
         break;
 
