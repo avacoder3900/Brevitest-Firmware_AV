@@ -2091,22 +2091,36 @@ void publish_validate_cartridge()
         }
 
         // === CHECK IF WAITING FOR RETRY DELAY ===
-        if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
+        // Use safe comparison that handles millis() overflow
+        bool waiting_for_retry = false;
+        if (validation_retry_delay_until > 0)
         {
-            // Still waiting for retry backoff delay
-            unsigned long remaining_delay = validation_retry_delay_until - millis();
-            static unsigned long last_retry_delay_log = 0;
-            if (last_retry_delay_log == 0 || (millis() - last_retry_delay_log) >= 5000) // Log every 5 seconds
+            unsigned long current_time = millis();
+            // Handle millis() overflow: if delay time is in the past (wrapped around),
+            // consider the delay as elapsed
+            if (validation_retry_delay_until > current_time)
             {
-                Log.info("Waiting for retry delay - %lu ms remaining (attempt %d/%d)", 
-                         remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
-                last_retry_delay_log = millis();
+                // Normal case: delay time is in the future
+                unsigned long remaining_delay = validation_retry_delay_until - current_time;
+                static unsigned long last_retry_delay_log = 0;
+                if (last_retry_delay_log == 0 || (current_time - last_retry_delay_log) >= 5000) // Log every 5 seconds
+                {
+                    Log.info("Waiting for retry delay - %lu ms remaining (attempt %d/%d)", 
+                             remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                    last_retry_delay_log = current_time;
+                }
+                waiting_for_retry = true;
             }
+            // If delay time <= current_time, delay has elapsed or overflowed - proceed
+        }
+        
+        if (waiting_for_retry)
+        {
             return;
         }
         
         // === CLEAR RETRY DELAY IF IT HAS ELAPSED ===
-        if (validation_retry_delay_until > 0 && millis() >= validation_retry_delay_until)
+        if (validation_retry_delay_until > 0)
         {
             Log.info("Retry delay elapsed - proceeding with retry attempt %d/%d", 
                      validation_retry_count, VALIDATION_MAX_RETRIES);
@@ -2250,7 +2264,7 @@ void response_validate_cartridge(CloudEvent cancel_event)
     Variant json = Variant::fromJSON(event_data);
     
     // Check if JSON parsing was successful
-    if (json.isError())
+    if (json.isNull())
     {
         Log.error("JSON parsing failed. Data: %s", event_data.c_str());
         device_state.cartridge_state = CartridgeState::INVALID;
@@ -5143,6 +5157,27 @@ void loop()
 
     case DeviceMode::VALIDATING_CARTRIDGE:
         // === CARTRIDGE VALIDATION MODE ===
+        // Early exit if device transitioned to error state
+        if (device_state.is_error())
+        {
+            break;  // Error state handled elsewhere
+        }
+        
+        // Check if cartridge was removed during validation
+        if (!device_state.detector_on || !device_state.has_cartridge())
+        {
+            Log.warn("Cartridge removed during validation");
+            if (device_state.cloud_operation_pending)
+            {
+                device_state.end_cloud_operation();
+            }
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
+            validation_request_id = "";
+            device_state.reset_to_idle();
+            break;
+        }
+        
         // Check cloud connection first
         if (!Particle.connected())
         {
@@ -5232,22 +5267,33 @@ void loop()
         if (heater_debounced() && !device_state.cloud_operation_pending)
         {
             // === CHECK IF WAITING FOR RETRY DELAY ===
-            if (validation_retry_delay_until > 0 && millis() < validation_retry_delay_until)
+            // Use safe comparison that handles millis() overflow
+            bool waiting_for_retry = false;
+            if (validation_retry_delay_until > 0)
             {
-                // Still waiting for retry backoff delay - log periodically
-                unsigned long remaining_delay = validation_retry_delay_until - millis();
-                static unsigned long last_retry_wait_log = 0;
-                if (last_retry_wait_log == 0 || (millis() - last_retry_wait_log) >= 5000) // Log every 5 seconds
+                unsigned long current_time = millis();
+                // Handle millis() overflow: if delay time is in the past (wrapped around),
+                // consider the delay as elapsed
+                if (validation_retry_delay_until > current_time)
                 {
-                    Log.info("Waiting for retry delay before republishing - %lu ms remaining (attempt %d/%d)", 
-                             remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
-                    last_retry_wait_log = millis();
+                    // Normal case: delay time is in the future
+                    unsigned long remaining_delay = validation_retry_delay_until - current_time;
+                    static unsigned long last_retry_wait_log = 0;
+                    if (last_retry_wait_log == 0 || (current_time - last_retry_wait_log) >= 5000) // Log every 5 seconds
+                    {
+                        Log.info("Waiting for retry delay before republishing - %lu ms remaining (attempt %d/%d)", 
+                                 remaining_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                        last_retry_wait_log = current_time;
+                    }
+                    waiting_for_retry = true;
                 }
+                // If delay time <= current_time, delay has elapsed or overflowed - proceed
             }
-            else
+            
+            if (!waiting_for_retry)
             {
                 // Retry delay has elapsed or no retry delay set - proceed with publish
-                if (validation_retry_delay_until > 0 && millis() >= validation_retry_delay_until)
+                if (validation_retry_delay_until > 0)
                 {
                     // Retry delay just elapsed - clear it and log
                     Log.info("Retry delay elapsed - proceeding with retry attempt %d/%d", 
