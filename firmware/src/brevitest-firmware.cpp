@@ -3,7 +3,7 @@
 /******************************************************/
 
 #include "Particle.h"
-#line 1 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 1 "c:/brevitest-device/firmware/src/brevitest-firmware.ino"
 /*
  * Project brevitest_v1_0
  * Description: firmware for Acuity™ Sample Processing Unit, part of the Brevitest™ Platform
@@ -100,6 +100,8 @@ int get_heater_temperature();
 int pid_controller();
 void start_temperature_control();
 void stop_temperature_control();
+void register_cloud_subscriptions();
+void log_all_events(const char *event, const char *data);
 void response_error(CloudEvent event);
 void publish_validate_cartridge();
 void response_validate_cartridge(CloudEvent cancel_event);
@@ -153,7 +155,7 @@ void magnet_validation_loop();
 void hardware_loop();
 void process_serial_port();
 void loop();
-#line 11 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/firmware/src/brevitest-firmware.ino"
+#line 11 "c:/brevitest-device/firmware/src/brevitest-firmware.ino"
 PRODUCT_VERSION(FIRMWARE_VERSION);
 SYSTEM_MODE(AUTOMATIC);
 
@@ -2105,6 +2107,53 @@ void stop_temperature_control()
 /////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////
+//            SUBSCRIPTION MANAGEMENT              //
+/////////////////////////////////////////////////////
+
+/**
+ * @brief Register all Particle cloud subscriptions
+ * 
+ * This function registers all webhook response and error subscriptions.
+ * Should be called during setup() and when connection is restored.
+ */
+void register_cloud_subscriptions()
+{
+    String validation_topic = String(device_id + "/hook-response/validate-cartridge/");
+    String validation_error_topic = String(device_id + "/hook-error/validate-cartridge/");
+    
+    // Success responses
+    bool sub1 = Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
+    bool sub2 = Particle.subscribe(validation_topic, response_validate_cartridge);
+    bool sub3 = Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
+    bool sub4 = Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
+
+    // Error responses - NOW ENABLED
+    bool sub5 = Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
+    bool sub6 = Particle.subscribe(validation_error_topic, response_error);
+    bool sub7 = Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
+    bool sub8 = Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
+    
+    // Log subscription status
+    Log.info("Subscriptions registered - Validation: %s (topic: %s), Error: %s (topic: %s)", 
+             sub2 ? "OK" : "FAILED", validation_topic.c_str(),
+             sub6 ? "OK" : "FAILED", validation_error_topic.c_str());
+    Log.info("All subscriptions - Load: %s, Validate: %s, Reset: %s, Upload: %s, Errors: %s/%s/%s/%s",
+             sub1 ? "OK" : "FAIL", sub2 ? "OK" : "FAIL", sub3 ? "OK" : "FAIL", sub4 ? "OK" : "FAIL",
+             sub5 ? "OK" : "FAIL", sub6 ? "OK" : "FAIL", sub7 ? "OK" : "FAIL", sub8 ? "OK" : "FAIL");
+}
+
+/**
+ * @brief Diagnostic function to log all received Particle events
+ * 
+ * This helps debug subscription issues by showing all events received.
+ * Enable by uncommenting the subscription in setup().
+ */
+void log_all_events(const char *event, const char *data)
+{
+    Log.info("[DIAGNOSTIC] Event received - Name: %s, Data: %s", event, data ? data : "(null)");
+}
+
+/////////////////////////////////////////////////////
 //                 WEBHOOK ERROR                   //
 /////////////////////////////////////////////////////
 
@@ -2120,19 +2169,60 @@ void response_error(CloudEvent event)
         // Validation-specific error handling
         device_state.end_cloud_operation();
         
-        // Reset retry tracking on explicit error (don't retry on webhook errors)
-        validation_retry_count = 0;
-        validation_retry_delay_until = 0;
-        
-        // Set error state
-        device_state.cartridge_state = CartridgeState::INVALID;
-        device_state.set_error("Cartridge validation webhook error");
-        
         // Try to parse error message if available
         String error_data = event.dataString();
+        String error_message = "";
         if (error_data.length() > 0)
         {
             Log.error("Validation webhook error details: %s", error_data.c_str());
+            
+            // Try to extract error code/message from JSON if available
+            Variant json_error = Variant::fromJSON(error_data);
+            if (!json_error.isNull())
+            {
+                error_message = json_error.get("error").toString();
+                if (error_message.length() == 0)
+                {
+                    error_message = json_error.get("message").toString();
+                }
+            }
+        }
+        
+        // Determine if error is retryable (transient network/server errors)
+        bool is_retryable = false;
+        if (error_message.length() > 0)
+        {
+            error_message.toLowerCase();
+            // Check for transient error indicators
+            is_retryable = (error_message.indexOf("timeout") >= 0 ||
+                           error_message.indexOf("network") >= 0 ||
+                           error_message.indexOf("connection") >= 0 ||
+                           error_message.indexOf("503") >= 0 ||
+                           error_message.indexOf("502") >= 0 ||
+                           error_message.indexOf("504") >= 0);
+        }
+        
+        // If retryable and we have retries left, allow retry
+        if (is_retryable && validation_retry_count < VALIDATION_MAX_RETRIES)
+        {
+            validation_retry_count++;
+            unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
+            validation_retry_delay_until = millis() + backoff_delay;
+            validation_request_id = "";  // Clear request ID for retry
+            
+            Log.warn("Validation webhook error (retryable), will retry in %lu ms (attempt %d/%d)", 
+                     backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+        }
+        else
+        {
+            // Non-retryable error or max retries exceeded
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
+            validation_request_id = "";  // Clear request ID on error
+            
+            // Set error state
+            device_state.cartridge_state = CartridgeState::INVALID;
+            device_state.set_error("Cartridge validation webhook error");
         }
     }
     else if (event_name.indexOf("load-assay") >= 0)
@@ -2184,8 +2274,36 @@ void publish_validate_cartridge()
         if (!Particle.connected())
         {
             Log.error("Cannot publish validation: not connected to Particle cloud");
-            device_state.set_error("No cloud connection for validation");
-            return;
+            
+            // If we have retries left, don't set error yet - wait for connection to restore
+            if (validation_retry_count < VALIDATION_MAX_RETRIES)
+            {
+                // Clear any pending cloud operation since we're not connected
+                if (device_state.cloud_operation_pending)
+                {
+                    device_state.end_cloud_operation();
+                }
+                
+                // Set retry delay to check connection again
+                unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * (validation_retry_count + 1);
+                validation_retry_delay_until = millis() + backoff_delay;
+                Log.info("Cloud disconnected, will retry connection check in %lu ms (attempt %d/%d)", 
+                         backoff_delay, validation_retry_count + 1, VALIDATION_MAX_RETRIES);
+                return;
+            }
+            else
+            {
+                // Max retries exceeded - clear cloud operation and set error
+                if (device_state.cloud_operation_pending)
+                {
+                    device_state.end_cloud_operation();
+                }
+                device_state.set_error("No cloud connection for validation");
+                validation_retry_count = 0;
+                validation_retry_delay_until = 0;
+                validation_request_id = "";
+                return;
+            }
         }
 
         // === CHECK IF WAITING FOR RETRY DELAY ===
@@ -2225,18 +2343,36 @@ void publish_validate_cartridge()
             validation_retry_delay_until = 0; // Clear the delay flag
         }
 
+        // === GENERATE REQUEST ID FOR CORRELATION ===
+        // Create unique request ID: device_id + timestamp + retry_count
+        validation_request_id = String(device_id) + "-" + String(millis()) + "-" + String(validation_retry_count);
+        Log.info("Validation request ID: %s", validation_request_id.c_str());
+        
         // === PREPARE CLOUD EVENT ===
         lastPublish = millis();
         clear_payload_buffer();
         event.name("validate-cartridge");
         event.contentType(ContentType::STRUCTURED);
         data.set("uuid", barcode_uuid);
+        data.set("requestId", validation_request_id);  // Include request ID for correlation
         event.data(data);
         
         // === VERIFY EVENT CAN BE PUBLISHED ===
         if (!event.canPublish(event.size()))
         {
             Log.error("Cannot publish validation: event size too large (%d bytes)", event.size());
+            
+            // Clear any pending cloud operation
+            if (device_state.cloud_operation_pending)
+            {
+                device_state.end_cloud_operation();
+            }
+            
+            // This is a non-retryable error (event too large)
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
+            validation_request_id = "";
+            device_state.cartridge_state = CartridgeState::INVALID;
             device_state.set_error("Validation event too large");
             return;
         }
@@ -2265,10 +2401,19 @@ void publish_validate_cartridge()
             }
             else
             {
-                // Max retries exceeded
+                // Max retries exceeded - clear any pending cloud operation and set error
                 Log.error("Publish failed after %d attempts - giving up", VALIDATION_MAX_RETRIES + 1);
+                
+                // Ensure cloud operation is cleared
+                if (device_state.cloud_operation_pending)
+                {
+                    device_state.end_cloud_operation();
+                }
+                
                 validation_retry_count = 0;
                 validation_retry_delay_until = 0;
+                validation_request_id = "";
+                device_state.cartridge_state = CartridgeState::INVALID;
                 device_state.set_error("Validation publish failed after retries");
             }
             return;
@@ -2304,16 +2449,106 @@ void publish_validate_cartridge()
  */
 void response_validate_cartridge(CloudEvent cancel_event)
 {
+    String event_data = cancel_event.dataString();
+    String event_name = cancel_event.name();
+    
+    Log.info("Validation response received - Event: %s, Data length: %d", 
+             event_name.c_str(), event_data.length());
+    
+    // === VERIFY REQUEST ID MATCH ===
+    // Check if response matches current request
+    if (validation_request_id.length() > 0)
+    {
+        Variant json_check = Variant::fromJSON(event_data);
+        String response_request_id = json_check.get("requestId").toString();
+        
+        if (response_request_id.length() > 0 && response_request_id != validation_request_id)
+        {
+            Log.warn("Response request ID mismatch - Expected: %s, Received: %s. Ignoring stale response.",
+                     validation_request_id.c_str(), response_request_id.c_str());
+            return;  // Ignore response that doesn't match current request
+        }
+        else if (response_request_id.length() == 0)
+        {
+            Log.warn("Response missing request ID - may be from old request. Current ID: %s",
+                     validation_request_id.c_str());
+            // Continue processing but log warning
+        }
+        else
+        {
+            Log.info("Response request ID verified: %s", response_request_id.c_str());
+        }
+    }
+    
     // === END CLOUD OPERATION TRACKING ===
     device_state.end_cloud_operation();
     
     // === RESET RETRY TRACKING ON RESPONSE ===
     validation_retry_count = 0;
     validation_retry_delay_until = 0;
+    validation_request_id = "";  // Clear request ID after successful response
 
     // === PARSE CLOUD RESPONSE ===
-    Variant json = Variant::fromJSON(cancel_event.dataString());
-    if (json.get("status").toString() == "SUCCESS")
+    // Check if event data is valid
+    if (event_data.length() == 0)
+    {
+        Log.error("Validation response is empty");
+        
+        // Check if we can retry on empty response (might be transient)
+        if (validation_retry_count < VALIDATION_MAX_RETRIES)
+        {
+            validation_retry_count++;
+            unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
+            validation_retry_delay_until = millis() + backoff_delay;
+            validation_request_id = "";  // Clear for retry
+            
+            Log.warn("Empty validation response, will retry in %lu ms (attempt %d/%d)", 
+                     backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+            return;
+        }
+        
+        // Max retries exceeded
+        device_state.cartridge_state = CartridgeState::INVALID;
+        device_state.set_error("Empty validation response");
+        validation_retry_count = 0;
+        validation_retry_delay_until = 0;
+        validation_request_id = "";
+        return;
+    }
+    
+    Variant json = Variant::fromJSON(event_data);
+    
+    // Check if JSON parsing was successful
+    if (json.isNull())
+    {
+        Log.error("JSON parsing failed. Data: %s", event_data.c_str());
+        
+        // Check if we can retry on parse failure (might be transient malformed response)
+        if (validation_retry_count < VALIDATION_MAX_RETRIES)
+        {
+            validation_retry_count++;
+            unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
+            validation_retry_delay_until = millis() + backoff_delay;
+            validation_request_id = "";  // Clear for retry
+            
+            Log.warn("Invalid validation response format, will retry in %lu ms (attempt %d/%d)", 
+                     backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+            return;
+        }
+        
+        // Max retries exceeded
+        device_state.cartridge_state = CartridgeState::INVALID;
+        device_state.set_error("Invalid validation response format");
+        validation_retry_count = 0;
+        validation_retry_delay_until = 0;
+        validation_request_id = "";
+        return;
+    }
+    
+    String status = json.get("status").toString();
+    Log.info("Validation response status: %s", status.c_str());
+    
+    if (status == "SUCCESS")
     {
         // === CARTRIDGE VALIDATION SUCCESSFUL ===
         String assay_id = json.get("assayId").toString();
@@ -3825,6 +4060,7 @@ int test_runner(String cartridgeId)
             // Reset retry tracking when starting new validation
             validation_retry_count = 0;
             validation_retry_delay_until = 0;
+            validation_request_id = "";  // Clear request ID
             
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             return 0;
@@ -4529,17 +4765,10 @@ void setup()
     Particle.function("upload_test", upload_test_results);
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
-    // Success responses
-    Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
-    Particle.subscribe(String(device_id + "/hook-response/validate-cartridge/"), response_validate_cartridge);
-    Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
-    Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
-
-    // Error responses
-    // Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
-    // Particle.subscribe(String(device_id + "/hook-error/validate-cartridge/"), response_error);
-    // Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
-    // Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
+    register_cloud_subscriptions();
+    
+    // Diagnostic: Subscribe to all events for debugging (optional, can be disabled in production)
+    // Particle.subscribe("", log_all_events);
 
     // === EEPROM SETUP ===
     setup_eeprom();
@@ -4904,6 +5133,7 @@ void barcode_scan_loop()
             // Reset retry tracking when starting new validation
             validation_retry_count = 0;
             validation_retry_delay_until = 0;
+            validation_request_id = "";  // Clear request ID
             break;
 
         case BARCODE_TYPE_MAGNETOMETER:
@@ -5037,6 +5267,7 @@ void hardware_loop()
                 // === CLEANUP VALIDATION RETRY TRACKING ===
                 validation_retry_count = 0;
                 validation_retry_delay_until = 0;
+                validation_request_id = "";  // Clear request ID
                 if (device_state.cloud_operation_pending)
                 {
                     device_state.end_cloud_operation();
@@ -5115,6 +5346,18 @@ void process_serial_port()
  */
 void loop()
 {
+    // === CONNECTION MONITORING AND SUBSCRIPTION RE-REGISTRATION ===
+    static bool last_cloud_connected = false;
+    bool current_cloud_connected = Particle.connected();
+    
+    // Detect when connection is restored and re-register subscriptions
+    if (current_cloud_connected && !last_cloud_connected)
+    {
+        Log.info("Cloud connection restored - re-registering subscriptions");
+        register_cloud_subscriptions();
+    }
+    last_cloud_connected = current_cloud_connected;
+    
     // === ALWAYS RUN THESE ===
     process_serial_port(); // Handle serial commands
     hardware_loop();       // Handle hardware state changes
@@ -5216,10 +5459,47 @@ void loop()
             {
                 Log.error("Cloud disconnected during validation - clearing pending operation");
                 device_state.end_cloud_operation();
-                // Don't reset retry count - allow retry when connection restored
+                
+                // Check if we can retry when connection is restored
+                if (validation_retry_count < VALIDATION_MAX_RETRIES)
+                {
+                    validation_retry_count++;
+                    unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
+                    validation_retry_delay_until = millis() + backoff_delay;
+                    validation_request_id = "";  // Clear request ID for retry
+                    
+                    Log.info("Cloud disconnected, will retry when connection restored in %lu ms (attempt %d/%d)", 
+                             backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
+                }
+                else
+                {
+                    // Max retries exceeded - set error
+                    device_state.cartridge_state = CartridgeState::INVALID;
+                    device_state.set_error("No cloud connection - max retries exceeded");
+                    validation_retry_count = 0;
+                    validation_retry_delay_until = 0;
+                    validation_request_id = "";
+                }
             }
-            Log.error("Not connected to Particle cloud - cannot validate cartridge");
-            device_state.set_error("No cloud connection");
+            else
+            {
+                // Not waiting for response, but not connected - check if we should retry
+                if (validation_retry_count < VALIDATION_MAX_RETRIES && 
+                    (validation_retry_delay_until == 0 || millis() >= validation_retry_delay_until))
+                {
+                    // Will retry when publish_validate_cartridge is called
+                    Log.warn("Not connected to Particle cloud - will retry when connection restored");
+                }
+                else if (validation_retry_count >= VALIDATION_MAX_RETRIES)
+                {
+                    // Max retries exceeded
+                    device_state.cartridge_state = CartridgeState::INVALID;
+                    device_state.set_error("No cloud connection - max retries exceeded");
+                    validation_retry_count = 0;
+                    validation_retry_delay_until = 0;
+                    validation_request_id = "";
+                }
+            }
             break;
         }
         
@@ -5258,6 +5538,9 @@ void loop()
                     // Clear cloud operation to allow retry
                     device_state.end_cloud_operation();
                     
+                    // Clear old request ID - new one will be generated on retry
+                    validation_request_id = "";
+                    
                     Log.info("Validation timeout, will retry in %lu ms (attempt %d/%d)", 
                              backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
                     Log.info("Retry scheduled - delay until: %lu ms (current: %lu ms)", 
@@ -5265,12 +5548,21 @@ void loop()
                 }
                 else
                 {
-                    // Max retries exceeded - set error
+                    // Max retries exceeded - clear cloud operation and set error
                     Log.error("Cartridge validation timeout after %d attempts - giving up", 
                               VALIDATION_MAX_RETRIES + 1);
+                    
+                    // Ensure cloud operation is cleared before setting error
+                    device_state.end_cloud_operation();
+                    
+                    // Set error state (this will transition to ERROR_STATE)
+                    device_state.cartridge_state = CartridgeState::INVALID;
                     device_state.set_error("Cartridge validation timeout");
+                    
+                    // Clear retry tracking
                     validation_retry_count = 0;
                     validation_retry_delay_until = 0;
+                    validation_request_id = "";  // Clear request ID on final timeout
                 }
             }
             else

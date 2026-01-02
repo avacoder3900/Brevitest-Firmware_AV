@@ -2521,6 +2521,20 @@ void response_reset_cartridge(CloudEvent reset_event)
         String cartridge_id = json.get("cartridgeId").toString();
         Log.info("Cartridge reset successful: %s", cartridge_id.c_str());
         memset(reset_uuid, 0, BARCODE_UUID_LENGTH + 1);
+        
+        // === CLEANUP VALIDATION RETRY TRACKING FOR NEXT TEST ===
+        validation_retry_count = 0;
+        validation_retry_delay_until = 0;
+        validation_request_id = "";
+        if (device_state.cloud_operation_pending)
+        {
+            device_state.end_cloud_operation();
+        }
+        
+        // Clear pending barcode state
+        pending_barcode_available = false;
+        pending_barcode_uuid[0] = '\0';
+        
         device_state.transition_to(DeviceMode::IDLE);
     }
     else
@@ -2780,6 +2794,20 @@ void publish_upload_test()
         {
             // No more tests to upload - transition back to IDLE
             Log.info("No test in cache - transitioning to IDLE");
+            
+            // === CLEANUP VALIDATION RETRY TRACKING FOR NEXT TEST ===
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
+            validation_request_id = "";
+            if (device_state.cloud_operation_pending)
+            {
+                device_state.end_cloud_operation();
+            }
+            
+            // Clear pending barcode state
+            pending_barcode_available = false;
+            pending_barcode_uuid[0] = '\0';
+            
             device_state.transition_to(DeviceMode::IDLE);
             return;
         }
@@ -2852,6 +2880,21 @@ void response_upload_test(CloudEvent upload_event)
         {
             // No more cached tests - safe to transition to IDLE
             Log.info("All cached tests uploaded");
+            
+            // === CLEANUP VALIDATION RETRY TRACKING FOR NEXT TEST ===
+            // Reset validation retry variables to ensure clean state for next cartridge
+            validation_retry_count = 0;
+            validation_retry_delay_until = 0;
+            validation_request_id = "";
+            if (device_state.cloud_operation_pending)
+            {
+                device_state.end_cloud_operation();
+            }
+            
+            // Clear pending barcode state for next test
+            pending_barcode_available = false;
+            pending_barcode_uuid[0] = '\0';
+            
             device_state.transition_to(DeviceMode::IDLE);
         }
     }
