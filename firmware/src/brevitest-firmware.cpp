@@ -156,7 +156,7 @@ void hardware_loop();
 void process_serial_port();
 void loop();
 #line 11 "c:/brevitest-device/firmware/src/brevitest-firmware.ino"
-PRODUCT_VERSION(57);
+PRODUCT_VERSION(58);
 SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////
@@ -2570,15 +2570,8 @@ void response_validate_cartridge(CloudEvent cancel_event)
         if (load_assay_from_file(assay_id, checksum_value))
         {
             // === ASSAY LOADED SUCCESSFULLY ===
-            // Only transition to RUNNING_TEST if we're still in VALIDATING_CARTRIDGE mode
-            // This prevents invalid transitions if validation response arrives late (e.g., during UPLOADING_RESULTS)
-            if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
-            {
-                Log.warn("Validation response received but device is in %s mode (expected VALIDATING_CARTRIDGE) - ignoring response",
-                         device_mode_to_string(device_state.mode).c_str());
-                return;  // Ignore stale validation response
-            }
-            
+            // Mode was already validated at the beginning of this function
+            // Proceed with transition to RUNNING_TEST
             device_state.cartridge_state = CartridgeState::VALIDATED;
             device_state.test_state = TestState::NOT_STARTED;
             strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
@@ -5743,6 +5736,23 @@ void loop()
             bool waiting_for_retry = false;
             if (validation_retry_delay_until > 0)
             {
+                // === CHECK IF CARTRIDGE STILL PRESENT DURING RETRY DELAY ===
+                // If cartridge was removed, cancel the retry
+                if (!device_state.detector_on || !device_state.has_cartridge())
+                {
+                    Log.warn("Cartridge removed during validation retry delay - cancelling retry");
+                    // Clear retry tracking since cartridge is gone
+                    validation_retry_count = 0;
+                    validation_retry_delay_until = 0;
+                    validation_request_id = "";
+                    if (device_state.cloud_operation_pending)
+                    {
+                        device_state.end_cloud_operation();
+                    }
+                    // State will be reset by hardware_loop() - don't transition here
+                    break;  // Exit validation loop
+                }
+                
                 unsigned long current_time = millis();
                 // Handle millis() overflow: if delay time is in the past (wrapped around),
                 // consider the delay as elapsed
@@ -5764,6 +5774,36 @@ void loop()
             
             if (!waiting_for_retry)
             {
+                // === VERIFY CARTRIDGE STILL PRESENT BEFORE RETRY ===
+                // Check if cartridge was removed during retry delay
+                if (!device_state.detector_on || !device_state.has_cartridge())
+                {
+                    Log.warn("Cartridge removed during validation retry delay - cancelling retry");
+                    // Clear retry tracking since cartridge is gone
+                    validation_retry_count = 0;
+                    validation_retry_delay_until = 0;
+                    validation_request_id = "";
+                    if (device_state.cloud_operation_pending)
+                    {
+                        device_state.end_cloud_operation();
+                    }
+                    // State will be reset by hardware_loop() - don't transition here
+                    break;  // Exit validation loop
+                }
+                
+                // === VERIFY STILL IN VALIDATING_CARTRIDGE MODE ===
+                // Ensure we're still in the correct mode (shouldn't happen, but safety check)
+                if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
+                {
+                    Log.warn("Device mode changed during validation retry delay - cancelling retry (current mode: %s)",
+                             device_mode_to_string(device_state.mode).c_str());
+                    // Clear retry tracking
+                    validation_retry_count = 0;
+                    validation_retry_delay_until = 0;
+                    validation_request_id = "";
+                    break;  // Exit validation loop
+                }
+                
                 // Retry delay has elapsed or no retry delay set - proceed with publish
                 if (validation_retry_delay_until > 0)
                 {

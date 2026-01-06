@@ -8,7 +8,7 @@
 #include "brevitest-firmware.h"
 #include "DFRobot_AS7341.h"
 
-PRODUCT_VERSION(57);
+PRODUCT_VERSION(58);
 SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////
@@ -5014,6 +5014,14 @@ void barcode_scan_loop()
                  device_mode_to_string(device_state.mode).c_str(),
                  barcode_uuid);
         
+        // === SET BARCODE IMMEDIATELY AFTER SCANNING ===
+        // Set barcode as soon as it's scanned for better traceability in transition history
+        // This ensures the barcode is associated with all subsequent transitions
+        if (barcode_uuid[0] != '\0')
+        {
+            device_state.set_current_barcode(barcode_uuid);
+        }
+        
         switch (barcode_type)
         {
         case BARCODE_TYPE_CARTRIDGE:
@@ -5099,7 +5107,7 @@ void barcode_scan_loop()
                 pending_barcode_uuid[0] = '\0';
             }
             
-            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
+            // Barcode already set above after scanning - no need to set again
             device_state.transition_to(DeviceMode::VALIDATING_CARTRIDGE);
             Log.info("Cartridge inserted");
             
@@ -5117,7 +5125,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_MAGNETOMETER:
             // === MAGNETOMETER DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
-            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
+            // Barcode already set above after scanning - no need to set again
             device_state.transition_to(DeviceMode::VALIDATING_MAGNETOMETER);
             Log.info("Magnetometer inserted");
             break;
@@ -5125,7 +5133,7 @@ void barcode_scan_loop()
         case BARCODE_TYPE_STRESS_TEST:
             // === STRESS TEST CARTRIDGE DETECTED ===
             device_state.cartridge_state = CartridgeState::BARCODE_READ;
-            device_state.set_current_barcode(barcode_uuid);  // Track this barcode
+            // Barcode already set above after scanning - no need to set again
             max_cycles = atoi(&barcode_uuid[12]);
             start_stress_test(max_cycles, LED_DEFAULT_POWER);
             device_state.transition_to(DeviceMode::STRESS_TESTING);
