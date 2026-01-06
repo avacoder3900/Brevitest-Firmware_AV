@@ -3053,6 +3053,14 @@ void response_upload_test(CloudEvent upload_event)
             // === CLEAN UP CACHE ===
             unlink("/cache/" + cartridgeId);
             Log.info("Uploaded test successful, %s removed from cache", cartridgeId.c_str());
+            
+            // === TRACK RECENTLY TESTED BARCODE ===
+            // Store this barcode as recently tested to prevent immediate re-scanning
+            strncpy(last_tested_barcode, cartridgeId.c_str(), BARCODE_UUID_LENGTH);
+            last_tested_barcode[BARCODE_UUID_LENGTH] = '\0';
+            last_tested_timestamp = millis();
+            Log.info("Barcode %s marked as recently tested (cooldown: %lu ms)", 
+                     last_tested_barcode, (unsigned long)RECENT_TEST_COOLDOWN_MS);
         }
         else
         {
@@ -4945,6 +4953,10 @@ void setup()
     device_state.test_state = TestState::NOT_STARTED;
     device_state.cartridge_state = CartridgeState::NOT_INSERTED;
     device_state.cloud_operation_pending = false;
+    
+    // === INITIALIZE RECENTLY TESTED BARCODE TRACKING ===
+    last_tested_barcode[0] = '\0';
+    last_tested_timestamp = 0;
 
     // === CHECK FOR INTERRUPTED TEST ===
     bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
@@ -5241,6 +5253,32 @@ void barcode_scan_loop()
                 break;
             }
             
+            // === CHECK IF THIS BARCODE WAS RECENTLY TESTED ===
+            // Prevent re-scanning the same barcode within cooldown period
+            // This prevents rapid re-testing even if cartridge was removed and re-inserted
+            if (last_tested_barcode[0] != '\0' && 
+                strcmp(barcode_uuid, last_tested_barcode) == 0 &&
+                last_tested_timestamp > 0 &&
+                (millis() - last_tested_timestamp) < RECENT_TEST_COOLDOWN_MS)
+            {
+                unsigned long time_since_test = millis() - last_tested_timestamp;
+                unsigned long remaining_cooldown = RECENT_TEST_COOLDOWN_MS - time_since_test;
+                Log.warn("Barcode %s was recently tested %lu ms ago (cooldown: %lu ms remaining) - skipping validation. Remove and wait before re-inserting.",
+                         barcode_uuid, time_since_test, remaining_cooldown);
+                
+                // Signal user to remove cartridge
+                device_state.cartridge_state = CartridgeState::DETECTED;
+                turn_on_remove_cartridge_LED();
+                turn_on_buzzer_alert();
+                if (!buzzer_timer.isActive())
+                {
+                    buzzer_timer.start();
+                }
+                // Transition back to IDLE - don't validate
+                device_state.transition_to(DeviceMode::IDLE);
+                break;  // Exit switch, don't proceed with validation
+            }
+            
             // === HEATER IS READY - PROCEED WITH VALIDATION ===
             // Check if this matches a pending barcode from earlier
             if (pending_barcode_available && strcmp(barcode_uuid, pending_barcode_uuid) == 0)
@@ -5359,15 +5397,31 @@ void hardware_loop()
                 sleep_motor();
 
                 // === PREVENT RE-SCANNING AFTER TEST COMPLETION ===
-                // If we're in IDLE mode with cartridge_state = DETECTED but no current_barcode,
-                // AND test_state = UPLOADED, this means a test just completed and cartridge is still inserted.
-                // Don't trigger barcode scanning - user must remove and re-insert cartridge.
-                // IMPORTANT: We check test_state == UPLOADED to ensure we only skip scanning after
-                // successful test completion, not after error recovery or other IDLE scenarios.
-                bool skip_barcode_scan = (device_state.mode == DeviceMode::IDLE && 
-                                          device_state.cartridge_state == CartridgeState::DETECTED &&
-                                          device_state.current_barcode[0] == '\0' &&
-                                          device_state.test_state == TestState::UPLOADED);
+                // Check multiple conditions to prevent re-scanning:
+                // 1. test_state == UPLOADED (test just completed)
+                // 2. Recently tested barcode cooldown (same barcode tested within cooldown window)
+                bool skip_barcode_scan = false;
+                
+                if (device_state.mode == DeviceMode::IDLE && 
+                    device_state.cartridge_state == CartridgeState::DETECTED &&
+                    device_state.current_barcode[0] == '\0')
+                {
+                    // Check if test was just uploaded
+                    if (device_state.test_state == TestState::UPLOADED)
+                    {
+                        skip_barcode_scan = true;
+                        Log.info("Cartridge still inserted after test completion - skipping barcode scan. Remove and re-insert to run new test.");
+                    }
+                    // Check if this barcode was recently tested (even if test_state was reset)
+                    else if (last_tested_barcode[0] != '\0' && 
+                             last_tested_timestamp > 0 &&
+                             (millis() - last_tested_timestamp) < RECENT_TEST_COOLDOWN_MS)
+                    {
+                        // Barcode was recently tested - check if it matches (will be checked after scanning)
+                        // For now, we'll allow scanning but check after barcode is read
+                        skip_barcode_scan = false;  // Allow scan, but we'll check after
+                    }
+                }
                 
                 if (skip_barcode_scan)
                 {
@@ -5440,6 +5494,12 @@ void hardware_loop()
                 // Note: We keep pending_barcode_available = true so if user re-inserts
                 // the same cartridge after heater is ready, we can reuse it
                 // Only clear if explicitly needed (e.g., different cartridge inserted)
+                
+                // === CLEAR RECENTLY TESTED BARCODE TRACKING ===
+                // When cartridge is removed, clear the recently tested barcode
+                // This allows the same barcode to be tested again after removal
+                last_tested_barcode[0] = '\0';
+                last_tested_timestamp = 0;
                 
                 device_state.reset_to_idle();
             }

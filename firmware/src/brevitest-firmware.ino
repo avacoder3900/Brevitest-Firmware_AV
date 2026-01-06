@@ -5110,25 +5110,41 @@ void barcode_scan_loop()
             // This prevents rapid re-testing even if cartridge was removed and re-inserted
             if (last_tested_barcode[0] != '\0' && 
                 strcmp(barcode_uuid, last_tested_barcode) == 0 &&
-                last_tested_timestamp > 0 &&
-                (millis() - last_tested_timestamp) < RECENT_TEST_COOLDOWN_MS)
+                last_tested_timestamp > 0)
             {
-                unsigned long time_since_test = millis() - last_tested_timestamp;
-                unsigned long remaining_cooldown = RECENT_TEST_COOLDOWN_MS - time_since_test;
-                Log.warn("Barcode %s was recently tested %lu ms ago (cooldown: %lu ms remaining) - skipping validation. Remove and wait before re-inserting.",
-                         barcode_uuid, time_since_test, remaining_cooldown);
+                // Use safe comparison that handles millis() overflow
+                unsigned long current_time = millis();
+                unsigned long time_since_test;
                 
-                // Signal user to remove cartridge
-                device_state.cartridge_state = CartridgeState::DETECTED;
-                turn_on_remove_cartridge_LED();
-                turn_on_buzzer_alert();
-                if (!buzzer_timer.isActive())
+                if (current_time >= last_tested_timestamp)
                 {
-                    buzzer_timer.start();
+                    // Normal case: no overflow
+                    time_since_test = current_time - last_tested_timestamp;
                 }
-                // Transition back to IDLE - don't validate
-                device_state.transition_to(DeviceMode::IDLE);
-                break;  // Exit switch, don't proceed with validation
+                else
+                {
+                    // millis() overflowed - calculate time since test accounting for wrap
+                    time_since_test = (ULONG_MAX - last_tested_timestamp) + current_time + 1;
+                }
+                
+                if (time_since_test < RECENT_TEST_COOLDOWN_MS)
+                {
+                    unsigned long remaining_cooldown = RECENT_TEST_COOLDOWN_MS - time_since_test;
+                    Log.warn("Barcode %s was recently tested %lu ms ago (cooldown: %lu ms remaining) - skipping validation. Remove and wait before re-inserting.",
+                             barcode_uuid, time_since_test, remaining_cooldown);
+                    
+                    // Signal user to remove cartridge
+                    device_state.cartridge_state = CartridgeState::DETECTED;
+                    turn_on_remove_cartridge_LED();
+                    turn_on_buzzer_alert();
+                    if (!buzzer_timer.isActive())
+                    {
+                        buzzer_timer.start();
+                    }
+                    // Transition back to IDLE - don't validate
+                    device_state.transition_to(DeviceMode::IDLE);
+                    break;  // Exit switch, don't proceed with validation
+                }
             }
             
             // === HEATER IS READY - PROCEED WITH VALIDATION ===
