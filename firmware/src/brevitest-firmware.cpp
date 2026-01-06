@@ -3026,9 +3026,11 @@ void response_upload_test(CloudEvent upload_event)
     // === CHECK IF DEVICE IS IN VALID STATE FOR UPLOAD RESPONSE ===
     // Only process upload responses when in UPLOADING_RESULTS mode
     // This prevents duplicate processing if response arrives multiple times or after state change
+    // Note: Stale responses are common after cloud reconnection and are safely ignored
     if (device_state.mode != DeviceMode::UPLOADING_RESULTS)
     {
-        Log.warn("Upload response received but device is in %s mode (expected UPLOADING_RESULTS) - ignoring stale response",
+        // Use INFO level instead of WARN since stale responses are expected after cloud reconnection
+        Log.info("Upload response received but device is in %s mode (expected UPLOADING_RESULTS) - ignoring stale response",
                  device_mode_to_string(device_state.mode).c_str());
         return;  // Ignore response - device is no longer uploading
     }

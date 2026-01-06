@@ -340,6 +340,11 @@ int validation_retry_count = 0;
 unsigned long validation_retry_delay_until = 0;
 String validation_request_id = "";  // Request ID for correlation
 
+// recently tested barcode tracking (prevents immediate re-scanning of same barcode)
+char last_tested_barcode[BARCODE_UUID_LENGTH + 1];
+unsigned long last_tested_timestamp = 0;
+#define RECENT_TEST_COOLDOWN_MS 30000  // 30 seconds - prevent re-scanning same barcode within this window
+
 // assay re-download tracking for checksum mismatch recovery
 bool assay_redownload_pending = false;
 char pending_assay_id[ASSAY_UUID_LENGTH + 1];
