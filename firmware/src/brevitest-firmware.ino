@@ -8,7 +8,7 @@
 #include "brevitest-firmware.h"
 #include "DFRobot_AS7341.h"
 
-PRODUCT_VERSION(FIRMWARE_VERSION);
+PRODUCT_VERSION(57);
 SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////
@@ -2895,6 +2895,28 @@ void response_upload_test(CloudEvent upload_event)
             pending_barcode_available = false;
             pending_barcode_uuid[0] = '\0';
             
+            // === CLEAR BARCODE TO PREVENT RE-TRIGGERING TEST ===
+            // Clear both the global barcode_uuid and the device state's current_barcode
+            // This prevents re-running the test on the same cartridge that's still inserted
+            memset(barcode_uuid, 0, BARCODE_UUID_LENGTH + 1);
+            device_state.clear_current_barcode();
+            
+            // === RESET CARTRIDGE STATE ===
+            // If cartridge is still inserted, set to DETECTED but don't trigger barcode scanning
+            // This prevents re-running the test on the same cartridge
+            // User must remove and re-insert cartridge to run a new test
+            if (device_state.detector_on)
+            {
+                // Cartridge still inserted - set to DETECTED but don't trigger scanning
+                device_state.cartridge_state = CartridgeState::DETECTED;
+                Log.info("Cartridge still inserted after test completion - barcode cleared, waiting for removal before allowing new test");
+            }
+            else
+            {
+                // Cartridge removed - reset to NOT_INSERTED
+                device_state.cartridge_state = CartridgeState::NOT_INSERTED;
+            }
+            
             device_state.transition_to(DeviceMode::IDLE);
         }
     }
@@ -5117,37 +5139,55 @@ void hardware_loop()
                 move_stage_to_test_start_position();
                 sleep_motor();
 
-                // Check if we're in HEATING mode - always scan barcode if inserted during heating
-                if (device_state.mode == DeviceMode::HEATING)
+                // === PREVENT RE-SCANNING AFTER TEST COMPLETION ===
+                // If we're in IDLE mode with cartridge_state = DETECTED but no current_barcode,
+                // this means a test just completed and cartridge is still inserted.
+                // Don't trigger barcode scanning - user must remove and re-insert cartridge.
+                bool skip_barcode_scan = (device_state.mode == DeviceMode::IDLE && 
+                                          device_state.cartridge_state == CartridgeState::DETECTED &&
+                                          device_state.current_barcode[0] == '\0');
+                
+                if (skip_barcode_scan)
                 {
-                    // === EARLY DETECTION: Cartridge inserted during heating ===
-                    // Always scan barcode when inserted during heating, regardless of heater state
-                    device_state.cartridge_state = CartridgeState::DETECTED;
-                    Log.info("Cartridge detected during heating - transitioning to BARCODE_SCANNING for early detection");
-                    device_state.transition_to(DeviceMode::BARCODE_SCANNING);
-                    Log.info("Will scan barcode but not validate until heater ready");
+                    Log.info("Cartridge still inserted after test completion - skipping barcode scan. Remove and re-insert to run new test.");
+                    // Don't transition to barcode scanning - wait for cartridge removal
+                    // Continue with rest of hardware_loop (indicators, temperature control, etc.)
                 }
-                // Check if we can start barcode scanning (heater ready + valid transition)
-                else if (heater_ready && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
+                // Only proceed with barcode scanning transitions if not skipping
+                if (!skip_barcode_scan)
                 {
-                    device_state.cartridge_state = CartridgeState::DETECTED;
-                    device_state.transition_to(DeviceMode::BARCODE_SCANNING);
-                    turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
-                }
-                else
-                {
-                    // Heater not ready and not in heating mode - set error state and activate indicators immediately
-                    device_state.cartridge_state = CartridgeState::DETECTED;
-                    device_state.set_error("Heater not ready for cartridge insertion");
-                    
-                    // Activate buzzer and LED immediately to signal removal
-                    turn_on_remove_cartridge_LED();
-                    turn_on_buzzer_alert();
-                    // Ensure buzzer timer is started
-                    if (!buzzer_timer.isActive())
+                    // Check if we're in HEATING mode - always scan barcode if inserted during heating
+                    if (device_state.mode == DeviceMode::HEATING)
                     {
-                        buzzer_timer.start();
-                        Log.info("Activated remove cartridge LED and alert buzzer - heater not ready for cartridge insertion");
+                        // === EARLY DETECTION: Cartridge inserted during heating ===
+                        // Always scan barcode when inserted during heating, regardless of heater state
+                        device_state.cartridge_state = CartridgeState::DETECTED;
+                        Log.info("Cartridge detected during heating - transitioning to BARCODE_SCANNING for early detection");
+                        device_state.transition_to(DeviceMode::BARCODE_SCANNING);
+                        Log.info("Will scan barcode but not validate until heater ready");
+                    }
+                    // Check if we can start barcode scanning (heater ready + valid transition)
+                    else if (heater_ready && device_state.can_transition_to(DeviceMode::BARCODE_SCANNING))
+                    {
+                        device_state.cartridge_state = CartridgeState::DETECTED;
+                        device_state.transition_to(DeviceMode::BARCODE_SCANNING);
+                        turn_on_buzzer_for_duration(BUZZER_INSERT_DURATION, BUZZER_INSERT_FREQUENCY);
+                    }
+                    else
+                    {
+                        // Heater not ready and not in heating mode - set error state and activate indicators immediately
+                        device_state.cartridge_state = CartridgeState::DETECTED;
+                        device_state.set_error("Heater not ready for cartridge insertion");
+                        
+                        // Activate buzzer and LED immediately to signal removal
+                        turn_on_remove_cartridge_LED();
+                        turn_on_buzzer_alert();
+                        // Ensure buzzer timer is started
+                        if (!buzzer_timer.isActive())
+                        {
+                            buzzer_timer.start();
+                            Log.info("Activated remove cartridge LED and alert buzzer - heater not ready for cartridge insertion");
+                        }
                     }
                 }
             }
