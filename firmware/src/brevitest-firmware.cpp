@@ -2452,8 +2452,19 @@ void response_validate_cartridge(CloudEvent cancel_event)
     String event_data = cancel_event.dataString();
     String event_name = cancel_event.name();
     
-    Log.info("Validation response received - Event: %s, Data length: %d", 
-             event_name.c_str(), event_data.length());
+    Log.info("Validation response received - Event: %s, Data length: %d, Current mode: %s", 
+             event_name.c_str(), event_data.length(),
+             device_mode_to_string(device_state.mode).c_str());
+    
+    // === CHECK IF DEVICE IS IN VALID STATE FOR VALIDATION RESPONSE ===
+    // Ignore validation responses if we're not in VALIDATING_CARTRIDGE mode
+    // This prevents invalid state transitions if response arrives late (e.g., during UPLOADING_RESULTS)
+    if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
+    {
+        Log.warn("Validation response received but device is in %s mode (expected VALIDATING_CARTRIDGE) - ignoring stale response",
+                 device_mode_to_string(device_state.mode).c_str());
+        return;  // Ignore response - device is no longer waiting for validation
+    }
     
     // === VERIFY REQUEST ID MATCH ===
     // Check if response matches current request
@@ -2559,6 +2570,15 @@ void response_validate_cartridge(CloudEvent cancel_event)
         if (load_assay_from_file(assay_id, checksum_value))
         {
             // === ASSAY LOADED SUCCESSFULLY ===
+            // Only transition to RUNNING_TEST if we're still in VALIDATING_CARTRIDGE mode
+            // This prevents invalid transitions if validation response arrives late (e.g., during UPLOADING_RESULTS)
+            if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
+            {
+                Log.warn("Validation response received but device is in %s mode (expected VALIDATING_CARTRIDGE) - ignoring response",
+                         device_mode_to_string(device_state.mode).c_str());
+                return;  // Ignore stale validation response
+            }
+            
             device_state.cartridge_state = CartridgeState::VALIDATED;
             device_state.test_state = TestState::NOT_STARTED;
             strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
@@ -2823,6 +2843,20 @@ void response_load_assay(CloudEvent load_assay_event)
                     if (load_assay_from_file(pending_assay_id, pending_checksum))
                     {
                         // === ASSAY LOADED SUCCESSFULLY AFTER RE-DOWNLOAD ===
+                        // Only transition to RUNNING_TEST if we're still in VALIDATING_CARTRIDGE mode
+                        // This prevents invalid transitions if assay re-download completes late
+                        if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
+                        {
+                            Log.warn("Assay re-download completed but device is in %s mode (expected VALIDATING_CARTRIDGE) - ignoring",
+                                     device_mode_to_string(device_state.mode).c_str());
+                            // Clear re-download tracking
+                            assay_redownload_pending = false;
+                            pending_assay_id[0] = '\0';
+                            pending_checksum = 0;
+                            pending_cartridge_id[0] = '\0';
+                            return;  // Ignore stale assay re-download
+                        }
+                        
                         Log.info("Assay loaded successfully after re-download");
                         device_state.cartridge_state = CartridgeState::VALIDATED;
                         device_state.test_state = TestState::NOT_STARTED;
