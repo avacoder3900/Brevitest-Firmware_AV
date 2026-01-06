@@ -3030,6 +3030,16 @@ void publish_upload_test()
  */
 void response_upload_test(CloudEvent upload_event)
 {
+    // === CHECK IF DEVICE IS IN VALID STATE FOR UPLOAD RESPONSE ===
+    // Only process upload responses when in UPLOADING_RESULTS mode
+    // This prevents duplicate processing if response arrives multiple times or after state change
+    if (device_state.mode != DeviceMode::UPLOADING_RESULTS)
+    {
+        Log.warn("Upload response received but device is in %s mode (expected UPLOADING_RESULTS) - ignoring stale response",
+                 device_mode_to_string(device_state.mode).c_str());
+        return;  // Ignore response - device is no longer uploading
+    }
+    
     // === END CLOUD OPERATION TRACKING ===
     device_state.end_cloud_operation();
 
@@ -3114,7 +3124,16 @@ void response_upload_test(CloudEvent upload_event)
                 device_state.cartridge_state = CartridgeState::NOT_INSERTED;
             }
             
-            device_state.transition_to(DeviceMode::IDLE);
+            // Only transition to IDLE if we're not already there
+            // This prevents duplicate transitions and IDLE -> IDLE transitions
+            if (device_state.mode != DeviceMode::IDLE)
+            {
+                device_state.transition_to(DeviceMode::IDLE);
+            }
+            else
+            {
+                Log.warn("Upload response processed but device already in IDLE - skipping duplicate transition");
+            }
         }
     }
     else
