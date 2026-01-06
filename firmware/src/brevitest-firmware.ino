@@ -2857,16 +2857,19 @@ void response_upload_test(CloudEvent upload_event)
     if (json.get("status").toString() == "SUCCESS")
     {
         // === TEST UPLOAD SUCCESSFUL ===
+        // Mark test as uploaded regardless of cartridgeId validity
+        // This ensures skip_barcode_scan logic works correctly
+        device_state.test_state = TestState::UPLOADED;
+        
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
         {
             // === CLEAN UP CACHE ===
             unlink("/cache/" + cartridgeId);
             Log.info("Uploaded test successful, %s removed from cache", cartridgeId.c_str());
-            device_state.test_state = TestState::UPLOADED;
         }
         else
         {
-            Log.info("Uploaded test successful, but %s not removed from cache", cartridgeId.c_str());
+            Log.info("Uploaded test successful, but %s not removed from cache (invalid length)", cartridgeId.c_str());
         }
         
         // === CHECK FOR MORE CACHED TESTS ===
@@ -2905,11 +2908,23 @@ void response_upload_test(CloudEvent upload_event)
             // If cartridge is still inserted, set to DETECTED but don't trigger barcode scanning
             // This prevents re-running the test on the same cartridge
             // User must remove and re-insert cartridge to run a new test
+            // NOTE: Check detector state atomically to avoid race conditions with hardware_loop()
             if (device_state.detector_on)
             {
                 // Cartridge still inserted - set to DETECTED but don't trigger scanning
-                device_state.cartridge_state = CartridgeState::DETECTED;
-                Log.info("Cartridge still inserted after test completion - barcode cleared, waiting for removal before allowing new test");
+                // Only set to DETECTED if we're not already in a different state (e.g., if hardware_loop
+                // already processed removal and reset state)
+                if (device_state.cartridge_state != CartridgeState::NOT_INSERTED)
+                {
+                    device_state.cartridge_state = CartridgeState::DETECTED;
+                    Log.info("Cartridge still inserted after test completion - barcode cleared, waiting for removal before allowing new test");
+                }
+                else
+                {
+                    // Cartridge was removed between upload completion and this check
+                    // hardware_loop() already reset state - don't override it
+                    Log.info("Cartridge removed during upload - state already reset by hardware_loop()");
+                }
             }
             else
             {
@@ -5141,11 +5156,14 @@ void hardware_loop()
 
                 // === PREVENT RE-SCANNING AFTER TEST COMPLETION ===
                 // If we're in IDLE mode with cartridge_state = DETECTED but no current_barcode,
-                // this means a test just completed and cartridge is still inserted.
+                // AND test_state = UPLOADED, this means a test just completed and cartridge is still inserted.
                 // Don't trigger barcode scanning - user must remove and re-insert cartridge.
+                // IMPORTANT: We check test_state == UPLOADED to ensure we only skip scanning after
+                // successful test completion, not after error recovery or other IDLE scenarios.
                 bool skip_barcode_scan = (device_state.mode == DeviceMode::IDLE && 
                                           device_state.cartridge_state == CartridgeState::DETECTED &&
-                                          device_state.current_barcode[0] == '\0');
+                                          device_state.current_barcode[0] == '\0' &&
+                                          device_state.test_state == TestState::UPLOADED);
                 
                 if (skip_barcode_scan)
                 {
