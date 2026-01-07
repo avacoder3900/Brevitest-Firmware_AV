@@ -4941,8 +4941,7 @@ void set_device_indicators()
             // Cartridge present but not processed - remove it
             turn_on_remove_cartridge_LED();
             
-            // Activate buzzer if test was just completed (green light = remove cartridge after test)
-            // OR if this is not after a test (cartridge inserted when not ready)
+            // Activate buzzer ONLY if test was just completed (green light = remove cartridge after test)
             if (device_state.test_state == TestState::UPLOADED)
             {
                 // Test is done - buzz to signal cartridge removal (green light is on)
@@ -4959,8 +4958,8 @@ void set_device_indicators()
         {
             // Heater ready and no cartridge - ready for cartridge insertion
             turn_on_insert_cartridge_LED();
-            // Activate buzzer when device is ready for cartridge insertion (green light)
-            turn_on_buzzer_alert();
+            // Turn off buzzer - no cartridge in device, no buzzer should be on
+            turn_off_buzzer_timer();
         }
         else
         {
