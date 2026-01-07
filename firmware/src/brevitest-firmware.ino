@@ -4958,7 +4958,20 @@ void set_device_indicators()
         {
             // Cartridge present but not processed - remove it
             turn_on_remove_cartridge_LED();
-            turn_on_buzzer_alert();
+            
+            // Only activate buzzer if this is NOT after a successful test completion
+            // After successful test, just show LED - no need for buzzer alert
+            // Buzzer should only be used for urgent alerts (e.g., cartridge inserted during heating)
+            if (device_state.test_state != TestState::UPLOADED)
+            {
+                turn_on_buzzer_alert();
+            }
+            else
+            {
+                // Test just completed successfully - turn off buzzer if it was running
+                // This prevents unexpected beeps after test completion
+                turn_off_buzzer_timer();
+            }
         }
         else if (device_state.heater_ready)
         {
