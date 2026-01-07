@@ -4763,7 +4763,8 @@ void run_test()
     // === CLEANUP AND RECONNECT ===
     reset_stage(true);
     connect_to_cloud();
-    turn_on_buzzer_alert();
+    // Turn off buzzer - device is not ready (uploading results)
+    turn_off_buzzer_timer();
 }
 
 /////////////////////////////////////////////////////////////
@@ -5067,36 +5068,17 @@ void set_device_indicators()
         // === HEATING STATE ===
         if (device_state.detector_on)
         {
-            // Cartridge inserted while heating
-            if (pending_barcode_available)
-            {
-                // We already scanned the barcode - signal to remove
-                turn_on_remove_cartridge_LED();
-                turn_on_buzzer_alert();
-                // Ensure buzzer timer is started
-                if (!buzzer_timer.isActive())
-                {
-                    buzzer_timer.start();
-                    Log.info("Started buzzer timer for pending barcode removal signal");
-                }
-            }
-            else
-            {
-                // Cartridge inserted but not scanned yet - signal to remove immediately
-                turn_on_remove_cartridge_LED();
-                turn_on_buzzer_alert();
-                // Ensure buzzer timer is started
-                if (!buzzer_timer.isActive())
-                {
-                    buzzer_timer.start();
-                    Log.info("Activated remove cartridge LED and alert buzzer for cartridge inserted during heating");
-                }
-            }
+            // Cartridge inserted while heating - signal to remove (LED only, no buzzer)
+            turn_on_remove_cartridge_LED();
+            // Turn off buzzer - device is not ready (heating in progress)
+            turn_off_buzzer_timer();
         }
         else
         {
             // Heating up - don't touch
             turn_on_dont_touch_LED();
+            // Turn off buzzer - device is not ready (heating in progress)
+            turn_off_buzzer_timer();
         }
         break;
 
@@ -5107,17 +5089,17 @@ void set_device_indicators()
             // Cartridge present but not processed - remove it
             turn_on_remove_cartridge_LED();
             
-            // Only activate buzzer if this is NOT after a successful test completion
-            // After successful test, just show LED - no need for buzzer alert
-            // Buzzer should only be used for urgent alerts (e.g., cartridge inserted during heating)
-            if (device_state.test_state != TestState::UPLOADED)
+            // Activate buzzer if test was just completed (green light = remove cartridge after test)
+            // OR if this is not after a test (cartridge inserted when not ready)
+            if (device_state.test_state == TestState::UPLOADED)
             {
+                // Test is done - buzz to signal cartridge removal (green light is on)
                 turn_on_buzzer_alert();
             }
             else
             {
-                // Test just completed successfully - turn off buzzer if it was running
-                // This prevents unexpected beeps after test completion
+                // Cartridge present but not after a test - turn off buzzer
+                // Device is not ready (cartridge must be removed first)
                 turn_off_buzzer_timer();
             }
         }
@@ -5125,11 +5107,15 @@ void set_device_indicators()
         {
             // Heater ready and no cartridge - ready for cartridge insertion
             turn_on_insert_cartridge_LED();
+            // Activate buzzer when device is ready for cartridge insertion (green light)
+            turn_on_buzzer_alert();
         }
         else
         {
             // Heater not ready - don't touch
             turn_on_dont_touch_LED();
+            // Turn off buzzer - device is not ready
+            turn_off_buzzer_timer();
         }
         break;
 
@@ -5215,17 +5201,11 @@ void barcode_scan_loop()
                 Log.info("Cartridge identified during heating: %s", barcode_uuid);
                 Log.info("Cartridge inserted during heating - please remove cartridge and re-insert when heater is ready");
                 
-                // Signal user to remove cartridge
+                // Signal user to remove cartridge (LED only, no buzzer)
                 turn_on_remove_cartridge_LED();
-                turn_on_buzzer_alert();
-                Log.info("Activated remove cartridge LED and alert buzzer - LED active: %s, Buzzer running: %s", 
-                         indicatorRemove.isActive() ? "YES" : "NO",
-                         buzzer_alert_running ? "YES" : "NO");
-                // Ensure buzzer timer is started
-                if (!buzzer_timer.isActive())
-                {
-                    buzzer_timer.start();
-                }
+                turn_off_buzzer_timer();  // Turn off buzzer - device is not ready
+                Log.info("Activated remove cartridge LED (LED active: %s)",
+                         indicatorRemove.isActive() ? "YES" : "NO");
                 
                 // Transition back to HEATING mode (don't validate or run test)
                 Log.info("Transitioning back to HEATING mode - cartridge rejected, waiting for removal");
@@ -5246,17 +5226,11 @@ void barcode_scan_loop()
                 Log.info("Cartridge identified during heating: %s", barcode_uuid);
                 Log.info("Heater not ready - please remove cartridge and re-insert when heater is ready");
                 
-                // Signal user to remove cartridge
+                // Signal user to remove cartridge (LED only, no buzzer)
                 turn_on_remove_cartridge_LED();
-                turn_on_buzzer_alert();
-                Log.info("Activated remove cartridge LED and alert buzzer - LED active: %s, Buzzer running: %s", 
-                         indicatorRemove.isActive() ? "YES" : "NO",
-                         buzzer_alert_running ? "YES" : "NO");
-                // Ensure buzzer timer is started
-                if (!buzzer_timer.isActive())
-                {
-                    buzzer_timer.start();
-                }
+                turn_off_buzzer_timer();  // Turn off buzzer - device is not ready
+                Log.info("Activated remove cartridge LED (LED active: %s)",
+                         indicatorRemove.isActive() ? "YES" : "NO");
                 
                 // Transition back to HEATING mode (don't validate yet)
                 Log.info("Transitioning back to HEATING mode - barcode stored for later validation");
@@ -5294,14 +5268,11 @@ void barcode_scan_loop()
                     Log.warn("Barcode %s was recently tested %lu ms ago (cooldown: %lu ms remaining) - skipping validation. Remove and wait before re-inserting.",
                              barcode_uuid, time_since_test, remaining_cooldown);
                     
-                    // Signal user to remove cartridge
+                    // Signal user to remove cartridge (LED only, no buzzer)
                     device_state.cartridge_state = CartridgeState::DETECTED;
                     turn_on_remove_cartridge_LED();
-                    turn_on_buzzer_alert();
-                    if (!buzzer_timer.isActive())
-                    {
-                        buzzer_timer.start();
-                    }
+                    // Turn off buzzer - device is not ready (cooldown active)
+                    turn_off_buzzer_timer();
                     // Transition back to IDLE - don't validate
                     device_state.transition_to(DeviceMode::IDLE);
                     break;  // Exit switch, don't proceed with validation
@@ -5484,15 +5455,10 @@ void hardware_loop()
                         device_state.cartridge_state = CartridgeState::DETECTED;
                         device_state.set_error("Heater not ready for cartridge insertion");
                         
-                        // Activate buzzer and LED immediately to signal removal
+                        // Activate LED immediately to signal removal (no buzzer)
                         turn_on_remove_cartridge_LED();
-                        turn_on_buzzer_alert();
-                        // Ensure buzzer timer is started
-                        if (!buzzer_timer.isActive())
-                        {
-                            buzzer_timer.start();
-                            Log.info("Activated remove cartridge LED and alert buzzer - heater not ready for cartridge insertion");
-                        }
+                        turn_off_buzzer_timer();  // Turn off buzzer - device is not ready
+                        Log.info("Activated remove cartridge LED - heater not ready for cartridge insertion");
                     }
                 }
             }
