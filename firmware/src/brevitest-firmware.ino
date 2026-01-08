@@ -2236,8 +2236,8 @@ void publish_validate_cartridge()
 
         // === ATTEMPT TO PUBLISH ===
         // #region agent log
-        Log.info("[DEBUG-L] BEFORE publish: event_name=validate-cartridge event_data_len=%d request_id=%s cloud_connected=%d",
-                 event_data.length(), validation_request_id.c_str(),
+        Log.info("[DEBUG-L] BEFORE publish: event_name=validate-cartridge event_size=%d request_id=%s cloud_connected=%d",
+                 event.size(), validation_request_id.c_str(),
                  Particle.connected() ? 1 : 0);
         // #endregion
         Log.info("Publishing validate cartridge, %s (attempt %d/%d)", 
