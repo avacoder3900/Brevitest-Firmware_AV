@@ -2429,7 +2429,16 @@ void publish_validate_cartridge()
         {
             Log.info("Validation publish successful, waiting for response");
         }
+        // #region agent log
+        Log.info("[DEBUG-K] AFTER publish success: retry_count=%d max_retries=%d mode=%s",
+                 validation_retry_count, VALIDATION_MAX_RETRIES,
+                 device_mode_to_string(device_state.mode).c_str());
+        // #endregion
         device_state.start_cloud_operation();
+        // #region agent log
+        Log.info("[DEBUG-K] AFTER start_cloud_operation: cloud_pending=%d",
+                 device_state.cloud_operation_pending ? 1 : 0);
+        // #endregion
         
         // Reset retry tracking on successful publish
         // Note: Don't reset retry_count here - keep it for logging until we get a response
@@ -5801,9 +5810,15 @@ void loop()
                 Log.warn("Cartridge validation timeout - no response from cloud after %lu ms", timeout_ms);
                 
                 // Check if we can retry
+                // CRITICAL: Check retry count BEFORE incrementing to ensure we don't exceed max retries
+                // The retry count represents attempts already made, so we check if we can make one more
                 if (validation_retry_count < VALIDATION_MAX_RETRIES)
                 {
-                    // Increment retry count
+                    // #region agent log
+                    Log.info("[DEBUG-I] Validation timeout - scheduling retry: retry_count=%d max_retries=%d",
+                             validation_retry_count, VALIDATION_MAX_RETRIES);
+                    // #endregion
+                    // Increment retry count BEFORE scheduling retry
                     validation_retry_count++;
                     
                     // Calculate exponential backoff delay
@@ -5823,21 +5838,40 @@ void loop()
                 }
                 else
                 {
+                    // #region agent log
+                    Log.error("[DEBUG-I] MAX RETRIES EXCEEDED: retry_count=%d max_retries=%d mode=%s",
+                             validation_retry_count, VALIDATION_MAX_RETRIES,
+                             device_mode_to_string(device_state.mode).c_str());
+                    // #endregion
                     // Max retries exceeded - clear cloud operation and set error
                     Log.error("Cartridge validation timeout after %d attempts - giving up", 
-                              VALIDATION_MAX_RETRIES + 1);
+                              validation_retry_count + 1);
                     
                     // Ensure cloud operation is cleared before setting error
                     device_state.end_cloud_operation();
                     
+                    // #region agent log
+                    Log.info("[DEBUG-I] BEFORE set_error: mode=%s cartridge_state=%s",
+                             device_mode_to_string(device_state.mode).c_str(),
+                             cartridge_state_to_string(device_state.cartridge_state).c_str());
+                    // #endregion
                     // Set error state (this will transition to ERROR_STATE)
                     device_state.cartridge_state = CartridgeState::INVALID;
                     device_state.set_error("Cartridge validation timeout");
+                    // #region agent log
+                    Log.info("[DEBUG-I] AFTER set_error: mode=%s cartridge_state=%s",
+                             device_mode_to_string(device_state.mode).c_str(),
+                             cartridge_state_to_string(device_state.cartridge_state).c_str());
+                    // #endregion
                     
                     // Clear retry tracking
                     validation_retry_count = 0;
                     validation_retry_delay_until = 0;
                     validation_request_id = "";  // Clear request ID on final timeout
+                    
+                    // CRITICAL: Break out of VALIDATING_CARTRIDGE loop after setting error
+                    // The mode has changed to ERROR_STATE, so we should exit this case
+                    break;  // Exit validation loop - device is now in ERROR_STATE
                 }
             }
             else
@@ -5940,6 +5974,13 @@ void loop()
                              validation_retry_count, VALIDATION_MAX_RETRIES);
                     validation_retry_delay_until = 0;
                 }
+                
+                // #region agent log
+                Log.info("[DEBUG-J] BEFORE publish validation retry: retry_count=%d max_retries=%d mode=%s cloud_pending=%d",
+                         validation_retry_count, VALIDATION_MAX_RETRIES,
+                         device_mode_to_string(device_state.mode).c_str(),
+                         device_state.cloud_operation_pending ? 1 : 0);
+                // #endregion
                 
                 // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
                 if (validation_retry_count > 0)

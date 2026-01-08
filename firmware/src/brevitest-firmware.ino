@@ -1992,6 +1992,11 @@ void register_cloud_subscriptions()
     Log.info("All subscriptions - Load: %s, Validate: %s, Reset: %s, Upload: %s, Errors: %s/%s/%s/%s",
              sub1 ? "OK" : "FAIL", sub2 ? "OK" : "FAIL", sub3 ? "OK" : "FAIL", sub4 ? "OK" : "FAIL",
              sub5 ? "OK" : "FAIL", sub6 ? "OK" : "FAIL", sub7 ? "OK" : "FAIL", sub8 ? "OK" : "FAIL");
+    
+    // #region agent log
+    Log.info("[DEBUG-L] Subscription status: validation_sub=%d error_sub=%d cloud_connected=%d",
+             sub2 ? 1 : 0, sub6 ? 1 : 0, Particle.connected() ? 1 : 0);
+    // #endregion
 }
 
 /**
@@ -2230,10 +2235,19 @@ void publish_validate_cartridge()
         }
 
         // === ATTEMPT TO PUBLISH ===
+        // #region agent log
+        Log.info("[DEBUG-L] BEFORE publish: event_name=validate-cartridge event_data_len=%d request_id=%s cloud_connected=%d",
+                 event_data.length(), validation_request_id.c_str(),
+                 Particle.connected() ? 1 : 0);
+        // #endregion
         Log.info("Publishing validate cartridge, %s (attempt %d/%d)", 
                  barcode_uuid, validation_retry_count + 1, VALIDATION_MAX_RETRIES + 1);
         
         bool publish_success = Particle.publish(event);
+        // #region agent log
+        Log.info("[DEBUG-L] AFTER publish: success=%d",
+                 publish_success ? 1 : 0);
+        // #endregion
         
         // === VERIFY PUBLISH SUCCESS ===
         if (!publish_success)
