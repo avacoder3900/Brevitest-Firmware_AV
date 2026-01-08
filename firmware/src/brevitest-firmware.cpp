@@ -2449,6 +2449,13 @@ void publish_validate_cartridge()
  */
 void response_validate_cartridge(CloudEvent cancel_event)
 {
+    // #region agent log
+    Log.info("[DEBUG-B] response_validate_cartridge entry: mode=%s detector_on=%d cartridge_state=%s test_state=%s",
+             device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+             cartridge_state_to_string(device_state.cartridge_state).c_str(),
+             test_state_to_string(device_state.test_state).c_str());
+    // #endregion
+    
     String event_data = cancel_event.dataString();
     String event_name = cancel_event.name();
     
@@ -2461,10 +2468,19 @@ void response_validate_cartridge(CloudEvent cancel_event)
     // This prevents invalid state transitions if response arrives late (e.g., during UPLOADING_RESULTS)
     if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
     {
+        // #region agent log
+        Log.warn("[DEBUG-B] STALE VALIDATION RESPONSE: current_mode=%s expected=VALIDATING_CARTRIDGE detector_on=%d",
+                 device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+        // #endregion
         Log.warn("Validation response received but device is in %s mode (expected VALIDATING_CARTRIDGE) - ignoring stale response",
                  device_mode_to_string(device_state.mode).c_str());
         return;  // Ignore response - device is no longer waiting for validation
     }
+    
+    // #region agent log
+    Log.info("[DEBUG-D] validation response processing: detector_on=%d has_cartridge=%d",
+             device_state.detector_on ? 1 : 0, device_state.has_cartridge() ? 1 : 0);
+    // #endregion
     
     // === VERIFY REQUEST ID MATCH ===
     // Check if response matches current request
@@ -2572,10 +2588,19 @@ void response_validate_cartridge(CloudEvent cancel_event)
             // === ASSAY LOADED SUCCESSFULLY ===
             // Mode was already validated at the beginning of this function
             // Proceed with transition to RUNNING_TEST
+            // #region agent log
+            Log.info("[DEBUG-E] BEFORE transition to RUNNING_TEST: mode=%s detector_on=%d cartridge_state=%s",
+                     device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+                     cartridge_state_to_string(device_state.cartridge_state).c_str());
+            // #endregion
             device_state.cartridge_state = CartridgeState::VALIDATED;
             device_state.test_state = TestState::NOT_STARTED;
             strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
             device_state.transition_to(DeviceMode::RUNNING_TEST);
+            // #region agent log
+            Log.info("[DEBUG-E] AFTER transition to RUNNING_TEST: mode=%s detector_on=%d",
+                     device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+            // #endregion
             run_test();
         }
         else
@@ -3023,12 +3048,23 @@ void publish_upload_test()
  */
 void response_upload_test(CloudEvent upload_event)
 {
+    // #region agent log
+    Log.info("[DEBUG-F] response_upload_test entry: mode=%s detector_on=%d test_state=%s cartridge_state=%s",
+             device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+             test_state_to_string(device_state.test_state).c_str(),
+             cartridge_state_to_string(device_state.cartridge_state).c_str());
+    // #endregion
+    
     // === CHECK IF DEVICE IS IN VALID STATE FOR UPLOAD RESPONSE ===
     // Only process upload responses when in UPLOADING_RESULTS mode
     // This prevents duplicate processing if response arrives multiple times or after state change
     // Note: Stale responses are common after cloud reconnection and are safely ignored
     if (device_state.mode != DeviceMode::UPLOADING_RESULTS)
     {
+        // #region agent log
+        Log.info("[DEBUG-F] STALE UPLOAD RESPONSE: current_mode=%s expected=UPLOADING_RESULTS detector_on=%d",
+                 device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+        // #endregion
         // Use INFO level instead of WARN since stale responses are expected after cloud reconnection
         Log.info("Upload response received but device is in %s mode (expected UPLOADING_RESULTS) - ignoring stale response",
                  device_mode_to_string(device_state.mode).c_str());
@@ -3129,12 +3165,26 @@ void response_upload_test(CloudEvent upload_event)
             
             // Only transition to IDLE if we're not already there
             // This prevents duplicate transitions and IDLE -> IDLE transitions
+            // #region agent log
+            Log.info("[DEBUG-G] BEFORE IDLE transition check: mode=%s detector_on=%d test_state=%s",
+                     device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+                     test_state_to_string(device_state.test_state).c_str());
+            // #endregion
             if (device_state.mode != DeviceMode::IDLE)
             {
                 device_state.transition_to(DeviceMode::IDLE);
+                // #region agent log
+                Log.info("[DEBUG-G] AFTER IDLE transition: mode=%s test_state=%s",
+                         device_mode_to_string(device_state.mode).c_str(),
+                         test_state_to_string(device_state.test_state).c_str());
+                // #endregion
             }
             else
             {
+                // #region agent log
+                Log.warn("[DEBUG-G] DUPLICATE IDLE TRANSITION BLOCKED: mode=%s",
+                         device_mode_to_string(device_state.mode).c_str());
+                // #endregion
                 Log.warn("Upload response processed but device already in IDLE - skipping duplicate transition");
             }
         }
@@ -5089,8 +5139,7 @@ void set_device_indicators()
             // Cartridge present but not processed - remove it
             turn_on_remove_cartridge_LED();
             
-            // Activate buzzer if test was just completed (green light = remove cartridge after test)
-            // OR if this is not after a test (cartridge inserted when not ready)
+            // Activate buzzer ONLY if test was just completed (green light = remove cartridge after test)
             if (device_state.test_state == TestState::UPLOADED)
             {
                 // Test is done - buzz to signal cartridge removal (green light is on)
@@ -5107,8 +5156,8 @@ void set_device_indicators()
         {
             // Heater ready and no cartridge - ready for cartridge insertion
             turn_on_insert_cartridge_LED();
-            // Activate buzzer when device is ready for cartridge insertion (green light)
-            turn_on_buzzer_alert();
+            // Turn off buzzer - no cartridge in device, no buzzer should be on
+            turn_off_buzzer_timer();
         }
         else
         {
@@ -5465,6 +5514,13 @@ void hardware_loop()
             else
             {
                 // === CARTRIDGE REMOVED ===
+                // #region agent log
+                Log.info("[DEBUG-H] BEFORE cartridge removal reset: mode=%s test_state=%s cartridge_state=%s detector_on=%d",
+                         device_mode_to_string(device_state.mode).c_str(),
+                         test_state_to_string(device_state.test_state).c_str(),
+                         cartridge_state_to_string(device_state.cartridge_state).c_str(),
+                         device_state.detector_on ? 1 : 0);
+                // #endregion
                 // Reset everything to IDLE state
                 reset_stage(true);
                 turn_off_buzzer_timer();
@@ -5497,6 +5553,13 @@ void hardware_loop()
                 last_tested_timestamp = 0;
                 
                 device_state.reset_to_idle();
+                // #region agent log
+                Log.info("[DEBUG-H] AFTER cartridge removal reset: mode=%s test_state=%s cartridge_state=%s detector_on=%d",
+                         device_mode_to_string(device_state.mode).c_str(),
+                         test_state_to_string(device_state.test_state).c_str(),
+                         cartridge_state_to_string(device_state.cartridge_state).c_str(),
+                         device_state.detector_on ? 1 : 0);
+                // #endregion
             }
         }
     }

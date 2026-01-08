@@ -2281,7 +2281,16 @@ void publish_validate_cartridge()
         {
             Log.info("Validation publish successful, waiting for response");
         }
+        // #region agent log
+        Log.info("[DEBUG-K] AFTER publish success: retry_count=%d max_retries=%d mode=%s",
+                 validation_retry_count, VALIDATION_MAX_RETRIES,
+                 device_mode_to_string(device_state.mode).c_str());
+        // #endregion
         device_state.start_cloud_operation();
+        // #region agent log
+        Log.info("[DEBUG-K] AFTER start_cloud_operation: cloud_pending=%d",
+                 device_state.cloud_operation_pending ? 1 : 0);
+        // #endregion
         
         // Reset retry tracking on successful publish
         // Note: Don't reset retry_count here - keep it for logging until we get a response
@@ -2301,6 +2310,13 @@ void publish_validate_cartridge()
  */
 void response_validate_cartridge(CloudEvent cancel_event)
 {
+    // #region agent log
+    Log.info("[DEBUG-B] response_validate_cartridge entry: mode=%s detector_on=%d cartridge_state=%s test_state=%s",
+             device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+             cartridge_state_to_string(device_state.cartridge_state).c_str(),
+             test_state_to_string(device_state.test_state).c_str());
+    // #endregion
+    
     String event_data = cancel_event.dataString();
     String event_name = cancel_event.name();
     
@@ -2313,10 +2329,19 @@ void response_validate_cartridge(CloudEvent cancel_event)
     // This prevents invalid state transitions if response arrives late (e.g., during UPLOADING_RESULTS)
     if (device_state.mode != DeviceMode::VALIDATING_CARTRIDGE)
     {
+        // #region agent log
+        Log.warn("[DEBUG-B] STALE VALIDATION RESPONSE: current_mode=%s expected=VALIDATING_CARTRIDGE detector_on=%d",
+                 device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+        // #endregion
         Log.warn("Validation response received but device is in %s mode (expected VALIDATING_CARTRIDGE) - ignoring stale response",
                  device_mode_to_string(device_state.mode).c_str());
         return;  // Ignore response - device is no longer waiting for validation
     }
+    
+    // #region agent log
+    Log.info("[DEBUG-D] validation response processing: detector_on=%d has_cartridge=%d",
+             device_state.detector_on ? 1 : 0, device_state.has_cartridge() ? 1 : 0);
+    // #endregion
     
     // === VERIFY REQUEST ID MATCH ===
     // Check if response matches current request
@@ -2424,10 +2449,19 @@ void response_validate_cartridge(CloudEvent cancel_event)
             // === ASSAY LOADED SUCCESSFULLY ===
             // Mode was already validated at the beginning of this function
             // Proceed with transition to RUNNING_TEST
+            // #region agent log
+            Log.info("[DEBUG-E] BEFORE transition to RUNNING_TEST: mode=%s detector_on=%d cartridge_state=%s",
+                     device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+                     cartridge_state_to_string(device_state.cartridge_state).c_str());
+            // #endregion
             device_state.cartridge_state = CartridgeState::VALIDATED;
             device_state.test_state = TestState::NOT_STARTED;
             strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
             device_state.transition_to(DeviceMode::RUNNING_TEST);
+            // #region agent log
+            Log.info("[DEBUG-E] AFTER transition to RUNNING_TEST: mode=%s detector_on=%d",
+                     device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+            // #endregion
             run_test();
         }
         else
@@ -2875,12 +2909,23 @@ void publish_upload_test()
  */
 void response_upload_test(CloudEvent upload_event)
 {
+    // #region agent log
+    Log.info("[DEBUG-F] response_upload_test entry: mode=%s detector_on=%d test_state=%s cartridge_state=%s",
+             device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+             test_state_to_string(device_state.test_state).c_str(),
+             cartridge_state_to_string(device_state.cartridge_state).c_str());
+    // #endregion
+    
     // === CHECK IF DEVICE IS IN VALID STATE FOR UPLOAD RESPONSE ===
     // Only process upload responses when in UPLOADING_RESULTS mode
     // This prevents duplicate processing if response arrives multiple times or after state change
     // Note: Stale responses are common after cloud reconnection and are safely ignored
     if (device_state.mode != DeviceMode::UPLOADING_RESULTS)
     {
+        // #region agent log
+        Log.info("[DEBUG-F] STALE UPLOAD RESPONSE: current_mode=%s expected=UPLOADING_RESULTS detector_on=%d",
+                 device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+        // #endregion
         // Use INFO level instead of WARN since stale responses are expected after cloud reconnection
         Log.info("Upload response received but device is in %s mode (expected UPLOADING_RESULTS) - ignoring stale response",
                  device_mode_to_string(device_state.mode).c_str());
@@ -2981,12 +3026,26 @@ void response_upload_test(CloudEvent upload_event)
             
             // Only transition to IDLE if we're not already there
             // This prevents duplicate transitions and IDLE -> IDLE transitions
+            // #region agent log
+            Log.info("[DEBUG-G] BEFORE IDLE transition check: mode=%s detector_on=%d test_state=%s",
+                     device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
+                     test_state_to_string(device_state.test_state).c_str());
+            // #endregion
             if (device_state.mode != DeviceMode::IDLE)
             {
                 device_state.transition_to(DeviceMode::IDLE);
+                // #region agent log
+                Log.info("[DEBUG-G] AFTER IDLE transition: mode=%s test_state=%s",
+                         device_mode_to_string(device_state.mode).c_str(),
+                         test_state_to_string(device_state.test_state).c_str());
+                // #endregion
             }
             else
             {
+                // #region agent log
+                Log.warn("[DEBUG-G] DUPLICATE IDLE TRANSITION BLOCKED: mode=%s",
+                         device_mode_to_string(device_state.mode).c_str());
+                // #endregion
                 Log.warn("Upload response processed but device already in IDLE - skipping duplicate transition");
             }
         }
@@ -5316,6 +5375,13 @@ void hardware_loop()
             else
             {
                 // === CARTRIDGE REMOVED ===
+                // #region agent log
+                Log.info("[DEBUG-H] BEFORE cartridge removal reset: mode=%s test_state=%s cartridge_state=%s detector_on=%d",
+                         device_mode_to_string(device_state.mode).c_str(),
+                         test_state_to_string(device_state.test_state).c_str(),
+                         cartridge_state_to_string(device_state.cartridge_state).c_str(),
+                         device_state.detector_on ? 1 : 0);
+                // #endregion
                 // Reset everything to IDLE state
                 reset_stage(true);
                 turn_off_buzzer_timer();
@@ -5348,6 +5414,13 @@ void hardware_loop()
                 last_tested_timestamp = 0;
                 
                 device_state.reset_to_idle();
+                // #region agent log
+                Log.info("[DEBUG-H] AFTER cartridge removal reset: mode=%s test_state=%s cartridge_state=%s detector_on=%d",
+                         device_mode_to_string(device_state.mode).c_str(),
+                         test_state_to_string(device_state.test_state).c_str(),
+                         cartridge_state_to_string(device_state.cartridge_state).c_str(),
+                         device_state.detector_on ? 1 : 0);
+                // #endregion
             }
         }
     }
@@ -5589,9 +5662,15 @@ void loop()
                 Log.warn("Cartridge validation timeout - no response from cloud after %lu ms", timeout_ms);
                 
                 // Check if we can retry
+                // CRITICAL: Check retry count BEFORE incrementing to ensure we don't exceed max retries
+                // The retry count represents attempts already made, so we check if we can make one more
                 if (validation_retry_count < VALIDATION_MAX_RETRIES)
                 {
-                    // Increment retry count
+                    // #region agent log
+                    Log.info("[DEBUG-I] Validation timeout - scheduling retry: retry_count=%d max_retries=%d",
+                             validation_retry_count, VALIDATION_MAX_RETRIES);
+                    // #endregion
+                    // Increment retry count BEFORE scheduling retry
                     validation_retry_count++;
                     
                     // Calculate exponential backoff delay
@@ -5611,21 +5690,40 @@ void loop()
                 }
                 else
                 {
+                    // #region agent log
+                    Log.error("[DEBUG-I] MAX RETRIES EXCEEDED: retry_count=%d max_retries=%d mode=%s",
+                             validation_retry_count, VALIDATION_MAX_RETRIES,
+                             device_mode_to_string(device_state.mode).c_str());
+                    // #endregion
                     // Max retries exceeded - clear cloud operation and set error
                     Log.error("Cartridge validation timeout after %d attempts - giving up", 
-                              VALIDATION_MAX_RETRIES + 1);
+                              validation_retry_count + 1);
                     
                     // Ensure cloud operation is cleared before setting error
                     device_state.end_cloud_operation();
                     
+                    // #region agent log
+                    Log.info("[DEBUG-I] BEFORE set_error: mode=%s cartridge_state=%s",
+                             device_mode_to_string(device_state.mode).c_str(),
+                             cartridge_state_to_string(device_state.cartridge_state).c_str());
+                    // #endregion
                     // Set error state (this will transition to ERROR_STATE)
                     device_state.cartridge_state = CartridgeState::INVALID;
                     device_state.set_error("Cartridge validation timeout");
+                    // #region agent log
+                    Log.info("[DEBUG-I] AFTER set_error: mode=%s cartridge_state=%s",
+                             device_mode_to_string(device_state.mode).c_str(),
+                             cartridge_state_to_string(device_state.cartridge_state).c_str());
+                    // #endregion
                     
                     // Clear retry tracking
                     validation_retry_count = 0;
                     validation_retry_delay_until = 0;
                     validation_request_id = "";  // Clear request ID on final timeout
+                    
+                    // CRITICAL: Break out of VALIDATING_CARTRIDGE loop after setting error
+                    // The mode has changed to ERROR_STATE, so we should exit this case
+                    break;  // Exit validation loop - device is now in ERROR_STATE
                 }
             }
             else
@@ -5728,6 +5826,13 @@ void loop()
                              validation_retry_count, VALIDATION_MAX_RETRIES);
                     validation_retry_delay_until = 0;
                 }
+                
+                // #region agent log
+                Log.info("[DEBUG-J] BEFORE publish validation retry: retry_count=%d max_retries=%d mode=%s cloud_pending=%d",
+                         validation_retry_count, VALIDATION_MAX_RETRIES,
+                         device_mode_to_string(device_state.mode).c_str(),
+                         device_state.cloud_operation_pending ? 1 : 0);
+                // #endregion
                 
                 // === DIAGNOSTIC: LOG BEFORE PUBLISHING ===
                 if (validation_retry_count > 0)
