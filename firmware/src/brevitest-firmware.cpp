@@ -2128,10 +2128,6 @@ void register_cloud_subscriptions()
     bool sub4 = Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
 
     // Error responses - NOW ENABLED
-    bool sub5 = Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
-    bool sub6 = Particle.subscribe(validation_error_topic, response_error);
-    bool sub7 = Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
-    bool sub8 = Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
     
     // Log subscription status
     Log.info("Subscriptions registered - Validation: %s (topic: %s), Error: %s (topic: %s)", 
@@ -2155,7 +2151,10 @@ void register_cloud_subscriptions()
  */
 void log_all_events(const char *event, const char *data)
 {
-    Log.info("[DIAGNOSTIC] Event received - Name: %s, Data: %s", event, data ? data : "(null)");
+    // #region agent log
+    Log.info("[DIAGNOSTIC] Event received: name=%s data_len=%d data_preview=%.100s",
+             event ? event : "(null)", data ? strlen(data) : 0, data ? data : "(null)");
+    // #endregion
 }
 
 /////////////////////////////////////////////////////
@@ -2384,8 +2383,8 @@ void publish_validate_cartridge()
 
         // === ATTEMPT TO PUBLISH ===
         // #region agent log
-        Log.info("[DEBUG-L] BEFORE publish: event_name=validate-cartridge event_data_len=%d request_id=%s cloud_connected=%d",
-                 event_data.length(), validation_request_id.c_str(),
+        Log.info("[DEBUG-L] BEFORE publish: event_name=validate-cartridge event_size=%d request_id=%s cloud_connected=%d",
+                 event.size(), validation_request_id.c_str(),
                  Particle.connected() ? 1 : 0);
         // #endregion
         Log.info("Publishing validate cartridge, %s (attempt %d/%d)", 
@@ -2481,6 +2480,11 @@ void response_validate_cartridge(CloudEvent cancel_event)
     
     String event_data = cancel_event.dataString();
     String event_name = cancel_event.name();
+    
+    // #region agent log
+    Log.info("[DEBUG-B] Event received: name=%s data_len=%d data_preview=%.50s",
+             event_name.c_str(), event_data.length(), event_data.c_str());
+    // #endregion
     
     Log.info("Validation response received - Event: %s, Data length: %d, Current mode: %s", 
              event_name.c_str(), event_data.length(),
@@ -4978,7 +4982,8 @@ void setup()
     register_cloud_subscriptions();
     
     // Diagnostic: Subscribe to all events for debugging (optional, can be disabled in production)
-    // Particle.subscribe("", log_all_events);
+    // Enable temporarily to diagnose why validation responses aren't being received
+    Particle.subscribe("", log_all_events);
 
     // === EEPROM SETUP ===
     setup_eeprom();

@@ -1971,31 +1971,22 @@ void stop_temperature_control()
 void register_cloud_subscriptions()
 {
     String validation_topic = String(device_id + "/hook-response/validate-cartridge/");
-    String validation_error_topic = String(device_id + "/hook-error/validate-cartridge/");
     
     // Success responses
     bool sub1 = Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
     bool sub2 = Particle.subscribe(validation_topic, response_validate_cartridge);
     bool sub3 = Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
     bool sub4 = Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
-
-    // Error responses - NOW ENABLED
-    bool sub5 = Particle.subscribe(String(device_id + "/hook-error/load-assay/"), response_error);
-    bool sub6 = Particle.subscribe(validation_error_topic, response_error);
-    bool sub7 = Particle.subscribe(String(device_id + "/hook-error/reset-cartridge/"), response_error);
-    bool sub8 = Particle.subscribe(String(device_id + "/hook-error/upload-test/"), response_error);
     
     // Log subscription status
-    Log.info("Subscriptions registered - Validation: %s (topic: %s), Error: %s (topic: %s)", 
-             sub2 ? "OK" : "FAILED", validation_topic.c_str(),
-             sub6 ? "OK" : "FAILED", validation_error_topic.c_str());
-    Log.info("All subscriptions - Load: %s, Validate: %s, Reset: %s, Upload: %s, Errors: %s/%s/%s/%s",
-             sub1 ? "OK" : "FAIL", sub2 ? "OK" : "FAIL", sub3 ? "OK" : "FAIL", sub4 ? "OK" : "FAIL",
-             sub5 ? "OK" : "FAIL", sub6 ? "OK" : "FAIL", sub7 ? "OK" : "FAIL", sub8 ? "OK" : "FAIL");
+    Log.info("Subscriptions registered - Load: %s, Validate: %s, Reset: %s, Upload: %s",
+             sub1 ? "OK" : "FAIL", sub2 ? "OK" : "FAIL", sub3 ? "OK" : "FAIL", sub4 ? "OK" : "FAIL");
+    Log.info("Validation subscription: %s (topic: %s)", 
+             sub2 ? "OK" : "FAILED", validation_topic.c_str());
     
     // #region agent log
-    Log.info("[DEBUG-L] Subscription status: validation_sub=%d error_sub=%d cloud_connected=%d",
-             sub2 ? 1 : 0, sub6 ? 1 : 0, Particle.connected() ? 1 : 0);
+    Log.info("[DEBUG-L] Subscription status: validation_sub=%d cloud_connected=%d",
+             sub2 ? 1 : 0, Particle.connected() ? 1 : 0);
     // #endregion
 }
 
@@ -2007,7 +1998,10 @@ void register_cloud_subscriptions()
  */
 void log_all_events(const char *event, const char *data)
 {
-    Log.info("[DIAGNOSTIC] Event received - Name: %s, Data: %s", event, data ? data : "(null)");
+    // #region agent log
+    Log.info("[DIAGNOSTIC] Event received: name=%s data_len=%d data_preview=%.100s",
+             event ? event : "(null)", data ? strlen(data) : 0, data ? data : "(null)");
+    // #endregion
 }
 
 /////////////////////////////////////////////////////
@@ -2333,6 +2327,11 @@ void response_validate_cartridge(CloudEvent cancel_event)
     
     String event_data = cancel_event.dataString();
     String event_name = cancel_event.name();
+    
+    // #region agent log
+    Log.info("[DEBUG-B] Event received: name=%s data_len=%d data_preview=%.50s",
+             event_name.c_str(), event_data.length(), event_data.c_str());
+    // #endregion
     
     Log.info("Validation response received - Event: %s, Data length: %d, Current mode: %s", 
              event_name.c_str(), event_data.length(),
@@ -4830,7 +4829,8 @@ void setup()
     register_cloud_subscriptions();
     
     // Diagnostic: Subscribe to all events for debugging (optional, can be disabled in production)
-    // Particle.subscribe("", log_all_events);
+    // Enable temporarily to diagnose why validation responses aren't being received
+    Particle.subscribe("", log_all_events);
 
     // === EEPROM SETUP ===
     setup_eeprom();
