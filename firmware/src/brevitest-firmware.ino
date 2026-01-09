@@ -2220,7 +2220,7 @@ void publish_validate_cartridge()
         String uuid_val = data.get("uuid").toString();
         String requestId_val = data.get("requestId").toString();
         Log.info("[DEBUG-W] Validation payload fields: uuid=%s requestId=%s device_id=%s",
-                 uuid_val.c_str(), requestId_val.c_str(), device_id);
+                 uuid_val.c_str(), requestId_val.c_str(), device_id.c_str());
         Log.info("[DEBUG-W] Payload verification: uuid_match=%d requestId_match=%d",
                  (uuid_val == barcode_uuid) ? 1 : 0, (requestId_val == validation_request_id) ? 1 : 0);
         // #endregion
@@ -2248,9 +2248,9 @@ void publish_validate_cartridge()
         // === ATTEMPT TO PUBLISH ===
         // #region agent log
         Log.info("[DEBUG-W] BEFORE publish: event_name=validate-cartridge event_size=%d request_id=%s device_id=%s cloud_connected=%d",
-                 event.size(), validation_request_id.c_str(), device_id, Particle.connected() ? 1 : 0);
+                 event.size(), validation_request_id.c_str(), device_id.c_str(), Particle.connected() ? 1 : 0);
         Log.info("[DEBUG-W] Event details: name=%s contentType=%d isSending=%d",
-                 event.name().c_str(), (int)event.contentType(), event.isSending() ? 1 : 0);
+                 event.name(), (int)event.contentType(), event.isSending() ? 1 : 0);
         // #endregion
         Log.info("Publishing validate cartridge, %s (attempt %d/%d)", 
                  barcode_uuid, validation_retry_count + 1, VALIDATION_MAX_RETRIES + 1);
