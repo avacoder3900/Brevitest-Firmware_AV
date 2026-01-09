@@ -8,7 +8,7 @@
 #include "brevitest-firmware.h"
 #include "DFRobot_AS7341.h"
 
-PRODUCT_VERSION(59);
+PRODUCT_VERSION(60);
 SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////

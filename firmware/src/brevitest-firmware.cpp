@@ -156,7 +156,7 @@ void hardware_loop();
 void process_serial_port();
 void loop();
 #line 11 "c:/brevitest-device/firmware/src/brevitest-firmware.ino"
-PRODUCT_VERSION(59);
+PRODUCT_VERSION(60);
 SYSTEM_MODE(AUTOMATIC);
 
 /////////////////////////////////////////////////////////////
@@ -2118,6 +2118,11 @@ void stop_temperature_control()
  */
 void register_cloud_subscriptions()
 {
+    // #region agent log
+    Log.info("[DEBUG-L] BEFORE register_cloud_subscriptions: device_id=%s device_id_len=%d",
+             device_id.c_str(), device_id.length());
+    // #endregion
+    
     String validation_topic = String(device_id + "/hook-response/validate-cartridge/");
     
     // Success responses
@@ -2125,6 +2130,13 @@ void register_cloud_subscriptions()
     bool sub2 = Particle.subscribe(validation_topic, response_validate_cartridge);
     bool sub3 = Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
     bool sub4 = Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
+    
+    // #region agent log
+    Log.info("[DEBUG-L] Subscription topics: validation_topic=%s device_id=%s",
+             validation_topic.c_str(), device_id.c_str());
+    Log.info("[DEBUG-L] Subscription results: sub1=%d sub2=%d sub3=%d sub4=%d",
+             sub1 ? 1 : 0, sub2 ? 1 : 0, sub3 ? 1 : 0, sub4 ? 1 : 0);
+    // #endregion
     
     // Log subscription status
     Log.info("Subscriptions registered - Load: %s, Validate: %s, Reset: %s, Upload: %s",
@@ -2507,6 +2519,13 @@ void response_validate_cartridge(CloudEvent cancel_event)
     // #region agent log
     Log.info("[DEBUG-B] Event received: name=%s data_len=%d data_preview=%.50s",
              event_name.c_str(), event_data.length(), event_data.c_str());
+    Log.info("[DEBUG-B] Event name analysis: full_name=%s expected_prefix=%s/hook-response/validate-cartridge/",
+             event_name.c_str(), device_id.c_str());
+    // Check if event name matches expected subscription topic
+    String expected_prefix = String(device_id + "/hook-response/validate-cartridge/");
+    bool name_matches = event_name.indexOf(expected_prefix) == 0;
+    Log.info("[DEBUG-B] Event name match: matches=%d expected_len=%d actual_len=%d",
+             name_matches ? 1 : 0, expected_prefix.length(), event_name.length());
     // #endregion
     
     Log.info("Validation response received - Event: %s, Data length: %d, Current mode: %s", 
@@ -4782,6 +4801,12 @@ void connect_to_cloud()
     if (Particle.connected())
     {
         Log.info("Connected to cloud");
+        // Re-register subscriptions after reconnection to ensure they're active
+        // #region agent log
+        Log.info("[DEBUG-L] Re-registering subscriptions after cloud reconnection: device_id=%s",
+                 device_id.c_str());
+        // #endregion
+        register_cloud_subscriptions();
     }
     else
     {
