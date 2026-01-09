@@ -2589,7 +2589,7 @@ void response_validate_cartridge(CloudEvent cancel_event)
             strcpy(test.cartridge_id, cartridge_id.c_str());
             
             // #region agent log
-            Log.info("[DIAG-TEST] Calling transition_to(RUNNING_TEST): cartridge_state=VALIDATED test_state=NOT_STARTED",
+            Log.info("[DIAG-TEST] Calling transition_to(RUNNING_TEST): cartridge_state=VALIDATED test_state=NOT_STARTED cartridge_id=%s",
                      cartridge_id.c_str());
             // #endregion
             
@@ -4183,6 +4183,7 @@ int particle_command(String arg)
         break;
 
     case 9003:
+    {
         // Diagnose test transition issues
         Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
         Serial.println("║           TEST TRANSITION DIAGNOSTICS                        ║");
@@ -4250,6 +4251,7 @@ int particle_command(String arg)
         Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
         result = 1;
         break;
+    }
 
     case 9010:
         // Show all state transitions

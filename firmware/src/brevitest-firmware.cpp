@@ -561,6 +561,11 @@ bool save_assay_to_file()
 
 bool load_assay_from_file(String assay_id, int BCODE_checksum = 0)
 {
+    // #region agent log
+    Log.info("[DIAG-TEST] load_assay_from_file entry: assay_id=%s checksum=%d",
+             assay_id.c_str(), BCODE_checksum);
+    // #endregion
+    
     int bytes_read;
     int index = 0;
     char *mark;
@@ -569,19 +574,33 @@ bool load_assay_from_file(String assay_id, int BCODE_checksum = 0)
     if (assay_id.length() == 0)
     {
         Log.error("load_assay_from_file, assay.id is empty");
+        // #region agent log
+        Log.error("[DIAG-TEST] load_assay_from_file FAILED: empty assay_id");
+        // #endregion
         return false;
     }
 
     String filename = "/assay/" + assay_id;
+    // #region agent log
+    Log.info("[DIAG-TEST] Attempting to open file: %s", filename.c_str());
+    // #endregion
+    
     int fd = open(filename, O_RDONLY);
     if (fd < 0)
     {
         Log.error("load_assay_from_file, failed to open file %s, errno: %d", filename.c_str(), errno);
+        // #region agent log
+        Log.error("[DIAG-TEST] load_assay_from_file FAILED: file open error errno=%d", errno);
+        // #endregion
         return false;
     }
 
     bytes_read = read(fd, assay_buffer, sizeof assay_buffer - 1);
     close(fd);
+
+    // #region agent log
+    Log.info("[DIAG-TEST] File read: bytes_read=%d buffer_size=%d", bytes_read, sizeof(assay_buffer) - 1);
+    // #endregion
 
     assay_buffer[bytes_read] = '\0'; // null-terminate the string
 
@@ -591,6 +610,9 @@ bool load_assay_from_file(String assay_id, int BCODE_checksum = 0)
         assay_buffer[index] = '\0'; // null-terminate the assay id
         Log.error("load_assay_from_file, assay id doesn't match file data - assay id: %s, filename: %s", assay_id.c_str(), assay_buffer);
         assay.id[0] = '\0'; // reset assay id
+        // #region agent log
+        Log.error("[DIAG-TEST] load_assay_from_file FAILED: assay ID mismatch");
+        // #endregion
         return false;
     }
     else
@@ -605,12 +627,27 @@ bool load_assay_from_file(String assay_id, int BCODE_checksum = 0)
     strncpy(assay.BCODE, mark, index);
     assay.BCODE[index] = '\0'; // null-terminate the BCODE string
     checksum_value = abs((int)checksum(assay.BCODE, strlen(assay.BCODE)));
+    
+    // #region agent log
+    Log.info("[DIAG-TEST] Checksum check: expected=%d calculated=%d BCODE_len=%d",
+             BCODE_checksum, checksum_value, strlen(assay.BCODE));
+    // #endregion
+    
     if (BCODE_checksum != 0 && checksum_value != BCODE_checksum)
     {
         Log.error("load_assay_from_file, BCODE checksum mismatch - expected: %d, actual: %d", BCODE_checksum, checksum_value);
         assay.id[0] = '\0'; // reset assay id
+        // #region agent log
+        Log.error("[DIAG-TEST] load_assay_from_file FAILED: checksum mismatch");
+        // #endregion
         return false;
     }
+    
+    // #region agent log
+    Log.info("[DIAG-TEST] load_assay_from_file SUCCESS: assay_id=%s duration=%d",
+             assay.id, assay.duration);
+    // #endregion
+    
     return true;
 }
 
@@ -2519,13 +2556,13 @@ void response_validate_cartridge(CloudEvent cancel_event)
     // #region agent log
     Log.info("[DEBUG-B] Event received: name=%s data_len=%d data_preview=%.50s",
              event_name.c_str(), event_data.length(), event_data.c_str());
-    Log.info("[DEBUG-B] Event name analysis: full_name=%s expected_prefix=%s/hook-response/validate-cartridge/",
-             event_name.c_str(), device_id.c_str());
+    Log.info("[DEBUG-B] Event name analysis: full_name=%s expected_prefix=%s/hook-response/validate-cartridge/ device_id=%s",
+             event_name.c_str(), device_id.c_str(), device_id.c_str());
     // Check if event name matches expected subscription topic
     String expected_prefix = String(device_id + "/hook-response/validate-cartridge/");
     bool name_matches = event_name.indexOf(expected_prefix) == 0;
-    Log.info("[DEBUG-B] Event name match: matches=%d expected_len=%d actual_len=%d",
-             name_matches ? 1 : 0, expected_prefix.length(), event_name.length());
+    Log.info("[DEBUG-B] Event name match: matches=%d expected_len=%d actual_len=%d expected_prefix=%s",
+             name_matches ? 1 : 0, expected_prefix.length(), event_name.length(), expected_prefix.c_str());
     // #endregion
     
     Log.info("Validation response received - Event: %s, Data length: %d, Current mode: %s", 
@@ -2644,20 +2681,38 @@ void response_validate_cartridge(CloudEvent cancel_event)
     String status = json.get("status").toString();
     Log.info("Validation response status: %s", status.c_str());
     
+    // #region agent log
+    Log.info("[DIAG-TEST] Validation response parsed: status=%s mode=%s detector_on=%d",
+             status.c_str(), device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+    // #endregion
+    
     if (status == "SUCCESS")
     {
         // === CARTRIDGE VALIDATION SUCCESSFUL ===
         String assay_id = json.get("assayId").toString();
         int checksum_value = json.get("checksum").toInt();
+        String cartridge_id = json.get("cartridgeId").toString();
         // #region agent log
         unsigned long validation_end_time = millis();
         Log.info("[DEBUG-W] Validation SUCCESS received: barcode=%s request_id=%s elapsed_time=%lu ms",
-                 json.get("cartridgeId").toString().c_str(), validation_request_id.c_str(), validation_end_time);
+                 cartridge_id.c_str(), validation_request_id.c_str(), validation_end_time);
         // #endregion
         Log.info("Cartridge validation successful, assay ID: %s, checksum: %d", assay_id.c_str(), checksum_value);
 
+        // #region agent log
+        Log.info("[DIAG-TEST] BEFORE assay load: assay_id=%s checksum=%d assay_id_len=%d",
+                 assay_id.c_str(), checksum_value, assay_id.length());
+        // #endregion
+
         // === LOAD ASSAY FROM FILE ===
-        if (load_assay_from_file(assay_id, checksum_value))
+        bool assay_loaded = load_assay_from_file(assay_id, checksum_value);
+        
+        // #region agent log
+        Log.info("[DIAG-TEST] AFTER assay load: result=%d assay_id=%s",
+                 assay_loaded ? 1 : 0, assay_id.c_str());
+        // #endregion
+        
+        if (assay_loaded)
         {
             // === ASSAY LOADED SUCCESSFULLY ===
             // Mode was already validated at the beginning of this function
@@ -2667,15 +2722,48 @@ void response_validate_cartridge(CloudEvent cancel_event)
                      device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0,
                      cartridge_state_to_string(device_state.cartridge_state).c_str());
             // #endregion
+            
+            // #region agent log
+            Log.info("[DIAG-TEST] Preparing for RUNNING_TEST transition: cartridge_id=%s assay_id=%s",
+                     cartridge_id.c_str(), assay_id.c_str());
+            // Check if transition is allowed
+            bool can_transition = device_state.can_transition_to(DeviceMode::RUNNING_TEST);
+            Log.info("[DIAG-TEST] Transition check: can_transition=%d current_mode=%s target_mode=RUNNING_TEST",
+                     can_transition ? 1 : 0, device_mode_to_string(device_state.mode).c_str());
+            // #endregion
+            
             device_state.cartridge_state = CartridgeState::VALIDATED;
             device_state.test_state = TestState::NOT_STARTED;
-            strcpy(test.cartridge_id, json.get("cartridgeId").toString().c_str());
+            strcpy(test.cartridge_id, cartridge_id.c_str());
+            
+            // #region agent log
+            Log.info("[DIAG-TEST] Calling transition_to(RUNNING_TEST): cartridge_state=VALIDATED test_state=NOT_STARTED",
+                     cartridge_id.c_str());
+            // #endregion
+            
             device_state.transition_to(DeviceMode::RUNNING_TEST);
+            
             // #region agent log
             Log.info("[DEBUG-E] AFTER transition to RUNNING_TEST: mode=%s detector_on=%d",
                      device_mode_to_string(device_state.mode).c_str(), device_state.detector_on ? 1 : 0);
+            Log.info("[DIAG-TEST] Transition completed: actual_mode=%s expected_mode=RUNNING_TEST match=%d",
+                     device_mode_to_string(device_state.mode).c_str(),
+                     (device_state.mode == DeviceMode::RUNNING_TEST) ? 1 : 0);
             // #endregion
+            
+            // #region agent log
+            Log.info("[DIAG-TEST] About to call run_test(): mode=%s test_state=%s",
+                     device_mode_to_string(device_state.mode).c_str(),
+                     test_state_to_string(device_state.test_state).c_str());
+            // #endregion
+            
             run_test();
+            
+            // #region agent log
+            Log.info("[DIAG-TEST] run_test() returned: mode=%s test_state=%s",
+                     device_mode_to_string(device_state.mode).c_str(),
+                     test_state_to_string(device_state.test_state).c_str());
+            // #endregion
         }
         else
         {
@@ -2723,20 +2811,29 @@ void response_validate_cartridge(CloudEvent cancel_event)
         // Use the error message from the response if available
         if (failure_error.length() > 0)
         {
-            device_state.set_error("Cartridge validation failed: " + failure_error);
-            Log.error("Cartridge validation failed: %s", failure_error.c_str());
+            // Check for specific error types to provide clearer messaging
+            String error_msg;
+            if (failure_error.indexOf("already used") >= 0 || failure_error.indexOf("already tested") >= 0)
+            {
+                error_msg = "Cartridge already used - cannot test again";
+                Log.error("Cartridge validation failed: Cartridge already used (barcode: %s)", failure_cartridge_id.c_str());
+            }
+            else if (failure_error.indexOf("missing") >= 0 || failure_error.indexOf("deleted") >= 0)
+            {
+                error_msg = "Cartridge not found in database";
+                Log.error("Cartridge validation failed: Cartridge not found (barcode: %s)", failure_cartridge_id.c_str());
+            }
+            else
+            {
+                error_msg = "Cartridge validation failed: " + failure_error;
+                Log.error("Cartridge validation failed: %s", failure_error.c_str());
+            }
+            device_state.set_error(error_msg);
         }
         else
         {
             device_state.set_error("Cartridge validation failed");
             Log.info("Cartridge validation failed (no error message provided)");
-        }
-
-        // === GET ERROR MESSAGE IF AVAILABLE ===
-        String errorMessage = json.get("errorMessage").toString();
-        if (errorMessage.length() > 0)
-        {
-            Log.info("Cartridge validation error: %s", errorMessage.c_str());
         }
     }
 }
@@ -4167,6 +4264,7 @@ int particle_command(String arg)
         Serial.println("║   9000 - Display this help                                    ║");
         Serial.println("║   9001 - Show current device state                            ║");
         Serial.println("║   9002 - Show detailed state information                      ║");
+        Serial.println("║   9003 - Diagnose test transition issues                      ║");
         Serial.println("║                                                               ║");
         Serial.println("║ TRANSITION HISTORY:                                           ║");
         Serial.println("║   9010 - Show all state transitions                           ║");
@@ -4228,6 +4326,75 @@ int particle_command(String arg)
         Serial.println("║ TRANSITION HISTORY:                                           ║");
         Serial.printlnf("║   Total Transitions: %-40d ║", device_state.get_transition_count());
         Serial.printlnf("║   History Size:      %-40d ║", DeviceStateMachine::TRANSITION_HISTORY_SIZE);
+        Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        result = 1;
+        break;
+
+    case 9003:
+        // Diagnose test transition issues
+        Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        Serial.println("║           TEST TRANSITION DIAGNOSTICS                        ║");
+        Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+        Serial.println("║ CURRENT STATE:                                                ║");
+        Serial.printlnf("║   Device Mode:      %-41s ║", device_mode_to_string(device_state.mode).c_str());
+        Serial.printlnf("║   Test State:       %-41s ║", test_state_to_string(device_state.test_state).c_str());
+        Serial.printlnf("║   Cartridge State:  %-41s ║", cartridge_state_to_string(device_state.cartridge_state).c_str());
+        Serial.println("║                                                               ║");
+        Serial.println("║ TRANSITION CHECK:                                              ║");
+        bool can_transition = device_state.can_transition_to(DeviceMode::RUNNING_TEST);
+        Serial.printlnf("║   Can transition to RUNNING_TEST: %-30s ║", can_transition ? "YES" : "NO");
+        if (!can_transition) {
+            Serial.printlnf("║   Current mode: %s does not allow RUNNING_TEST          ║", device_mode_to_string(device_state.mode).c_str());
+        }
+        Serial.println("║                                                               ║");
+        Serial.println("║ HARDWARE STATUS:                                              ║");
+        Serial.printlnf("║   Detector On:      %-41s ║", device_state.detector_on ? "YES" : "NO");
+        Serial.printlnf("║   Heater Ready:     %-41s ║", device_state.heater_ready ? "YES" : "NO");
+        Serial.println("║                                                               ║");
+        Serial.println("║ BARCODE INFORMATION:                                          ║");
+        Serial.printlnf("║   Current Barcode:  %-41s ║", device_state.current_barcode[0] != '\0' ? device_state.current_barcode : "(none)");
+        Serial.printlnf("║   Test Cartridge ID: %-41s ║", test.cartridge_id[0] != '\0' ? test.cartridge_id : "(none)");
+        Serial.println("║                                                               ║");
+        Serial.println("║ ASSAY INFORMATION:                                            ║");
+        Serial.printlnf("║   Assay ID:         %-41s ║", assay.id[0] != '\0' ? assay.id : "(none)");
+        Serial.printlnf("║   Assay Duration:   %-41d ║", assay.duration);
+        Serial.println("║                                                               ║");
+        Serial.println("║ VALIDATION STATUS:                                            ║");
+        Serial.printlnf("║   Validation Retry Count: %-35d ║", validation_retry_count);
+        Serial.printlnf("║   Validation Request ID:   %-35s ║", validation_request_id.length() > 0 ? validation_request_id.c_str() : "(none)");
+        Serial.printlnf("║   Assay Re-download Pending: %-33s ║", assay_redownload_pending ? "YES" : "NO");
+        if (assay_redownload_pending) {
+            Serial.printlnf("║   Pending Assay ID:       %-35s ║", pending_assay_id[0] != '\0' ? pending_assay_id : "(none)");
+        }
+        Serial.println("║                                                               ║");
+        Serial.println("║ CLOUD STATUS:                                                 ║");
+        Serial.printlnf("║   Cloud Connected:  %-41s ║", Particle.connected() ? "YES" : "NO");
+        Serial.printlnf("║   Cloud Operation Pending: %-35s ║", device_state.cloud_operation_pending ? "YES" : "NO");
+        if (device_state.cloud_operation_pending) {
+            unsigned long elapsed = millis() - device_state.cloud_operation_start_time;
+            Serial.printlnf("║   Operation Time Elapsed: %-33lu ms ║", elapsed);
+        }
+        Serial.println("║                                                               ║");
+        Serial.println("║ DIAGNOSTIC RECOMMENDATIONS:                                    ║");
+        if (device_state.mode == DeviceMode::VALIDATING_CARTRIDGE) {
+            Serial.println("║   • Device is in VALIDATING_CARTRIDGE mode                 ║");
+            Serial.println("║   • Waiting for validation response from cloud             ║");
+            if (device_state.cloud_operation_pending) {
+                unsigned long elapsed = millis() - device_state.cloud_operation_start_time;
+                if (elapsed > 45000) {
+                    Serial.println("║   • WARNING: Validation timeout exceeded (>45s)        ║");
+                }
+            }
+        } else if (device_state.mode != DeviceMode::RUNNING_TEST && device_state.cartridge_state == CartridgeState::VALIDATED) {
+            Serial.println("║   • Cartridge is VALIDATED but not in RUNNING_TEST        ║");
+            Serial.println("║   • Check if assay file exists and loads correctly          ║");
+            Serial.println("║   • Check if transition is blocked by state machine        ║");
+        } else if (device_state.mode == DeviceMode::ERROR_STATE) {
+            Serial.printlnf("║   • Device is in ERROR_STATE: %-30s ║", device_state.last_error.c_str());
+            Serial.println("║   • Error must be cleared before test can run              ║");
+        } else if (!can_transition) {
+            Serial.printlnf("║   • Transition blocked: %s -> RUNNING_TEST not allowed   ║", device_mode_to_string(device_state.mode).c_str());
+        }
         Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
         result = 1;
         break;
@@ -4843,8 +5010,21 @@ void output_test_readings(BrevitestTestRecord *t)
  */
 void run_test()
 {
+    // #region agent log
+    Log.info("[DIAG-TEST] run_test() ENTRY: mode=%s test_state=%s cartridge_state=%s detector_on=%d cartridge_id=%s",
+             device_mode_to_string(device_state.mode).c_str(),
+             test_state_to_string(device_state.test_state).c_str(),
+             cartridge_state_to_string(device_state.cartridge_state).c_str(),
+             device_state.detector_on ? 1 : 0,
+             test.cartridge_id);
+    // #endregion
+    
     // === SET TEST STATE ===
     device_state.test_state = TestState::RUNNING;
+    
+    // #region agent log
+    Log.info("[DIAG-TEST] run_test() test_state set to RUNNING");
+    // #endregion
 
     // === DISCONNECT FROM CLOUD ===
     // Avoid cloud interference during test execution
