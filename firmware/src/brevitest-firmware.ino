@@ -2204,6 +2204,11 @@ void publish_validate_cartridge()
         // === GENERATE REQUEST ID FOR CORRELATION ===
         // Create unique request ID: device_id + timestamp + retry_count
         validation_request_id = String(device_id) + "-" + String(millis()) + "-" + String(validation_retry_count);
+        // #region agent log
+        unsigned long validation_start_time = millis();
+        Log.info("[DEBUG-W] Validation request created: request_id=%s barcode=%s start_time=%lu",
+                 validation_request_id.c_str(), barcode_uuid, validation_start_time);
+        // #endregion
         Log.info("Validation request ID: %s", validation_request_id.c_str());
         
         // === PREPARE CLOUD EVENT ===
@@ -2477,6 +2482,11 @@ void response_validate_cartridge(CloudEvent cancel_event)
         // === CARTRIDGE VALIDATION SUCCESSFUL ===
         String assay_id = json.get("assayId").toString();
         int checksum_value = json.get("checksum").toInt();
+        // #region agent log
+        unsigned long validation_end_time = millis();
+        Log.info("[DEBUG-W] Validation SUCCESS received: barcode=%s request_id=%s elapsed_time=%lu ms",
+                 json.get("cartridgeId").toString().c_str(), validation_request_id.c_str(), validation_end_time);
+        // #endregion
         Log.info("Cartridge validation successful, assay ID: %s, checksum: %d", assay_id.c_str(), checksum_value);
 
         // === LOAD ASSAY FROM FILE ===
@@ -2533,9 +2543,27 @@ void response_validate_cartridge(CloudEvent cancel_event)
     else
     {
         // === CARTRIDGE VALIDATION FAILED ===
+        // #region agent log
+        String failure_cartridge_id = json.get("cartridgeId").toString();
+        String failure_error = json.get("errorMessage").toString();
+        String failure_status = json.get("status").toString();
+        Log.error("[DEBUG-W] Validation FAILURE received: status=%s barcode=%s request_id=%s error=%s",
+                  failure_status.c_str(), failure_cartridge_id.c_str(), validation_request_id.c_str(), failure_error.c_str());
+        Log.error("[DEBUG-W] Full failure response: %s", event_data.c_str());
+        // #endregion
         device_state.cartridge_state = CartridgeState::INVALID;
-        device_state.set_error("Cartridge validation failed");
-        Log.info("Cartridge validation failed");
+        
+        // Use the error message from the response if available
+        if (failure_error.length() > 0)
+        {
+            device_state.set_error("Cartridge validation failed: " + failure_error);
+            Log.error("Cartridge validation failed: %s", failure_error.c_str());
+        }
+        else
+        {
+            device_state.set_error("Cartridge validation failed");
+            Log.info("Cartridge validation failed (no error message provided)");
+        }
 
         // === GET ERROR MESSAGE IF AVAILABLE ===
         String errorMessage = json.get("errorMessage").toString();
