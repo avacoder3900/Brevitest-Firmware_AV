@@ -2039,126 +2039,6 @@ void register_cloud_subscriptions()
     // #endregion
 }
 
-/**
- * @brief Diagnostic function to log all received Particle events
- * 
- * This helps debug subscription issues by showing all events received.
- * Enable by uncommenting the subscription in setup().
- */
-void log_all_events(const char *event, const char *data)
-{
-    // #region agent log
-    Log.info("[DIAGNOSTIC] Event received: name=%s data_len=%d data_preview=%.200s",
-             event ? event : "(null)", data ? strlen(data) : 0, data ? data : "(null)");
-    
-    // Check if this is a webhook-related event
-    if (event && (strstr(event, "hook-") != NULL || strstr(event, "validate") != NULL))
-    {
-        Log.info("[DIAGNOSTIC] WEBHOOK EVENT: name=%s full_data=%.500s",
-                 event, data ? data : "(null)");
-    }
-    // #endregion
-}
-
-/////////////////////////////////////////////////////
-//                 WEBHOOK ERROR                   //
-/////////////////////////////////////////////////////
-
-void response_error(CloudEvent event)
-{
-    String event_name = event.name();
-    Log.error("Webhook error: event = %s, size = %d", event_name.c_str(), event.data().size());
-    
-    // === END CLOUD OPERATION TRACKING ===
-    // Check if this is a validation error and handle appropriately
-    if (event_name.indexOf("validate-cartridge") >= 0)
-    {
-        // Validation-specific error handling
-        device_state.end_cloud_operation();
-        
-        // Try to parse error message if available
-        String error_data = event.dataString();
-        String error_message = "";
-        if (error_data.length() > 0)
-        {
-            Log.error("Validation webhook error details: %s", error_data.c_str());
-            
-            // Try to extract error code/message from JSON if available
-            Variant json_error = Variant::fromJSON(error_data);
-            if (!json_error.isNull())
-            {
-                error_message = json_error.get("error").toString();
-                if (error_message.length() == 0)
-                {
-                    error_message = json_error.get("message").toString();
-                }
-            }
-        }
-        
-        // Determine if error is retryable (transient network/server errors)
-        bool is_retryable = false;
-        if (error_message.length() > 0)
-        {
-            error_message.toLowerCase();
-            // Check for transient error indicators
-            is_retryable = (error_message.indexOf("timeout") >= 0 ||
-                           error_message.indexOf("network") >= 0 ||
-                           error_message.indexOf("connection") >= 0 ||
-                           error_message.indexOf("503") >= 0 ||
-                           error_message.indexOf("502") >= 0 ||
-                           error_message.indexOf("504") >= 0);
-        }
-        
-        // If retryable and we have retries left, allow retry
-        if (is_retryable && validation_retry_count < VALIDATION_MAX_RETRIES)
-        {
-            validation_retry_count++;
-            unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
-            validation_retry_delay_until = millis() + backoff_delay;
-            validation_request_id = "";  // Clear request ID for retry
-            
-            Log.warn("Validation webhook error (retryable), will retry in %lu ms (attempt %d/%d)", 
-                     backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
-        }
-        else
-        {
-            // Non-retryable error or max retries exceeded
-            validation_retry_count = 0;
-            validation_retry_delay_until = 0;
-            validation_request_id = "";  // Clear request ID on error
-            
-            // Set error state
-            device_state.cartridge_state = CartridgeState::INVALID;
-            device_state.set_error("Cartridge validation webhook error");
-        }
-    }
-    else if (event_name.indexOf("load-assay") >= 0)
-    {
-        // Assay download error - handle re-download failure
-        device_state.end_cloud_operation();
-        
-        if (assay_redownload_pending)
-        {
-            Log.error("Assay re-download webhook error");
-            device_state.cartridge_state = CartridgeState::INVALID;
-            device_state.set_error("Assay re-download webhook error");
-            memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
-            device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
-            
-            // Clear re-download tracking
-            assay_redownload_pending = false;
-            pending_assay_id[0] = '\0';
-            pending_checksum = 0;
-            pending_cartridge_id[0] = '\0';
-        }
-    }
-    else if (event_name.indexOf("reset-cartridge") >= 0 || 
-             event_name.indexOf("upload-test") >= 0)
-    {
-        // End cloud operation for other webhook errors
-        device_state.end_cloud_operation();
-    }
-}
 
 /////////////////////////////////////////////////////
 //              VALIDATE CARTRIDGE                 //
@@ -5085,10 +4965,6 @@ void setup()
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
     register_cloud_subscriptions();
-    
-    // Diagnostic: Subscribe to all events for debugging (optional, can be disabled in production)
-    // Enable temporarily to diagnose why validation responses aren't being received
-    Particle.subscribe("", log_all_events);
 
     // === EEPROM SETUP ===
     setup_eeprom();
