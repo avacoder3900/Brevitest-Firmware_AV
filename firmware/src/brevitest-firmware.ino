@@ -1999,8 +1999,15 @@ void register_cloud_subscriptions()
 void log_all_events(const char *event, const char *data)
 {
     // #region agent log
-    Log.info("[DIAGNOSTIC] Event received: name=%s data_len=%d data_preview=%.100s",
+    Log.info("[DIAGNOSTIC] Event received: name=%s data_len=%d data_preview=%.200s",
              event ? event : "(null)", data ? strlen(data) : 0, data ? data : "(null)");
+    
+    // Check if this is a webhook-related event
+    if (event && (strstr(event, "hook-") != NULL || strstr(event, "validate") != NULL))
+    {
+        Log.info("[DIAGNOSTIC] WEBHOOK EVENT: name=%s full_data=%.500s",
+                 event, data ? data : "(null)");
+    }
     // #endregion
 }
 
@@ -2208,6 +2215,16 @@ void publish_validate_cartridge()
         data.set("requestId", validation_request_id);  // Include request ID for correlation
         event.data(data);
         
+        // #region agent log
+        // Capture exact payload being sent - log individual fields
+        String uuid_val = data.get("uuid").toString();
+        String requestId_val = data.get("requestId").toString();
+        Log.info("[DEBUG-W] Validation payload fields: uuid=%s requestId=%s device_id=%s",
+                 uuid_val.c_str(), requestId_val.c_str(), device_id);
+        Log.info("[DEBUG-W] Payload verification: uuid_match=%d requestId_match=%d",
+                 (uuid_val == barcode_uuid) ? 1 : 0, (requestId_val == validation_request_id) ? 1 : 0);
+        // #endregion
+        
         // === VERIFY EVENT CAN BE PUBLISHED ===
         if (!event.canPublish(event.size()))
         {
@@ -2230,17 +2247,23 @@ void publish_validate_cartridge()
 
         // === ATTEMPT TO PUBLISH ===
         // #region agent log
-        Log.info("[DEBUG-L] BEFORE publish: event_name=validate-cartridge event_size=%d request_id=%s cloud_connected=%d",
-                 event.size(), validation_request_id.c_str(),
-                 Particle.connected() ? 1 : 0);
+        Log.info("[DEBUG-W] BEFORE publish: event_name=validate-cartridge event_size=%d request_id=%s device_id=%s cloud_connected=%d",
+                 event.size(), validation_request_id.c_str(), device_id, Particle.connected() ? 1 : 0);
+        Log.info("[DEBUG-W] Event details: name=%s contentType=%d isSending=%d",
+                 event.name().c_str(), (int)event.contentType(), event.isSending() ? 1 : 0);
         // #endregion
         Log.info("Publishing validate cartridge, %s (attempt %d/%d)", 
                  barcode_uuid, validation_retry_count + 1, VALIDATION_MAX_RETRIES + 1);
         
         bool publish_success = Particle.publish(event);
         // #region agent log
-        Log.info("[DEBUG-L] AFTER publish: success=%d",
-                 publish_success ? 1 : 0);
+        Log.info("[DEBUG-W] AFTER publish: success=%d event_size=%d",
+                 publish_success ? 1 : 0, event.size());
+        if (!publish_success)
+        {
+            Log.error("[DEBUG-W] Publish failed - check: cloud_connected=%d event_valid=%d",
+                     Particle.connected() ? 1 : 0, event.isValid() ? 1 : 0);
+        }
         // #endregion
         
         // === VERIFY PUBLISH SUCCESS ===

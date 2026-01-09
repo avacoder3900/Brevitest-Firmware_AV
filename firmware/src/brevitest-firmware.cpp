@@ -2119,27 +2119,22 @@ void stop_temperature_control()
 void register_cloud_subscriptions()
 {
     String validation_topic = String(device_id + "/hook-response/validate-cartridge/");
-    String validation_error_topic = String(device_id + "/hook-error/validate-cartridge/");
     
     // Success responses
     bool sub1 = Particle.subscribe(String(device_id + "/hook-response/load-assay/"), response_load_assay);
     bool sub2 = Particle.subscribe(validation_topic, response_validate_cartridge);
     bool sub3 = Particle.subscribe(String(device_id + "/hook-response/reset-cartridge/"), response_reset_cartridge);
     bool sub4 = Particle.subscribe(String(device_id + "/hook-response/upload-test/"), response_upload_test);
-
-    // Error responses - NOW ENABLED
     
     // Log subscription status
-    Log.info("Subscriptions registered - Validation: %s (topic: %s), Error: %s (topic: %s)", 
-             sub2 ? "OK" : "FAILED", validation_topic.c_str(),
-             sub6 ? "OK" : "FAILED", validation_error_topic.c_str());
-    Log.info("All subscriptions - Load: %s, Validate: %s, Reset: %s, Upload: %s, Errors: %s/%s/%s/%s",
-             sub1 ? "OK" : "FAIL", sub2 ? "OK" : "FAIL", sub3 ? "OK" : "FAIL", sub4 ? "OK" : "FAIL",
-             sub5 ? "OK" : "FAIL", sub6 ? "OK" : "FAIL", sub7 ? "OK" : "FAIL", sub8 ? "OK" : "FAIL");
+    Log.info("Subscriptions registered - Load: %s, Validate: %s, Reset: %s, Upload: %s",
+             sub1 ? "OK" : "FAIL", sub2 ? "OK" : "FAIL", sub3 ? "OK" : "FAIL", sub4 ? "OK" : "FAIL");
+    Log.info("Validation subscription: %s (topic: %s)", 
+             sub2 ? "OK" : "FAILED", validation_topic.c_str());
     
     // #region agent log
-    Log.info("[DEBUG-L] Subscription status: validation_sub=%d error_sub=%d cloud_connected=%d",
-             sub2 ? 1 : 0, sub6 ? 1 : 0, Particle.connected() ? 1 : 0);
+    Log.info("[DEBUG-L] Subscription status: validation_sub=%d cloud_connected=%d",
+             sub2 ? 1 : 0, Particle.connected() ? 1 : 0);
     // #endregion
 }
 
