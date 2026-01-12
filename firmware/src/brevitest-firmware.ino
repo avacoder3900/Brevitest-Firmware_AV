@@ -1005,7 +1005,14 @@ void check_buzzer()
 void turn_on_buzzer_alert()
 {
     if (buzzer_alert_running)
+    {
+        // Already running - just ensure timer is active
+        if (!buzzer_timer.isActive())
+        {
+            buzzer_timer.start();
+        }
         return;
+    }
     buzzer_problem_running = false;
     start_problem_buzzer = false;
     buzzer_alert_running = true;
@@ -1017,6 +1024,8 @@ void turn_on_buzzer_alert()
     {
         buzzer_timer.start();
     }
+    // Immediately trigger first buzz
+    turn_on_buzzer_for_duration(BUZZER_ALERT_DURATION, BUZZER_ALERT_FREQUENCY);
 }
 
 void turn_on_buzzer_problem()
@@ -2830,7 +2839,12 @@ void response_upload_test(CloudEvent upload_event)
         // Activate buzzer to signal cartridge removal if cartridge is still inserted
         if (device_state.detector_on)
         {
+            Log.info("Test uploaded successfully - activating buzzer for cartridge removal");
             turn_on_buzzer_alert();
+        }
+        else
+        {
+            Log.info("Test uploaded successfully but cartridge already removed - no buzzer needed");
         }
         
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
@@ -4833,7 +4847,7 @@ void setup()
 
     // === LOGGING ===
     Log.info("device id: %s", device_id.c_str());
-    Log.info("Firmware version: %d", eeprom.firmware_version);
+    Log.info("Firmware version: %d (code: %d)", eeprom.firmware_version, FIRMWARE_VERSION);
     Log.info("Data format version: %d", eeprom.data_format_version);
     Log.info("Lifetime stress test cycles: %d", eeprom.lifetime_stress_test_cycles);
     Log.info("Stress test cycles since reset: %d", eeprom.stress_test_cycles_since_reset);
