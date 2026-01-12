@@ -2827,6 +2827,12 @@ void response_upload_test(CloudEvent upload_event)
         // This ensures skip_barcode_scan logic works correctly
         device_state.test_state = TestState::UPLOADED;
         
+        // Activate buzzer to signal cartridge removal if cartridge is still inserted
+        if (device_state.detector_on)
+        {
+            turn_on_buzzer_alert();
+        }
+        
         if (cartridgeId.length() == BARCODE_UUID_LENGTH)
         {
             // === CLEAN UP CACHE ===
