@@ -101,8 +101,6 @@ int pid_controller();
 void start_temperature_control();
 void stop_temperature_control();
 void register_cloud_subscriptions();
-void log_all_events(const char *event, const char *data);
-void response_error(CloudEvent event);
 void publish_validate_cartridge();
 void response_validate_cartridge(CloudEvent cancel_event);
 void publish_reset_cartridge();
@@ -2187,126 +2185,6 @@ void register_cloud_subscriptions()
     // #endregion
 }
 
-/**
- * @brief Diagnostic function to log all received Particle events
- * 
- * This helps debug subscription issues by showing all events received.
- * Enable by uncommenting the subscription in setup().
- */
-void log_all_events(const char *event, const char *data)
-{
-    // #region agent log
-    Log.info("[DIAGNOSTIC] Event received: name=%s data_len=%d data_preview=%.200s",
-             event ? event : "(null)", data ? strlen(data) : 0, data ? data : "(null)");
-    
-    // Check if this is a webhook-related event
-    if (event && (strstr(event, "hook-") != NULL || strstr(event, "validate") != NULL))
-    {
-        Log.info("[DIAGNOSTIC] WEBHOOK EVENT: name=%s full_data=%.500s",
-                 event, data ? data : "(null)");
-    }
-    // #endregion
-}
-
-/////////////////////////////////////////////////////
-//                 WEBHOOK ERROR                   //
-/////////////////////////////////////////////////////
-
-void response_error(CloudEvent event)
-{
-    String event_name = event.name();
-    Log.error("Webhook error: event = %s, size = %d", event_name.c_str(), event.data().size());
-    
-    // === END CLOUD OPERATION TRACKING ===
-    // Check if this is a validation error and handle appropriately
-    if (event_name.indexOf("validate-cartridge") >= 0)
-    {
-        // Validation-specific error handling
-        device_state.end_cloud_operation();
-        
-        // Try to parse error message if available
-        String error_data = event.dataString();
-        String error_message = "";
-        if (error_data.length() > 0)
-        {
-            Log.error("Validation webhook error details: %s", error_data.c_str());
-            
-            // Try to extract error code/message from JSON if available
-            Variant json_error = Variant::fromJSON(error_data);
-            if (!json_error.isNull())
-            {
-                error_message = json_error.get("error").toString();
-                if (error_message.length() == 0)
-                {
-                    error_message = json_error.get("message").toString();
-                }
-            }
-        }
-        
-        // Determine if error is retryable (transient network/server errors)
-        bool is_retryable = false;
-        if (error_message.length() > 0)
-        {
-            error_message.toLowerCase();
-            // Check for transient error indicators
-            is_retryable = (error_message.indexOf("timeout") >= 0 ||
-                           error_message.indexOf("network") >= 0 ||
-                           error_message.indexOf("connection") >= 0 ||
-                           error_message.indexOf("503") >= 0 ||
-                           error_message.indexOf("502") >= 0 ||
-                           error_message.indexOf("504") >= 0);
-        }
-        
-        // If retryable and we have retries left, allow retry
-        if (is_retryable && validation_retry_count < VALIDATION_MAX_RETRIES)
-        {
-            validation_retry_count++;
-            unsigned long backoff_delay = VALIDATION_RETRY_BACKOFF_BASE * validation_retry_count;
-            validation_retry_delay_until = millis() + backoff_delay;
-            validation_request_id = "";  // Clear request ID for retry
-            
-            Log.warn("Validation webhook error (retryable), will retry in %lu ms (attempt %d/%d)", 
-                     backoff_delay, validation_retry_count, VALIDATION_MAX_RETRIES);
-        }
-        else
-        {
-            // Non-retryable error or max retries exceeded
-            validation_retry_count = 0;
-            validation_retry_delay_until = 0;
-            validation_request_id = "";  // Clear request ID on error
-            
-            // Set error state
-            device_state.cartridge_state = CartridgeState::INVALID;
-            device_state.set_error("Cartridge validation webhook error");
-        }
-    }
-    else if (event_name.indexOf("load-assay") >= 0)
-    {
-        // Assay download error - handle re-download failure
-        device_state.end_cloud_operation();
-        
-        if (assay_redownload_pending)
-        {
-            Log.error("Assay re-download webhook error");
-            device_state.cartridge_state = CartridgeState::INVALID;
-            device_state.set_error("Assay re-download webhook error");
-            memcpy(reset_uuid, barcode_uuid, BARCODE_UUID_LENGTH + 1);
-            device_state.transition_to(DeviceMode::RESETTING_CARTRIDGE);
-            
-            // Clear re-download tracking
-            assay_redownload_pending = false;
-            pending_assay_id[0] = '\0';
-            pending_checksum = 0;
-            pending_cartridge_id[0] = '\0';
-        }
-    }
-    else if (event_name.indexOf("reset-cartridge") >= 0 || 
-             event_name.indexOf("upload-test") >= 0)
-    {
-        // End cloud operation for other webhook errors
-        device_state.end_cloud_operation();
-    }
-}
 
 /////////////////////////////////////////////////////
 //              VALIDATE CARTRIDGE                 //
@@ -2592,8 +2470,25 @@ void response_validate_cartridge(CloudEvent cancel_event)
     // Check if response matches current request
     if (validation_request_id.length() > 0)
     {
+        // #region agent log
+        Log.info("[DEBUG-A] BEFORE JSON parse: event_data_len=%d validation_request_id=%s event_data_preview=%.100s", 
+                 event_data.length(), validation_request_id.c_str(), event_data.c_str());
+        // #endregion
         Variant json_check = Variant::fromJSON(event_data);
+        // #region agent log
+        Log.info("[DEBUG-B] AFTER JSON parse: json_is_null=%d", json_check.isNull() ? 1 : 0);
+        // #endregion
         String response_request_id = json_check.get("requestId").toString();
+        // #region agent log
+        Log.info("[DEBUG-C] requestId extraction: response_request_id=%s response_request_id_len=%d expected_request_id=%s", 
+                 response_request_id.c_str(), response_request_id.length(), validation_request_id.c_str());
+        // #endregion
+        // #region agent log
+        String request_id_lower = json_check.get("requestid").toString();
+        String request_id_underscore = json_check.get("request_id").toString();
+        Log.info("[DEBUG-D] alternative field names: requestid_lower=%s request_id_underscore=%s", 
+                 request_id_lower.c_str(), request_id_underscore.c_str());
+        // #endregion
         
         if (response_request_id.length() > 0 && response_request_id != validation_request_id)
         {
@@ -2603,9 +2498,32 @@ void response_validate_cartridge(CloudEvent cancel_event)
         }
         else if (response_request_id.length() == 0)
         {
-            Log.warn("Response missing request ID - may be from old request. Current ID: %s",
-                     validation_request_id.c_str());
-            // Continue processing but log warning
+            // Request ID missing - use cartridgeId as fallback verification
+            String response_cartridge_id = json_check.get("cartridgeId").toString();
+            String current_barcode = String(barcode_uuid);
+            
+            // #region agent log
+            Log.info("[DEBUG-E] cartridgeId fallback check: response_cartridge_id=%s current_barcode=%s match=%d", 
+                     response_cartridge_id.c_str(), current_barcode.c_str(), 
+                     (response_cartridge_id == current_barcode) ? 1 : 0);
+            // #endregion
+            
+            if (response_cartridge_id.length() > 0 && response_cartridge_id == current_barcode)
+            {
+                Log.info("Response missing request ID but cartridgeId matches current barcode - accepting response");
+            }
+            else if (response_cartridge_id.length() == 0)
+            {
+                Log.warn("Response missing both request ID and cartridgeId - may be from old request. Current ID: %s, Current barcode: %s",
+                         validation_request_id.c_str(), current_barcode.c_str());
+                // Continue processing but log warning
+            }
+            else
+            {
+                Log.warn("Response missing request ID and cartridgeId mismatch - Expected: %s, Received: %s. Ignoring stale response.",
+                         current_barcode.c_str(), response_cartridge_id.c_str());
+                return;  // Ignore response that doesn't match current cartridge
+            }
         }
         else
         {
@@ -5233,10 +5151,6 @@ void setup()
 
     // === PARTICLE CLOUD SUBSCRIPTIONS ===
     register_cloud_subscriptions();
-    
-    // Diagnostic: Subscribe to all events for debugging (optional, can be disabled in production)
-    // Enable temporarily to diagnose why validation responses aren't being received
-    Particle.subscribe("", log_all_events);
 
     // === EEPROM SETUP ===
     setup_eeprom();
