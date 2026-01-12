@@ -113,19 +113,8 @@ bool DeviceStateMachine::can_transition_to(DeviceMode new_mode) {
  * @param new_mode The target mode to transition to
  */
 void DeviceStateMachine::transition_to(DeviceMode new_mode) {
-    // #region agent log
-    Log.info("[DEBUG-A] transition_to entry: from=%s to=%s test_state=%s cartridge_state=%s detector_on=%d barcode=%s",
-             device_mode_to_string(mode).c_str(), device_mode_to_string(new_mode).c_str(),
-             test_state_to_string(test_state).c_str(), cartridge_state_to_string(cartridge_state).c_str(),
-             detector_on ? 1 : 0, current_barcode);
-    // #endregion
-    
     // === VALIDATION CHECK ===
     if (!can_transition_to(new_mode)) {
-        // #region agent log
-        Log.warn("[DEBUG-C] INVALID TRANSITION BLOCKED: from=%s to=%s",
-                 device_mode_to_string(mode).c_str(), device_mode_to_string(new_mode).c_str());
-        // #endregion
         Log.warn("Invalid state transition from %s to %s", 
                 device_mode_to_string(mode).c_str(),
                 device_mode_to_string(new_mode).c_str());
@@ -150,13 +139,6 @@ void DeviceStateMachine::transition_to(DeviceMode new_mode) {
     // === PERFORM TRANSITION ===
     previous_mode = mode;  // Store previous state for logging
     mode = new_mode;       // Update current state
-    
-    // #region agent log
-    Log.info("[DEBUG-A] transition_to completed: from=%s to=%s test_state=%s cartridge_state=%s detector_on=%d",
-             device_mode_to_string(previous_mode).c_str(), device_mode_to_string(mode).c_str(),
-             test_state_to_string(test_state).c_str(), cartridge_state_to_string(cartridge_state).c_str(),
-             detector_on ? 1 : 0);
-    // #endregion
     
     // === LOG TRANSITION ===
     Log.info("State transition: %s -> %s", 
@@ -239,17 +221,8 @@ bool DeviceStateMachine::is_cloud_operation_timeout(unsigned long timeout_ms) co
  * Use this for any error condition that requires attention.
  */
 void DeviceStateMachine::set_error(const String& error_msg) {
-    // #region agent log
-    Log.info("[DEBUG-I] set_error called: current_mode=%s error_msg=%s",
-             device_mode_to_string(mode).c_str(), error_msg.c_str());
-    // #endregion
     last_error = error_msg;
-    DeviceMode previous_mode = mode;
     mode = DeviceMode::ERROR_STATE;
-    // #region agent log
-    Log.info("[DEBUG-I] set_error completed: from=%s to=%s",
-             device_mode_to_string(previous_mode).c_str(), device_mode_to_string(mode).c_str());
-    // #endregion
     Log.error("Device error: %s", error_msg.c_str());
 }
 
