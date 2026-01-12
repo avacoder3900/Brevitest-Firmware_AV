@@ -4969,8 +4969,23 @@ void set_device_indicators()
         break;
 
     case DeviceMode::UPLOADING_RESULTS:
+        // === UPLOADING RESULTS STATE ===
+        // Device is communicating with cloud - don't touch
+        turn_on_dont_touch_LED();
+        // If test is uploaded and cartridge is still inserted, activate buzzer to signal removal
+        if (device_state.test_state == TestState::UPLOADED && device_state.detector_on)
+        {
+            turn_on_buzzer_alert();
+        }
+        else
+        {
+            // Turn off buzzer if test not yet uploaded OR cartridge has been removed
+            turn_off_buzzer_timer();
+        }
+        break;
+        
     case DeviceMode::RESETTING_CARTRIDGE:
-        // === CLOUD OPERATION STATES ===
+        // === RESETTING CARTRIDGE STATE ===
         // Device is communicating with cloud - don't touch
         turn_on_dont_touch_LED();
         break;
