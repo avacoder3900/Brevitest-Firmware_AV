@@ -1024,8 +1024,9 @@ void turn_on_buzzer_alert()
     {
         buzzer_timer.start();
     }
-    // Immediately trigger first buzz
-    turn_on_buzzer_for_duration(BUZZER_ALERT_DURATION, BUZZER_ALERT_FREQUENCY);
+    // Trigger first buzz immediately via the non-blocking mechanism
+    // This will be processed in the main loop's buzzer management section
+    start_alert_buzzer = true;
 }
 
 void turn_on_buzzer_problem()
