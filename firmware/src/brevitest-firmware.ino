@@ -2324,8 +2324,25 @@ void response_validate_cartridge(CloudEvent cancel_event)
     // Check if response matches current request
     if (validation_request_id.length() > 0)
     {
+        // #region agent log
+        Log.info("[DEBUG-A] BEFORE JSON parse: event_data_len=%d validation_request_id=%s event_data_preview=%.100s", 
+                 event_data.length(), validation_request_id.c_str(), event_data.c_str());
+        // #endregion
         Variant json_check = Variant::fromJSON(event_data);
+        // #region agent log
+        Log.info("[DEBUG-B] AFTER JSON parse: json_is_null=%d", json_check.isNull() ? 1 : 0);
+        // #endregion
         String response_request_id = json_check.get("requestId").toString();
+        // #region agent log
+        Log.info("[DEBUG-C] requestId extraction: response_request_id=%s response_request_id_len=%d expected_request_id=%s", 
+                 response_request_id.c_str(), response_request_id.length(), validation_request_id.c_str());
+        // #endregion
+        // #region agent log
+        String request_id_lower = json_check.get("requestid").toString();
+        String request_id_underscore = json_check.get("request_id").toString();
+        Log.info("[DEBUG-D] alternative field names: requestid_lower=%s request_id_underscore=%s", 
+                 request_id_lower.c_str(), request_id_underscore.c_str());
+        // #endregion
         
         if (response_request_id.length() > 0 && response_request_id != validation_request_id)
         {
@@ -2335,9 +2352,32 @@ void response_validate_cartridge(CloudEvent cancel_event)
         }
         else if (response_request_id.length() == 0)
         {
-            Log.warn("Response missing request ID - may be from old request. Current ID: %s",
-                     validation_request_id.c_str());
-            // Continue processing but log warning
+            // Request ID missing - use cartridgeId as fallback verification
+            String response_cartridge_id = json_check.get("cartridgeId").toString();
+            String current_barcode = String(barcode_uuid);
+            
+            // #region agent log
+            Log.info("[DEBUG-E] cartridgeId fallback check: response_cartridge_id=%s current_barcode=%s match=%d", 
+                     response_cartridge_id.c_str(), current_barcode.c_str(), 
+                     (response_cartridge_id == current_barcode) ? 1 : 0);
+            // #endregion
+            
+            if (response_cartridge_id.length() > 0 && response_cartridge_id == current_barcode)
+            {
+                Log.info("Response missing request ID but cartridgeId matches current barcode - accepting response");
+            }
+            else if (response_cartridge_id.length() == 0)
+            {
+                Log.warn("Response missing both request ID and cartridgeId - may be from old request. Current ID: %s, Current barcode: %s",
+                         validation_request_id.c_str(), current_barcode.c_str());
+                // Continue processing but log warning
+            }
+            else
+            {
+                Log.warn("Response missing request ID and cartridgeId mismatch - Expected: %s, Received: %s. Ignoring stale response.",
+                         current_barcode.c_str(), response_cartridge_id.c_str());
+                return;  // Ignore response that doesn't match current cartridge
+            }
         }
         else
         {
