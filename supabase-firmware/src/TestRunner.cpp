@@ -546,7 +546,7 @@ void TestRunner::setGetStagePositionCallback(GetStagePositionCallback callback) 
     _get_stage_position_callback = callback;
 }
 
-void TestRunner::setStateChangeCallback(StateChangeCallback callback) {
+void TestRunner::setTestStateChangeCallback(TestStateChangeCallback callback) {
     _state_change_callback = callback;
 }
 

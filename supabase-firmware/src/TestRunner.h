@@ -37,7 +37,7 @@
 class MotorController;
 class HeaterController;
 class SpectrophotometerDriver;
-class BuzzerController;
+// Note: BuzzerController is a namespace, not a class
 
 //==============================================================================
 // TEST RUNNER CONFIGURATION
@@ -164,7 +164,7 @@ typedef int32_t (*GetStagePositionCallback)(void);
  * @param old_state Previous state
  * @param new_state New state
  */
-typedef void (*StateChangeCallback)(TestRunnerState old_state, TestRunnerState new_state);
+typedef void (*TestStateChangeCallback)(TestRunnerState old_state, TestRunnerState new_state);
 
 //==============================================================================
 // TEST RUNNER CLASS
@@ -440,7 +440,7 @@ public:
     /**
      * @brief Set state change callback
      */
-    void setStateChangeCallback(StateChangeCallback callback);
+    void setTestStateChangeCallback(TestStateChangeCallback callback);
 
     //==========================================================================
     // BCODE INTERPRETER ACCESS
@@ -473,6 +473,21 @@ public:
      * @return Error message string
      */
     const char* getErrorMessage() const;
+
+    //==========================================================================
+    // CALLBACK HELPERS (used by static delay loop callback)
+    //==========================================================================
+
+    /**
+     * @brief Check for cartridge removal
+     * @return true if cartridge still present
+     */
+    bool checkCartridge();
+
+    /**
+     * @brief Run heater control loop
+     */
+    void updateHeater();
 
 private:
     //==========================================================================
@@ -510,7 +525,7 @@ private:
     SetHeaterPowerCallback _set_heater_power_callback;
     IsCartridgeInsertedCallback _is_cartridge_inserted_callback;
     GetStagePositionCallback _get_stage_position_callback;
-    StateChangeCallback _state_change_callback;
+    TestStateChangeCallback _state_change_callback;
 
     //==========================================================================
     // INTERNAL METHODS
@@ -534,17 +549,6 @@ private:
      * @return true to continue, false to cancel
      */
     static bool bcodeDelayLoop();
-
-    /**
-     * @brief Check for cartridge removal
-     * @return true if cartridge still present
-     */
-    bool checkCartridge();
-
-    /**
-     * @brief Run heater control loop
-     */
-    void updateHeater();
 
     /**
      * @brief Set error state
