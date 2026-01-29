@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Particle: Compile application (cloud)",
+            "type": "shell",
+            "command": "particle",
+            "args": ["compile", "msom", "--saveTo", "brevitest-supabase.bin"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Particle: Flash application (USB)",
+            "type": "shell",
+            "command": "particle",
+            "args": ["flash", "--usb", "brevitest-supabase.bin"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Particle: Serial Monitor",
+            "type": "shell",
+            "command": "particle",
+            "args": ["serial", "monitor"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Particle: List Devices",
+            "type": "shell",
+            "command": "particle",
+            "args": ["list"],
+            "problemMatcher": []
+        }
+    ]
+}

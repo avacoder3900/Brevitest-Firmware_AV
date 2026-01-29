@@ -1,0 +1,6 @@
+{
+    "recommendations": [
+        "particle.particle-vscode-core",
+        "ms-vscode.cpptools"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "particle.targetPlatform": "msom",
+    "particle.targetVersion": "6.3.4",
+    "particle.firmwareVersion": "6.3.4",
+    "C_Cpp.default.configurationProvider": "particle.particle-vscode-core",
+    "files.associations": {
+        "*.ino": "cpp"
+    },
+    "editor.formatOnSave": false,
+    "files.exclude": {
+        "**/.git": true,
+        "**/node_modules": true,
+        "**/*.bin": false
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/*.bin": true
+    }
+}

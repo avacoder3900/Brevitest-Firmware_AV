@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Particle: Flash and Monitor",
+            "type": "particle",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.ino",
+            "preLaunchTask": "Particle: Flash application (local)"
+        }
+    ]
+}
