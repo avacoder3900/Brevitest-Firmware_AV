@@ -87,6 +87,24 @@ Commands are sent as: `<command_id> [param1] [param2] ...`
 |----|---------|------------|-------------|
 | 60 | Scan Barcode | none | Reads cartridge barcode, returns UUID |
 
+## Magnetometer Validation (70-73)
+
+| ID | Command | Parameters | Description |
+|----|---------|------------|-------------|
+| 70 | Start Validation | none | Initiates magnetometer validation sequence |
+| 71 | List Files | none | Lists all validation files in /validation/ |
+| 72 | Load Latest | none | Loads most recent validation data |
+| 73 | Clear Files | none | Deletes all validation files |
+
+## Stress Test (90-93)
+
+| ID | Command | Parameters | Description |
+|----|---------|------------|-------------|
+| 90 | Start Stress Test | [cycles] | Starts stress test (default: 10 cycles) |
+| 91 | Stop Stress Test | none | Stops running stress test |
+| 92 | Get Status | none | Returns stress test progress and stats |
+| 93 | Reset Counters | none | Resets stress test cycle counters |
+
 ## Spectrophotometer (301-311)
 
 | ID | Command | Parameters | Description |
@@ -113,6 +131,26 @@ Commands are sent as: `<command_id> [param1] [param2] ...`
 | 404 | Check Assays | none | Lists cached assay files |
 | 405 | Clear Assays | none | Deletes all cached assay files |
 | 406 | Output Assay | [index] | Displays assay storage info |
+
+## Radio Control (8000-8999)
+
+| ID | Command | Parameters | Description |
+|----|---------|------------|-------------|
+| 8000 | Help | none | Shows radio command reference |
+| 8001 | Status | none | Shows current radio states (WiFi/Cell/BLE) |
+| 8100 | WiFi Off | none | Disables WiFi radio |
+| 8101 | WiFi On | none | Enables WiFi radio |
+| 8200 | Cellular Off | none | Disables cellular radio |
+| 8201 | Cellular On | none | Enables cellular radio |
+| 8300 | Bluetooth Off | none | Disables Bluetooth radio |
+| 8301 | Bluetooth On | none | Enables Bluetooth radio |
+| 8500 | WiFi Test Mode | none | Sets WiFi as primary connection |
+| 8501 | Cell Test Mode | none | Sets cellular as primary connection |
+| 8502 | BLE Test Mode | none | Sets Bluetooth as primary connection |
+| 8503 | Auto Mode | none | Restores automatic radio management |
+| 8900 | All Radios Off | none | Disables all radios (airplane mode) |
+| 8901 | All Radios On | none | Enables all radios |
+| 8999 | Emission Report | none | Shows RF emission status for compliance |
 
 ## State Management (9000-9020)
 
