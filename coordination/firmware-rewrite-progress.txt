@@ -305,3 +305,81 @@ Terminal: Gamma
 - coordination/docs/CLOUD-PROTOCOL-SPEC.md (new documentation)
 
 ---
+
+## 2026-01-30 - Final Alpha Stories & Verification Session
+Terminal: Alpha (Completion)
+
+### Completed Stories This Session
+
+#### ALPHA-014: Cartridge rejection during heating
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:5077-5100
+- Implementation (already present, verified):
+  - pending_barcode_uuid and pending_barcode_available variables (lines 142-143)
+  - Barcode read during HEATING stores to pending and transitions back (lines 361-365)
+  - HEATING mode with cartridge shows green blink LED, NO buzzer (lines 773-783)
+  - When heater ready with pending barcode, re-scans (lines 337-342)
+  - Log message present for user notification
+
+#### ALPHA-015: Recently tested barcode cooldown
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:5284-5316
+- Implementation (already present, verified):
+  - last_tested_barcode and last_tested_timestamp tracking (lines 138-139)
+  - RECENT_TEST_COOLDOWN_MS = 30000 (line 82)
+  - Records barcode and timestamp on test completion (lines 438-441)
+  - Cooldown check in BARCODE_SCANNING state (lines 374-380)
+  - Cleared on cartridge removal (lines 933-934)
+
+#### ALPHA-016: Complete setup() function
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:4703-4870
+- Implementation additions:
+  - Extended serial wait to 15s (while loop with timeout)
+  - Added Particle.variable: temperature, magnet_validation, device_status
+  - Added Particle.function: runTest, resetDevice, setHeaterTarget, getStatus
+  - Device now starts in INITIALIZING mode before transitioning to IDLE
+  - Cloud function implementations for remote device control
+
+#### ALPHA-017: Document all state transitions
+- File: coordination/docs/STATE_TRANSITIONS_LEGACY_ANALYSIS.md
+- Verification complete - all acceptance criteria met:
+  - Mermaid state diagram (lines 15-54) with all 11 states
+  - Each transition documented with trigger/guard/actions/legacy refs
+  - Entry/exit actions in Active Behaviors sections per state
+  - Error recovery paths (ERROR_STATE section + error codes table)
+  - Timing requirements table (lines 369-382)
+  - Global Behaviors section documents hardware interactions
+- Documentation is comprehensive with 394 lines
+
+### Implementation Summary
+
+All Alpha stories are now complete:
+- Alpha: 17/17 (100% complete) - ALL ALPHA TASKS COMPLETE
+- Beta: 20/20 (100% complete)
+- Gamma: 16/16 (100% complete)
+- Delta: 26/28 (DELTA-027 and DELTA-028 are documentation)
+
+### Remaining Documentation Stories
+- DELTA-027: Serial command reference documentation
+- DELTA-028: BCODE instruction set documentation
+
+### Files Modified This Session
+- supabase-firmware/src/main.ino (Particle cloud registrations, setup enhancements)
+- coordination/prd-fw-alpha-statemachine.json (marked ALPHA-014, 015, 016 as passing)
+
+---
+
+## Project Status Summary
+
+### Complete: 79/81 stories (98%)
+### Documentation Remaining: 2 stories (DELTA-027, DELTA-028)
+
+| Terminal | Complete | Total | Notes |
+|----------|----------|-------|-------|
+| Alpha    | 17/17    | 100%  | ALL COMPLETE |
+| Beta     | 20/20    | 100%  | ALL COMPLETE |
+| Gamma    | 16/16    | 100%  | ALL COMPLETE |
+| Delta    | 26/28    | 93%   | DELTA-027, 028 (docs) remaining |
+
+---
