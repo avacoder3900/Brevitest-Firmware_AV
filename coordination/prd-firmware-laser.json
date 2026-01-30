@@ -1,0 +1,103 @@
+{
+  "featureName": "Laser Controller Module",
+  "branchName": "feature/supabase-laser",
+  "description": "PWM-controlled laser diode controller for three independent laser channels (A, B, C). Manages power levels and timing.",
+  "affectedFiles": [
+    "supabase-firmware/src/LaserController.h",
+    "supabase-firmware/src/LaserController.cpp",
+    "supabase-firmware/tests/unit/test_laser.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "LAS-001",
+      "title": "Implement LaserController class",
+      "description": "Create laser controller class managing three independent laser channels.",
+      "acceptanceCriteria": [
+        "init() function configures laser pins (D5, D6, D7)",
+        "PWM frequency: 500 Hz",
+        "Default power: 128/255",
+        "All lasers off at initialization",
+        "Channel enum: A, B, C"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LaserController.h"],
+      "documentation": "Document laser safety considerations",
+      "priority": 1,
+      "notes": "Lasers A/B/C on D5/D6/D7 respectively"
+    },
+    {
+      "id": "LAS-002",
+      "title": "Implement individual laser control",
+      "description": "Create functions for controlling individual lasers.",
+      "acceptanceCriteria": [
+        "setLaserPower(channel, power) function",
+        "getLaserPower(channel) function",
+        "enableLaser(channel) function",
+        "disableLaser(channel) function",
+        "isLaserEnabled(channel) function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LaserController.cpp"],
+      "priority": 1,
+      "notes": "Power range 0-255"
+    },
+    {
+      "id": "LAS-003",
+      "title": "Implement all-laser control",
+      "description": "Create convenience functions for controlling all lasers simultaneously.",
+      "acceptanceCriteria": [
+        "enableAllLasers() function",
+        "disableAllLasers() function",
+        "setAllLaserPower(power) function",
+        "areAllLasersEnabled() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LaserController.cpp"],
+      "priority": 2,
+      "notes": "Used during startup/shutdown"
+    },
+    {
+      "id": "LAS-004",
+      "title": "Implement pulsed laser mode",
+      "description": "Create pulsed operation mode for spectrophotometer synchronization.",
+      "acceptanceCriteria": [
+        "setPulseMode(onTime, cycleTime) function",
+        "Default: 20us on, 2ms cycle (0.5% duty)",
+        "Pulse synchronized with readings",
+        "pulse() function for single pulse",
+        "isPulseModeEnabled() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LaserController.cpp"],
+      "priority": 2,
+      "notes": "Synchronized with spectrophotometer readings"
+    },
+    {
+      "id": "LAS-005",
+      "title": "Implement laser safety features",
+      "description": "Create safety mechanisms for laser operation.",
+      "acceptanceCriteria": [
+        "Maximum continuous on-time limit",
+        "Cartridge present check before enabling",
+        "Auto-disable when cartridge removed",
+        "Interlock integration with state machine"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LaserController.cpp"],
+      "priority": 1,
+      "notes": "Safety interlock with cartridge detection"
+    },
+    {
+      "id": "LAS-006",
+      "title": "Create laser controller unit tests",
+      "description": "Unit tests for laser controller.",
+      "acceptanceCriteria": [
+        "Test initialization",
+        "Test individual channel control",
+        "Test pulse mode timing",
+        "Test safety interlock logic"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_laser.cpp"],
+      "priority": 3,
+      "notes": "Mock GPIO for testing"
+    }
+  ]
+}

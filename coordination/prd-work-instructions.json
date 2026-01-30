@@ -1,0 +1,477 @@
+{
+  "id": "PRD-WINST",
+  "featureName": "Work Instruction & Document Management System",
+  "branchName": "feature/work-instructions",
+  "description": "Comprehensive document filing system with drag-and-drop upload, automatic parsing of work instructions to extract part numbers and tools, integration with assembly workflow, and version control. Non-work-instruction documents are stored in a document repository.",
+  "affectedFiles": [
+    "src/lib/server/db/schema.ts",
+    "src/lib/server/services/document-parser.ts",
+    "src/lib/server/services/work-instruction-parser.ts",
+    "src/routes/spu/documents/**",
+    "src/routes/spu/assembly/**",
+    "src/lib/components/upload/**"
+  ],
+  "userStories": [
+    {
+      "id": "WINST-01",
+      "title": "Add workInstruction table to database schema",
+      "description": "Create the core work instruction table for storing parsed work instructions",
+      "acceptanceCriteria": [
+        "Add 'workInstruction' table: id (text PK), documentNumber (text unique, e.g., WIMF-SPU-001), title (text), description (text), documentType (text: 'spu_assembly' | 'general'), status (text: 'draft' | 'active' | 'archived'), currentVersion (integer default 1), originalFileName (text), fileSize (integer), mimeType (text), createdAt, updatedAt, createdBy (FK to user)",
+        "Add 'WorkInstruction' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 1,
+      "layer": "database",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-02",
+      "title": "Add workInstructionVersion table for version history",
+      "description": "Track all versions of work instructions with full content",
+      "acceptanceCriteria": [
+        "Add 'workInstructionVersion' table: id (text PK), workInstructionId (FK), version (integer), content (text - full parsed text), rawContent (text - original file content as base64), changeNotes (text), parsedAt (timestamp), parsedBy (FK to user), createdAt",
+        "Add 'WorkInstructionVersion' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 2,
+      "layer": "database",
+      "domain": "documents",
+      "notes": "Depends on WINST-01"
+    },
+    {
+      "id": "WINST-03",
+      "title": "Add workInstructionStep table for individual steps",
+      "description": "Store each step from a work instruction with sequence and content",
+      "acceptanceCriteria": [
+        "Add 'workInstructionStep' table: id (text PK), workInstructionVersionId (FK), stepNumber (integer), title (text), content (text), requiresScan (boolean default false), scanPrompt (text - what to scan), notes (text), createdAt",
+        "Add 'WorkInstructionStep' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 3,
+      "layer": "database",
+      "domain": "documents",
+      "notes": "Depends on WINST-02"
+    },
+    {
+      "id": "WINST-04",
+      "title": "Add stepPartRequirement table for parts per step",
+      "description": "Link parts (PT#) to specific work instruction steps",
+      "acceptanceCriteria": [
+        "Add 'stepPartRequirement' table: id (text PK), stepId (FK to workInstructionStep), partNumber (text - the PT# from document), partDefinitionId (FK to partDefinition, nullable), quantity (integer default 1), notes (text), createdAt",
+        "Add 'StepPartRequirement' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 4,
+      "layer": "database",
+      "domain": "documents",
+      "notes": "Depends on WINST-03"
+    },
+    {
+      "id": "WINST-05",
+      "title": "Add stepToolRequirement table for tools per step",
+      "description": "Link tools (Tool#) to specific work instruction steps",
+      "acceptanceCriteria": [
+        "Add 'stepToolRequirement' table: id (text PK), stepId (FK to workInstructionStep), toolNumber (text - the Tool# from document), toolName (text), calibrationRequired (boolean default false), notes (text), createdAt",
+        "Add 'StepToolRequirement' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 5,
+      "layer": "database",
+      "domain": "documents",
+      "notes": "Depends on WINST-03"
+    },
+    {
+      "id": "WINST-06",
+      "title": "Add documentRepository table for general documents",
+      "description": "Store non-work-instruction documents in a general repository",
+      "acceptanceCriteria": [
+        "Add 'documentRepository' table: id (text PK), fileName (text), originalFileName (text), fileSize (integer), mimeType (text), category (text nullable), tags (jsonb), content (text - base64 encoded), description (text), uploadedAt, uploadedBy (FK to user)",
+        "Add 'DocumentRepository' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 6,
+      "layer": "database",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-07",
+      "title": "Add assemblyStepRecord table for tracking step completion",
+      "description": "Record completion of each step during assembly with scanned lot numbers",
+      "acceptanceCriteria": [
+        "Add 'assemblyStepRecord' table: id (text PK), assemblySessionId (FK), workInstructionStepId (FK), scannedLotNumber (text nullable), scannedPartNumber (text nullable), completedAt (timestamp), completedBy (FK to user), signatureId (FK to electronicSignature nullable), notes (text)",
+        "Add 'AssemblyStepRecord' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 7,
+      "layer": "database",
+      "domain": "assembly",
+      "notes": "Depends on WINST-03"
+    },
+    {
+      "id": "WINST-08",
+      "title": "Add document and workInstruction permissions to RBAC",
+      "description": "Add permission resources for document and work instruction management",
+      "acceptanceCriteria": [
+        "Add 'workInstruction' to PermissionResource type",
+        "Add 'documentRepo' to PermissionResource type",
+        "Enables workInstruction:read, workInstruction:write, workInstruction:approve",
+        "Enables documentRepo:read, documentRepo:write",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/auth/permissions.ts"],
+      "priority": 8,
+      "layer": "server",
+      "domain": "auth"
+    },
+    {
+      "id": "WINST-09",
+      "title": "Create document text extraction service",
+      "description": "Service to extract text content from PDF and DOCX files",
+      "acceptanceCriteria": [
+        "Create src/lib/server/services/document-extractor.ts",
+        "Install pdf-parse and mammoth packages for PDF/DOCX extraction",
+        "Implement extractTextFromPdf(buffer): Promise<string>",
+        "Implement extractTextFromDocx(buffer): Promise<string>",
+        "Implement extractText(buffer, mimeType): Promise<string> that routes to correct extractor",
+        "Handle errors gracefully with meaningful messages",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/services/document-extractor.ts"],
+      "priority": 9,
+      "layer": "server",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-10",
+      "title": "Create work instruction parser service",
+      "description": "Parse work instruction text to extract steps, PT#s, and Tool#s",
+      "acceptanceCriteria": [
+        "Create src/lib/server/services/work-instruction-parser.ts",
+        "Implement parseWorkInstruction(text, documentNumber): ParsedWorkInstruction",
+        "Extract steps using regex patterns (Step 1:, 1., 1), etc.)",
+        "Extract PT# patterns (PT-001, PT#001, Part #001, etc.)",
+        "Extract Tool# patterns (Tool-001, Tool #1, T-001, etc.)",
+        "Return structured data: { steps: Step[], partsFound: string[], toolsFound: string[] }",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/services/work-instruction-parser.ts"],
+      "priority": 10,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINST-09"
+    },
+    {
+      "id": "WINST-11",
+      "title": "Create document classification service",
+      "description": "Determine if uploaded document is SPU work instruction or general document",
+      "acceptanceCriteria": [
+        "Create src/lib/server/services/document-classifier.ts",
+        "Implement classifyDocument(fileName, content): DocumentType",
+        "SPU work instruction patterns: WIMF-SPU-*, WI-SPU-*, Work Instruction SPU",
+        "Return 'spu_assembly' | 'general'",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/services/document-classifier.ts"],
+      "priority": 11,
+      "layer": "server",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-12",
+      "title": "Create work instruction version service",
+      "description": "Service to handle versioning of work instructions",
+      "acceptanceCriteria": [
+        "Create src/lib/server/services/work-instruction-version.ts",
+        "Implement createVersion(workInstructionId, content, userId): Promise<WorkInstructionVersion>",
+        "Implement getLatestVersion(workInstructionId): Promise<WorkInstructionVersion | null>",
+        "Implement getVersionHistory(workInstructionId): Promise<WorkInstructionVersion[]>",
+        "Auto-increment version number",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/services/work-instruction-version.ts"],
+      "priority": 12,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINST-02"
+    },
+    {
+      "id": "WINST-13",
+      "title": "Create FileDropzone component for drag-and-drop upload",
+      "description": "Reusable drag-and-drop file upload component with TRON styling",
+      "acceptanceCriteria": [
+        "Create src/lib/components/upload/FileDropzone.svelte",
+        "Props: accept (string, e.g., '.pdf,.docx'), maxSize (number in bytes), onFile (callback)",
+        "Visual feedback on drag over (border highlight)",
+        "Click to browse fallback",
+        "File type and size validation with error messages",
+        "TRON theme styling with cyan accent",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/components/upload/FileDropzone.svelte"],
+      "priority": 13,
+      "layer": "ui",
+      "domain": "components"
+    },
+    {
+      "id": "WINST-14",
+      "title": "Create upload components barrel export",
+      "description": "Export upload components from index file",
+      "acceptanceCriteria": [
+        "Create src/lib/components/upload/index.ts",
+        "Export FileDropzone",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/components/upload/index.ts"],
+      "priority": 14,
+      "layer": "ui",
+      "domain": "components",
+      "notes": "Depends on WINST-13"
+    },
+    {
+      "id": "WINST-15",
+      "title": "Create document upload page",
+      "description": "Page for uploading documents with drag-and-drop",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/upload/+page.svelte",
+        "Use FileDropzone component",
+        "Accept .pdf and .docx files",
+        "Show upload progress",
+        "Display classification result (SPU work instruction vs general)",
+        "For work instructions: show parsed preview before saving",
+        "TRON theme styling",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/upload/+page.svelte"],
+      "priority": 15,
+      "layer": "ui",
+      "domain": "documents",
+      "notes": "Depends on WINST-13, WINST-14"
+    },
+    {
+      "id": "WINST-16",
+      "title": "Create document upload server action",
+      "description": "Server-side handling of document upload, parsing, and storage",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/upload/+page.server.ts",
+        "Require workInstruction:write or documentRepo:write permission",
+        "Accept file upload via FormData",
+        "Extract text using document-extractor service",
+        "Classify document type",
+        "For SPU work instructions: parse and create workInstruction + version + steps",
+        "For general documents: store in documentRepository",
+        "Log audit event",
+        "Return parsed data for preview",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/upload/+page.server.ts"],
+      "priority": 16,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINST-09, WINST-10, WINST-11, WINST-12"
+    },
+    {
+      "id": "WINST-17",
+      "title": "Create work instruction list page",
+      "description": "Page listing all work instructions with status and version",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/instructions/+page.svelte",
+        "Table: Document #, Title, Status, Version, Last Updated",
+        "Filter by status (all, active, draft, archived)",
+        "Link to detail page",
+        "Upload button linking to upload page",
+        "TRON theme styling",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/+page.svelte"],
+      "priority": 17,
+      "layer": "ui",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-18",
+      "title": "Create work instruction list server load",
+      "description": "Server load for work instruction list",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/instructions/+page.server.ts",
+        "Require workInstruction:read permission",
+        "Load all work instructions ordered by updatedAt desc",
+        "Support status filter query param",
+        "Return list with version info",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/+page.server.ts"],
+      "priority": 18,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINST-01"
+    },
+    {
+      "id": "WINST-19",
+      "title": "Create work instruction detail page",
+      "description": "View work instruction with steps, parts, and tools",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/instructions/[id]/+page.svelte",
+        "Display document info: number, title, status, version",
+        "List all steps with their content",
+        "For each step: show required parts (PT#) and tools",
+        "Version history panel",
+        "Edit and re-upload buttons",
+        "TRON theme styling",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/[id]/+page.svelte"],
+      "priority": 19,
+      "layer": "ui",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-20",
+      "title": "Create work instruction detail server load",
+      "description": "Load work instruction with all steps and requirements",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/instructions/[id]/+page.server.ts",
+        "Require workInstruction:read permission",
+        "Load work instruction by ID",
+        "Load current version with all steps",
+        "Load part requirements for each step (join with partDefinition)",
+        "Load tool requirements for each step",
+        "Load version history",
+        "Return 404 if not found",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/[id]/+page.server.ts"],
+      "priority": 20,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINST-01, WINST-02, WINST-03, WINST-04, WINST-05"
+    },
+    {
+      "id": "WINST-21",
+      "title": "Create document repository list page",
+      "description": "Page listing all general documents in repository",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/repository/+page.svelte",
+        "Table: File Name, Category, Size, Uploaded, Uploaded By",
+        "Download button for each document",
+        "Upload button linking to upload page",
+        "Search by filename",
+        "TRON theme styling",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/repository/+page.svelte"],
+      "priority": 21,
+      "layer": "ui",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-22",
+      "title": "Create document repository server load and actions",
+      "description": "Server for document repository list and download",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/repository/+page.server.ts",
+        "Require documentRepo:read permission",
+        "Load all documents ordered by uploadedAt desc",
+        "Add download action that returns file content",
+        "Support search query param",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/repository/+page.server.ts"],
+      "priority": 22,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINST-06"
+    },
+    {
+      "id": "WINST-23",
+      "title": "Create documents section layout",
+      "description": "Layout with navigation for documents section",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/+layout.svelte",
+        "Navigation: Work Instructions, Repository, Upload",
+        "Breadcrumb: SPU > Documents > [section]",
+        "TRON theme styling consistent with SPU layout",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/+layout.svelte"],
+      "priority": 23,
+      "layer": "ui",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-24",
+      "title": "Create documents section layout server",
+      "description": "Auth check and permissions for documents section",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/+layout.server.ts",
+        "Require user to be logged in",
+        "Return user permissions for conditional UI",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/+layout.server.ts"],
+      "priority": 24,
+      "layer": "server",
+      "domain": "documents"
+    },
+    {
+      "id": "WINST-25",
+      "title": "Update assembly session to use work instruction steps",
+      "description": "Modify assembly session to load and track work instruction steps",
+      "acceptanceCriteria": [
+        "Update src/routes/spu/assembly/[spuId]/+page.server.ts",
+        "Load active work instruction for SPU assembly",
+        "Load steps with part requirements",
+        "Create assemblyStepRecord on step completion",
+        "Track scanned lot numbers per step",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/assembly/[spuId]/+page.server.ts"],
+      "priority": 25,
+      "layer": "server",
+      "domain": "assembly",
+      "notes": "Depends on WINST-03, WINST-04, WINST-07"
+    },
+    {
+      "id": "WINST-26",
+      "title": "Update assembly UI to show work instruction steps",
+      "description": "Display work instruction steps in assembly with scan prompts",
+      "acceptanceCriteria": [
+        "Update src/routes/spu/assembly/[spuId]/+page.svelte",
+        "Display current step content from work instruction",
+        "Show required parts for current step",
+        "Show scan prompt for lot number when step requires scan",
+        "Record scanned data and advance to next step",
+        "Show step completion status",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/assembly/[spuId]/+page.svelte"],
+      "priority": 26,
+      "layer": "ui",
+      "domain": "assembly",
+      "notes": "Depends on WINST-25"
+    },
+    {
+      "id": "WINST-27",
+      "title": "Add Documents link to SPU navigation",
+      "description": "Add Documents navigation item to SPU sidebar",
+      "acceptanceCriteria": [
+        "Update src/routes/spu/+layout.svelte",
+        "Add 'Documents' link between Parts and Assembly",
+        "Use document icon",
+        "Link to /spu/documents/instructions",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/+layout.svelte"],
+      "priority": 27,
+      "layer": "ui",
+      "domain": "navigation"
+    }
+  ]
+}

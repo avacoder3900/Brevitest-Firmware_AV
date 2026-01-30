@@ -1,0 +1,136 @@
+{
+  "featureName": "Motor Controller Module",
+  "branchName": "feature/supabase-motor",
+  "description": "Stepper motor controller for linear stage movement. Handles positioning, oscillation, and limit detection.",
+  "affectedFiles": [
+    "supabase-firmware/src/MotorController.h",
+    "supabase-firmware/src/MotorController.cpp",
+    "supabase-firmware/tests/unit/test_motor.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "MOT-001",
+      "title": "Implement MotorController class",
+      "description": "Create motor controller class with initialization and basic movement functions.",
+      "acceptanceCriteria": [
+        "init() function configures motor pins",
+        "Enable/disable motor driver",
+        "Direction control",
+        "Step pulse generation",
+        "Motor fault detection"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.h"],
+      "documentation": "Document motor timing requirements",
+      "priority": 1,
+      "notes": "Uses D8 (direction), D11 (reset), D12 (sleep), D13 (step)"
+    },
+    {
+      "id": "MOT-002",
+      "title": "Implement position tracking",
+      "description": "Create position tracking with micron-level accuracy.",
+      "acceptanceCriteria": [
+        "Position stored in microns (not steps)",
+        "Conversion: 25 microns per 1/8 step",
+        "getCurrentPosition() function",
+        "Position range: -60000 to +45000 microns",
+        "Home position: 21000 microns"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.cpp"],
+      "priority": 1,
+      "notes": "8 microsteps per full step"
+    },
+    {
+      "id": "MOT-003",
+      "title": "Implement homing sequence",
+      "description": "Create homing function that finds the limit switch and establishes position reference.",
+      "acceptanceCriteria": [
+        "home() function moves until limit switch",
+        "Limit switch on D26 (proximal)",
+        "Sets position to 0 at limit",
+        "Moves to home position (21000 microns)",
+        "Timeout handling"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.cpp"],
+      "priority": 1,
+      "notes": "Called during initialization"
+    },
+    {
+      "id": "MOT-004",
+      "title": "Implement absolute positioning",
+      "description": "Create function to move stage to absolute position.",
+      "acceptanceCriteria": [
+        "moveToPosition(microns) function",
+        "Validates position within limits",
+        "Calculates optimal direction",
+        "Variable speed control (step delay 250-600us)",
+        "Non-blocking option with callback"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.cpp"],
+      "priority": 1,
+      "notes": "Most common positioning function"
+    },
+    {
+      "id": "MOT-005",
+      "title": "Implement relative movement",
+      "description": "Create functions for relative movement by distance or steps.",
+      "acceptanceCriteria": [
+        "moveRelative(microns) function",
+        "stepRelative(steps) function",
+        "Forward/reverse direction functions",
+        "Speed parameter support",
+        "Position bounds checking"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.cpp"],
+      "priority": 2,
+      "notes": "Used for fine adjustments"
+    },
+    {
+      "id": "MOT-006",
+      "title": "Implement oscillation mode",
+      "description": "Create oscillation mode for continuous back-and-forth movement during spectrophotometer scanning.",
+      "acceptanceCriteria": [
+        "startOscillation(start, end, speed) function",
+        "stopOscillation() function",
+        "isOscillating() status function",
+        "Callback on direction change",
+        "Integration with continuous spectro reading"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.cpp"],
+      "priority": 2,
+      "notes": "Critical for test data collection"
+    },
+    {
+      "id": "MOT-007",
+      "title": "Implement predefined positions",
+      "description": "Create named positions for common stage locations.",
+      "acceptanceCriteria": [
+        "moveToHome() - 21000 microns",
+        "moveToTestStart() - 7860 microns",
+        "moveToShippingBolt() - 28000 microns",
+        "moveToMagnetometer() - 12800 microns",
+        "Enum for position names"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.cpp"],
+      "priority": 2,
+      "notes": "Convenience functions for common operations"
+    },
+    {
+      "id": "MOT-008",
+      "title": "Create motor controller unit tests",
+      "description": "Unit tests for motor controller with mocked GPIO.",
+      "acceptanceCriteria": [
+        "Test initialization",
+        "Test position tracking math",
+        "Test movement calculations",
+        "Test limit switch handling",
+        "Test oscillation logic"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_motor.cpp"],
+      "priority": 3,
+      "notes": "Mock GPIO for testing"
+    }
+  ]
+}

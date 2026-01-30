@@ -1,0 +1,143 @@
+{
+  "featureName": "State Machine Module",
+  "branchName": "feature/supabase-state-machine",
+  "description": "Core state machine that controls all device behavior. Manages DeviceMode transitions with validation, history tracking, and error handling.",
+  "affectedFiles": [
+    "supabase-firmware/src/StateMachine.h",
+    "supabase-firmware/src/StateMachine.cpp",
+    "supabase-firmware/tests/unit/test_state_machine.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/DeviceState.h",
+    "legacy-firmware/firmware/src/DeviceState.cpp",
+    "legacy-firmware/firmware/STATE_MANAGEMENT_GUIDE.md"
+  ],
+  "userStories": [
+    {
+      "id": "SM-001",
+      "title": "Implement DeviceState class",
+      "description": "Create the main state management class that tracks current mode, test state, and cartridge state.",
+      "acceptanceCriteria": [
+        "DeviceMode current_mode member",
+        "TestState test_state member",
+        "CartridgeState cartridge_state member",
+        "String current_cartridge_id member",
+        "Timestamp tracking for state changes",
+        "Thread-safe access to state"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.h"],
+      "documentation": "Document state machine behavior in header",
+      "priority": 1,
+      "notes": "Single source of truth for device state"
+    },
+    {
+      "id": "SM-002",
+      "title": "Implement state transition validation",
+      "description": "Create validation logic that enforces legal state transitions and rejects invalid ones.",
+      "acceptanceCriteria": [
+        "isValidTransition(from, to) function",
+        "Transition matrix matching legacy behavior",
+        "Special handling for ERROR_STATE (any → ERROR allowed)",
+        "Special handling for IDLE (any → IDLE for reset)",
+        "Returns error code for invalid transitions"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.cpp"],
+      "priority": 1,
+      "notes": "Reference STATE_MANAGEMENT_GUIDE.md for valid transitions"
+    },
+    {
+      "id": "SM-003",
+      "title": "Implement transition history tracking",
+      "description": "Create circular buffer that stores the last 50 state transitions with timestamps.",
+      "acceptanceCriteria": [
+        "Circular buffer of 50 entries",
+        "Each entry: from_mode, to_mode, timestamp, cartridge_id",
+        "getTransitionCount() function",
+        "getTransitionHistory(count) function",
+        "getHistoryByCartridge(id) function",
+        "clearHistory() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.cpp"],
+      "priority": 2,
+      "notes": "Used for debugging and cloud reporting"
+    },
+    {
+      "id": "SM-004",
+      "title": "Implement setMode() with validation",
+      "description": "Create the main state transition function that validates and executes mode changes.",
+      "acceptanceCriteria": [
+        "Validates transition before executing",
+        "Logs transition to history",
+        "Publishes state change event (for observers)",
+        "Updates timestamp",
+        "Returns success/failure",
+        "Optionally forces transition (for recovery)"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.cpp"],
+      "priority": 1,
+      "notes": "All mode changes must go through setMode()"
+    },
+    {
+      "id": "SM-005",
+      "title": "Implement test state management",
+      "description": "Create functions to manage the TestState sub-machine during test execution.",
+      "acceptanceCriteria": [
+        "setTestState() function",
+        "Test state transitions: NOT_STARTED → RUNNING → COMPLETED → UPLOAD_PENDING → UPLOADED",
+        "CANCELLED state for cartridge removal",
+        "isTestInProgress() helper",
+        "canStartNewTest() helper"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.cpp"],
+      "priority": 2,
+      "notes": "Nested within DeviceMode::RUNNING_TEST"
+    },
+    {
+      "id": "SM-006",
+      "title": "Implement cartridge state management",
+      "description": "Create functions to manage CartridgeState based on hardware events.",
+      "acceptanceCriteria": [
+        "setCartridgeState() function",
+        "onCartridgeInserted() event handler",
+        "onCartridgeRemoved() event handler",
+        "Automatic state updates based on events",
+        "Integration with test state (removal → CANCELLED)"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.cpp"],
+      "priority": 2,
+      "notes": "Driven by hardware interrupt on D3"
+    },
+    {
+      "id": "SM-007",
+      "title": "Implement state query functions",
+      "description": "Create convenience functions for querying current state and capabilities.",
+      "acceptanceCriteria": [
+        "getCurrentMode() function",
+        "getCurrentModeString() function",
+        "getStateAsJson() for serialization",
+        "canAcceptCartridge() helper",
+        "isHeatingRequired() helper",
+        "isCloudOperationInProgress() helper"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StateMachine.cpp"],
+      "priority": 2,
+      "notes": "Used throughout firmware for state checks"
+    },
+    {
+      "id": "SM-008",
+      "title": "Create state machine unit tests",
+      "description": "Comprehensive unit tests for all state transitions and edge cases.",
+      "acceptanceCriteria": [
+        "Test all valid transitions succeed",
+        "Test all invalid transitions fail",
+        "Test history tracking correctness",
+        "Test cartridge state integration",
+        "Test test state integration",
+        "Test force transition functionality"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_state_machine.cpp"],
+      "priority": 3,
+      "notes": "Reference STATE_TRANSITION_ERRORS_ANALYSIS.md for edge cases"
+    }
+  ]
+}

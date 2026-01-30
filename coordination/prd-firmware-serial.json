@@ -1,0 +1,169 @@
+{
+  "featureName": "Serial Command Interface Module",
+  "branchName": "feature/supabase-serial",
+  "description": "Serial command interface for debugging, testing, and device control. Implements 100+ commands across multiple categories.",
+  "affectedFiles": [
+    "supabase-firmware/src/SerialCommands.h",
+    "supabase-firmware/src/SerialCommands.cpp",
+    "supabase-firmware/src/CommandParser.h",
+    "supabase-firmware/src/CommandParser.cpp",
+    "supabase-firmware/docs/SERIAL_COMMANDS.md",
+    "supabase-firmware/tests/unit/test_serial.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/SERIAL_COMMANDS.md",
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "SER-001",
+      "title": "Implement CommandParser class",
+      "description": "Create command parser for processing serial input.",
+      "acceptanceCriteria": [
+        "init(baudRate) function - default 115200",
+        "Parses numeric command IDs",
+        "Parses optional parameters",
+        "Handles newline termination",
+        "Command buffer management"
+      ],
+      "affectedFiles": ["supabase-firmware/src/CommandParser.h", "supabase-firmware/src/CommandParser.cpp"],
+      "documentation": "Document command format",
+      "priority": 1,
+      "notes": "Format: <command_id> [param1] [param2]..."
+    },
+    {
+      "id": "SER-002",
+      "title": "Implement system commands (1-9)",
+      "description": "Implement system-level commands for device management.",
+      "acceptanceCriteria": [
+        "1: Reset device",
+        "2: EEPROM read",
+        "3: EEPROM write",
+        "4: Pin state dump",
+        "5: Firmware version",
+        "All commands documented"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 1,
+      "notes": "Critical for debugging"
+    },
+    {
+      "id": "SER-003",
+      "title": "Implement stage/motor commands (20-29)",
+      "description": "Implement commands for stage movement control.",
+      "acceptanceCriteria": [
+        "20: Home stage",
+        "21: Move to position",
+        "22: Move relative",
+        "23: Get position",
+        "24-29: Speed, oscillation controls"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 1,
+      "notes": "Delegates to MotorController"
+    },
+    {
+      "id": "SER-004",
+      "title": "Implement laser commands (30-33)",
+      "description": "Implement commands for laser control.",
+      "acceptanceCriteria": [
+        "30: Enable/disable lasers",
+        "31: Set laser power",
+        "32: Get laser status",
+        "33: Pulse mode control"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 2,
+      "notes": "Delegates to LaserController"
+    },
+    {
+      "id": "SER-005",
+      "title": "Implement heater commands (50-55)",
+      "description": "Implement commands for temperature control.",
+      "acceptanceCriteria": [
+        "50: Enable/disable heater",
+        "51: Set target temperature",
+        "52: Get current temperature",
+        "53: Get PID values",
+        "54-55: PID tuning"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 1,
+      "notes": "Delegates to HeaterController"
+    },
+    {
+      "id": "SER-006",
+      "title": "Implement spectrophotometer commands (301-311)",
+      "description": "Implement commands for spectrophotometer control.",
+      "acceptanceCriteria": [
+        "301: Initialize spectro",
+        "302: Read all channels",
+        "303: Set integration time",
+        "304: Set gain",
+        "305-311: Channel selection, calibration"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 1,
+      "notes": "Delegates to Spectrophotometer"
+    },
+    {
+      "id": "SER-007",
+      "title": "Implement state management commands (9000-9021)",
+      "description": "Implement commands for state machine query and control.",
+      "acceptanceCriteria": [
+        "9000: Get current state",
+        "9001: Get state history",
+        "9002: Get transition count",
+        "9003: Clear history",
+        "9010-9021: Force state, advanced diagnostics"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 2,
+      "notes": "Delegates to StateMachine"
+    },
+    {
+      "id": "SER-008",
+      "title": "Implement cloud commands (400-406)",
+      "description": "Implement commands for cloud operations.",
+      "acceptanceCriteria": [
+        "400: Validate cartridge manually",
+        "401: Force upload",
+        "402: View cache",
+        "403: Clear cache",
+        "404-406: Connection status, retry"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SerialCommands.cpp"],
+      "priority": 2,
+      "notes": "Delegates to SupabaseClient"
+    },
+    {
+      "id": "SER-009",
+      "title": "Create serial commands documentation",
+      "description": "Document all serial commands with examples.",
+      "acceptanceCriteria": [
+        "All commands listed with IDs",
+        "Parameter descriptions",
+        "Expected responses",
+        "Usage examples",
+        "Error codes"
+      ],
+      "affectedFiles": ["supabase-firmware/docs/SERIAL_COMMANDS.md"],
+      "priority": 2,
+      "notes": "Reference legacy SERIAL_COMMANDS.md"
+    },
+    {
+      "id": "SER-010",
+      "title": "Create serial interface unit tests",
+      "description": "Unit tests for command parsing and execution.",
+      "acceptanceCriteria": [
+        "Test command parsing",
+        "Test parameter extraction",
+        "Test invalid command handling",
+        "Test response formatting"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_serial.cpp"],
+      "priority": 3,
+      "notes": "Mock serial input/output"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "featureName": "Storage Manager Module",
+  "branchName": "feature/supabase-storage",
+  "description": "Persistent storage management for EEPROM, filesystem, and cache operations. Handles configuration, crash recovery, and data caching.",
+  "affectedFiles": [
+    "supabase-firmware/src/StorageManager.h",
+    "supabase-firmware/src/StorageManager.cpp",
+    "supabase-firmware/tests/unit/test_storage.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "STOR-001",
+      "title": "Implement StorageManager class",
+      "description": "Create storage manager for coordinating all persistent storage operations.",
+      "acceptanceCriteria": [
+        "init() function",
+        "Detects available storage",
+        "Reports storage capacity",
+        "Handles storage errors gracefully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StorageManager.h"],
+      "documentation": "Document storage layout",
+      "priority": 1,
+      "notes": "Coordinates EEPROM and filesystem"
+    },
+    {
+      "id": "STOR-002",
+      "title": "Implement EEPROM operations",
+      "description": "Create functions for EEPROM read/write with structure management.",
+      "acceptanceCriteria": [
+        "loadConfig() function",
+        "saveConfig() function",
+        "Firmware version storage",
+        "Stress test counters",
+        "Running test recovery data"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StorageManager.cpp"],
+      "priority": 1,
+      "notes": "EEPROM structure defined in DataTypes"
+    },
+    {
+      "id": "STOR-003",
+      "title": "Implement crash recovery",
+      "description": "Create logic to recover from unexpected power loss during test.",
+      "acceptanceCriteria": [
+        "Detects incomplete test on boot",
+        "Stores running test UUID to EEPROM",
+        "Stores running assay ID",
+        "Recovery prompt to user",
+        "Clear recovery data on completion"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StorageManager.cpp"],
+      "priority": 2,
+      "notes": "Prevents test data loss"
+    },
+    {
+      "id": "STOR-004",
+      "title": "Implement filesystem cache",
+      "description": "Create filesystem-based cache for test data and assays.",
+      "acceptanceCriteria": [
+        "Cache directory management",
+        "cacheTestData(record) function",
+        "getCachedTests() function",
+        "cacheAssay(assay) function",
+        "getCachedAssay(id) function",
+        "Max 50 cached items"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StorageManager.cpp"],
+      "priority": 2,
+      "notes": "Directories: /cache/, /assay/"
+    },
+    {
+      "id": "STOR-005",
+      "title": "Implement cache cleanup",
+      "description": "Create automatic cleanup for old cached data.",
+      "acceptanceCriteria": [
+        "clearOldCache(ageDays) function",
+        "FIFO eviction when full",
+        "getCacheSize() function",
+        "getCacheCount() function",
+        "Manual clearCache() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StorageManager.cpp"],
+      "priority": 2,
+      "notes": "Prevents storage exhaustion"
+    },
+    {
+      "id": "STOR-006",
+      "title": "Create storage manager unit tests",
+      "description": "Unit tests for storage operations.",
+      "acceptanceCriteria": [
+        "Test EEPROM read/write",
+        "Test cache operations",
+        "Test crash recovery logic",
+        "Test cleanup operations"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_storage.cpp"],
+      "priority": 3,
+      "notes": "Use file system mocks"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "id": "PRD-PINV",
+  "featureName": "Parts List Inventory Consolidation",
+  "branchName": "feature/parts-inventory",
+  "description": "Consolidate BOM inventory data into the Parts list, making Parts the single source of truth for both sourcing and inventory information",
+  "affectedFiles": [
+    "src/routes/spu/parts/+page.server.ts",
+    "src/routes/spu/parts/+page.svelte",
+    "src/routes/spu/+layout.svelte"
+  ],
+  "userStories": [
+    {
+      "id": "PINV-01",
+      "title": "Update Parts server load to join BOM inventory data",
+      "description": "Join partDefinition with bomItem via partNumber to include inventory counts and values",
+      "acceptanceCriteria": [
+        "Server load joins partDefinition LEFT JOIN bomItem ON partNumber",
+        "Return inventoryCount, quantityPerUnit from bomItem",
+        "Calculate totalValue = unitCost * inventoryCount",
+        "Add stats: totalInventoryValue, lowStockCount, totalParts",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/parts/+page.server.ts"],
+      "priority": 1,
+      "layer": "server",
+      "domain": "spu"
+    },
+    {
+      "id": "PINV-02",
+      "title": "Add inventory columns to Parts list table",
+      "description": "Display inventory data from BOM in the Parts list table",
+      "acceptanceCriteria": [
+        "Add columns: Inventory Count, Qty/Unit, Total Value",
+        "Low stock highlight (red) when inventoryCount < quantityPerUnit",
+        "Format currency for Total Value column",
+        "Keep existing columns: Part #, Name, Category, Manufacturer, Unit Cost",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/parts/+page.svelte"],
+      "priority": 2,
+      "layer": "ui",
+      "domain": "spu",
+      "notes": "Depends on PINV-01"
+    },
+    {
+      "id": "PINV-03",
+      "title": "Add inventory stats cards to Parts page",
+      "description": "Add summary stats cards showing inventory totals",
+      "acceptanceCriteria": [
+        "Add stats row above table with TronCard components",
+        "Cards: Total Parts, Total Inventory Value, Low Stock Items",
+        "Use TRON theme colors (cyan for value, red for low stock)",
+        "Match BOM page styling for consistency",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/parts/+page.svelte"],
+      "priority": 3,
+      "layer": "ui",
+      "domain": "spu",
+      "notes": "Depends on PINV-01"
+    },
+    {
+      "id": "PINV-04",
+      "title": "Update navigation - Rename BOM to Inventory or redirect",
+      "description": "Update SPU navigation to reflect Parts as primary inventory view",
+      "acceptanceCriteria": [
+        "BOM nav item links to /spu/parts with ?view=inventory query param OR",
+        "Rename 'BOM' to 'Sync from Box' in nav (for sync-only access)",
+        "Parts tab remains primary for all part/inventory management",
+        "Verify navigation works correctly",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/+layout.svelte"],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "spu"
+    }
+  ]
+}

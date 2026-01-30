@@ -1,0 +1,224 @@
+{
+  "featureName": "Box.com Integration & Document Viewer",
+  "branchName": "feature/box-integration",
+  "description": "Complete Box.com integration: OAuth flow testing, document browser UI, Box MCP server setup, and BOM sync validation. Builds on existing OAuth endpoints, Box API client, and BOM sync service.",
+  "affectedFiles": [
+    "src/routes/api/box/**",
+    "src/routes/spu/bom/**",
+    "src/lib/server/integrations/box/**",
+    "src/lib/server/services/bom-sync.ts",
+    "src/lib/server/services/bom-parser.ts",
+    "src/routes/spu/documents/**"
+  ],
+  "userStories": [
+    {
+      "id": "BOX-001",
+      "title": "Validate Box Developer App configuration",
+      "description": "Verify the Box Developer Console has the correct redirect URI (http://localhost:5176/api/box/callback), proper scopes (read/write files and folders), and the app is approved. Ensure .env has correct credentials. Test that the OAuth redirect to Box.com works without errors.",
+      "acceptanceCriteria": [
+        "Box Developer Console redirect URI matches BOX_REDIRECT_URI in .env",
+        "App has necessary Box API scopes enabled",
+        "Navigating to /api/box/auth redirects to Box.com login",
+        "No errors in server console during redirect"
+      ],
+      "affectedFiles": [
+        ".env",
+        "src/lib/server/integrations/box/config.ts"
+      ],
+      "priority": 1,
+      "layer": "server",
+      "domain": "box",
+      "notes": "FIRST TASK - all other tasks depend on this. Check Box Developer Console at https://app.box.com/developers/console. Ensure the redirect URI exactly matches the .env value."
+    },
+    {
+      "id": "BOX-002",
+      "title": "Create 'Inventory & Materials' folder in Box",
+      "description": "Ensure the target folder 'Inventory & Materials' exists in the Box.com account. Create a test 'Live Equipment Overview' Excel file inside it with sample BOM columns (Part Number, Name, Description, Category, Manufacturer, Unit Cost, Quantity, Unit of Measure).",
+      "acceptanceCriteria": [
+        "Folder 'Inventory & Materials' exists in Box.com root",
+        "File 'Live Equipment Overview' exists inside the folder",
+        "Excel file has correct column headers for BOM parsing",
+        "At least 3 sample BOM rows with realistic test data"
+      ],
+      "affectedFiles": [],
+      "priority": 1,
+      "layer": "server",
+      "domain": "box",
+      "notes": "This is a Box.com setup task, no code changes. Can be done in parallel with BOX-001."
+    },
+    {
+      "id": "BOX-003",
+      "title": "Test full OAuth flow end-to-end",
+      "description": "With BOX-001 and BOX-002 complete, test the full OAuth flow: click Connect on settings page -> Box login -> authorize app -> callback stores tokens -> settings shows connected status with folder/file IDs.",
+      "acceptanceCriteria": [
+        "Settings page loads at /spu/bom/settings without errors",
+        "Clicking 'Connect to Box.com' redirects to Box OAuth",
+        "After authorizing, callback redirects to settings with ?connected=true",
+        "Settings page shows green 'Connected' status",
+        "Folder ID and File ID are displayed on settings page",
+        "box_integration table has valid tokens"
+      ],
+      "affectedFiles": [
+        "src/routes/api/box/auth/+server.ts",
+        "src/routes/api/box/callback/+server.ts",
+        "src/routes/spu/bom/settings/+page.server.ts",
+        "src/routes/spu/bom/settings/+page.svelte"
+      ],
+      "priority": 2,
+      "layer": "server",
+      "domain": "box",
+      "notes": "Depends on BOX-001 and BOX-002. This is a testing/validation task."
+    },
+    {
+      "id": "BOX-004",
+      "title": "Test BOM sync from Box.com",
+      "description": "With Box connected (BOX-003), test the 'Sync Now' button on settings page. Verify it downloads the Excel file from Box, parses it, and creates bom_item records in the database.",
+      "acceptanceCriteria": [
+        "Clicking 'Sync Now' triggers sync without errors",
+        "Sync status shows 'Success' after completion",
+        "bom_item table has records matching Excel file data",
+        "bom_item_version table has 'create' entries for new items",
+        "Subsequent syncs show 'update' or no changes as appropriate",
+        "Typecheck passes (npm run check)"
+      ],
+      "affectedFiles": [
+        "src/lib/server/services/bom-sync.ts",
+        "src/lib/server/services/bom-parser.ts"
+      ],
+      "priority": 3,
+      "layer": "server",
+      "domain": "bom",
+      "notes": "Depends on BOX-003. May require fixes to bom-parser.ts if Excel format doesn't match expectations."
+    },
+    {
+      "id": "BOX-005",
+      "title": "Build Box.com document browser page",
+      "description": "Create a new page at /spu/documents/box that displays the contents of the 'Inventory & Materials' folder from Box.com. Show files and subfolders in a list/grid with file names, sizes, and types. Allow navigating into subfolders.",
+      "acceptanceCriteria": [
+        "New route at /spu/documents/box with layout integration",
+        "Lists files and folders from 'Inventory & Materials'",
+        "Shows file name, type icon, and size for each item",
+        "Clicking a subfolder navigates into it with breadcrumbs",
+        "Back navigation works correctly",
+        "Shows loading state while fetching",
+        "Shows error state if Box not connected",
+        "Uses TRON-themed UI components",
+        "Typecheck passes (npm run check)"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/documents/box/+page.svelte",
+        "src/routes/spu/documents/box/+page.server.ts"
+      ],
+      "priority": 3,
+      "layer": "ui",
+      "domain": "box",
+      "notes": "Depends on BOX-003. Uses listFolderContents() from box client. Requires box:read permission."
+    },
+    {
+      "id": "BOX-006",
+      "title": "Add file preview/download from Box browser",
+      "description": "Extend the Box document browser (BOX-005) to support file preview and download. For Excel/CSV files show a table preview. For other files provide a download link. Use the existing downloadFile() from the box client.",
+      "acceptanceCriteria": [
+        "Clicking a file opens a detail view or modal",
+        "Excel files show first 20 rows in a table preview",
+        "Download button works for all file types",
+        "API endpoint for file download with access validation",
+        "Proper error handling for failed downloads",
+        "Typecheck passes (npm run check)"
+      ],
+      "affectedFiles": [
+        "src/routes/api/box/files/[fileId]/+server.ts",
+        "src/routes/spu/documents/box/+page.svelte"
+      ],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "box",
+      "notes": "Depends on BOX-005. The download endpoint must validate file access using validateFileAccess()."
+    },
+    {
+      "id": "BOX-007",
+      "title": "Add file upload to Box from webapp",
+      "description": "Add file upload capability to the Box document browser. Users can upload files to the current folder (within 'Inventory & Materials' boundary). Use the existing uploadFile() from the box client.",
+      "acceptanceCriteria": [
+        "Upload button visible in Box browser when viewing a folder",
+        "File picker allows selecting files from local machine",
+        "Upload progress indicator shown during upload",
+        "Success message after upload completes",
+        "Uploaded file appears in folder listing",
+        "Access validation enforced (only within Inventory & Materials)",
+        "API endpoint for file upload with proper validation",
+        "Typecheck passes (npm run check)"
+      ],
+      "affectedFiles": [
+        "src/routes/api/box/upload/+server.ts",
+        "src/routes/spu/documents/box/+page.svelte"
+      ],
+      "priority": 5,
+      "layer": "ui",
+      "domain": "box",
+      "notes": "Depends on BOX-005. Uses uploadFile() and createSubfolder() from box client."
+    },
+    {
+      "id": "BOX-008",
+      "title": "Add Box connection status to main nav",
+      "description": "Add a Box.com connection indicator to the SPU layout sidebar/nav. Show a small icon indicating connected/disconnected status. Link to Box settings page.",
+      "acceptanceCriteria": [
+        "Box status indicator visible in SPU layout nav",
+        "Green dot when connected, gray when disconnected",
+        "Clicking indicator navigates to /spu/bom/settings",
+        "Status loads without blocking page render",
+        "Typecheck passes (npm run check)"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/+layout.server.ts",
+        "src/routes/spu/+layout.svelte"
+      ],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "box",
+      "notes": "Independent of BOX-005/006/007. Only needs box_integration table query. Add isBoxConnected to layout data."
+    },
+    {
+      "id": "BOX-009",
+      "title": "Setup Box MCP server for AI-assisted content management",
+      "description": "Clone and configure the box-community/mcp-server-box for local development. Set up the MCP server with the project's Box OAuth credentials so Claude can interact with Box content directly through MCP tools.",
+      "acceptanceCriteria": [
+        "mcp-server-box cloned and dependencies installed",
+        "MCP server .env configured with Box credentials",
+        "MCP server starts successfully in STDIO mode",
+        "Claude Desktop or Claude Code config updated to use the MCP server",
+        "Basic test: can list files via MCP tool",
+        "Documentation added to AGENTS.md for MCP server usage"
+      ],
+      "affectedFiles": [
+        "AGENTS.md"
+      ],
+      "priority": 3,
+      "layer": "server",
+      "domain": "box",
+      "notes": "Independent task - can run in parallel with BOX-003 through BOX-008. Requires Python and uv package manager. Does not modify webapp code except AGENTS.md documentation."
+    },
+    {
+      "id": "BOX-010",
+      "title": "Add token refresh monitoring and auto-reconnect",
+      "description": "Add a server-side check that runs on settings page load to verify the Box token is still valid by calling the Box.com /users/me endpoint. If the token refresh fails, update status to 'disconnected' and show a reconnect prompt.",
+      "acceptanceCriteria": [
+        "Settings page load verifies token validity with Box API",
+        "If token is expired and refresh fails, status updates to 'disconnected'",
+        "UI shows 'Token expired - please reconnect' message",
+        "Reconnect button visible when token is invalid",
+        "Audit log entry for token expiry events",
+        "Typecheck passes (npm run check)"
+      ],
+      "affectedFiles": [
+        "src/lib/server/integrations/box/client.ts",
+        "src/routes/spu/bom/settings/+page.server.ts",
+        "src/routes/spu/bom/settings/+page.svelte"
+      ],
+      "priority": 5,
+      "layer": "server",
+      "domain": "box",
+      "notes": "Depends on BOX-003. Uses the /users/me endpoint from BOX_API.userInfo to validate tokens."
+    }
+  ]
+}

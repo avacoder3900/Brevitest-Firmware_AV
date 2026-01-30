@@ -1,0 +1,218 @@
+{
+  "featureName": "BOM/Parts Refactoring — Parts as Master Data, BOM as Inventory View",
+  "branchName": "feature/bom-parts-refactor",
+  "description": "Restructure so Parts tab holds all part detail (manufacturer, cost, lead time, etc.) and BOM tab becomes an inventory-focused view showing only: inventory count, qty per unit, classification, and total value. Box sync populates both tables automatically.",
+  "affectedFiles": [
+    "src/lib/server/db/schema.ts",
+    "drizzle/0002_bom_parts_refactor.sql",
+    "scripts/migrate-bom-to-parts.ts",
+    "src/lib/server/services/bom-parser.ts",
+    "src/lib/server/services/bom-sync.ts",
+    "src/routes/spu/bom/settings/mapping/**",
+    "src/routes/spu/parts/**",
+    "src/routes/spu/bom/**"
+  ],
+  "userStories": [
+    {
+      "id": "BOMR-01",
+      "title": "Schema migration — Enrich partDefinition + add inventoryCount to bomItem",
+      "description": "Add sourcing columns (manufacturer, vendorPartNumber, unitCost, unitOfMeasure, leadTimeDays, minimumOrderQty, hazardClass, certifications, expirationDate, msdsFileId, createdBy) to partDefinition. Add inventoryCount (integer, nullable) to bomItem. Create SQL migration file.",
+      "acceptanceCriteria": [
+        "partDefinition has all sourcing columns in schema.ts",
+        "bomItem has inventoryCount column in schema.ts",
+        "SQL migration file at drizzle/0002_bom_parts_refactor.sql",
+        "npm run check passes",
+        "No existing bomItem columns dropped (soft deprecation)"
+      ],
+      "affectedFiles": [
+        "src/lib/server/db/schema.ts",
+        "drizzle/0002_bom_parts_refactor.sql"
+      ],
+      "priority": 1,
+      "layer": "database",
+      "domain": "spu",
+      "notes": "Phase 1 — must complete before all other tasks. This terminal (alpha) owns this."
+    },
+    {
+      "id": "BOMR-02",
+      "title": "Data migration script — Copy bomItem sourcing data to partDefinition",
+      "description": "Create idempotent script that for each bomItem, upserts a partDefinition matched by partNumber. Copies manufacturer, vendorPartNumber, unitCost, etc. Uses transaction, logs summary.",
+      "acceptanceCriteria": [
+        "Script at scripts/migrate-bom-to-parts.ts",
+        "Idempotent — safe to run multiple times",
+        "Uses transaction for atomicity",
+        "Logs summary: X created, Y updated, Z skipped",
+        "New partDefinitions get scanRequired: false, sortOrder: 0"
+      ],
+      "affectedFiles": [
+        "scripts/migrate-bom-to-parts.ts"
+      ],
+      "priority": 2,
+      "layer": "database",
+      "domain": "spu",
+      "notes": "Phase 1 — depends on BOMR-01. Alpha terminal."
+    },
+    {
+      "id": "BOMR-03",
+      "title": "Update BOM parser — Add inventoryCount field",
+      "description": "Add inventoryCount?: number to ParsedBomItem interface. Add COLUMN_ALIASES for inventoryCount. Parse with getNumericValue in parseRow().",
+      "acceptanceCriteria": [
+        "ParsedBomItem has inventoryCount field",
+        "COLUMN_ALIASES includes inventoryCount with aliases: inventory, inventory count, qty on hand, stock, in stock, count, amount current in inventory",
+        "parseRow() extracts inventoryCount via getNumericValue",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/lib/server/services/bom-parser.ts"
+      ],
+      "priority": 3,
+      "layer": "server",
+      "domain": "bom",
+      "notes": "Phase 2 — depends on BOMR-01. Beta terminal."
+    },
+    {
+      "id": "BOMR-04",
+      "title": "Update BOM sync — Populate both tables during sync",
+      "description": "Modify createBomItem() and updateBomItem() to also insert/update partDefinition with sourcing fields. Write inventoryCount to bomItem. Audit logging covers both tables.",
+      "acceptanceCriteria": [
+        "createBomItem() also creates/updates partDefinition",
+        "updateBomItem() also updates partDefinition sourcing fields",
+        "inventoryCount written to bomItem during sync",
+        "New partDefinitions get scanRequired: false",
+        "Audit logging covers both tables",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/lib/server/services/bom-sync.ts"
+      ],
+      "priority": 3,
+      "layer": "server",
+      "domain": "bom",
+      "notes": "Phase 2 — depends on BOMR-01 and BOMR-03. Alpha terminal."
+    },
+    {
+      "id": "BOMR-05",
+      "title": "Update column mapping UI — Add inventoryCount",
+      "description": "Add inventoryCount to mappable fields in settings/mapping page with label 'Inventory Count'.",
+      "acceptanceCriteria": [
+        "inventoryCount appears in bomFields list",
+        "inventoryCount included in saveMapping fields list",
+        "Label shows 'Inventory Count'",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/bom/settings/mapping/+page.server.ts"
+      ],
+      "priority": 3,
+      "layer": "server",
+      "domain": "bom",
+      "notes": "Phase 2 — depends on BOMR-03. Beta terminal."
+    },
+    {
+      "id": "BOMR-06",
+      "title": "Refactor Parts page — Show full sourcing data",
+      "description": "Expand Parts page table to show: Part #, Name, Category, Manufacturer, Unit Cost, Lead Time, Status, Actions. Add stats cards. Expand 'Add Part' modal with sourcing fields. Add View link to detail page.",
+      "acceptanceCriteria": [
+        "Table shows sourcing columns (manufacturer, unitCost, leadTimeDays)",
+        "Stats cards: total parts, total categories",
+        "Search filters by partNumber, name, manufacturer",
+        "'Add Part' modal includes manufacturer, vendorPartNumber, unitCost, unitOfMeasure, leadTimeDays, minimumOrderQty, hazardClass",
+        "'View' link goes to /spu/parts/[partId]",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/parts/+page.server.ts",
+        "src/routes/spu/parts/+page.svelte"
+      ],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "spu",
+      "notes": "Phase 3 — depends on BOMR-01. Gamma terminal."
+    },
+    {
+      "id": "BOMR-07",
+      "title": "Refactor BOM page — Inventory-focused view",
+      "description": "BOM page joins bomItem with partDefinition on partNumber. Table columns: Part #, Name, Classification, Qty/Unit, Inventory Count, Unit Cost, Total Value. Stats: Total Items, Total Inventory Value, Low Stock. Keep Sync from Box button. Remove manufacturer/vendor PN columns.",
+      "acceptanceCriteria": [
+        "Server load joins bomItem with partDefinition via partNumber",
+        "Table shows: partNumber, name, classification, qtyPerUnit, inventoryCount, unitCost, totalValue",
+        "Total Value = unitCost x inventoryCount",
+        "Stats: Total Items, Total Inventory Value, Low Stock count",
+        "Sync from Box button and status retained",
+        "View links go to /spu/parts/[partId]",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/bom/+page.server.ts",
+        "src/routes/spu/bom/+page.svelte"
+      ],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "bom",
+      "notes": "Phase 3 — depends on BOMR-01. Beta terminal."
+    },
+    {
+      "id": "BOMR-08",
+      "title": "Simplify BOM detail page + Remove bomPartLink usage",
+      "description": "BOM detail shows inventory count (editable), qty per unit, classification, version history. Sourcing info shown read-only from partDefinition join with link to parts detail. Remove link/unlink part actions.",
+      "acceptanceCriteria": [
+        "Inventory count editable on detail page",
+        "Sourcing info read-only from partDefinition join",
+        "Link to /spu/parts/[partId] for full editing",
+        "bomPartLink import/usage removed from active code",
+        "Deactivate action and version history retained",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/bom/[bomId]/+page.server.ts",
+        "src/routes/spu/bom/[bomId]/+page.svelte"
+      ],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "bom",
+      "notes": "Phase 3 — depends on BOMR-01. Alpha terminal."
+    },
+    {
+      "id": "BOMR-09",
+      "title": "Create Parts detail page",
+      "description": "New pages at /spu/parts/[partId]. Shows all partDefinition fields with edit form. Side panel shows related BOM data (inventory count, qty per unit) from bomItem join. Toggle active/inactive. Breadcrumb back to parts list.",
+      "acceptanceCriteria": [
+        "New +page.server.ts and +page.svelte at parts/[partId]",
+        "Edit form with all partDefinition fields",
+        "Side panel shows BOM data from bomItem join",
+        "Toggle active/inactive action",
+        "Breadcrumb: Parts > [Part Number]",
+        "Permissions: part:read, part:write",
+        "npm run check passes"
+      ],
+      "affectedFiles": [
+        "src/routes/spu/parts/[partId]/+page.server.ts",
+        "src/routes/spu/parts/[partId]/+page.svelte"
+      ],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "spu",
+      "notes": "Phase 3 — depends on BOMR-01. Delta terminal."
+    },
+    {
+      "id": "BOMR-10",
+      "title": "Update documentation and run full verification",
+      "description": "Update AGENTS.md with new architecture: Parts = master data, BOM = inventory view, partNumber join pattern replacing bomPartLink. Update progress.txt. Run npm run check and npm run lint.",
+      "acceptanceCriteria": [
+        "AGENTS.md documents new Parts/BOM architecture",
+        "AGENTS.md documents partNumber join pattern",
+        "progress.txt updated with all task completions and learnings",
+        "npm run check — 0 errors",
+        "npm run lint — clean"
+      ],
+      "affectedFiles": [
+        "AGENTS.md",
+        "scripts/ralph/progress.txt"
+      ],
+      "priority": 5,
+      "layer": "server",
+      "domain": "spu",
+      "notes": "Phase 4 — depends on all previous tasks. Alpha terminal."
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+{
+  "featureName": "Cloud Communication Module (Supabase)",
+  "branchName": "feature/supabase-cloud",
+  "description": "Supabase/PostgreSQL cloud integration replacing Particle/CouchDB. Handles cartridge validation, assay loading, test upload, and device management via HTTPS to Supabase Edge Functions.",
+  "affectedFiles": [
+    "supabase-firmware/src/SupabaseClient.h",
+    "supabase-firmware/src/SupabaseClient.cpp",
+    "supabase-firmware/src/CloudProtocol.h",
+    "supabase-firmware/backend/functions/validate-cartridge/index.ts",
+    "supabase-firmware/backend/functions/load-assay/index.ts",
+    "supabase-firmware/backend/functions/upload-test/index.ts",
+    "supabase-firmware/backend/functions/reset-cartridge/index.ts",
+    "supabase-firmware/backend/schema/schema.sql",
+    "supabase-firmware/tests/unit/test_cloud.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "CLOUD-001",
+      "title": "Implement SupabaseClient class",
+      "description": "Create HTTPS client for communicating with Supabase Edge Functions.",
+      "acceptanceCriteria": [
+        "init() configures HTTP client",
+        "setEndpoint(url) function",
+        "setApiKey(key) function",
+        "isConnected() function",
+        "WiFi connectivity management"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SupabaseClient.h"],
+      "documentation": "Document Supabase endpoint configuration",
+      "priority": 1,
+      "notes": "Replaces Particle.publish/subscribe pattern"
+    },
+    {
+      "id": "CLOUD-002",
+      "title": "Implement cartridge validation",
+      "description": "Create function to validate cartridge UUID with cloud backend.",
+      "acceptanceCriteria": [
+        "validateCartridge(uuid) function",
+        "Returns validation result with assay ID",
+        "Timeout: 45 seconds",
+        "Retry logic: 3 attempts, 5s backoff",
+        "Request ID correlation"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SupabaseClient.cpp"],
+      "priority": 1,
+      "notes": "Critical path for test execution"
+    },
+    {
+      "id": "CLOUD-003",
+      "title": "Implement assay loading",
+      "description": "Create function to download assay (BCODE) from cloud.",
+      "acceptanceCriteria": [
+        "loadAssay(assayId) function",
+        "Handles chunked response (large BCODE)",
+        "Checksum verification",
+        "Stores assay locally",
+        "Callback on completion"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SupabaseClient.cpp"],
+      "priority": 1,
+      "notes": "BCODE can be up to 5000 bytes"
+    },
+    {
+      "id": "CLOUD-004",
+      "title": "Implement test upload",
+      "description": "Create function to upload test results to cloud.",
+      "acceptanceCriteria": [
+        "uploadTest(testRecord) function",
+        "Handles 9668 byte payload",
+        "Retry on failure",
+        "Confirmation callback",
+        "Caches failed uploads for retry"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SupabaseClient.cpp"],
+      "priority": 1,
+      "notes": "Must handle network interruptions gracefully"
+    },
+    {
+      "id": "CLOUD-005",
+      "title": "Implement cartridge reset",
+      "description": "Create function to reset cartridge status on server.",
+      "acceptanceCriteria": [
+        "resetCartridge(uuid) function",
+        "Confirmation of reset",
+        "Error handling",
+        "Timeout handling"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SupabaseClient.cpp"],
+      "priority": 2,
+      "notes": "Allows cartridge reuse for testing"
+    },
+    {
+      "id": "CLOUD-006",
+      "title": "Implement offline caching",
+      "description": "Create local cache for offline operation and retry.",
+      "acceptanceCriteria": [
+        "Cache failed uploads to filesystem",
+        "Retry cached uploads when connected",
+        "getCacheCount() function",
+        "clearCache() function",
+        "Max 50 cached uploads"
+      ],
+      "affectedFiles": ["supabase-firmware/src/SupabaseClient.cpp"],
+      "priority": 2,
+      "notes": "Ensures no data loss during network issues"
+    },
+    {
+      "id": "CLOUD-007",
+      "title": "Create Supabase Edge Functions",
+      "description": "Implement server-side Edge Functions for device communication.",
+      "acceptanceCriteria": [
+        "validate-cartridge function",
+        "load-assay function",
+        "upload-test function",
+        "reset-cartridge function",
+        "Device authentication via API key"
+      ],
+      "affectedFiles": [
+        "supabase-firmware/backend/functions/validate-cartridge/index.ts",
+        "supabase-firmware/backend/functions/load-assay/index.ts",
+        "supabase-firmware/backend/functions/upload-test/index.ts",
+        "supabase-firmware/backend/functions/reset-cartridge/index.ts"
+      ],
+      "priority": 1,
+      "notes": "TypeScript Edge Functions"
+    },
+    {
+      "id": "CLOUD-008",
+      "title": "Create database schema",
+      "description": "Design PostgreSQL schema for device data storage.",
+      "acceptanceCriteria": [
+        "devices table (device_id, api_key, metadata)",
+        "cartridges table (uuid, status, assay_id)",
+        "assays table (id, bcode, duration, checksum)",
+        "test_results table (all test record fields)",
+        "Row Level Security policies"
+      ],
+      "affectedFiles": ["supabase-firmware/backend/schema/schema.sql"],
+      "priority": 1,
+      "notes": "Replaces CouchDB document structure"
+    },
+    {
+      "id": "CLOUD-009",
+      "title": "Create cloud communication unit tests",
+      "description": "Unit tests for cloud client with mocked HTTP.",
+      "acceptanceCriteria": [
+        "Test request formatting",
+        "Test response parsing",
+        "Test retry logic",
+        "Test cache operations",
+        "Test timeout handling"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_cloud.cpp"],
+      "priority": 3,
+      "notes": "Mock HTTP client for testing"
+    }
+  ]
+}

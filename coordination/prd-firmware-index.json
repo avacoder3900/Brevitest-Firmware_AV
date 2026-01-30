@@ -1,0 +1,208 @@
+{
+  "projectName": "Brevitest Supabase Firmware Rewrite",
+  "version": "1.0.0",
+  "description": "Complete firmware rewrite migrating from Particle/CouchDB to Supabase/PostgreSQL architecture",
+  "createdDate": "2026-01-29",
+  "lastUpdated": "2026-01-29",
+  "totalPRDs": 15,
+  "totalUserStories": 103,
+  "modules": [
+    {
+      "name": "Data Structures",
+      "prdFile": "prd-firmware-data-structures.json",
+      "stories": 6,
+      "priority": 1,
+      "dependencies": [],
+      "canStartImmediately": true,
+      "description": "Core type definitions shared across all modules"
+    },
+    {
+      "name": "Hardware Abstraction Layer",
+      "prdFile": "prd-firmware-hal.json",
+      "stories": 7,
+      "priority": 1,
+      "dependencies": [],
+      "canStartImmediately": true,
+      "description": "Hardware pin definitions and low-level I/O"
+    },
+    {
+      "name": "State Machine",
+      "prdFile": "prd-firmware-state-machine.json",
+      "stories": 8,
+      "priority": 1,
+      "dependencies": ["prd-firmware-data-structures.json"],
+      "canStartImmediately": false,
+      "description": "Core state management for device modes"
+    },
+    {
+      "name": "Spectrophotometer",
+      "prdFile": "prd-firmware-spectrophotometer.json",
+      "stories": 7,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "AS7341 sensor driver and measurement logic"
+    },
+    {
+      "name": "Motor Controller",
+      "prdFile": "prd-firmware-motor.json",
+      "stories": 8,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "Stepper motor and stage positioning"
+    },
+    {
+      "name": "Heater Controller",
+      "prdFile": "prd-firmware-heater.json",
+      "stories": 7,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "PID temperature control"
+    },
+    {
+      "name": "Laser Controller",
+      "prdFile": "prd-firmware-laser.json",
+      "stories": 6,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "PWM laser diode control"
+    },
+    {
+      "name": "Barcode Scanner",
+      "prdFile": "prd-firmware-barcode.json",
+      "stories": 6,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "Barcode reading and parsing"
+    },
+    {
+      "name": "Buzzer Controller",
+      "prdFile": "prd-firmware-buzzer.json",
+      "stories": 6,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "Audio feedback and alerts"
+    },
+    {
+      "name": "Cloud Communication",
+      "prdFile": "prd-firmware-cloud.json",
+      "stories": 9,
+      "priority": 1,
+      "dependencies": ["prd-firmware-data-structures.json"],
+      "canStartImmediately": false,
+      "description": "Supabase integration for cloud operations"
+    },
+    {
+      "name": "Serial Interface",
+      "prdFile": "prd-firmware-serial.json",
+      "stories": 10,
+      "priority": 3,
+      "dependencies": ["All hardware modules"],
+      "canStartImmediately": false,
+      "description": "Debug and control serial commands"
+    },
+    {
+      "name": "Test Engine",
+      "prdFile": "prd-firmware-test-engine.json",
+      "stories": 8,
+      "priority": 2,
+      "dependencies": ["All hardware modules", "prd-firmware-state-machine.json"],
+      "canStartImmediately": false,
+      "description": "BCODE interpreter and test execution"
+    },
+    {
+      "name": "Storage Manager",
+      "prdFile": "prd-firmware-storage.json",
+      "stories": 6,
+      "priority": 2,
+      "dependencies": ["prd-firmware-data-structures.json"],
+      "canStartImmediately": false,
+      "description": "EEPROM and filesystem management"
+    },
+    {
+      "name": "LED Controller",
+      "prdFile": "prd-firmware-led.json",
+      "stories": 6,
+      "priority": 2,
+      "dependencies": ["prd-firmware-hal.json"],
+      "canStartImmediately": false,
+      "description": "RGB LED status indicators"
+    },
+    {
+      "name": "Main Integration",
+      "prdFile": "prd-firmware-main.json",
+      "stories": 12,
+      "priority": 4,
+      "dependencies": ["All other PRDs"],
+      "canStartImmediately": false,
+      "description": "Main entry point and module coordination"
+    }
+  ],
+  "developmentPhases": [
+    {
+      "phase": 1,
+      "name": "Foundation",
+      "modules": ["Data Structures", "Hardware Abstraction Layer"],
+      "description": "Core types and hardware interface - can run in parallel"
+    },
+    {
+      "phase": 2,
+      "name": "Core Systems",
+      "modules": ["State Machine", "Storage Manager", "Cloud Communication"],
+      "description": "State management and persistence - can run in parallel after Phase 1"
+    },
+    {
+      "phase": 3,
+      "name": "Hardware Modules",
+      "modules": ["Spectrophotometer", "Motor Controller", "Heater Controller", "Laser Controller", "Barcode Scanner", "Buzzer Controller", "LED Controller"],
+      "description": "All hardware modules - can ALL run in parallel after Phase 1 HAL"
+    },
+    {
+      "phase": 4,
+      "name": "Integration",
+      "modules": ["Test Engine", "Serial Interface"],
+      "description": "Modules that integrate multiple subsystems - after Phase 2 and 3"
+    },
+    {
+      "phase": 5,
+      "name": "Main Integration",
+      "modules": ["Main Integration"],
+      "description": "Final assembly - after all other phases"
+    }
+  ],
+  "parallelizationGuide": {
+    "maxParallelAgents": 7,
+    "recommendedParallelSets": [
+      {
+        "set": 1,
+        "agents": ["Data Structures Agent", "HAL Agent"],
+        "notes": "Start immediately, no dependencies"
+      },
+      {
+        "set": 2,
+        "agents": ["State Machine Agent", "Cloud Agent", "Storage Agent"],
+        "notes": "After Data Structures complete"
+      },
+      {
+        "set": 3,
+        "agents": ["Spectro Agent", "Motor Agent", "Heater Agent", "Laser Agent", "Barcode Agent", "Buzzer Agent", "LED Agent"],
+        "notes": "After HAL complete - all 7 can run in parallel"
+      },
+      {
+        "set": 4,
+        "agents": ["Test Engine Agent", "Serial Agent"],
+        "notes": "After hardware modules complete"
+      },
+      {
+        "set": 5,
+        "agents": ["Main Integration Agent"],
+        "notes": "Final phase after all modules complete"
+      }
+    ]
+  }
+}

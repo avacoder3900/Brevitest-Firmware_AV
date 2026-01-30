@@ -1,0 +1,104 @@
+{
+  "featureName": "LED Controller Module",
+  "branchName": "feature/supabase-led",
+  "description": "RGB LED indicator controller for device status communication. Manages colors, patterns, and priority-based display.",
+  "affectedFiles": [
+    "supabase-firmware/src/LEDController.h",
+    "supabase-firmware/src/LEDController.cpp",
+    "supabase-firmware/tests/unit/test_led.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "LED-001",
+      "title": "Implement LEDController class",
+      "description": "Create LED controller using Particle RGB LED API.",
+      "acceptanceCriteria": [
+        "init() function",
+        "setColor(r, g, b) function",
+        "setBrightness(level) function",
+        "off() function",
+        "Uses Particle LEDStatus class"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LEDController.h"],
+      "documentation": "Document color meanings",
+      "priority": 1,
+      "notes": "Uses built-in RGB LED on Particle Boron"
+    },
+    {
+      "id": "LED-002",
+      "title": "Implement state-based indicators",
+      "description": "Create indicator patterns for each device state.",
+      "acceptanceCriteria": [
+        "IDLE: Slow green pulse",
+        "HEATING: Orange solid",
+        "RUNNING_TEST: Blue pulse",
+        "ERROR: Red solid",
+        "Automatic state-to-LED mapping"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LEDController.cpp"],
+      "priority": 1,
+      "notes": "Matches legacy indicator behavior"
+    },
+    {
+      "id": "LED-003",
+      "title": "Implement user prompt indicators",
+      "description": "Create indicators for user interaction prompts.",
+      "acceptanceCriteria": [
+        "Insert prompt: Green fade",
+        "Remove prompt: Green slow-blink",
+        "Don't touch: Red solid",
+        "showPrompt(type) function",
+        "clearPrompt() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LEDController.cpp"],
+      "priority": 1,
+      "notes": "High priority overrides state indicator"
+    },
+    {
+      "id": "LED-004",
+      "title": "Implement pattern animations",
+      "description": "Create animated patterns for LED display.",
+      "acceptanceCriteria": [
+        "Fade in/out pattern",
+        "Blink pattern (configurable rate)",
+        "Pulse pattern",
+        "Rainbow pattern (optional)",
+        "update() called in main loop"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LEDController.cpp"],
+      "priority": 2,
+      "notes": "Non-blocking animation system"
+    },
+    {
+      "id": "LED-005",
+      "title": "Implement priority system",
+      "description": "Create priority-based display with override capability.",
+      "acceptanceCriteria": [
+        "Priority levels: Low, Normal, High, Critical",
+        "Higher priority overrides lower",
+        "Timeout for temporary indicators",
+        "Restore previous on timeout"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LEDController.cpp"],
+      "priority": 2,
+      "notes": "Ensures important states always visible"
+    },
+    {
+      "id": "LED-006",
+      "title": "Create LED controller unit tests",
+      "description": "Unit tests for LED controller.",
+      "acceptanceCriteria": [
+        "Test color setting",
+        "Test pattern timing",
+        "Test priority system",
+        "Test state mapping"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_led.cpp"],
+      "priority": 3,
+      "notes": "Mock LED API"
+    }
+  ]
+}

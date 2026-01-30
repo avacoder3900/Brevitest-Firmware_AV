@@ -1,0 +1,211 @@
+{
+  "featureName": "Main Integration Module",
+  "branchName": "feature/supabase-main",
+  "description": "Main firmware entry point integrating all modules. Implements setup(), loop(), and coordinates all subsystems.",
+  "affectedFiles": [
+    "supabase-firmware/src/main.ino",
+    "supabase-firmware/src/main.h",
+    "supabase-firmware/project.properties",
+    "supabase-firmware/tests/integration/test_integration.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "dependencies": [
+    "prd-firmware-data-structures.json",
+    "prd-firmware-hal.json",
+    "prd-firmware-state-machine.json",
+    "prd-firmware-spectrophotometer.json",
+    "prd-firmware-motor.json",
+    "prd-firmware-heater.json",
+    "prd-firmware-laser.json",
+    "prd-firmware-barcode.json",
+    "prd-firmware-buzzer.json",
+    "prd-firmware-cloud.json",
+    "prd-firmware-serial.json",
+    "prd-firmware-test-engine.json",
+    "prd-firmware-storage.json",
+    "prd-firmware-led.json"
+  ],
+  "userStories": [
+    {
+      "id": "MAIN-001",
+      "title": "Create project structure",
+      "description": "Set up Particle project with all dependencies and build configuration.",
+      "acceptanceCriteria": [
+        "project.properties with dependencies",
+        "Correct Particle OS version (6.3.3)",
+        "Library includes for AS7341",
+        "Build configuration for Boron"
+      ],
+      "affectedFiles": ["supabase-firmware/project.properties"],
+      "documentation": "Document build process",
+      "priority": 1,
+      "notes": "Must compile for Particle Boron"
+    },
+    {
+      "id": "MAIN-002",
+      "title": "Implement setup() function",
+      "description": "Create initialization sequence for all modules.",
+      "acceptanceCriteria": [
+        "Initialize all modules in correct order",
+        "HAL first, then hardware modules",
+        "State machine initialization",
+        "Cloud client connection",
+        "Serial interface startup"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Order matters for dependencies"
+    },
+    {
+      "id": "MAIN-003",
+      "title": "Implement main loop() structure",
+      "description": "Create main loop with state-driven operation.",
+      "acceptanceCriteria": [
+        "Always: serial processing, hardware loop",
+        "State-driven switch for mode-specific code",
+        "Background tasks (LED, buzzer, heater)",
+        "Non-blocking design",
+        "Timing analysis"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Match legacy loop structure"
+    },
+    {
+      "id": "MAIN-004",
+      "title": "Implement IDLE state handler",
+      "description": "Create handler for IDLE state operations.",
+      "acceptanceCriteria": [
+        "Monitor cartridge insertion",
+        "Check heating readiness",
+        "Handle cached upload retry",
+        "LED indicator management",
+        "Transition to BARCODE_SCANNING on insert"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Default resting state"
+    },
+    {
+      "id": "MAIN-005",
+      "title": "Implement HEATING state handler",
+      "description": "Create handler for temperature ramp-up phase.",
+      "acceptanceCriteria": [
+        "Run PID control loop",
+        "Monitor temperature stability",
+        "Transition to IDLE when ready",
+        "LED indicator (orange)",
+        "Timeout handling"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Blocking until temperature stable"
+    },
+    {
+      "id": "MAIN-006",
+      "title": "Implement BARCODE_SCANNING state handler",
+      "description": "Create handler for barcode reading phase.",
+      "acceptanceCriteria": [
+        "Trigger barcode scan",
+        "Validate barcode format",
+        "Determine barcode type",
+        "Transition based on type",
+        "Handle scan failures"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Entry point for all cartridge workflows"
+    },
+    {
+      "id": "MAIN-007",
+      "title": "Implement VALIDATING_CARTRIDGE state handler",
+      "description": "Create handler for cloud cartridge validation.",
+      "acceptanceCriteria": [
+        "Call SupabaseClient.validateCartridge()",
+        "Handle validation response",
+        "Load assay on success",
+        "Transition to RUNNING_TEST or ERROR",
+        "Timeout and retry handling"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Critical cloud integration point"
+    },
+    {
+      "id": "MAIN-008",
+      "title": "Implement RUNNING_TEST state handler",
+      "description": "Create handler for test execution.",
+      "acceptanceCriteria": [
+        "Delegate to TestRunner",
+        "Monitor for cartridge removal",
+        "Update progress indicators",
+        "Transition to UPLOADING on complete",
+        "Handle test cancellation"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Most complex state handler"
+    },
+    {
+      "id": "MAIN-009",
+      "title": "Implement UPLOADING_RESULTS state handler",
+      "description": "Create handler for test data upload.",
+      "acceptanceCriteria": [
+        "Call SupabaseClient.uploadTest()",
+        "Handle upload response",
+        "Cache on failure",
+        "Transition to IDLE on success",
+        "Retry logic"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Must handle network failures gracefully"
+    },
+    {
+      "id": "MAIN-010",
+      "title": "Implement ERROR_STATE handler",
+      "description": "Create handler for error recovery.",
+      "acceptanceCriteria": [
+        "Display error indicator (red LED)",
+        "Log error details",
+        "Wait for user intervention",
+        "Recovery via serial command",
+        "Transition to IDLE on recovery"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 2,
+      "notes": "Safety fallback state"
+    },
+    {
+      "id": "MAIN-011",
+      "title": "Implement interrupt handlers",
+      "description": "Create interrupt handlers for hardware events.",
+      "acceptanceCriteria": [
+        "D3 interrupt for cartridge detection",
+        "Non-blocking handler (set flag only)",
+        "Debouncing in main loop",
+        "Safe state updates"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 1,
+      "notes": "Critical for responsive cartridge detection"
+    },
+    {
+      "id": "MAIN-012",
+      "title": "Create integration tests",
+      "description": "End-to-end tests for complete workflows.",
+      "acceptanceCriteria": [
+        "Test full insert → scan → validate → test → upload flow",
+        "Test error recovery",
+        "Test cartridge removal handling",
+        "Test stress test mode",
+        "Hardware-in-loop testing"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/integration/test_integration.cpp"],
+      "priority": 3,
+      "notes": "Requires actual hardware"
+    }
+  ]
+}

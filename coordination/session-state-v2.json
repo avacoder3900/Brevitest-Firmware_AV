@@ -1,0 +1,1383 @@
+{
+  "_schema": "Multi-Claude Coordination State v2",
+  "_version": "2.0.0",
+  "_updated": "2026-01-29T17:22:46.321Z",
+  "activeSessions": {
+    "beta": {
+      "startedAt": "2026-01-27T17:44:11.127Z",
+      "lastHeartbeat": "2026-01-27T17:47:02.836Z",
+      "status": "active",
+      "currentTask": "BOX-002",
+      "prdId": "PRD-BOX",
+      "description": "Working on Box.com Integration & Document Viewer"
+    },
+    "ralph": {
+      "startedAt": "2026-01-29T17:11:46.938Z",
+      "lastHeartbeat": "2026-01-29T17:22:46.320Z",
+      "status": "active",
+      "currentTask": "WINSTX-01",
+      "prdId": "PRD-WINSTX",
+      "description": "Working on Work Instruction Custom Fields & Barcode Scanning"
+    }
+  },
+  "fileReservations": {},
+  "protectedFiles": [
+    "src/routes/spu/documents/**",
+    "src/lib/components/documents/**",
+    "src/routes/api/box/**",
+    "src/routes/spu/bom/**",
+    "src/lib/server/integrations/box/**",
+    "src/lib/server/services/bom-sync.ts",
+    "src/lib/server/services/bom-parser.ts",
+    "src/lib/server/db/schema.ts",
+    "src/lib/server/services/document-parser.ts",
+    "src/lib/server/services/work-instruction-parser.ts",
+    "src/routes/spu/assembly/**",
+    "src/lib/components/upload/**",
+    "src/lib/server/services/qr-code-generator.ts",
+    "src/routes/spu/documents/instructions/[id]/**",
+    "src/routes/spu/assembly/[sessionId]/**",
+    "src/routes/api/assembly/[sessionId]/qr/**",
+    "src/lib/server/services/barcode-parser.ts"
+  ],
+  "taskClaims": {
+    "DOC-001": {
+      "session": "claude-demo",
+      "prdId": "PRD-DOCS",
+      "claimedAt": "2026-01-23T20:03:15.445Z",
+      "status": "in_progress"
+    },
+    "BOX-002": {
+      "session": "beta",
+      "prdId": "PRD-BOX",
+      "claimedAt": "2026-01-27T22:39:43.603Z",
+      "status": "in_progress"
+    },
+    "WINST-01": {
+      "session": "ralph",
+      "prdId": "PRD-WINST",
+      "claimedAt": "2026-01-29T17:01:54.194Z",
+      "status": "in_progress"
+    },
+    "WINSTX-02": {
+      "session": "ralph",
+      "prdId": "PRD-WINSTX",
+      "claimedAt": "2026-01-29T17:13:56.973Z",
+      "status": "in_progress"
+    },
+    "WINSTX-04": {
+      "session": "ralph",
+      "prdId": "PRD-WINSTX",
+      "claimedAt": "2026-01-29T17:16:10.878Z",
+      "status": "in_progress"
+    },
+    "WINSTX-06": {
+      "session": "ralph",
+      "prdId": "PRD-WINSTX",
+      "claimedAt": "2026-01-29T17:18:40.095Z",
+      "status": "in_progress"
+    },
+    "WINSTX-08": {
+      "session": "ralph",
+      "prdId": "PRD-WINSTX",
+      "claimedAt": "2026-01-29T17:22:06.580Z",
+      "status": "in_progress"
+    },
+    "WINSTX-01": {
+      "session": "ralph",
+      "prdId": "PRD-WINSTX",
+      "claimedAt": "2026-01-29T17:22:46.321Z",
+      "status": "in_progress"
+    }
+  },
+  "messageLog": [
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-23T20:03:08.579Z",
+      "message": "PRD loaded: [PRD-DOCS] Document Management System (2 tasks)"
+    },
+    {
+      "from": "claude-demo",
+      "to": "all",
+      "timestamp": "2026-01-23T20:03:15.445Z",
+      "message": "Joined [PRD-DOCS] and claimed DOC-001: Create documents list page"
+    },
+    {
+      "from": "claude-demo",
+      "to": "all",
+      "timestamp": "2026-01-23T20:03:30.829Z",
+      "message": "Session ended"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-27T17:44:06.896Z",
+      "message": "PRD loaded: [PRD-BOX] Box.com Integration & Document Viewer (10 tasks)"
+    },
+    {
+      "from": "beta",
+      "to": "all",
+      "timestamp": "2026-01-27T17:44:11.128Z",
+      "message": "Joined [PRD-BOX] and claimed BOX-001: Validate Box Developer App configuration"
+    },
+    {
+      "from": "beta",
+      "to": "all",
+      "timestamp": "2026-01-27T18:48:59.014Z",
+      "message": "Submitted BOX-001 for review (1 files)"
+    },
+    {
+      "from": "alpha",
+      "to": "beta",
+      "timestamp": "2026-01-27T22:39:39.366Z",
+      "message": "Approved review for BOX-001"
+    },
+    {
+      "from": "beta",
+      "to": "all",
+      "timestamp": "2026-01-27T22:39:43.603Z",
+      "message": "Completed BOX-001 (reviewed by alpha)"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-29T17:01:47.704Z",
+      "message": "PRD loaded: [PRD-WINST] Work Instruction & Document Management System (27 tasks)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:01:54.194Z",
+      "message": "Joined [PRD-WINST] and claimed WINST-01: Add workInstruction table to database schema"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:03:50.044Z",
+      "message": "Session ended"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-29T17:03:54.961Z",
+      "message": "PRD loaded: [PRD-WINSTX] Work Instruction Custom Fields & QR Export (12 tasks)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:03:59.491Z",
+      "message": "Joined [PRD-WINSTX] and claimed WINSTX-01: Add stepFieldDefinition table for custom scan fields"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:11:40.400Z",
+      "message": "Session ended"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-29T17:11:40.546Z",
+      "message": "PRD loaded: [PRD-WINSTX] Work Instruction Custom Fields & Barcode Scanning (8 tasks)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:11:46.940Z",
+      "message": "Joined [PRD-WINSTX] and claimed WINSTX-01: Add stepFieldDefinition table for custom scan fields"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:13:50.247Z",
+      "message": "Submitted WINSTX-01 for review (1 files)"
+    },
+    {
+      "from": "orchestrator",
+      "to": "ralph",
+      "timestamp": "2026-01-29T17:13:56.827Z",
+      "message": "Approved review for WINSTX-01"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:13:56.973Z",
+      "message": "Completed WINSTX-01 (reviewed by orchestrator)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:14:02.549Z",
+      "message": "Joined [PRD-WINSTX] and claimed WINSTX-03: Create barcode parser service for GS1/external codes"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:16:04.602Z",
+      "message": "Submitted WINSTX-03 for review (1 files)"
+    },
+    {
+      "from": "orchestrator",
+      "to": "ralph",
+      "timestamp": "2026-01-29T17:16:10.732Z",
+      "message": "Approved review for WINSTX-03"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:16:10.878Z",
+      "message": "Completed WINSTX-03 (reviewed by orchestrator)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:16:28.611Z",
+      "message": "Joined [PRD-WINSTX] and claimed WINSTX-05: Create custom field configuration server"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:18:34.538Z",
+      "message": "Submitted WINSTX-05 for review (1 files)"
+    },
+    {
+      "from": "orchestrator",
+      "to": "ralph",
+      "timestamp": "2026-01-29T17:18:39.934Z",
+      "message": "Approved review for WINSTX-05"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:18:40.095Z",
+      "message": "Completed WINSTX-05 (reviewed by orchestrator)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:18:58.888Z",
+      "message": "Joined [PRD-WINSTX] and claimed WINSTX-07: Update assembly server for custom field capture"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:22:00.428Z",
+      "message": "Submitted WINSTX-07 for review (2 files)"
+    },
+    {
+      "from": "orchestrator",
+      "to": "ralph",
+      "timestamp": "2026-01-29T17:22:06.420Z",
+      "message": "Approved review for WINSTX-07"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:22:06.580Z",
+      "message": "Completed WINSTX-07 (reviewed by orchestrator)"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-29T17:22:34.475Z",
+      "message": "PRD loaded: [PRD-WINSTX] Work Instruction Custom Fields & Barcode Scanning (8 tasks)"
+    },
+    {
+      "from": "ralph",
+      "to": "all",
+      "timestamp": "2026-01-29T17:22:46.321Z",
+      "message": "Joined [PRD-WINSTX] and claimed WINSTX-01: Add stepFieldDefinition table for custom scan fields"
+    }
+  ],
+  "prds": {
+    "PRD-DOCS": {
+      "id": "PRD-DOCS",
+      "featureName": "Document Management System",
+      "branchName": "feature/document-management",
+      "description": "File upload, work instructions, and document control for FDA compliance",
+      "affectedFiles": [
+        "src/routes/spu/documents/**",
+        "src/lib/components/documents/**"
+      ],
+      "loadedAt": "2026-01-23T20:03:08.578Z",
+      "tasks": [
+        {
+          "id": "DOC-001",
+          "title": "Create documents list page",
+          "description": "As a user, I want to see a list of all documents with filtering",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/+page.svelte",
+            "Display documents in table format",
+            "Show: document number, title, revision, status, category",
+            "Include 'Upload Document' button",
+            "Typecheck passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 1,
+          "status": "in_progress",
+          "assignedTo": "claude-demo",
+          "reviewedBy": null,
+          "startedAt": "2026-01-23T20:03:15.445Z"
+        },
+        {
+          "id": "DOC-002",
+          "title": "Create documents server load",
+          "description": "As a developer, I need to load documents from the database",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/+page.server.ts",
+            "Load work instructions from database",
+            "Require 'document:read' permission",
+            "Typecheck passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 2,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        }
+      ]
+    },
+    "PRD-BOX": {
+      "id": "PRD-BOX",
+      "featureName": "Box.com Integration & Document Viewer",
+      "branchName": "feature/box-integration",
+      "description": "Complete Box.com integration: OAuth flow testing, document browser UI, Box MCP server setup, and BOM sync validation. Builds on existing OAuth endpoints, Box API client, and BOM sync service.",
+      "affectedFiles": [
+        "src/routes/api/box/**",
+        "src/routes/spu/bom/**",
+        "src/lib/server/integrations/box/**",
+        "src/lib/server/services/bom-sync.ts",
+        "src/lib/server/services/bom-parser.ts",
+        "src/routes/spu/documents/**"
+      ],
+      "loadedAt": "2026-01-27T17:44:06.895Z",
+      "tasks": [
+        {
+          "id": "BOX-001",
+          "title": "Validate Box Developer App configuration",
+          "description": "Verify the Box Developer Console has the correct redirect URI (http://localhost:5176/api/box/callback), proper scopes (read/write files and folders), and the app is approved. Ensure .env has correct credentials. Test that the OAuth redirect to Box.com works without errors.",
+          "acceptanceCriteria": [
+            "Box Developer Console redirect URI matches BOX_REDIRECT_URI in .env",
+            "App has necessary Box API scopes enabled",
+            "Navigating to /api/box/auth redirects to Box.com login",
+            "No errors in server console during redirect"
+          ],
+          "affectedFiles": [
+            ".env",
+            "src/lib/server/integrations/box/config.ts"
+          ],
+          "documentation": null,
+          "priority": 1,
+          "status": "completed",
+          "assignedTo": "beta",
+          "reviewedBy": "alpha",
+          "startedAt": "2026-01-27T17:44:11.128Z",
+          "completedAt": "2026-01-27T22:39:43.602Z"
+        },
+        {
+          "id": "BOX-002",
+          "title": "Create 'Inventory & Materials' folder in Box",
+          "description": "Ensure the target folder 'Inventory & Materials' exists in the Box.com account. Create a test 'Live Equipment Overview' Excel file inside it with sample BOM columns (Part Number, Name, Description, Category, Manufacturer, Unit Cost, Quantity, Unit of Measure).",
+          "acceptanceCriteria": [
+            "Folder 'Inventory & Materials' exists in Box.com root",
+            "File 'Live Equipment Overview' exists inside the folder",
+            "Excel file has correct column headers for BOM parsing",
+            "At least 3 sample BOM rows with realistic test data"
+          ],
+          "affectedFiles": [],
+          "documentation": null,
+          "priority": 1,
+          "status": "in_progress",
+          "assignedTo": "beta",
+          "reviewedBy": null,
+          "startedAt": "2026-01-27T22:39:43.603Z"
+        },
+        {
+          "id": "BOX-003",
+          "title": "Test full OAuth flow end-to-end",
+          "description": "With BOX-001 and BOX-002 complete, test the full OAuth flow: click Connect on settings page -> Box login -> authorize app -> callback stores tokens -> settings shows connected status with folder/file IDs.",
+          "acceptanceCriteria": [
+            "Settings page loads at /spu/bom/settings without errors",
+            "Clicking 'Connect to Box.com' redirects to Box OAuth",
+            "After authorizing, callback redirects to settings with ?connected=true",
+            "Settings page shows green 'Connected' status",
+            "Folder ID and File ID are displayed on settings page",
+            "box_integration table has valid tokens"
+          ],
+          "affectedFiles": [
+            "src/routes/api/box/auth/+server.ts",
+            "src/routes/api/box/callback/+server.ts",
+            "src/routes/spu/bom/settings/+page.server.ts",
+            "src/routes/spu/bom/settings/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 2,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-004",
+          "title": "Test BOM sync from Box.com",
+          "description": "With Box connected (BOX-003), test the 'Sync Now' button on settings page. Verify it downloads the Excel file from Box, parses it, and creates bom_item records in the database.",
+          "acceptanceCriteria": [
+            "Clicking 'Sync Now' triggers sync without errors",
+            "Sync status shows 'Success' after completion",
+            "bom_item table has records matching Excel file data",
+            "bom_item_version table has 'create' entries for new items",
+            "Subsequent syncs show 'update' or no changes as appropriate",
+            "Typecheck passes (npm run check)"
+          ],
+          "affectedFiles": [
+            "src/lib/server/services/bom-sync.ts",
+            "src/lib/server/services/bom-parser.ts"
+          ],
+          "documentation": null,
+          "priority": 3,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-005",
+          "title": "Build Box.com document browser page",
+          "description": "Create a new page at /spu/documents/box that displays the contents of the 'Inventory & Materials' folder from Box.com. Show files and subfolders in a list/grid with file names, sizes, and types. Allow navigating into subfolders.",
+          "acceptanceCriteria": [
+            "New route at /spu/documents/box with layout integration",
+            "Lists files and folders from 'Inventory & Materials'",
+            "Shows file name, type icon, and size for each item",
+            "Clicking a subfolder navigates into it with breadcrumbs",
+            "Back navigation works correctly",
+            "Shows loading state while fetching",
+            "Shows error state if Box not connected",
+            "Uses TRON-themed UI components",
+            "Typecheck passes (npm run check)"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/box/+page.svelte",
+            "src/routes/spu/documents/box/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 3,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-009",
+          "title": "Setup Box MCP server for AI-assisted content management",
+          "description": "Clone and configure the box-community/mcp-server-box for local development. Set up the MCP server with the project's Box OAuth credentials so Claude can interact with Box content directly through MCP tools.",
+          "acceptanceCriteria": [
+            "mcp-server-box cloned and dependencies installed",
+            "MCP server .env configured with Box credentials",
+            "MCP server starts successfully in STDIO mode",
+            "Claude Desktop or Claude Code config updated to use the MCP server",
+            "Basic test: can list files via MCP tool",
+            "Documentation added to AGENTS.md for MCP server usage"
+          ],
+          "affectedFiles": [
+            "AGENTS.md"
+          ],
+          "documentation": null,
+          "priority": 3,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-006",
+          "title": "Add file preview/download from Box browser",
+          "description": "Extend the Box document browser (BOX-005) to support file preview and download. For Excel/CSV files show a table preview. For other files provide a download link. Use the existing downloadFile() from the box client.",
+          "acceptanceCriteria": [
+            "Clicking a file opens a detail view or modal",
+            "Excel files show first 20 rows in a table preview",
+            "Download button works for all file types",
+            "API endpoint for file download with access validation",
+            "Proper error handling for failed downloads",
+            "Typecheck passes (npm run check)"
+          ],
+          "affectedFiles": [
+            "src/routes/api/box/files/[fileId]/+server.ts",
+            "src/routes/spu/documents/box/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 4,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-008",
+          "title": "Add Box connection status to main nav",
+          "description": "Add a Box.com connection indicator to the SPU layout sidebar/nav. Show a small icon indicating connected/disconnected status. Link to Box settings page.",
+          "acceptanceCriteria": [
+            "Box status indicator visible in SPU layout nav",
+            "Green dot when connected, gray when disconnected",
+            "Clicking indicator navigates to /spu/bom/settings",
+            "Status loads without blocking page render",
+            "Typecheck passes (npm run check)"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/+layout.server.ts",
+            "src/routes/spu/+layout.svelte"
+          ],
+          "documentation": null,
+          "priority": 4,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-007",
+          "title": "Add file upload to Box from webapp",
+          "description": "Add file upload capability to the Box document browser. Users can upload files to the current folder (within 'Inventory & Materials' boundary). Use the existing uploadFile() from the box client.",
+          "acceptanceCriteria": [
+            "Upload button visible in Box browser when viewing a folder",
+            "File picker allows selecting files from local machine",
+            "Upload progress indicator shown during upload",
+            "Success message after upload completes",
+            "Uploaded file appears in folder listing",
+            "Access validation enforced (only within Inventory & Materials)",
+            "API endpoint for file upload with proper validation",
+            "Typecheck passes (npm run check)"
+          ],
+          "affectedFiles": [
+            "src/routes/api/box/upload/+server.ts",
+            "src/routes/spu/documents/box/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 5,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "BOX-010",
+          "title": "Add token refresh monitoring and auto-reconnect",
+          "description": "Add a server-side check that runs on settings page load to verify the Box token is still valid by calling the Box.com /users/me endpoint. If the token refresh fails, update status to 'disconnected' and show a reconnect prompt.",
+          "acceptanceCriteria": [
+            "Settings page load verifies token validity with Box API",
+            "If token is expired and refresh fails, status updates to 'disconnected'",
+            "UI shows 'Token expired - please reconnect' message",
+            "Reconnect button visible when token is invalid",
+            "Audit log entry for token expiry events",
+            "Typecheck passes (npm run check)"
+          ],
+          "affectedFiles": [
+            "src/lib/server/integrations/box/client.ts",
+            "src/routes/spu/bom/settings/+page.server.ts",
+            "src/routes/spu/bom/settings/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 5,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        }
+      ]
+    },
+    "PRD-WINST": {
+      "id": "PRD-WINST",
+      "featureName": "Work Instruction & Document Management System",
+      "branchName": "feature/work-instructions",
+      "description": "Comprehensive document filing system with drag-and-drop upload, automatic parsing of work instructions to extract part numbers and tools, integration with assembly workflow, and version control. Non-work-instruction documents are stored in a document repository.",
+      "affectedFiles": [
+        "src/lib/server/db/schema.ts",
+        "src/lib/server/services/document-parser.ts",
+        "src/lib/server/services/work-instruction-parser.ts",
+        "src/routes/spu/documents/**",
+        "src/routes/spu/assembly/**",
+        "src/lib/components/upload/**"
+      ],
+      "loadedAt": "2026-01-29T17:01:47.703Z",
+      "tasks": [
+        {
+          "id": "WINST-01",
+          "title": "Add workInstruction table to database schema",
+          "description": "Create the core work instruction table for storing parsed work instructions",
+          "acceptanceCriteria": [
+            "Add 'workInstruction' table: id (text PK), documentNumber (text unique, e.g., WIMF-SPU-001), title (text), description (text), documentType (text: 'spu_assembly' | 'general'), status (text: 'draft' | 'active' | 'archived'), currentVersion (integer default 1), originalFileName (text), fileSize (integer), mimeType (text), createdAt, updatedAt, createdBy (FK to user)",
+            "Add 'WorkInstruction' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 1,
+          "status": "in_progress",
+          "assignedTo": "ralph",
+          "reviewedBy": null,
+          "startedAt": "2026-01-29T17:01:54.194Z"
+        },
+        {
+          "id": "WINST-02",
+          "title": "Add workInstructionVersion table for version history",
+          "description": "Track all versions of work instructions with full content",
+          "acceptanceCriteria": [
+            "Add 'workInstructionVersion' table: id (text PK), workInstructionId (FK), version (integer), content (text - full parsed text), rawContent (text - original file content as base64), changeNotes (text), parsedAt (timestamp), parsedBy (FK to user), createdAt",
+            "Add 'WorkInstructionVersion' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 2,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-03",
+          "title": "Add workInstructionStep table for individual steps",
+          "description": "Store each step from a work instruction with sequence and content",
+          "acceptanceCriteria": [
+            "Add 'workInstructionStep' table: id (text PK), workInstructionVersionId (FK), stepNumber (integer), title (text), content (text), requiresScan (boolean default false), scanPrompt (text - what to scan), notes (text), createdAt",
+            "Add 'WorkInstructionStep' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 3,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-04",
+          "title": "Add stepPartRequirement table for parts per step",
+          "description": "Link parts (PT#) to specific work instruction steps",
+          "acceptanceCriteria": [
+            "Add 'stepPartRequirement' table: id (text PK), stepId (FK to workInstructionStep), partNumber (text - the PT# from document), partDefinitionId (FK to partDefinition, nullable), quantity (integer default 1), notes (text), createdAt",
+            "Add 'StepPartRequirement' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 4,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-05",
+          "title": "Add stepToolRequirement table for tools per step",
+          "description": "Link tools (Tool#) to specific work instruction steps",
+          "acceptanceCriteria": [
+            "Add 'stepToolRequirement' table: id (text PK), stepId (FK to workInstructionStep), toolNumber (text - the Tool# from document), toolName (text), calibrationRequired (boolean default false), notes (text), createdAt",
+            "Add 'StepToolRequirement' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 5,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-06",
+          "title": "Add documentRepository table for general documents",
+          "description": "Store non-work-instruction documents in a general repository",
+          "acceptanceCriteria": [
+            "Add 'documentRepository' table: id (text PK), fileName (text), originalFileName (text), fileSize (integer), mimeType (text), category (text nullable), tags (jsonb), content (text - base64 encoded), description (text), uploadedAt, uploadedBy (FK to user)",
+            "Add 'DocumentRepository' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 6,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-07",
+          "title": "Add assemblyStepRecord table for tracking step completion",
+          "description": "Record completion of each step during assembly with scanned lot numbers",
+          "acceptanceCriteria": [
+            "Add 'assemblyStepRecord' table: id (text PK), assemblySessionId (FK), workInstructionStepId (FK), scannedLotNumber (text nullable), scannedPartNumber (text nullable), completedAt (timestamp), completedBy (FK to user), signatureId (FK to electronicSignature nullable), notes (text)",
+            "Add 'AssemblyStepRecord' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 7,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-08",
+          "title": "Add document and workInstruction permissions to RBAC",
+          "description": "Add permission resources for document and work instruction management",
+          "acceptanceCriteria": [
+            "Add 'workInstruction' to PermissionResource type",
+            "Add 'documentRepo' to PermissionResource type",
+            "Enables workInstruction:read, workInstruction:write, workInstruction:approve",
+            "Enables documentRepo:read, documentRepo:write",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/auth/permissions.ts"
+          ],
+          "documentation": null,
+          "priority": 8,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-09",
+          "title": "Create document text extraction service",
+          "description": "Service to extract text content from PDF and DOCX files",
+          "acceptanceCriteria": [
+            "Create src/lib/server/services/document-extractor.ts",
+            "Install pdf-parse and mammoth packages for PDF/DOCX extraction",
+            "Implement extractTextFromPdf(buffer): Promise<string>",
+            "Implement extractTextFromDocx(buffer): Promise<string>",
+            "Implement extractText(buffer, mimeType): Promise<string> that routes to correct extractor",
+            "Handle errors gracefully with meaningful messages",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/services/document-extractor.ts"
+          ],
+          "documentation": null,
+          "priority": 9,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-10",
+          "title": "Create work instruction parser service",
+          "description": "Parse work instruction text to extract steps, PT#s, and Tool#s",
+          "acceptanceCriteria": [
+            "Create src/lib/server/services/work-instruction-parser.ts",
+            "Implement parseWorkInstruction(text, documentNumber): ParsedWorkInstruction",
+            "Extract steps using regex patterns (Step 1:, 1., 1), etc.)",
+            "Extract PT# patterns (PT-001, PT#001, Part #001, etc.)",
+            "Extract Tool# patterns (Tool-001, Tool #1, T-001, etc.)",
+            "Return structured data: { steps: Step[], partsFound: string[], toolsFound: string[] }",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/services/work-instruction-parser.ts"
+          ],
+          "documentation": null,
+          "priority": 10,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-11",
+          "title": "Create document classification service",
+          "description": "Determine if uploaded document is SPU work instruction or general document",
+          "acceptanceCriteria": [
+            "Create src/lib/server/services/document-classifier.ts",
+            "Implement classifyDocument(fileName, content): DocumentType",
+            "SPU work instruction patterns: WIMF-SPU-*, WI-SPU-*, Work Instruction SPU",
+            "Return 'spu_assembly' | 'general'",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/services/document-classifier.ts"
+          ],
+          "documentation": null,
+          "priority": 11,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-12",
+          "title": "Create work instruction version service",
+          "description": "Service to handle versioning of work instructions",
+          "acceptanceCriteria": [
+            "Create src/lib/server/services/work-instruction-version.ts",
+            "Implement createVersion(workInstructionId, content, userId): Promise<WorkInstructionVersion>",
+            "Implement getLatestVersion(workInstructionId): Promise<WorkInstructionVersion | null>",
+            "Implement getVersionHistory(workInstructionId): Promise<WorkInstructionVersion[]>",
+            "Auto-increment version number",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/services/work-instruction-version.ts"
+          ],
+          "documentation": null,
+          "priority": 12,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-13",
+          "title": "Create FileDropzone component for drag-and-drop upload",
+          "description": "Reusable drag-and-drop file upload component with TRON styling",
+          "acceptanceCriteria": [
+            "Create src/lib/components/upload/FileDropzone.svelte",
+            "Props: accept (string, e.g., '.pdf,.docx'), maxSize (number in bytes), onFile (callback)",
+            "Visual feedback on drag over (border highlight)",
+            "Click to browse fallback",
+            "File type and size validation with error messages",
+            "TRON theme styling with cyan accent",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/components/upload/FileDropzone.svelte"
+          ],
+          "documentation": null,
+          "priority": 13,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-14",
+          "title": "Create upload components barrel export",
+          "description": "Export upload components from index file",
+          "acceptanceCriteria": [
+            "Create src/lib/components/upload/index.ts",
+            "Export FileDropzone",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/components/upload/index.ts"
+          ],
+          "documentation": null,
+          "priority": 14,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-15",
+          "title": "Create document upload page",
+          "description": "Page for uploading documents with drag-and-drop",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/upload/+page.svelte",
+            "Use FileDropzone component",
+            "Accept .pdf and .docx files",
+            "Show upload progress",
+            "Display classification result (SPU work instruction vs general)",
+            "For work instructions: show parsed preview before saving",
+            "TRON theme styling",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/upload/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 15,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-16",
+          "title": "Create document upload server action",
+          "description": "Server-side handling of document upload, parsing, and storage",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/upload/+page.server.ts",
+            "Require workInstruction:write or documentRepo:write permission",
+            "Accept file upload via FormData",
+            "Extract text using document-extractor service",
+            "Classify document type",
+            "For SPU work instructions: parse and create workInstruction + version + steps",
+            "For general documents: store in documentRepository",
+            "Log audit event",
+            "Return parsed data for preview",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/upload/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 16,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-17",
+          "title": "Create work instruction list page",
+          "description": "Page listing all work instructions with status and version",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/instructions/+page.svelte",
+            "Table: Document #, Title, Status, Version, Last Updated",
+            "Filter by status (all, active, draft, archived)",
+            "Link to detail page",
+            "Upload button linking to upload page",
+            "TRON theme styling",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 17,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-18",
+          "title": "Create work instruction list server load",
+          "description": "Server load for work instruction list",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/instructions/+page.server.ts",
+            "Require workInstruction:read permission",
+            "Load all work instructions ordered by updatedAt desc",
+            "Support status filter query param",
+            "Return list with version info",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 18,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-19",
+          "title": "Create work instruction detail page",
+          "description": "View work instruction with steps, parts, and tools",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/instructions/[id]/+page.svelte",
+            "Display document info: number, title, status, version",
+            "List all steps with their content",
+            "For each step: show required parts (PT#) and tools",
+            "Version history panel",
+            "Edit and re-upload buttons",
+            "TRON theme styling",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/[id]/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 19,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-20",
+          "title": "Create work instruction detail server load",
+          "description": "Load work instruction with all steps and requirements",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/instructions/[id]/+page.server.ts",
+            "Require workInstruction:read permission",
+            "Load work instruction by ID",
+            "Load current version with all steps",
+            "Load part requirements for each step (join with partDefinition)",
+            "Load tool requirements for each step",
+            "Load version history",
+            "Return 404 if not found",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/[id]/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 20,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-21",
+          "title": "Create document repository list page",
+          "description": "Page listing all general documents in repository",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/repository/+page.svelte",
+            "Table: File Name, Category, Size, Uploaded, Uploaded By",
+            "Download button for each document",
+            "Upload button linking to upload page",
+            "Search by filename",
+            "TRON theme styling",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/repository/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 21,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-22",
+          "title": "Create document repository server load and actions",
+          "description": "Server for document repository list and download",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/repository/+page.server.ts",
+            "Require documentRepo:read permission",
+            "Load all documents ordered by uploadedAt desc",
+            "Add download action that returns file content",
+            "Support search query param",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/repository/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 22,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-23",
+          "title": "Create documents section layout",
+          "description": "Layout with navigation for documents section",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/+layout.svelte",
+            "Navigation: Work Instructions, Repository, Upload",
+            "Breadcrumb: SPU > Documents > [section]",
+            "TRON theme styling consistent with SPU layout",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/+layout.svelte"
+          ],
+          "documentation": null,
+          "priority": 23,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-24",
+          "title": "Create documents section layout server",
+          "description": "Auth check and permissions for documents section",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/+layout.server.ts",
+            "Require user to be logged in",
+            "Return user permissions for conditional UI",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/+layout.server.ts"
+          ],
+          "documentation": null,
+          "priority": 24,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-25",
+          "title": "Update assembly session to use work instruction steps",
+          "description": "Modify assembly session to load and track work instruction steps",
+          "acceptanceCriteria": [
+            "Update src/routes/spu/assembly/[spuId]/+page.server.ts",
+            "Load active work instruction for SPU assembly",
+            "Load steps with part requirements",
+            "Create assemblyStepRecord on step completion",
+            "Track scanned lot numbers per step",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/assembly/[spuId]/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 25,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-26",
+          "title": "Update assembly UI to show work instruction steps",
+          "description": "Display work instruction steps in assembly with scan prompts",
+          "acceptanceCriteria": [
+            "Update src/routes/spu/assembly/[spuId]/+page.svelte",
+            "Display current step content from work instruction",
+            "Show required parts for current step",
+            "Show scan prompt for lot number when step requires scan",
+            "Record scanned data and advance to next step",
+            "Show step completion status",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/assembly/[spuId]/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 26,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINST-27",
+          "title": "Add Documents link to SPU navigation",
+          "description": "Add Documents navigation item to SPU sidebar",
+          "acceptanceCriteria": [
+            "Update src/routes/spu/+layout.svelte",
+            "Add 'Documents' link between Parts and Assembly",
+            "Use document icon",
+            "Link to /spu/documents/instructions",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/+layout.svelte"
+          ],
+          "documentation": null,
+          "priority": 27,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        }
+      ]
+    },
+    "PRD-WINSTX": {
+      "id": "PRD-WINSTX",
+      "featureName": "Work Instruction Custom Fields & Barcode Scanning",
+      "branchName": "feature/winst-custom-fields",
+      "description": "Extension to PRD-WINST adding custom configurable scan fields per work instruction step. Fields are populated by scanning external barcodes on parts (containing lot #, part #, expiry, etc.) which link to BOM data.",
+      "affectedFiles": [
+        "src/lib/server/db/schema.ts",
+        "src/lib/server/services/barcode-parser.ts",
+        "src/routes/spu/documents/instructions/[id]/**",
+        "src/routes/spu/assembly/[sessionId]/**"
+      ],
+      "loadedAt": "2026-01-29T17:22:34.474Z",
+      "tasks": [
+        {
+          "id": "WINSTX-01",
+          "title": "Add stepFieldDefinition table for custom scan fields",
+          "description": "Create table to define custom fields that can be configured per work instruction step (lot, serial, expiry, calibration, etc.)",
+          "acceptanceCriteria": [
+            "Add 'stepFieldDefinition' table: id (text PK), stepId (FK to workInstructionStep), fieldName (text), fieldLabel (text), fieldType (text: 'barcode_scan' | 'manual_entry' | 'date_picker' | 'dropdown'), isRequired (boolean default true), validationPattern (text nullable), options (jsonb nullable for dropdowns), barcodeFieldMapping (text nullable - which GS1 AI to extract), sortOrder (integer default 0), createdAt",
+            "Add 'StepFieldDefinition' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 1,
+          "status": "in_progress",
+          "assignedTo": "ralph",
+          "reviewedBy": null,
+          "startedAt": "2026-01-29T17:22:46.321Z"
+        },
+        {
+          "id": "WINSTX-02",
+          "title": "Add stepFieldRecord table for captured field values",
+          "description": "Store the actual values captured during assembly for each custom field",
+          "acceptanceCriteria": [
+            "Add 'stepFieldRecord' table: id (text PK), assemblyStepRecordId (FK to assemblyStepRecord), stepFieldDefinitionId (FK to stepFieldDefinition), fieldValue (text), rawBarcodeData (text nullable - full scanned barcode), bomItemId (text FK nullable - linked BOM item), scannedAt (timestamp nullable), enteredAt (timestamp nullable), capturedBy (FK to user)",
+            "Add 'StepFieldRecord' type export",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/db/schema.ts"
+          ],
+          "documentation": null,
+          "priority": 2,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINSTX-03",
+          "title": "Create barcode parser service for GS1/external codes",
+          "description": "Service to parse external barcodes (GS1, QR codes on parts) and extract structured data",
+          "acceptanceCriteria": [
+            "Create src/lib/server/services/barcode-parser.ts",
+            "Implement parseGS1Barcode(data): ParsedBarcode - extracts AI fields (01 GTIN, 10 Lot, 17 Expiry, 21 Serial, etc.)",
+            "Implement parseQrCode(data): ParsedBarcode - handles QR codes with delimited data",
+            "Implement lookupBomItem(lotNumber, partNumber): BomItem | null - finds matching BOM record",
+            "Return structured object: { gtin, lotNumber, serialNumber, expiryDate, partNumber, bomItem }",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/lib/server/services/barcode-parser.ts"
+          ],
+          "documentation": null,
+          "priority": 3,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINSTX-04",
+          "title": "Create custom field configuration UI",
+          "description": "UI to configure custom scan fields for each work instruction step",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/instructions/[id]/fields/+page.svelte",
+            "Display list of steps with their configured fields",
+            "Add/edit/delete fields per step",
+            "Field type selector (barcode scan, manual entry, date picker, dropdown)",
+            "For barcode_scan type: select which GS1 AI field to extract (lot, serial, expiry, GTIN)",
+            "Drag-and-drop reordering of fields within a step",
+            "TRON theme styling",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/[id]/fields/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 4,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINSTX-05",
+          "title": "Create custom field configuration server",
+          "description": "Server load and actions for field configuration",
+          "acceptanceCriteria": [
+            "Create src/routes/spu/documents/instructions/[id]/fields/+page.server.ts",
+            "Require workInstruction:write permission",
+            "Load work instruction with steps and field definitions",
+            "Action 'addField': create stepFieldDefinition record",
+            "Action 'updateField': update field properties",
+            "Action 'deleteField': remove field definition",
+            "Action 'reorderFields': update sortOrder values",
+            "Log audit events",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/[id]/fields/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 5,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINSTX-06",
+          "title": "Update assembly step UI for custom fields",
+          "description": "Modify assembly UI to display and capture custom fields per step via barcode scanning",
+          "acceptanceCriteria": [
+            "Update src/routes/spu/assembly/[sessionId]/+page.svelte",
+            "Load custom field definitions for current step",
+            "Render appropriate input for each field type (scan input, text input, date picker, dropdown)",
+            "For barcode_scan fields: use ScanInput, parse barcode, auto-fill mapped field",
+            "Show BOM link status when lot number matches BOM record",
+            "Validate required fields before advancing",
+            "Store captured values in stepFieldRecord",
+            "Show completed fields with captured values and BOM links",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/assembly/[sessionId]/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 6,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINSTX-07",
+          "title": "Update assembly server for custom field capture",
+          "description": "Server actions to store custom field values and link to BOM",
+          "acceptanceCriteria": [
+            "Update src/routes/spu/assembly/[sessionId]/+page.server.ts",
+            "Load step field definitions with step data",
+            "Action 'captureField': parse barcode, validate, store stepFieldRecord",
+            "Lookup BOM item by lot number and link if found",
+            "Validate all required fields before step completion",
+            "Store raw barcode data for traceability",
+            "Log audit events for each field capture",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/assembly/[sessionId]/+page.server.ts"
+          ],
+          "documentation": null,
+          "priority": 7,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        },
+        {
+          "id": "WINSTX-08",
+          "title": "Add fields link to work instruction detail page",
+          "description": "Add navigation to field configuration from work instruction detail",
+          "acceptanceCriteria": [
+            "Update src/routes/spu/documents/instructions/[id]/+page.svelte",
+            "Add 'Configure Fields' button linking to /fields subpage",
+            "Show count of configured fields per step in step list",
+            "npm run check passes"
+          ],
+          "affectedFiles": [
+            "src/routes/spu/documents/instructions/[id]/+page.svelte"
+          ],
+          "documentation": null,
+          "priority": 8,
+          "status": "pending",
+          "assignedTo": null,
+          "reviewedBy": null
+        }
+      ]
+    }
+  },
+  "reviews": {},
+  "completedTasks": [
+    {
+      "taskId": "BOX-001",
+      "prdId": "PRD-BOX",
+      "completedBy": "beta",
+      "reviewedBy": "alpha",
+      "completedAt": "2026-01-27T22:39:43.603Z"
+    },
+    {
+      "taskId": "WINSTX-01",
+      "prdId": "PRD-WINSTX",
+      "completedBy": "ralph",
+      "reviewedBy": "orchestrator",
+      "completedAt": "2026-01-29T17:13:56.973Z"
+    },
+    {
+      "taskId": "WINSTX-03",
+      "prdId": "PRD-WINSTX",
+      "completedBy": "ralph",
+      "reviewedBy": "orchestrator",
+      "completedAt": "2026-01-29T17:16:10.878Z"
+    },
+    {
+      "taskId": "WINSTX-05",
+      "prdId": "PRD-WINSTX",
+      "completedBy": "ralph",
+      "reviewedBy": "orchestrator",
+      "completedAt": "2026-01-29T17:18:40.095Z"
+    },
+    {
+      "taskId": "WINSTX-07",
+      "prdId": "PRD-WINSTX",
+      "completedBy": "ralph",
+      "reviewedBy": "orchestrator",
+      "completedAt": "2026-01-29T17:22:06.580Z"
+    }
+  ]
+}

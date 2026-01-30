@@ -1,0 +1,105 @@
+{
+  "featureName": "Buzzer Controller Module",
+  "branchName": "feature/supabase-buzzer",
+  "description": "Buzzer/piezo controller for audio feedback. Manages tones, patterns, and alert sequences.",
+  "affectedFiles": [
+    "supabase-firmware/src/BuzzerController.h",
+    "supabase-firmware/src/BuzzerController.cpp",
+    "supabase-firmware/tests/unit/test_buzzer.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "BUZ-001",
+      "title": "Implement BuzzerController class",
+      "description": "Create buzzer controller class with initialization and basic tone functions.",
+      "acceptanceCriteria": [
+        "init() function configures buzzer pin (A0)",
+        "playTone(frequency, duration) function",
+        "stopTone() function",
+        "isPlaying() status function",
+        "setVolume(level) function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BuzzerController.h"],
+      "documentation": "Document frequency ranges and patterns",
+      "priority": 1,
+      "notes": "Uses PWM on analog pin A0"
+    },
+    {
+      "id": "BUZ-002",
+      "title": "Implement predefined alert tones",
+      "description": "Create functions for standard alert sounds.",
+      "acceptanceCriteria": [
+        "cartridgeInsert() - 620 Hz, 200ms",
+        "cartridgeRemove() - 620 Hz, 500ms",
+        "generalAlert() - 850 Hz, 500ms",
+        "problemAlert() - 620 Hz, 100ms",
+        "standardBeep() - 600 Hz, 1000ms"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BuzzerController.cpp"],
+      "priority": 1,
+      "notes": "Match legacy firmware alert sounds"
+    },
+    {
+      "id": "BUZ-003",
+      "title": "Implement periodic alert mode",
+      "description": "Create mode for repeating alerts at intervals.",
+      "acceptanceCriteria": [
+        "startPeriodicAlert(type, interval) function",
+        "General alert interval: 4000ms",
+        "Problem alert interval: 777ms",
+        "stopPeriodicAlert() function",
+        "isPeriodicAlertActive() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BuzzerController.cpp"],
+      "priority": 2,
+      "notes": "Non-blocking, uses timer callback"
+    },
+    {
+      "id": "BUZ-004",
+      "title": "Implement non-blocking tone playback",
+      "description": "Create non-blocking tone system using timers.",
+      "acceptanceCriteria": [
+        "Tones play without blocking main loop",
+        "update() function called in loop",
+        "Timer-based duration management",
+        "Queue for sequential tones",
+        "Interrupt current tone option"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BuzzerController.cpp"],
+      "priority": 1,
+      "notes": "Critical for responsive UI"
+    },
+    {
+      "id": "BUZ-005",
+      "title": "Implement melody/pattern playback",
+      "description": "Create functions for playing multi-tone sequences.",
+      "acceptanceCriteria": [
+        "playPattern(tones[], count) function",
+        "Success melody",
+        "Error melody",
+        "Startup melody",
+        "Pattern completion callback"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BuzzerController.cpp"],
+      "priority": 3,
+      "notes": "Nice-to-have for user feedback"
+    },
+    {
+      "id": "BUZ-006",
+      "title": "Create buzzer controller unit tests",
+      "description": "Unit tests for buzzer controller.",
+      "acceptanceCriteria": [
+        "Test tone generation",
+        "Test timing accuracy",
+        "Test periodic alert logic",
+        "Test non-blocking operation"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_buzzer.cpp"],
+      "priority": 3,
+      "notes": "Mock PWM output"
+    }
+  ]
+}

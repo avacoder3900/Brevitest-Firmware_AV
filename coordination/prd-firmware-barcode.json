@@ -1,0 +1,104 @@
+{
+  "featureName": "Barcode Scanner Module",
+  "branchName": "feature/supabase-barcode",
+  "description": "Barcode scanner controller for reading cartridge UUIDs. Handles triggering, reading, and parsing barcode data.",
+  "affectedFiles": [
+    "supabase-firmware/src/BarcodeScanner.h",
+    "supabase-firmware/src/BarcodeScanner.cpp",
+    "supabase-firmware/tests/unit/test_barcode.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "BAR-001",
+      "title": "Implement BarcodeScanner class",
+      "description": "Create barcode scanner controller class with initialization.",
+      "acceptanceCriteria": [
+        "init() function configures scanner pins",
+        "Ready pin: D22 (input)",
+        "Trigger pin: D23 (output)",
+        "Scanner communication via serial",
+        "isReady() status function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BarcodeScanner.h"],
+      "documentation": "Document scanner protocol",
+      "priority": 1,
+      "notes": "Uses hardware serial at 9600 baud"
+    },
+    {
+      "id": "BAR-002",
+      "title": "Implement scan triggering",
+      "description": "Create functions to trigger barcode scan.",
+      "acceptanceCriteria": [
+        "triggerScan() function",
+        "Read timeout: 1000ms",
+        "Delay between reads: 100ms",
+        "waitForScan(timeout) function",
+        "cancelScan() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BarcodeScanner.cpp"],
+      "priority": 1,
+      "notes": "Trigger is active low"
+    },
+    {
+      "id": "BAR-003",
+      "title": "Implement barcode parsing",
+      "description": "Create functions to parse and validate barcode data.",
+      "acceptanceCriteria": [
+        "readBarcode() returns string",
+        "Validate UUID format (36 chars)",
+        "Strip leading/trailing whitespace",
+        "getLastBarcode() function",
+        "clearLastBarcode() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BarcodeScanner.cpp"],
+      "priority": 1,
+      "notes": "UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    },
+    {
+      "id": "BAR-004",
+      "title": "Implement barcode type detection",
+      "description": "Create logic to identify barcode type from scanned data.",
+      "acceptanceCriteria": [
+        "BarcodeType enum: Cartridge(1), Magnetometer(2), Optical(3), StressTest(4), Shipping(5)",
+        "getBarcodeType(barcode) function",
+        "Type detection based on prefix or format",
+        "Unknown type handling"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BarcodeScanner.cpp"],
+      "priority": 2,
+      "notes": "Different barcode types trigger different workflows"
+    },
+    {
+      "id": "BAR-005",
+      "title": "Implement scan state machine",
+      "description": "Create internal state machine for scan process.",
+      "acceptanceCriteria": [
+        "States: IDLE, SCANNING, SUCCESS, FAILED, TIMEOUT",
+        "getScanState() function",
+        "Retry logic for failed scans",
+        "Max retries configuration",
+        "Callback on scan complete"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BarcodeScanner.cpp"],
+      "priority": 2,
+      "notes": "Integrates with main device state machine"
+    },
+    {
+      "id": "BAR-006",
+      "title": "Create barcode scanner unit tests",
+      "description": "Unit tests for barcode scanner.",
+      "acceptanceCriteria": [
+        "Test UUID validation",
+        "Test barcode type detection",
+        "Test timeout handling",
+        "Test retry logic"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_barcode.cpp"],
+      "priority": 3,
+      "notes": "Mock serial communication"
+    }
+  ]
+}

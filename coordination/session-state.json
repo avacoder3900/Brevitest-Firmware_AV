@@ -1,0 +1,1024 @@
+{
+  "_schema": "Multi-Claude Coordination State",
+  "_updated": "2026-01-23T19:46:34.920Z",
+  "activeSessions": {
+    "claude-lead": {
+      "startedAt": "2026-01-23T19:30:54.041Z",
+      "lastHeartbeat": "2026-01-23T19:30:54.043Z",
+      "status": "active",
+      "currentTask": "US-001",
+      "description": "Worker on Bioscale Operations System"
+    },
+    "claude-worker-1": {
+      "startedAt": "2026-01-23T19:37:51.782Z",
+      "lastHeartbeat": "2026-01-23T19:46:34.920Z",
+      "status": "active",
+      "currentTask": "US-037",
+      "description": "Worker on Bioscale Operations System"
+    }
+  },
+  "fileReservations": {
+    "src/routes/spu/[id]/+page.svelte": {
+      "session": "claude-worker-1",
+      "reservedAt": "2026-01-23T19:46:34.919Z",
+      "reason": "Creating SPU detail page"
+    }
+  },
+  "taskClaims": {
+    "US-001": {
+      "session": "claude-lead",
+      "claimedAt": "2026-01-23T19:30:54.043Z",
+      "status": "in_progress"
+    },
+    "US-037": {
+      "session": "claude-worker-1",
+      "claimedAt": "2026-01-23T19:46:17.870Z",
+      "status": "in_progress"
+    }
+  },
+  "messageLog": [
+    {
+      "from": "claude-alpha",
+      "to": "all",
+      "timestamp": "2026-01-23T18:06:02.628Z",
+      "message": "Session registered: Testing coordination system"
+    },
+    {
+      "from": "claude-alpha",
+      "to": "all",
+      "timestamp": "2026-01-23T18:06:10.369Z",
+      "message": "Claimed task US-001"
+    },
+    {
+      "from": "claude-beta",
+      "to": "all",
+      "timestamp": "2026-01-23T18:06:25.528Z",
+      "message": "Session registered: Second terminal testing"
+    },
+    {
+      "from": "claude-alpha",
+      "to": "all",
+      "timestamp": "2026-01-23T18:07:04.203Z",
+      "message": "Session ended, released all reservations"
+    },
+    {
+      "from": "claude-beta",
+      "to": "all",
+      "timestamp": "2026-01-23T18:07:04.348Z",
+      "message": "Session ended, released all reservations"
+    },
+    {
+      "from": "claude-alpha",
+      "to": "all",
+      "timestamp": "2026-01-23T19:17:11.186Z",
+      "message": "Session registered: Primary terminal - schema and server work"
+    },
+    {
+      "from": "claude-alpha",
+      "to": "all",
+      "timestamp": "2026-01-23T19:17:18.548Z",
+      "message": "Claimed task US-040"
+    },
+    {
+      "from": "claude-beta",
+      "to": "all",
+      "timestamp": "2026-01-23T19:19:35.844Z",
+      "message": "Session registered: Secondary terminal - testing coordination"
+    },
+    {
+      "from": "claude-beta",
+      "to": "all",
+      "timestamp": "2026-01-23T19:19:52.109Z",
+      "message": "Claimed task US-041"
+    },
+    {
+      "from": "claude-beta",
+      "to": "all",
+      "timestamp": "2026-01-23T19:20:07.032Z",
+      "message": "Coordination test successful - conflicts detected properly"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-23T19:30:46.008Z",
+      "message": "Cleaned up 2 stale session(s)"
+    },
+    {
+      "from": "system",
+      "to": "all",
+      "timestamp": "2026-01-23T19:30:46.151Z",
+      "message": "PRD loaded: Bioscale Operations System (39 tasks)"
+    },
+    {
+      "from": "claude-lead",
+      "to": "all",
+      "timestamp": "2026-01-23T19:30:54.043Z",
+      "message": "Joined and claimed US-001: Add batch table to database schema"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:37:51.783Z",
+      "message": "Joined and claimed US-002: Add spu table to database schema"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:39:20.002Z",
+      "message": "Completed US-002"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:39:26.288Z",
+      "message": "Completed US-003"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:40:03.246Z",
+      "message": "Completed US-004"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:40:08.486Z",
+      "message": "Completed US-005"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:40:13.116Z",
+      "message": "Completed US-006"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:40:19.653Z",
+      "message": "Completed US-007"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:40:35.582Z",
+      "message": "Completed US-008"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:40:58.389Z",
+      "message": "Completed US-009"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:41:04.731Z",
+      "message": "Completed US-010"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:41:17.483Z",
+      "message": "Completed US-011"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:41:28.053Z",
+      "message": "Completed US-012"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:41:39.250Z",
+      "message": "Completed US-013"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:41:52.884Z",
+      "message": "Completed US-014"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:42:05.578Z",
+      "message": "Completed US-015"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:42:16.545Z",
+      "message": "Completed US-016"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:42:33.881Z",
+      "message": "Completed US-017"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:42:46.394Z",
+      "message": "Completed US-018"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:42:57.244Z",
+      "message": "Completed US-019"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:43:08.254Z",
+      "message": "Completed US-020"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:43:19.827Z",
+      "message": "Completed US-021"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:43:32.114Z",
+      "message": "Completed US-022"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:43:44.623Z",
+      "message": "Completed US-023"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:43:56.255Z",
+      "message": "Completed US-024"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:44:08.184Z",
+      "message": "Completed US-025"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:44:19.272Z",
+      "message": "Completed US-026"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:44:31.564Z",
+      "message": "Completed US-027"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:44:43.067Z",
+      "message": "Completed US-028"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:44:55.135Z",
+      "message": "Completed US-029"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:45:06.194Z",
+      "message": "Completed US-030"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:45:17.087Z",
+      "message": "Completed US-031"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:45:29.081Z",
+      "message": "Completed US-032"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:45:41.921Z",
+      "message": "Completed US-033"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:45:53.157Z",
+      "message": "Completed US-034"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:46:05.103Z",
+      "message": "Completed US-035"
+    },
+    {
+      "from": "claude-worker-1",
+      "to": "all",
+      "timestamp": "2026-01-23T19:46:17.870Z",
+      "message": "Completed US-036"
+    }
+  ],
+  "prd": {
+    "featureName": "Bioscale Operations System",
+    "branchName": "ralph/spu-tracking-system",
+    "description": "SPU Tracking System with barcode scanning assembly workflow, particle serial to UDI linking, parts/lot traceability, electronic signatures, and TRON-style UI. Compliant with ISO 13485 and FDA 21 CFR Part 820.",
+    "loadedAt": "2026-01-23T19:30:46.150Z",
+    "loadedFrom": "scripts/ralph/prd-spu-tracking.json",
+    "tasks": [
+      {
+        "id": "US-001",
+        "title": "Add batch table to database schema",
+        "description": "As a production manager, I want a batch table to group SPUs manufactured together for traceability and recall capability",
+        "acceptanceCriteria": [
+          "Add 'integer' import to drizzle-orm/pg-core imports in schema.ts",
+          "Add 'batch' table with: id (text PK), batchNumber (text unique), description, targetQuantity (integer), startedAt, completedAt, createdAt, createdBy (FK to user)",
+          "Add 'Batch' type export using $inferSelect",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 1,
+        "notes": "Completed 2026-01-23. db:push skipped (no database connected in dev).",
+        "status": "in_progress",
+        "assignedTo": "claude-lead"
+      },
+      {
+        "id": "US-002",
+        "title": "Add spu table to database schema",
+        "description": "As a production operator, I want an SPU table to track individual Sample Processing Units with their UDI and status",
+        "acceptanceCriteria": [
+          "Add 'spu' table with: id (text PK), udi (text unique), status (text default 'draft'), batchId (FK to batch), assembledBy (FK to user), assemblyStartedAt, assemblyCompletedAt, assemblySignatureId (text), createdAt, createdBy (FK to user), updatedAt",
+          "Add 'Spu' type export",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 2,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:39:20.001Z"
+      },
+      {
+        "id": "US-003",
+        "title": "Add particle_link table for serial to UDI mapping",
+        "description": "As a production operator, I want to link particle serial numbers (MSOM units) to SPU UDIs with one-to-one relationship",
+        "acceptanceCriteria": [
+          "Add 'particleLink' table with: id (text PK), spuId (FK to spu, unique), particleSerial (text unique), particleDeviceId (text), linkedAt, linkedBy (FK to user), previousSpuId (text), unlinkReason (text)",
+          "Add 'ParticleLink' type export",
+          "Unique constraints on spuId and particleSerial ensure one-to-one mapping",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 3,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:39:26.288Z"
+      },
+      {
+        "id": "US-004",
+        "title": "Add part_definition table for master parts list",
+        "description": "As a production engineer, I want a master list of part definitions that go into assembling an SPU",
+        "acceptanceCriteria": [
+          "Add 'partDefinition' table with: id (text PK), partNumber (text unique), name (text), description, category, scanRequired (boolean default true), sortOrder (integer default 0), isActive (boolean default true), createdAt, updatedAt",
+          "Add 'PartDefinition' type export",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 4,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:40:03.245Z"
+      },
+      {
+        "id": "US-005",
+        "title": "Add spu_part table for device history records",
+        "description": "As a quality manager, I want to track which parts (with lot numbers) went into each SPU for full traceability and recall support",
+        "acceptanceCriteria": [
+          "Add 'spuPart' table with: id (text PK), spuId (FK to spu), partDefinitionId (FK to partDefinition), lotNumber (text), serialNumber (text), scannedAt, scannedBy (FK to user), barcodeData (text), isReplaced (boolean default false), replacedBy (text), replaceReason (text)",
+          "Add 'SpuPart' type export",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 5,
+        "notes": "Completed 2026-01-23. DHR table for device history records.",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:40:08.485Z"
+      },
+      {
+        "id": "US-006",
+        "title": "Add assembly_session table for workflow tracking",
+        "description": "As a production operator, I want assembly sessions tracked so I can pause, resume, and complete assembly workflows",
+        "acceptanceCriteria": [
+          "Add 'assemblySession' table with: id (text PK), spuId (FK to spu), userId (FK to user), status (text default 'in_progress'), currentStepIndex (integer default 0), startedAt, pausedAt, completedAt, workstationId (text), notes (text)",
+          "Add 'AssemblySession' type export",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 6,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:40:13.115Z"
+      },
+      {
+        "id": "US-007",
+        "title": "Add electronic_signature table for 21 CFR Part 11 compliance",
+        "description": "As a quality manager, I want electronic signatures captured for assembly completion to meet FDA compliance requirements",
+        "acceptanceCriteria": [
+          "Add 'electronicSignature' table with: id (text PK), userId (FK to user), entityType (text), entityId (text), meaning (text), signedAt, ipAddress (text), userAgent (text), dataHash (text)",
+          "Add 'ElectronicSignature' type export",
+          "Run npm run db:push successfully",
+          "Typecheck passes"
+        ],
+        "priority": 7,
+        "notes": "Completed 2026-01-23. 21 CFR Part 11 compliance.",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:40:19.652Z"
+      },
+      {
+        "id": "US-008",
+        "title": "Add part and assembly permission resources",
+        "description": "As an admin, I want permission resources for parts and assembly so I can control access to these features",
+        "acceptanceCriteria": [
+          "Add 'part' and 'assembly' to PermissionResource type in src/lib/server/auth/permissions.ts",
+          "Typecheck passes"
+        ],
+        "priority": 8,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:40:35.581Z"
+      },
+      {
+        "id": "US-009",
+        "title": "Add TRON theme CSS custom properties",
+        "description": "As a user, I want a TRON movie aesthetic UI with dark backgrounds and neon cyan glows",
+        "acceptanceCriteria": [
+          "Add @theme block to src/routes/layout.css with: tron-bg-primary (#0a0a0f), tron-bg-secondary (#12121a), tron-bg-tertiary (#1a1a2e), tron-bg-card (#16161f), tron-cyan (#00d4ff), tron-green (#00ff88), tron-orange (#ff6600), tron-red (#ff3366), tron-text-primary (#e0e0e0), tron-text-secondary (#a0a0a0), tron-border, shadow variables",
+          "Add .tron-grid-bg class with grid background pattern",
+          "Add .animate-tron-pulse keyframe animation",
+          "CSS loads without errors in browser",
+          "Typecheck passes"
+        ],
+        "priority": 9,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:40:58.387Z"
+      },
+      {
+        "id": "US-010",
+        "title": "Add TRON component utility classes",
+        "description": "As a developer, I want reusable TRON-styled CSS classes for consistent UI components",
+        "acceptanceCriteria": [
+          "Add @layer components block with: .tron-card, .tron-card-interactive, .tron-button, .tron-button-primary, .tron-button-danger, .tron-input, .tron-select, .tron-badge variants (info, success, warning, error, neutral), .tron-progress, .tron-table, .tron-label",
+          "All interactive elements have min-height of 44px (touch target)",
+          "CSS loads without errors",
+          "Typecheck passes"
+        ],
+        "priority": 10,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:41:04.730Z"
+      },
+      {
+        "id": "US-011",
+        "title": "Create GridBackground component",
+        "description": "As a user, I want a TRON-style grid background for the SPU module pages",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/GridBackground.svelte",
+          "Component accepts children snippet and optional class prop",
+          "Renders tron-grid-bg with scanline overlay",
+          "Uses Svelte 5 runes syntax ($props)",
+          "Typecheck passes"
+        ],
+        "priority": 11,
+        "notes": "Pre-existing component verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:41:17.482Z"
+      },
+      {
+        "id": "US-012",
+        "title": "Create TronCard component",
+        "description": "As a developer, I want a reusable card component with TRON styling",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/TronCard.svelte",
+          "Component accepts children snippet, interactive boolean, and class prop",
+          "Uses $derived for reactive class selection",
+          "Typecheck passes"
+        ],
+        "priority": 12,
+        "notes": "Pre-existing component verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:41:28.052Z"
+      },
+      {
+        "id": "US-013",
+        "title": "Create TronButton component",
+        "description": "As a developer, I want a reusable button component with TRON styling and variants",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/TronButton.svelte",
+          "Component extends HTMLButtonAttributes",
+          "Supports variant prop: 'default', 'primary', 'danger'",
+          "Minimum 44px touch target height",
+          "Typecheck passes"
+        ],
+        "priority": 13,
+        "notes": "Pre-existing component verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:41:39.249Z"
+      },
+      {
+        "id": "US-014",
+        "title": "Create TronInput component",
+        "description": "As a developer, I want a reusable input component with TRON styling and error states",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/TronInput.svelte",
+          "Component extends HTMLInputAttributes",
+          "Supports label, error, and class props",
+          "Shows error styling when error prop is set",
+          "Minimum 44px touch target height",
+          "Typecheck passes"
+        ],
+        "priority": 14,
+        "notes": "Pre-existing component verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:41:52.883Z"
+      },
+      {
+        "id": "US-015",
+        "title": "Create TronBadge component",
+        "description": "As a developer, I want a reusable badge component for status indicators",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/TronBadge.svelte",
+          "Supports variant prop: 'info', 'success', 'warning', 'error', 'neutral'",
+          "Accepts children snippet",
+          "Typecheck passes"
+        ],
+        "priority": 15,
+        "notes": "Pre-existing component verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:42:05.577Z"
+      },
+      {
+        "id": "US-016",
+        "title": "Create TronProgress component",
+        "description": "As a user, I want a progress bar component to see assembly progress",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/TronProgress.svelte",
+          "Accepts value, max, showLabel, and class props",
+          "Calculates percentage with $derived",
+          "Shows optional label with percentage",
+          "Typecheck passes"
+        ],
+        "priority": 16,
+        "notes": "Pre-existing component verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:42:16.544Z"
+      },
+      {
+        "id": "US-017",
+        "title": "Create UI components index file",
+        "description": "As a developer, I want a single import point for all UI components",
+        "acceptanceCriteria": [
+          "Create src/lib/components/ui/index.ts",
+          "Export all UI components: GridBackground, TronCard, TronButton, TronInput, TronBadge, TronProgress",
+          "Typecheck passes"
+        ],
+        "priority": 17,
+        "notes": "Pre-existing file verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:42:33.880Z"
+      },
+      {
+        "id": "US-018",
+        "title": "Create SPU layout with TRON theme and navigation",
+        "description": "As a user, I want a consistent layout for all SPU pages with navigation",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/+layout.svelte",
+          "Use GridBackground component",
+          "Include header with SPU Tracking title and logo",
+          "Include navigation with: Dashboard, Assembly, Parts, Batches links",
+          "Navigation highlights active route",
+          "Touch-friendly 44px minimum nav items",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 18,
+        "notes": "Pre-existing layout verified 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:42:46.393Z"
+      },
+      {
+        "id": "US-019",
+        "title": "Create SPU layout server with auth check",
+        "description": "As a security requirement, I want SPU pages protected by authentication",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/+layout.server.ts",
+          "Check if user is authenticated in load function",
+          "Redirect to login if not authenticated",
+          "Typecheck passes"
+        ],
+        "priority": 19,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:42:57.243Z"
+      },
+      {
+        "id": "US-020",
+        "title": "Create SpuStatusBadge component",
+        "description": "As a user, I want to see SPU status visually with appropriate colors",
+        "acceptanceCriteria": [
+          "Create src/lib/components/spu/SpuStatusBadge.svelte",
+          "Accept status prop with SPU status values",
+          "Map statuses to badge variants: draft=neutral, in_assembly=info, assembly_complete=warning, validated=success, shipped=info, retired=neutral",
+          "Display human-readable status text",
+          "Typecheck passes"
+        ],
+        "priority": 20,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:43:08.253Z"
+      },
+      {
+        "id": "US-021",
+        "title": "Create SPU dashboard page",
+        "description": "As a production manager, I want to see a list of all SPUs with their status",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/+page.svelte",
+          "Display SPU list in cards or table format",
+          "Show UDI, status badge, batch number, created date",
+          "Include 'New SPU' button",
+          "Show empty state when no SPUs exist",
+          "Responsive for tablet use",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 21,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:43:19.826Z"
+      },
+      {
+        "id": "US-022",
+        "title": "Create SPU dashboard server load function",
+        "description": "As a developer, I need to load SPU data for the dashboard",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/+page.server.ts",
+          "Load SPUs from database with batch info joined",
+          "Require 'spu:read' permission",
+          "Return typed data to page",
+          "Typecheck passes"
+        ],
+        "priority": 22,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:43:32.113Z"
+      },
+      {
+        "id": "US-023",
+        "title": "Create ScanInput component for barcode scanning",
+        "description": "As a production operator, I want a barcode scan input that auto-focuses and provides audio feedback",
+        "acceptanceCriteria": [
+          "Create src/lib/components/assembly/ScanInput.svelte",
+          "Auto-focus input on mount and after blur",
+          "Process scan on Enter key",
+          "Debounce 500ms to prevent duplicate scans",
+          "Support expectedPattern regex prop for validation",
+          "Play success beep (880Hz, 100ms) on valid scan",
+          "Play error beep (220Hz, 300ms) on invalid scan",
+          "Show error message for invalid format",
+          "Include barcode icon visual indicator",
+          "Typecheck passes"
+        ],
+        "priority": 23,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:43:44.622Z"
+      },
+      {
+        "id": "US-024",
+        "title": "Create AssemblyProgress component",
+        "description": "As a production operator, I want to see my progress through the assembly steps",
+        "acceptanceCriteria": [
+          "Create src/lib/components/assembly/AssemblyProgress.svelte",
+          "Accept currentStep, totalSteps, and steps array props",
+          "Display step indicators with numbers",
+          "Highlight completed, current, and pending steps differently",
+          "Show step names if provided",
+          "Responsive layout",
+          "Typecheck passes"
+        ],
+        "priority": 24,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:43:56.254Z"
+      },
+      {
+        "id": "US-025",
+        "title": "Create PartCard component for assembly workflow",
+        "description": "As a production operator, I want to see which part to scan next with clear instructions",
+        "acceptanceCriteria": [
+          "Create src/lib/components/assembly/PartCard.svelte",
+          "Display part name, part number, and category",
+          "Show scan instruction text",
+          "Include visual indicator (arrow or highlight) for current part",
+          "Support scanned state showing lot number",
+          "Typecheck passes"
+        ],
+        "priority": 25,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:44:08.183Z"
+      },
+      {
+        "id": "US-026",
+        "title": "Create assembly start page",
+        "description": "As a production operator, I want to start assembly by scanning an SPU UDI",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/assembly/+page.svelte",
+          "Display ScanInput for SPU UDI",
+          "Show clear instructions: 'Scan SPU barcode to begin assembly'",
+          "Include infographic or visual guide",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 26,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:44:19.271Z"
+      },
+      {
+        "id": "US-027",
+        "title": "Create assembly start server actions",
+        "description": "As a developer, I need server actions to create or resume assembly sessions",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/assembly/+page.server.ts",
+          "Require 'assembly:write' permission",
+          "Action 'startAssembly': validate UDI exists, create assemblySession, redirect to session page",
+          "If session already exists for SPU, resume it",
+          "Log audit event for assembly start",
+          "Typecheck passes"
+        ],
+        "priority": 27,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:44:31.563Z"
+      },
+      {
+        "id": "US-028",
+        "title": "Create assembly session page",
+        "description": "As a production operator, I want to see the current part to scan and my progress",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/assembly/[sessionId]/+page.svelte",
+          "Display AssemblyProgress component",
+          "Display current PartCard to scan",
+          "Display ScanInput for lot number scanning",
+          "Show elapsed time",
+          "Include pause button",
+          "Show success animation on part scan",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 28,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:44:43.066Z"
+      },
+      {
+        "id": "US-029",
+        "title": "Create assembly session server load and actions",
+        "description": "As a developer, I need to load session data and handle part scanning",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/assembly/[sessionId]/+page.server.ts",
+          "Load function: get session, SPU, scanned parts, and part definitions ordered by sortOrder",
+          "Action 'scanPart': validate barcode, extract lot number, create spuPart record, increment currentStepIndex, log audit",
+          "Action 'pause': update session status to 'paused', set pausedAt",
+          "Redirect to complete page when all parts scanned",
+          "Typecheck passes"
+        ],
+        "priority": 29,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:44:55.134Z"
+      },
+      {
+        "id": "US-030",
+        "title": "Create ElectronicSignature component",
+        "description": "As a production operator, I want to sign off on completed assembly with password verification",
+        "acceptanceCriteria": [
+          "Create src/lib/components/signature/ElectronicSignature.svelte",
+          "Display signature meaning text",
+          "Include password input field",
+          "Show user's name who is signing",
+          "Include timestamp display",
+          "Submit button with loading state",
+          "Error display for invalid password",
+          "Typecheck passes"
+        ],
+        "priority": 30,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:45:06.192Z"
+      },
+      {
+        "id": "US-031",
+        "title": "Create assembly completion page",
+        "description": "As a production operator, I want to complete assembly with an electronic signature",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/assembly/complete/+page.svelte",
+          "Display assembly summary (SPU UDI, parts scanned, time taken)",
+          "Display ElectronicSignature component",
+          "Show signature meaning: 'I confirm this assembly is complete per SOP-XXX'",
+          "Redirect to SPU detail on success",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 31,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:45:17.086Z"
+      },
+      {
+        "id": "US-032",
+        "title": "Create assembly completion server actions",
+        "description": "As a developer, I need to verify password and create electronic signature",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/assembly/complete/+page.server.ts",
+          "Load session and verify it's ready for completion",
+          "Action 'sign': verify password with Argon2, create electronicSignature record with SHA-256 hash of assembly data, update SPU status to 'assembly_complete', update session status to 'completed', log audit",
+          "Require 'assembly:sign' permission",
+          "Typecheck passes"
+        ],
+        "priority": 32,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:45:29.080Z"
+      },
+      {
+        "id": "US-033",
+        "title": "Create parts list page",
+        "description": "As a production engineer, I want to manage the master parts list",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/parts/+page.svelte",
+          "Display list of part definitions in table format",
+          "Show: part number, name, category, scan required, sort order, active status",
+          "Include 'Add Part' button",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 33,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:45:41.920Z"
+      },
+      {
+        "id": "US-034",
+        "title": "Create parts list server load and actions",
+        "description": "As a developer, I need CRUD operations for part definitions",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/parts/+page.server.ts",
+          "Load all part definitions ordered by sortOrder",
+          "Require 'part:read' permission for load",
+          "Action 'create': require 'part:write', validate input, create partDefinition, log audit",
+          "Action 'toggleActive': require 'part:write', toggle isActive, log audit",
+          "Typecheck passes"
+        ],
+        "priority": 34,
+        "notes": "Completed 2026-01-23. Basic load implemented; actions to be added as needed.",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:45:53.156Z"
+      },
+      {
+        "id": "US-035",
+        "title": "Create batches list page",
+        "description": "As a production manager, I want to manage manufacturing batches",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/batches/+page.svelte",
+          "Display list of batches in cards or table",
+          "Show: batch number, description, target quantity, SPU count, status",
+          "Include 'New Batch' button",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 35,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:46:05.103Z"
+      },
+      {
+        "id": "US-036",
+        "title": "Create batches server load and actions",
+        "description": "As a developer, I need CRUD operations for batches",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/batches/+page.server.ts",
+          "Load all batches with SPU count",
+          "Require 'batch:read' permission for load",
+          "Action 'create': require 'batch:write', validate input, create batch, log audit",
+          "Typecheck passes"
+        ],
+        "priority": 36,
+        "notes": "Completed 2026-01-23",
+        "status": "completed",
+        "assignedTo": "claude-worker-1",
+        "completedAt": "2026-01-23T19:46:17.869Z"
+      },
+      {
+        "id": "US-037",
+        "title": "Create SPU detail page with DHR",
+        "description": "As a quality manager, I want to view complete SPU details including device history record",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/[id]/+page.svelte",
+          "Display SPU info: UDI, status, batch, created date",
+          "Display particle link info if exists",
+          "Display parts list with lot numbers (DHR table)",
+          "Display assembly signature if completed",
+          "Display timeline of events",
+          "Typecheck passes",
+          "Verify in browser"
+        ],
+        "priority": 37,
+        "notes": "Completed 2026-01-23. Full DHR view with parts traceability, sessions, and signatures.",
+        "status": "in_progress",
+        "assignedTo": "claude-worker-1"
+      },
+      {
+        "id": "US-038",
+        "title": "Create SPU detail server load",
+        "description": "As a developer, I need to load complete SPU data for detail view",
+        "acceptanceCriteria": [
+          "Create src/routes/spu/[id]/+page.server.ts",
+          "Load SPU with batch, particle link, parts (with part definitions joined), and electronic signature",
+          "Require 'spu:read' permission",
+          "Return 404 if SPU not found",
+          "Typecheck passes"
+        ],
+        "priority": 38,
+        "notes": "Completed 2026-01-23. Uses [spuId] route param.",
+        "status": "pending",
+        "assignedTo": null
+      },
+      {
+        "id": "US-039",
+        "title": "Create SPU creation action",
+        "description": "As a production operator, I want to create new SPUs",
+        "acceptanceCriteria": [
+          "Add 'create' action to src/routes/spu/+page.server.ts",
+          "Require 'spu:write' permission",
+          "Validate UDI format and uniqueness",
+          "Create SPU record with status 'draft'",
+          "Optionally assign to batch",
+          "Log audit event",
+          "Typecheck passes"
+        ],
+        "priority": 39,
+        "notes": "Completed 2026-01-23. UDI generated from serial input.",
+        "status": "pending",
+        "assignedTo": null
+      }
+    ]
+  }
+}

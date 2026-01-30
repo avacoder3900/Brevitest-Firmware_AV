@@ -1,0 +1,158 @@
+{
+  "id": "PRD-WINSTX",
+  "featureName": "Work Instruction Custom Fields & Barcode Scanning",
+  "branchName": "feature/winst-custom-fields",
+  "description": "Extension to PRD-WINST adding custom configurable scan fields per work instruction step. Fields are populated by scanning external barcodes on parts (containing lot #, part #, expiry, etc.) which link to BOM data.",
+  "affectedFiles": [
+    "src/lib/server/db/schema.ts",
+    "src/lib/server/services/barcode-parser.ts",
+    "src/routes/spu/documents/instructions/[id]/**",
+    "src/routes/spu/assembly/[sessionId]/**"
+  ],
+  "userStories": [
+    {
+      "id": "WINSTX-01",
+      "title": "Add stepFieldDefinition table for custom scan fields",
+      "description": "Create table to define custom fields that can be configured per work instruction step (lot, serial, expiry, calibration, etc.)",
+      "acceptanceCriteria": [
+        "Add 'stepFieldDefinition' table: id (text PK), stepId (FK to workInstructionStep), fieldName (text), fieldLabel (text), fieldType (text: 'barcode_scan' | 'manual_entry' | 'date_picker' | 'dropdown'), isRequired (boolean default true), validationPattern (text nullable), options (jsonb nullable for dropdowns), barcodeFieldMapping (text nullable - which GS1 AI to extract), sortOrder (integer default 0), createdAt",
+        "Add 'StepFieldDefinition' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 1,
+      "layer": "database",
+      "domain": "documents"
+    },
+    {
+      "id": "WINSTX-02",
+      "title": "Add stepFieldRecord table for captured field values",
+      "description": "Store the actual values captured during assembly for each custom field",
+      "acceptanceCriteria": [
+        "Add 'stepFieldRecord' table: id (text PK), assemblyStepRecordId (FK to assemblyStepRecord), stepFieldDefinitionId (FK to stepFieldDefinition), fieldValue (text), rawBarcodeData (text nullable - full scanned barcode), bomItemId (text FK nullable - linked BOM item), scannedAt (timestamp nullable), enteredAt (timestamp nullable), capturedBy (FK to user)",
+        "Add 'StepFieldRecord' type export",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/db/schema.ts"],
+      "priority": 2,
+      "layer": "database",
+      "domain": "documents",
+      "notes": "Depends on WINSTX-01. bomItemId links scanned part to BOM via lot number."
+    },
+    {
+      "id": "WINSTX-03",
+      "title": "Create barcode parser service for GS1/external codes",
+      "description": "Service to parse external barcodes (GS1, QR codes on parts) and extract structured data",
+      "acceptanceCriteria": [
+        "Create src/lib/server/services/barcode-parser.ts",
+        "Implement parseGS1Barcode(data): ParsedBarcode - extracts AI fields (01 GTIN, 10 Lot, 17 Expiry, 21 Serial, etc.)",
+        "Implement parseQrCode(data): ParsedBarcode - handles QR codes with delimited data",
+        "Implement lookupBomItem(lotNumber, partNumber): BomItem | null - finds matching BOM record",
+        "Return structured object: { gtin, lotNumber, serialNumber, expiryDate, partNumber, bomItem }",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/lib/server/services/barcode-parser.ts"],
+      "priority": 3,
+      "layer": "server",
+      "domain": "assembly"
+    },
+    {
+      "id": "WINSTX-04",
+      "title": "Create custom field configuration UI",
+      "description": "UI to configure custom scan fields for each work instruction step",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/instructions/[id]/fields/+page.svelte",
+        "Display list of steps with their configured fields",
+        "Add/edit/delete fields per step",
+        "Field type selector (barcode scan, manual entry, date picker, dropdown)",
+        "For barcode_scan type: select which GS1 AI field to extract (lot, serial, expiry, GTIN)",
+        "Drag-and-drop reordering of fields within a step",
+        "TRON theme styling",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/[id]/fields/+page.svelte"],
+      "priority": 4,
+      "layer": "ui",
+      "domain": "documents",
+      "notes": "Depends on WINSTX-01"
+    },
+    {
+      "id": "WINSTX-05",
+      "title": "Create custom field configuration server",
+      "description": "Server load and actions for field configuration",
+      "acceptanceCriteria": [
+        "Create src/routes/spu/documents/instructions/[id]/fields/+page.server.ts",
+        "Require workInstruction:write permission",
+        "Load work instruction with steps and field definitions",
+        "Action 'addField': create stepFieldDefinition record",
+        "Action 'updateField': update field properties",
+        "Action 'deleteField': remove field definition",
+        "Action 'reorderFields': update sortOrder values",
+        "Log audit events",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/[id]/fields/+page.server.ts"],
+      "priority": 5,
+      "layer": "server",
+      "domain": "documents",
+      "notes": "Depends on WINSTX-04"
+    },
+    {
+      "id": "WINSTX-06",
+      "title": "Update assembly step UI for custom fields",
+      "description": "Modify assembly UI to display and capture custom fields per step via barcode scanning",
+      "acceptanceCriteria": [
+        "Update src/routes/spu/assembly/[sessionId]/+page.svelte",
+        "Load custom field definitions for current step",
+        "Render appropriate input for each field type (scan input, text input, date picker, dropdown)",
+        "For barcode_scan fields: use ScanInput, parse barcode, auto-fill mapped field",
+        "Show BOM link status when lot number matches BOM record",
+        "Validate required fields before advancing",
+        "Store captured values in stepFieldRecord",
+        "Show completed fields with captured values and BOM links",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/assembly/[sessionId]/+page.svelte"],
+      "priority": 6,
+      "layer": "ui",
+      "domain": "assembly",
+      "notes": "Depends on WINSTX-01, WINSTX-02, WINSTX-03"
+    },
+    {
+      "id": "WINSTX-07",
+      "title": "Update assembly server for custom field capture",
+      "description": "Server actions to store custom field values and link to BOM",
+      "acceptanceCriteria": [
+        "Update src/routes/spu/assembly/[sessionId]/+page.server.ts",
+        "Load step field definitions with step data",
+        "Action 'captureField': parse barcode, validate, store stepFieldRecord",
+        "Lookup BOM item by lot number and link if found",
+        "Validate all required fields before step completion",
+        "Store raw barcode data for traceability",
+        "Log audit events for each field capture",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/assembly/[sessionId]/+page.server.ts"],
+      "priority": 7,
+      "layer": "server",
+      "domain": "assembly",
+      "notes": "Depends on WINSTX-06"
+    },
+    {
+      "id": "WINSTX-08",
+      "title": "Add fields link to work instruction detail page",
+      "description": "Add navigation to field configuration from work instruction detail",
+      "acceptanceCriteria": [
+        "Update src/routes/spu/documents/instructions/[id]/+page.svelte",
+        "Add 'Configure Fields' button linking to /fields subpage",
+        "Show count of configured fields per step in step list",
+        "npm run check passes"
+      ],
+      "affectedFiles": ["src/routes/spu/documents/instructions/[id]/+page.svelte"],
+      "priority": 8,
+      "layer": "ui",
+      "domain": "documents",
+      "notes": "Depends on WINSTX-04"
+    }
+  ]
+}

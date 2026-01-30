@@ -1,0 +1,109 @@
+{
+  "featureName": "Data Structures Module",
+  "branchName": "feature/supabase-data-structures",
+  "description": "Core data type definitions shared across all firmware modules. Includes test records, spectrophotometer readings, assay structures, and configuration types.",
+  "affectedFiles": [
+    "supabase-firmware/src/DataTypes.h",
+    "supabase-firmware/src/DataTypes.cpp",
+    "supabase-firmware/tests/unit/test_data_types.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.h"
+  ],
+  "userStories": [
+    {
+      "id": "DATA-001",
+      "title": "Define BrevitestTestRecord structure",
+      "description": "Create the main test record structure (9668 bytes) that stores all test data including header info and spectrophotometer readings array.",
+      "acceptanceCriteria": [
+        "Structure size matches legacy (9668 bytes)",
+        "All fields from legacy firmware preserved",
+        "Proper byte alignment and packing",
+        "Checksum calculation function included",
+        "Serialization to byte array implemented"
+      ],
+      "affectedFiles": ["supabase-firmware/src/DataTypes.h"],
+      "documentation": "Add Doxygen comments for all fields",
+      "priority": 1,
+      "notes": "Reference legacy-firmware/firmware/src/brevitest-firmware.h lines 100-150 for original structure"
+    },
+    {
+      "id": "DATA-002",
+      "title": "Define BrevitestSpectrophotometerReading structure",
+      "description": "Create the 32-byte spectrophotometer reading structure with all 10 AS7341 channels plus metadata.",
+      "acceptanceCriteria": [
+        "Structure size exactly 32 bytes",
+        "All 10 wavelength channels (F1-F8, Clear, NIR)",
+        "Position, temperature, timing metadata included",
+        "Channel identifier (A/B/C) field",
+        "Laser output value field"
+      ],
+      "affectedFiles": ["supabase-firmware/src/DataTypes.h"],
+      "priority": 1,
+      "notes": "Max 300 readings per test"
+    },
+    {
+      "id": "DATA-003",
+      "title": "Define BrevitestAssay structure",
+      "description": "Create the assay structure that holds downloaded test instructions (BCODE).",
+      "acceptanceCriteria": [
+        "Assay ID field (8 chars + null)",
+        "Duration field",
+        "BCODE length field (uint16)",
+        "BCODE buffer (5000 bytes max)",
+        "Checksum validation function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/DataTypes.h"],
+      "priority": 2,
+      "notes": "BCODE is the instruction set for running tests"
+    },
+    {
+      "id": "DATA-004",
+      "title": "Define EEPROM storage structure",
+      "description": "Create persistent storage structure for firmware version, test counts, and running test recovery.",
+      "acceptanceCriteria": [
+        "Firmware version field",
+        "Data format version field",
+        "Stress test cycle counters",
+        "Running test UUID for crash recovery",
+        "Running assay ID for crash recovery"
+      ],
+      "affectedFiles": ["supabase-firmware/src/DataTypes.h"],
+      "priority": 2,
+      "notes": "Must be backwards compatible with existing EEPROM data"
+    },
+    {
+      "id": "DATA-005",
+      "title": "Define enumeration types",
+      "description": "Create all enum types used throughout firmware: DeviceMode, TestState, CartridgeState, BarcodeType, etc.",
+      "acceptanceCriteria": [
+        "DeviceMode enum (11 states)",
+        "TestState enum (6 states)",
+        "CartridgeState enum (5 states)",
+        "BarcodeType enum (5 types)",
+        "ErrorCode enum with all error conditions"
+      ],
+      "affectedFiles": ["supabase-firmware/src/DataTypes.h"],
+      "priority": 1,
+      "notes": "Values must match legacy firmware for state compatibility"
+    },
+    {
+      "id": "DATA-006",
+      "title": "Implement serialization utilities",
+      "description": "Create helper functions for converting structures to/from byte arrays for transmission and storage.",
+      "acceptanceCriteria": [
+        "serializeTestRecord() function",
+        "deserializeTestRecord() function",
+        "CRC32 checksum calculation",
+        "Base64 encoding/decoding utilities",
+        "Unit tests for round-trip serialization"
+      ],
+      "affectedFiles": [
+        "supabase-firmware/src/DataTypes.cpp",
+        "supabase-firmware/tests/unit/test_data_types.cpp"
+      ],
+      "priority": 2,
+      "notes": "Must produce identical output to legacy firmware"
+    }
+  ]
+}

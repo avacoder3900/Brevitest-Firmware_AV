@@ -1,0 +1,122 @@
+{
+  "featureName": "Hardware Abstraction Layer (HAL)",
+  "branchName": "feature/supabase-hal",
+  "description": "Hardware pin definitions and low-level hardware interface. Provides abstraction between firmware logic and physical hardware.",
+  "affectedFiles": [
+    "supabase-firmware/src/HardwareConfig.h",
+    "supabase-firmware/src/HAL.h",
+    "supabase-firmware/src/HAL.cpp",
+    "supabase-firmware/tests/unit/test_hal.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.h"
+  ],
+  "userStories": [
+    {
+      "id": "HAL-001",
+      "title": "Define all hardware pin mappings",
+      "description": "Create comprehensive header file with all GPIO pin definitions for the Particle Boron platform.",
+      "acceptanceCriteria": [
+        "Analog pins: A0 (buzzer), A2-A4 (spectro), A6 (thermistor)",
+        "Digital pins: D3-D8, D11-D13, D22-D23, D26",
+        "I2C addresses: AS7341, PCA9536 (0x41)",
+        "PWM configuration constants",
+        "All pins documented with purpose"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HardwareConfig.h"],
+      "documentation": "Document each pin with hardware connection description",
+      "priority": 1,
+      "notes": "Pin mapping must match Brevitest V56 hardware"
+    },
+    {
+      "id": "HAL-002",
+      "title": "Define timing and threshold constants",
+      "description": "Create constants for all timing delays, thresholds, and calibration values.",
+      "acceptanceCriteria": [
+        "Motor step delays (250-600 microseconds)",
+        "Stage position limits (45000 microns)",
+        "Temperature thresholds and targets",
+        "Timeout values for all operations",
+        "Default PWM values for lasers/heater"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HardwareConfig.h"],
+      "priority": 1,
+      "notes": "Reference legacy firmware for exact values"
+    },
+    {
+      "id": "HAL-003",
+      "title": "Implement GPIO initialization",
+      "description": "Create initialization function that configures all GPIO pins with correct modes.",
+      "acceptanceCriteria": [
+        "All input pins configured correctly",
+        "All output pins configured and set to safe defaults",
+        "PWM pins configured with correct frequency",
+        "Interrupt pin (D3) configured for cartridge detection",
+        "I2C initialized at correct speed"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HAL.cpp"],
+      "priority": 1,
+      "notes": "Called once during setup()"
+    },
+    {
+      "id": "HAL-004",
+      "title": "Implement analog read abstraction",
+      "description": "Create abstraction layer for analog reads with averaging and calibration.",
+      "acceptanceCriteria": [
+        "readThermistor() function with temperature lookup",
+        "readSpectroChannel(channel) function",
+        "Configurable sample averaging",
+        "ADC resolution configuration",
+        "Noise filtering option"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HAL.cpp"],
+      "priority": 2,
+      "notes": "Thermistor lookup table in HardwareConfig.h"
+    },
+    {
+      "id": "HAL-005",
+      "title": "Implement digital I/O abstraction",
+      "description": "Create abstraction for digital reads/writes with debouncing and safety.",
+      "acceptanceCriteria": [
+        "setHeaterPower(uint8_t) with safety limits",
+        "setLaserPower(channel, uint8_t) functions",
+        "readCartridgeSwitch() with debouncing",
+        "readLimitSwitch() with debouncing",
+        "motorPulse() for stepper control"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HAL.cpp"],
+      "priority": 2,
+      "notes": "Include hardware failsafes for heater"
+    },
+    {
+      "id": "HAL-006",
+      "title": "Implement I2C communication helpers",
+      "description": "Create helper functions for I2C device communication.",
+      "acceptanceCriteria": [
+        "i2cWriteRegister() function",
+        "i2cReadRegister() function",
+        "i2cScan() for debugging",
+        "Timeout handling",
+        "Error reporting"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HAL.cpp"],
+      "priority": 2,
+      "notes": "Used by spectrophotometer and mux"
+    },
+    {
+      "id": "HAL-007",
+      "title": "Create HAL unit tests",
+      "description": "Implement unit tests for HAL functions using mock hardware.",
+      "acceptanceCriteria": [
+        "Pin initialization test",
+        "Analog read mock test",
+        "Digital I/O mock test",
+        "Thermistor lookup table test",
+        "All tests pass"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_hal.cpp"],
+      "priority": 3,
+      "notes": "Use mocking framework for hardware simulation"
+    }
+  ]
+}

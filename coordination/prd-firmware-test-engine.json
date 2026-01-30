@@ -1,0 +1,142 @@
+{
+  "featureName": "Test Execution Engine Module",
+  "branchName": "feature/supabase-test-engine",
+  "description": "BCODE interpreter and test execution engine. Manages the complete test workflow from validation through data collection.",
+  "affectedFiles": [
+    "supabase-firmware/src/TestRunner.h",
+    "supabase-firmware/src/TestRunner.cpp",
+    "supabase-firmware/src/BCODEInterpreter.h",
+    "supabase-firmware/src/BCODEInterpreter.cpp",
+    "supabase-firmware/docs/BCODE_SPECIFICATION.md",
+    "supabase-firmware/tests/unit/test_runner.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "TEST-001",
+      "title": "Implement TestRunner class",
+      "description": "Create main test execution controller.",
+      "acceptanceCriteria": [
+        "init() function",
+        "startTest(assay, cartridgeId) function",
+        "stopTest() function",
+        "getTestState() function",
+        "getTestProgress() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/TestRunner.h"],
+      "documentation": "Document test workflow",
+      "priority": 1,
+      "notes": "Orchestrates all hardware modules during test"
+    },
+    {
+      "id": "TEST-002",
+      "title": "Implement BCODE interpreter",
+      "description": "Create interpreter for BCODE test instructions.",
+      "acceptanceCriteria": [
+        "loadBCODE(code, length) function",
+        "executeNextInstruction() function",
+        "Supports all legacy BCODE opcodes",
+        "Instruction pointer management",
+        "Error handling for invalid opcodes"
+      ],
+      "affectedFiles": [
+        "supabase-firmware/src/BCODEInterpreter.h",
+        "supabase-firmware/src/BCODEInterpreter.cpp"
+      ],
+      "priority": 1,
+      "notes": "BCODE is the test instruction set"
+    },
+    {
+      "id": "TEST-003",
+      "title": "Implement test data collection",
+      "description": "Create logic for collecting spectrophotometer readings during test.",
+      "acceptanceCriteria": [
+        "Collects up to 300 readings",
+        "Timestamps each reading",
+        "Records position for each reading",
+        "Records temperature for each reading",
+        "getReadingCount() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/TestRunner.cpp"],
+      "priority": 1,
+      "notes": "Populates BrevitestTestRecord readings array"
+    },
+    {
+      "id": "TEST-004",
+      "title": "Implement test record generation",
+      "description": "Create logic for assembling final test record.",
+      "acceptanceCriteria": [
+        "Populates all header fields",
+        "Calculates checksum",
+        "getTestRecord() function",
+        "Serializes to byte array",
+        "Validates record completeness"
+      ],
+      "affectedFiles": ["supabase-firmware/src/TestRunner.cpp"],
+      "priority": 1,
+      "notes": "Must produce identical format to legacy"
+    },
+    {
+      "id": "TEST-005",
+      "title": "Implement cartridge removal detection",
+      "description": "Create logic to handle cartridge removal during test.",
+      "acceptanceCriteria": [
+        "Detects removal via D3 interrupt",
+        "Gracefully stops test execution",
+        "Saves partial data",
+        "Sets TestState to CANCELLED",
+        "Notifies state machine"
+      ],
+      "affectedFiles": ["supabase-firmware/src/TestRunner.cpp"],
+      "priority": 1,
+      "notes": "Critical for data integrity"
+    },
+    {
+      "id": "TEST-006",
+      "title": "Implement stress test mode",
+      "description": "Create automated stress test execution for device validation.",
+      "acceptanceCriteria": [
+        "startStressTest(cycles) function",
+        "Automatic test cycling",
+        "Cycle counting and logging",
+        "LED power variation testing",
+        "Performance metrics collection"
+      ],
+      "affectedFiles": ["supabase-firmware/src/TestRunner.cpp"],
+      "priority": 2,
+      "notes": "Used for device validation"
+    },
+    {
+      "id": "TEST-007",
+      "title": "Document BCODE specification",
+      "description": "Create comprehensive documentation for BCODE instruction set.",
+      "acceptanceCriteria": [
+        "All opcodes documented",
+        "Parameter formats",
+        "Execution timing",
+        "Example BCODE sequences",
+        "Error conditions"
+      ],
+      "affectedFiles": ["supabase-firmware/docs/BCODE_SPECIFICATION.md"],
+      "priority": 2,
+      "notes": "Reverse-engineer from legacy firmware"
+    },
+    {
+      "id": "TEST-008",
+      "title": "Create test engine unit tests",
+      "description": "Unit tests for test execution logic.",
+      "acceptanceCriteria": [
+        "Test BCODE interpretation",
+        "Test data collection",
+        "Test record generation",
+        "Test cartridge removal handling",
+        "Test stress test logic"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_runner.cpp"],
+      "priority": 3,
+      "notes": "Mock hardware modules"
+    }
+  ]
+}

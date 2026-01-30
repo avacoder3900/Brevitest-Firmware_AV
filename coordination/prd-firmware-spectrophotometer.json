@@ -1,0 +1,127 @@
+{
+  "featureName": "Spectrophotometer Module",
+  "branchName": "feature/supabase-spectrophotometer",
+  "description": "AS7341 11-channel visible light sensor driver and measurement logic. Handles multi-channel readings during test execution.",
+  "affectedFiles": [
+    "supabase-firmware/src/Spectrophotometer.h",
+    "supabase-firmware/src/Spectrophotometer.cpp",
+    "supabase-firmware/src/drivers/AS7341.h",
+    "supabase-firmware/src/drivers/AS7341.cpp",
+    "supabase-firmware/tests/unit/test_spectrophotometer.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/DFRobot_AS7341.h",
+    "legacy-firmware/firmware/src/DFRobot_AS7341.cpp"
+  ],
+  "userStories": [
+    {
+      "id": "SPEC-001",
+      "title": "Port AS7341 driver",
+      "description": "Port the DFRobot AS7341 driver to new firmware structure with improved organization.",
+      "acceptanceCriteria": [
+        "I2C communication working",
+        "All register definitions preserved",
+        "ATIME, ASTEP, AGAIN configuration",
+        "SMUX configuration for channel selection",
+        "LED control functions",
+        "Flicker detection functions"
+      ],
+      "affectedFiles": [
+        "supabase-firmware/src/drivers/AS7341.h",
+        "supabase-firmware/src/drivers/AS7341.cpp"
+      ],
+      "documentation": "Document all register meanings",
+      "priority": 1,
+      "notes": "Based on legacy DFRobot_AS7341 driver"
+    },
+    {
+      "id": "SPEC-002",
+      "title": "Implement Spectrophotometer class",
+      "description": "Create high-level spectrophotometer controller that manages the AS7341 sensor.",
+      "acceptanceCriteria": [
+        "init() function for sensor setup",
+        "setIntegrationTime(atime, astep) function",
+        "setGain(again) function",
+        "isReady() status function",
+        "getLastError() function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/Spectrophotometer.h"],
+      "priority": 1,
+      "notes": "Uses HAL for I2C communication"
+    },
+    {
+      "id": "SPEC-003",
+      "title": "Implement channel multiplexing",
+      "description": "Implement PCA9536 I2C mux control for switching between optical channels A, B, C.",
+      "acceptanceCriteria": [
+        "PCA9536 initialization",
+        "selectChannel(char channel) function",
+        "Channel selection verified by read-back",
+        "Timeout handling for mux operations"
+      ],
+      "affectedFiles": ["supabase-firmware/src/Spectrophotometer.cpp"],
+      "priority": 1,
+      "notes": "PCA9536 at I2C address 0x41"
+    },
+    {
+      "id": "SPEC-004",
+      "title": "Implement single reading capture",
+      "description": "Create function to capture a single spectrophotometer reading with all channels.",
+      "acceptanceCriteria": [
+        "readAllChannels() returns all 10 values",
+        "Populates BrevitestSpectrophotometerReading structure",
+        "Includes position, temperature, timing metadata",
+        "Non-blocking with timeout",
+        "Error handling for I2C failures"
+      ],
+      "affectedFiles": ["supabase-firmware/src/Spectrophotometer.cpp"],
+      "priority": 1,
+      "notes": "Returns F1-F8, Clear, NIR channels"
+    },
+    {
+      "id": "SPEC-005",
+      "title": "Implement continuous reading mode",
+      "description": "Create mode for capturing readings continuously during stage oscillation.",
+      "acceptanceCriteria": [
+        "startContinuousMode() function",
+        "stopContinuousMode() function",
+        "Callback for each reading captured",
+        "Reading buffer management",
+        "Max 300 readings capacity"
+      ],
+      "affectedFiles": ["supabase-firmware/src/Spectrophotometer.cpp"],
+      "priority": 2,
+      "notes": "Used during RUNNING_TEST for data collection"
+    },
+    {
+      "id": "SPEC-006",
+      "title": "Implement calibration functions",
+      "description": "Create functions for spectrophotometer calibration and baseline measurement.",
+      "acceptanceCriteria": [
+        "captureBaseline() function",
+        "getBaselineReading(channel) function",
+        "Baseline subtraction option",
+        "Dark current compensation",
+        "Clear calibration data function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/Spectrophotometer.cpp"],
+      "priority": 2,
+      "notes": "Baseline captured before each test"
+    },
+    {
+      "id": "SPEC-007",
+      "title": "Create spectrophotometer unit tests",
+      "description": "Unit tests for spectrophotometer functionality using mocked I2C.",
+      "acceptanceCriteria": [
+        "Test initialization sequence",
+        "Test configuration changes",
+        "Test channel multiplexing",
+        "Test reading capture",
+        "Test error handling"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_spectrophotometer.cpp"],
+      "priority": 3,
+      "notes": "Mock I2C responses for testing"
+    }
+  ]
+}

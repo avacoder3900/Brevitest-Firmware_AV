@@ -1,0 +1,121 @@
+{
+  "featureName": "Heater Controller Module",
+  "branchName": "feature/supabase-heater",
+  "description": "PID temperature controller for heating element. Manages temperature ramping, stability detection, and safety failsafes.",
+  "affectedFiles": [
+    "supabase-firmware/src/HeaterController.h",
+    "supabase-firmware/src/HeaterController.cpp",
+    "supabase-firmware/tests/unit/test_heater.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "HEAT-001",
+      "title": "Implement HeaterController class",
+      "description": "Create heater controller class with initialization and basic control functions.",
+      "acceptanceCriteria": [
+        "init() function configures heater pin (D4)",
+        "setTargetTemperature(temp) function",
+        "getTargetTemperature() function",
+        "getCurrentTemperature() function",
+        "Default target: 450 (45.0 C)"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HeaterController.h"],
+      "documentation": "Document PID tuning parameters",
+      "priority": 1,
+      "notes": "Temperature stored as x10 (450 = 45.0C)"
+    },
+    {
+      "id": "HEAT-002",
+      "title": "Implement thermistor lookup table",
+      "description": "Create temperature conversion from ADC reading using lookup table.",
+      "acceptanceCriteria": [
+        "21-point lookup table (100-1000C range)",
+        "Linear interpolation between points",
+        "readTemperature() function",
+        "ADC averaging (multiple samples)",
+        "Error value for out-of-range readings"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HeaterController.cpp"],
+      "priority": 1,
+      "notes": "Reference Thermistor calcs.xlsx in legacy-firmware"
+    },
+    {
+      "id": "HEAT-003",
+      "title": "Implement PID control loop",
+      "description": "Create PID algorithm for temperature regulation.",
+      "acceptanceCriteria": [
+        "PID constants: Kp=80/4, Ki=1/50000, Kd=1/5",
+        "update() function called in main loop",
+        "Integral windup prevention",
+        "Output clamped to 0-255 PWM range",
+        "Configurable PID constants"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HeaterController.cpp"],
+      "priority": 1,
+      "notes": "Must match legacy PID behavior"
+    },
+    {
+      "id": "HEAT-004",
+      "title": "Implement safety failsafes",
+      "description": "Create safety mechanisms to prevent heater damage or fire.",
+      "acceptanceCriteria": [
+        "Maximum continuous power time: 2000ms",
+        "Over-temperature cutoff",
+        "Under-temperature warning",
+        "Thermal runaway detection",
+        "Emergency shutdown function"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HeaterController.cpp"],
+      "priority": 1,
+      "notes": "CRITICAL: Safety features must always be active"
+    },
+    {
+      "id": "HEAT-005",
+      "title": "Implement temperature stability detection",
+      "description": "Create logic to detect when temperature has stabilized at target.",
+      "acceptanceCriteria": [
+        "isReady() function returns true when stable",
+        "Stability criteria: within +/-10C of target",
+        "Must be stable for 5 seconds minimum",
+        "getTimeAtTarget() function",
+        "Callback when ready"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HeaterController.cpp"],
+      "priority": 2,
+      "notes": "Used to determine when tests can start"
+    },
+    {
+      "id": "HEAT-006",
+      "title": "Implement enable/disable functions",
+      "description": "Create functions to enable/disable heating with state tracking.",
+      "acceptanceCriteria": [
+        "enable() function starts heating",
+        "disable() function stops heating safely",
+        "isEnabled() status function",
+        "setDefaultPower(power) function",
+        "Default power: 64/255"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HeaterController.cpp"],
+      "priority": 2,
+      "notes": "Heater enabled during HEATING and RUNNING_TEST modes"
+    },
+    {
+      "id": "HEAT-007",
+      "title": "Create heater controller unit tests",
+      "description": "Unit tests for heater controller with mocked hardware.",
+      "acceptanceCriteria": [
+        "Test PID calculation correctness",
+        "Test lookup table interpolation",
+        "Test stability detection logic",
+        "Test safety failsafe triggers",
+        "Test enable/disable state"
+      ],
+      "affectedFiles": ["supabase-firmware/tests/unit/test_heater.cpp"],
+      "priority": 3,
+      "notes": "Safety tests are critical"
+    }
+  ]
+}

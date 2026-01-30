@@ -1,0 +1,42 @@
+{
+  "featureName": "Feature Name Here",
+  "branchName": "feature/your-branch-name",
+  "description": "Brief description of what this feature does",
+  "affectedFiles": [
+    "src/routes/feature/**",
+    "src/lib/components/feature/**",
+    "src/lib/server/feature/**"
+  ],
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "First task title",
+      "description": "What the user wants to accomplish",
+      "acceptanceCriteria": [
+        "Criterion 1 - specific and testable",
+        "Criterion 2 - specific and testable",
+        "Typecheck passes (npm run check)",
+        "Works in browser"
+      ],
+      "affectedFiles": [
+        "src/routes/feature/+page.svelte",
+        "src/routes/feature/+page.server.ts"
+      ],
+      "documentation": "Update AGENTS.md if architectural changes",
+      "priority": 1,
+      "notes": "Any additional context or dependencies"
+    },
+    {
+      "id": "US-002",
+      "title": "Second task title",
+      "description": "What the user wants to accomplish",
+      "acceptanceCriteria": [
+        "Criterion 1",
+        "Criterion 2"
+      ],
+      "affectedFiles": [],
+      "priority": 2,
+      "notes": "Depends on US-001"
+    }
+  ]
+}
