@@ -450,8 +450,8 @@
         "Include examples for common operations"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": "Documentation pending - code is complete"
+      "passes": true,
+      "notes": "Complete documentation in supabase-firmware/docs/SERIAL_COMMANDS.md: all commands 1-9999 documented with parameters, output formats, error codes, and examples"
     },
     {
       "id": "DELTA-028",
@@ -464,8 +464,8 @@
         "Document timing behavior"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": "Documentation pending - code is complete"
+      "passes": true,
+      "notes": "Complete documentation in supabase-firmware/docs/BCODE_SPECIFICATION.md: all opcodes (0-99) documented, parameters detailed, 3 example scripts, timing/delay behavior, execution model"
     }
   ],
 
