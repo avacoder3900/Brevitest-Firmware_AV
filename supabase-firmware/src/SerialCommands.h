@@ -217,6 +217,18 @@ public:
     // Barcode Commands (60)
     int handleScanBarcode(const ParsedCommand& cmd);           // 60
 
+    // Magnetometer Commands (70-73) - DELTA-009
+    int handleMagnetometerStart(const ParsedCommand& cmd);     // 70
+    int handleMagnetometerList(const ParsedCommand& cmd);      // 71
+    int handleMagnetometerLoad(const ParsedCommand& cmd);      // 72
+    int handleMagnetometerClear(const ParsedCommand& cmd);     // 73
+
+    // Stress Test Commands (90-93) - DELTA-010
+    int handleStressTestStart(const ParsedCommand& cmd);       // 90
+    int handleStressTestStop(const ParsedCommand& cmd);        // 91
+    int handleStressTestStatus(const ParsedCommand& cmd);      // 92
+    int handleStressTestReset(const ParsedCommand& cmd);       // 93
+
     // Spectrophotometer Commands (301-311) - SER-006
     int handleSpectroParams(const ParsedCommand& cmd);         // 301
     int handleSpectroChannelOn(const ParsedCommand& cmd);      // 303
@@ -237,6 +249,23 @@ public:
     int handleCloudCheckAssays(const ParsedCommand& cmd);      // 404
     int handleCloudClearAssays(const ParsedCommand& cmd);      // 405
     int handleCloudOutputAssay(const ParsedCommand& cmd);      // 406
+
+    // Radio Control Commands (8000-8999) - DELTA-013
+    int handleRadioHelp(const ParsedCommand& cmd);             // 8000
+    int handleRadioStatus(const ParsedCommand& cmd);           // 8001
+    int handleWiFiOff(const ParsedCommand& cmd);               // 8100
+    int handleWiFiOn(const ParsedCommand& cmd);                // 8101
+    int handleCellularOff(const ParsedCommand& cmd);           // 8200
+    int handleCellularOn(const ParsedCommand& cmd);            // 8201
+    int handleBluetoothOff(const ParsedCommand& cmd);          // 8300
+    int handleBluetoothOn(const ParsedCommand& cmd);           // 8301
+    int handleWiFiOnlyMode(const ParsedCommand& cmd);          // 8500
+    int handleCellularOnlyMode(const ParsedCommand& cmd);      // 8501
+    int handleBluetoothOnlyMode(const ParsedCommand& cmd);     // 8502
+    int handleFCCTestMode(const ParsedCommand& cmd);           // 8503
+    int handleAllRadiosOff(const ParsedCommand& cmd);          // 8900
+    int handleAllRadiosOn(const ParsedCommand& cmd);           // 8901
+    int handleEmissionCheck(const ParsedCommand& cmd);         // 8999
 
     // State Management Commands (9000-9032) - SER-007
     int handleStateHelp(const ParsedCommand& cmd);             // 9000

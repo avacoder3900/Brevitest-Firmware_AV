@@ -17,6 +17,9 @@
 
 #include "Spectrophotometer.h"
 #include "HAL.h"
+#include "MotorController.h"
+#include "LaserController.h"
+#include "HeaterController.h"
 
 //==============================================================================
 // CONSTRUCTOR / DESTRUCTOR
@@ -650,4 +653,220 @@ void Spectrophotometer::printStatus() {
     if (sensorReady_) {
         sensor_.printStatus(0);
     }
+}
+
+//==============================================================================
+// COORDINATED SCANNING (BETA-019)
+//==============================================================================
+
+uint32_t Spectrophotometer::calculateIntegrationTimeUs(uint8_t atime, uint16_t astep) {
+    // Integration time = (ATIME + 1) * (ASTEP + 1) * 2.78us
+    return ((uint32_t)(atime + 1) * (uint32_t)(astep + 1) * 278) / 100;
+}
+
+uint16_t Spectrophotometer::calculateStepDelayForIntegration(uint8_t atime, uint16_t astep) {
+    // Calculate integration time in microseconds
+    uint32_t integrationTimeUs = calculateIntegrationTimeUs(atime, astep);
+
+    // Well length is SPECTRO_WELL_LENGTH (5000 microns)
+    // Each step is MOTOR_MICRONS_PER_EIGHTH_STEP (25 microns)
+    int32_t stepsNeeded = SPECTRO_WELL_LENGTH / MOTOR_MICRONS_PER_EIGHTH_STEP;  // 200 steps
+
+    // Time per step in microseconds
+    uint32_t timePerStepUs = integrationTimeUs / stepsNeeded;
+
+    // Step delay is half the time per step (since step duration = 2 * step_delay)
+    uint16_t calculatedDelay = (uint16_t)(timePerStepUs / 2);
+
+    // Enforce minimum step delay
+    if (calculatedDelay < MOTOR_MINIMUM_STEP_DELAY) {
+        calculatedDelay = MOTOR_MINIMUM_STEP_DELAY;
+    }
+
+    return calculatedDelay;
+}
+
+bool Spectrophotometer::readingContinuous(BrevitestTestRecord* test,
+                                           MotorController* motor,
+                                           LaserController* laser,
+                                           HeaterController* heater,
+                                           bool baseline,
+                                           int32_t startingPosition,
+                                           int32_t distanceToScan,
+                                           uint16_t stepDelayUs,
+                                           bool log) {
+    if (!isReady() || test == nullptr || motor == nullptr || laser == nullptr) {
+        lastError_ = SpectroError::ERR_NOT_INITIALIZED;
+        return false;
+    }
+
+    int32_t previousPosition = motor->getCurrentPosition();
+
+    // Set baseline or test scan count
+    if (baseline) {
+        test->baseline_scans = 1;
+    } else {
+        test->test_scans = 1;
+    }
+
+    // Set test configuration
+    test->atime = atime_;
+    test->astep = astep_;
+    test->again = again_;
+
+    // Calculate integration time in microseconds
+    uint32_t integrationTimeUs = calculateIntegrationTimeUs(atime_, astep_);
+
+    // Calculate reading distance: distance stage travels during one reading
+    // Each step duration = 2 * step_delay_us
+    // Distance per step = MOTOR_MICRONS_PER_EIGHTH_STEP (25 microns)
+    int32_t readingDistance = (int32_t)((integrationTimeUs / (2 * stepDelayUs)) * MOTOR_MICRONS_PER_EIGHTH_STEP);
+
+    // Ensure minimum reading distance
+    if (readingDistance < MOTOR_MICRONS_PER_EIGHTH_STEP) {
+        readingDistance = MOTOR_MICRONS_PER_EIGHTH_STEP;
+    }
+
+    // Calculate number of segments needed to cover scan distance
+    int32_t numSegments = (distanceToScan + readingDistance - 1) / readingDistance;
+
+    // Turn off heater during readings for ADC stabilization
+    if (heater != nullptr) {
+        heater->disable();
+        delayMicroseconds(HEATER_STABILIZATION_TIME_US);
+    }
+
+    Log.info("Spectro: readingContinuous - start=%ld, distance=%ld, readingDist=%ld, segments=%ld",
+             startingPosition, distanceToScan, readingDistance, numSegments);
+
+    // Channel identifiers
+    const char channels[3] = {'A', 'B', 'C'};
+
+    // Read each channel (A, B, C) sequentially
+    for (int j = 0; j < 3; j++) {
+        char channel = channels[j];
+
+        // Select the spectrophotometer channel
+        if (!selectChannel(channel)) {
+            Log.error("Spectro: Failed to select channel %c", channel);
+            continue;
+        }
+
+        // Allow channel to stabilize
+        delay(2);
+
+        // Turn on laser for this channel
+        laser->enableLaser(channel);
+        delay(10);  // 10ms warmup delay
+
+        // For each segment
+        for (int32_t seg = 0; seg < numSegments; seg++) {
+            // Check buffer capacity
+            if (test->number_of_readings >= SPECTRO_MAX_READINGS) {
+                Log.warn("Spectro: Reading buffer full");
+                break;
+            }
+
+            // Calculate segment start and end positions
+            int32_t segmentStart = startingPosition + seg * readingDistance;
+            int32_t segmentEnd = segmentStart + readingDistance;
+
+            // Last segment may be shorter
+            if (segmentEnd > startingPosition + distanceToScan) {
+                segmentEnd = startingPosition + distanceToScan;
+            }
+
+            int32_t segmentLength = segmentEnd - segmentStart;
+
+            // Move to segment start position
+            motor->moveToPosition(segmentStart, MOTOR_FAST_STEP_DELAY);
+
+            // Get reference to reading structure
+            BrevitestSpectrophotometerReading* reading = &(test->reading[test->number_of_readings]);
+            reading->number = test->number_of_readings;
+            reading->channel = channel;
+            reading->temperature = heater ? heater->getCurrentTemperature() : 0;
+            reading->position = (uint16_t)segmentStart;
+            reading->laser_output = 0;  // Could read photodetector here
+
+            // Start F1F4ClearNIR measurement
+            uint32_t startTime = millis();
+            sensor_.startMeasure(AS7341::ChannelMapping::F1F4_CLEAR_NIR);
+
+            // Move stage through segment while sensor integrates
+            motor->moveRelative(segmentLength, stepDelayUs);
+
+            // Wait for F1F4ClearNIR measurement to complete
+            while (!sensor_.measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT) {
+                delayMicroseconds(100);
+            }
+
+            if (sensor_.measureComplete()) {
+                AS7341::ModeOneData data1 = sensor_.readSpectralDataOne();
+                reading->f1 = data1.f1;
+                reading->f2 = data1.f2;
+                reading->f3 = data1.f3;
+                reading->f4 = data1.f4;
+                reading->clear = data1.clear;
+                reading->nir = data1.nir;
+            } else {
+                Log.warn("Spectro: F1F4ClearNIR measurement timed out");
+            }
+
+            reading->msec = millis() - testStartTime_;
+
+            // Move back to segment start for F5-F8 measurement
+            motor->moveToPosition(segmentStart, MOTOR_FAST_STEP_DELAY);
+
+            // Start F5F8ClearNIR measurement
+            startTime = millis();
+            sensor_.startMeasure(AS7341::ChannelMapping::F5F8_CLEAR_NIR);
+
+            // Move stage through segment again while sensor integrates
+            motor->moveRelative(segmentLength, stepDelayUs);
+
+            // Wait for F5F8ClearNIR measurement to complete
+            while (!sensor_.measureComplete() && (millis() - startTime) < SPECTRO_TIMEOUT) {
+                delayMicroseconds(100);
+            }
+
+            if (sensor_.measureComplete()) {
+                AS7341::ModeTwoData data2 = sensor_.readSpectralDataTwo();
+                reading->f5 = data2.f5;
+                reading->f6 = data2.f6;
+                reading->f7 = data2.f7;
+                reading->f8 = data2.f8;
+            } else {
+                Log.warn("Spectro: F5F8ClearNIR measurement timed out");
+            }
+
+            test->number_of_readings++;
+
+            if (log) {
+                Log.info("%d\t%c\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d",
+                         reading->number, reading->channel, reading->position,
+                         reading->temperature, reading->msec,
+                         reading->f1, reading->f2, reading->f3, reading->f4,
+                         reading->f5, reading->f6, reading->f7, reading->f8,
+                         reading->clear, reading->nir);
+            }
+        }
+
+        // Turn off laser after all segments for this channel
+        laser->disableLaser(channel);
+    }
+
+    // Turn off all spectrophotometers
+    allChannelsOff();
+
+    // Return stage to previous position
+    motor->moveToPosition(previousPosition, MOTOR_FAST_STEP_DELAY);
+
+    // Re-enable heater if it was on
+    if (heater != nullptr && heater->getTargetTemperature() > 0) {
+        heater->enable();
+    }
+
+    Log.info("Spectro: readingContinuous complete, %d readings captured", test->number_of_readings);
+    return true;
 }
