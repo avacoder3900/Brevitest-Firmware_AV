@@ -1,0 +1,479 @@
+{
+  "project": "Firmware Rewrite - Delta: Serial Commands & Test Engine",
+  "branchName": "firmware-rewrite-supabase",
+  "terminal": "delta",
+  "description": "Implement serial command interface and BCODE test execution engine. Serial commands provide diagnostics and manual control. BCODE interpreter executes test scripts.",
+  "lastUpdated": "2026-01-30",
+
+  "legacyReference": {
+    "commandCategories": {
+      "1-9": "System reset, EEPROM, pin I/O, WiFi credentials",
+      "10-12": "Serial messaging enable/disable, device ID",
+      "20-29": "Stage motion commands",
+      "30-33": "Laser control commands",
+      "40-43": "Buzzer control commands",
+      "50-55": "Heater and temperature control",
+      "60": "Barcode scanner commands",
+      "70-73": "Magnetometer validation commands",
+      "90-93": "Stress test commands",
+      "301-311": "Spectrophotometer commands",
+      "400-406": "Cache and assay file management",
+      "8000-8999": "Radio control (WiFi, Cellular, Bluetooth)",
+      "9000-9032": "State management and diagnostics"
+    },
+    "bcodeCommands": {
+      "0": "Start test",
+      "1": "Delay(ms)",
+      "2": "Move Microns(microns, step_delay_us)",
+      "3": "Oscillate Stage(microns, step_delay_us, cycles)",
+      "10": "Set sensor params(gain, step, integration_time)",
+      "11": "Baseline scans(num_scans)",
+      "14": "Test scans(num_scans)",
+      "15": "Take sensor readings(channel, gain, step, integration)",
+      "16": "Continuous sensor readings(baseline, position, distance, step_delay)",
+      "20": "Repeat begin(iterations)",
+      "21": "Repeat end",
+      "99": "Finish test"
+    }
+  },
+
+  "userStories": [
+    {
+      "id": "DELTA-001",
+      "title": "Implement serial command parser",
+      "description": "Parse incoming serial commands with parameter extraction.",
+      "acceptanceCriteria": [
+        "process_serial_port() reads characters into buffer (40 bytes)",
+        "Detect newline as command terminator",
+        "Parse comma-delimited integer parameters",
+        "Route to particle_command(String) handler",
+        "Support 115200 baud rate"
+      ],
+      "legacyReference": "legacy-firmware process_serial_port() lines 5418-5433",
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented in CommandParser.cpp - 128 byte buffer, space-delimited params"
+    },
+    {
+      "id": "DELTA-002",
+      "title": "Implement system commands (1-9)",
+      "description": "Implement system-level serial commands.",
+      "acceptanceCriteria": [
+        "1: System reset (System.reset())",
+        "2: Reset EEPROM (reset_eeprom())",
+        "3: Read pin state",
+        "4: Write pin state",
+        "5: Set WiFi credentials",
+        "Log command execution"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp"
+    },
+    {
+      "id": "DELTA-003",
+      "title": "Implement messaging commands (10-12)",
+      "description": "Implement serial messaging control commands.",
+      "acceptanceCriteria": [
+        "10: Enable serial messaging (serial_messaging_on = true)",
+        "11: Disable serial messaging",
+        "12: Display device ID"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp"
+    },
+    {
+      "id": "DELTA-004",
+      "title": "Implement stage motion commands (20-29)",
+      "description": "Implement motor/stage control commands.",
+      "acceptanceCriteria": [
+        "20: Reset stage (reset_stage)",
+        "21: Move stage (move_stage with params)",
+        "22: Move to position (move_stage_to_position)",
+        "23: Oscillate stage (oscillate_stage)",
+        "24: Sleep motor",
+        "25: Wake motor",
+        "26: Move to test start position",
+        "27: Move to optical read position",
+        "Log position after movement"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using MotorController"
+    },
+    {
+      "id": "DELTA-005",
+      "title": "Implement laser commands (30-33)",
+      "description": "Implement laser control commands.",
+      "acceptanceCriteria": [
+        "30: Turn on laser A",
+        "31: Turn on laser B",
+        "32: Turn on laser C",
+        "33: Turn off all lasers",
+        "Support duration parameter for timed activation"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using LaserController"
+    },
+    {
+      "id": "DELTA-006",
+      "title": "Implement buzzer commands (40-43)",
+      "description": "Implement buzzer control commands.",
+      "acceptanceCriteria": [
+        "40: Standard buzzer (600Hz, 1000ms)",
+        "41: Alert buzzer (start periodic alert)",
+        "42: Problem buzzer (start periodic problem)",
+        "43: Stop buzzer timer"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using BuzzerController namespace"
+    },
+    {
+      "id": "DELTA-007",
+      "title": "Implement heater commands (50-55)",
+      "description": "Implement heater and temperature control commands.",
+      "acceptanceCriteria": [
+        "50: Read temperature",
+        "51: Set heater power",
+        "52: Turn off heater",
+        "53: Start temperature control",
+        "54: Stop temperature control",
+        "55: Set target temperature",
+        "Output temperature in format: 'Temperature: XX.X C'"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using HeaterController"
+    },
+    {
+      "id": "DELTA-008",
+      "title": "Implement barcode command (60)",
+      "description": "Implement barcode scanner trigger command.",
+      "acceptanceCriteria": [
+        "60: Trigger barcode scan",
+        "Output scanned barcode or error message",
+        "Output barcode type (cartridge, magnetometer, stress test)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using BarcodeScanner class"
+    },
+    {
+      "id": "DELTA-009",
+      "title": "Implement magnetometer commands (70-73)",
+      "description": "Implement magnetometer validation commands.",
+      "acceptanceCriteria": [
+        "70: Start magnetometer validation",
+        "71: List validation files",
+        "72: Load latest validation",
+        "73: Clear validation files"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using StorageManager validation methods"
+    },
+    {
+      "id": "DELTA-010",
+      "title": "Implement stress test commands (90-93)",
+      "description": "Implement stress test control commands.",
+      "acceptanceCriteria": [
+        "90: Start stress test (with cycle count param)",
+        "91: Stop stress test",
+        "92: Get stress test status",
+        "93: Reset stress test counters",
+        "Track cycles in EEPROM"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using TestRunner stress test mode"
+    },
+    {
+      "id": "DELTA-011",
+      "title": "Implement spectrophotometer commands (301-311)",
+      "description": "Implement spectrophotometer control commands.",
+      "acceptanceCriteria": [
+        "301: Initialize spectrophotometer",
+        "302: Power on channel (A/B/C)",
+        "303: Power off all",
+        "304: Set sensor params (gain, astep, atime)",
+        "305: Take single reading",
+        "306: Take baseline scans",
+        "307: Take test scans",
+        "308: Continuous scan",
+        "309: Output reading data",
+        "310: Reset spectrophotometer",
+        "311: Get spectrophotometer status"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using Spectrophotometer class"
+    },
+    {
+      "id": "DELTA-012",
+      "title": "Implement cache commands (400-406)",
+      "description": "Implement cache and file management commands.",
+      "acceptanceCriteria": [
+        "400: Check if test in cache",
+        "401: Output cached test data",
+        "402: Clear cache",
+        "403: List assay files",
+        "404: Output assay file (by number)",
+        "405: Clear assay files",
+        "406: Upload cached test"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using StorageManager and Cloud"
+    },
+    {
+      "id": "DELTA-013",
+      "title": "Implement radio control commands (8000-8999)",
+      "description": "Implement WiFi, Cellular, Bluetooth control commands.",
+      "acceptanceCriteria": [
+        "8000: Display help",
+        "8001: Show radio status",
+        "8100/8101: WiFi off/on",
+        "8200/8201: Cellular off/on",
+        "8300/8301: Bluetooth off/on",
+        "8500-8503: Test modes (WiFi only, Cellular only, Bluetooth only, FCC)",
+        "8900/8901: All radios off/on",
+        "8999: Emission check report"
+      ],
+      "legacyReference": "legacy-firmware displayHelp() and radio functions",
+      "priority": 13,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using Particle WiFi/Cellular APIs"
+    },
+    {
+      "id": "DELTA-014",
+      "title": "Implement state management commands (9000-9032)",
+      "description": "Implement state machine diagnostic commands.",
+      "acceptanceCriteria": [
+        "9000: Get device state (mode, test_state, cartridge_state)",
+        "9001: Get transition count",
+        "9002: Get state history (with count param)",
+        "9003: Clear state history",
+        "9004: Force state transition (dangerous)",
+        "9010: Get barcode history (with barcode param)",
+        "9020: Output current barcode",
+        "9030: Get heater ready status",
+        "9031: Get detector status",
+        "9032: Get cloud operation status"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Implemented in SerialCommands.cpp using StateMachine"
+    },
+    {
+      "id": "DELTA-015",
+      "title": "Implement BCODE interpreter tokenizer",
+      "description": "Implement BCODE string tokenization.",
+      "acceptanceCriteria": [
+        "get_BCODE_token(index, token) extracts next parameter",
+        "Parameters delimited by colon ':' and pipe '|'",
+        "Handle integer parameters",
+        "Track current position in BCODE string",
+        "Return token length or 0 at end"
+      ],
+      "legacyReference": "legacy-firmware get_BCODE_token function",
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp getToken() method"
+    },
+    {
+      "id": "DELTA-016",
+      "title": "Implement BCODE command 0: Start test",
+      "description": "Implement test initialization command.",
+      "acceptanceCriteria": [
+        "Record test start_time",
+        "Initialize readings count to 0",
+        "Copy cartridge_id and assay_id to test record",
+        "Set test_state to RUNNING",
+        "Move stage to test start position"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp BCODEOpcode::START_TEST"
+    },
+    {
+      "id": "DELTA-017",
+      "title": "Implement BCODE command 1: Delay",
+      "description": "Implement delay with heater control.",
+      "acceptanceCriteria": [
+        "Delay for specified milliseconds",
+        "Call BCODE_loop() periodically during delay",
+        "BCODE_loop() handles heater control and cartridge detection",
+        "Abort if cartridge removed (test_state = CANCELLED)"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp executeDelay() with callback"
+    },
+    {
+      "id": "DELTA-018",
+      "title": "Implement BCODE command 2: Move stage",
+      "description": "Implement stage movement command.",
+      "acceptanceCriteria": [
+        "Parameters: microns, step_delay_us",
+        "Call move_stage(microns, step_delay)",
+        "Log movement if serial_messaging_on"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp BCODEOpcode::MOVE_MICRONS"
+    },
+    {
+      "id": "DELTA-019",
+      "title": "Implement BCODE command 3: Oscillate",
+      "description": "Implement stage oscillation command.",
+      "acceptanceCriteria": [
+        "Parameters: microns, step_delay_us, cycles",
+        "Call oscillate_stage(amplitude, step_delay, cycles, true)",
+        "Pass inBCODE=true to enable BCODE_loop calls"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp BCODEOpcode::OSCILLATE"
+    },
+    {
+      "id": "DELTA-020",
+      "title": "Implement BCODE commands 10, 11, 14: Sensor config and scans",
+      "description": "Implement spectrophotometer configuration and scanning commands.",
+      "acceptanceCriteria": [
+        "10: Set sensor params (gain, astep, atime)",
+        "11: Baseline scans (num_scans) - store as baseline_scans",
+        "14: Test scans (num_scans) - store as test_scans",
+        "Store readings in test record"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp with callback system"
+    },
+    {
+      "id": "DELTA-021",
+      "title": "Implement BCODE commands 15, 16: Advanced readings",
+      "description": "Implement single and continuous spectrophotometer readings.",
+      "acceptanceCriteria": [
+        "15: Take single reading on specified channel",
+        "16: Continuous readings during movement",
+        "Include position, temperature, timestamp in each reading"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp SENSOR_READING and CONTINUOUS_SCANS"
+    },
+    {
+      "id": "DELTA-022",
+      "title": "Implement BCODE commands 20, 21: Repeat loop",
+      "description": "Implement repeat loop construct.",
+      "acceptanceCriteria": [
+        "20: Repeat begin - store loop start index and iteration count",
+        "21: Repeat end - decrement count and jump to start if count > 0",
+        "Support nested loops if needed"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp with 4-level nesting support"
+    },
+    {
+      "id": "DELTA-023",
+      "title": "Implement BCODE command 99: Finish test",
+      "description": "Implement test completion command.",
+      "acceptanceCriteria": [
+        "Record test end time and calculate duration",
+        "Calculate checksum for test record",
+        "Set test_state to COMPLETED",
+        "Store running_test_uuid to EEPROM (for recovery)",
+        "Clear running_test_uuid from EEPROM after save"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp BCODEOpcode::END_TEST"
+    },
+    {
+      "id": "DELTA-024",
+      "title": "Implement process_BCODE() main interpreter",
+      "description": "Implement main BCODE execution loop.",
+      "acceptanceCriteria": [
+        "process_BCODE(start_index) begins at specified position",
+        "Parse command number and route to handler",
+        "Track current position in BCODE string",
+        "Call BCODE_loop() between commands",
+        "Abort on cartridge removal or error",
+        "Return next index or -1 on completion/error"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Implemented in BCODEInterpreter.cpp executeNextInstruction()"
+    },
+    {
+      "id": "DELTA-025",
+      "title": "Implement TestRunner orchestration",
+      "description": "Implement test execution orchestration.",
+      "acceptanceCriteria": [
+        "test_runner(cartridgeId) cloud function handler",
+        "run_test() executes loaded assay BCODE",
+        "Handle test state transitions",
+        "Coordinate with state machine",
+        "Support test cancellation on cartridge removal"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": "Implemented in TestRunner.cpp with full lifecycle management"
+    },
+    {
+      "id": "DELTA-026",
+      "title": "Implement stress test execution",
+      "description": "Implement automated stress test cycles.",
+      "acceptanceCriteria": [
+        "stress_test_loop() runs multiple test cycles",
+        "Track stress_test_step, stress_test_limit",
+        "Update EEPROM with cycle counts",
+        "stress_test_cycles_since_reset, lifetime_stress_test_cycles",
+        "Handle test start, execution, completion per cycle"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "Implemented in TestRunner.cpp stress test methods"
+    },
+    {
+      "id": "DELTA-027",
+      "title": "Document all serial commands",
+      "description": "Create comprehensive serial command reference.",
+      "acceptanceCriteria": [
+        "Document all command numbers and their functions",
+        "Document parameters for each command",
+        "Document expected output format",
+        "Include examples for common operations"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Documentation pending - code is complete"
+    },
+    {
+      "id": "DELTA-028",
+      "title": "Document BCODE instruction set",
+      "description": "Create comprehensive BCODE reference.",
+      "acceptanceCriteria": [
+        "Document all BCODE command numbers",
+        "Document parameters for each command",
+        "Provide example BCODE scripts",
+        "Document timing behavior"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Documentation pending - code is complete"
+    }
+  ],
+
+  "codebasePatterns": [
+    "Parse integer parameters with atoi()",
+    "Use comma delimiter between parameters",
+    "Log all command executions",
+    "Check state machine before executing hardware commands",
+    "Handle BCODE errors gracefully without crash"
+  ]
+}

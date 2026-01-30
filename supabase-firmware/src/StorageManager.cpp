@@ -728,6 +728,137 @@ bool StorageManager::loadLatestValidationData(char* buffer, size_t bufferSize) {
 }
 
 // ============================================================================
+// MAGNETOMETER VALIDATION FILE MANAGEMENT (GAMMA-014)
+// ============================================================================
+
+uint32_t StorageManager::listValidationFiles() {
+    DIR* dir = opendir(VALIDATION_DIR);
+    if (dir == nullptr) {
+        Log.error("StorageManager::listValidationFiles() - Failed to open validation directory");
+        return 0;
+    }
+
+    uint32_t count = 0;
+    struct dirent* entry;
+
+    Log.info("Validation file directory:");
+
+    while ((entry = readdir(dir)) != nullptr && count < VALIDATION_MAX_FILES) {
+        if (entry->d_type != DT_REG) {
+            continue;
+        }
+        count++;
+        Log.info("  %s", entry->d_name);
+    }
+
+    closedir(dir);
+
+    Log.info("Total validation files: %u", count);
+    return count;
+}
+
+uint32_t StorageManager::clearValidationFiles() {
+    DIR* dir = opendir(VALIDATION_DIR);
+    if (dir == nullptr) {
+        Log.error("StorageManager::clearValidationFiles() - Failed to open validation directory");
+        return 0;
+    }
+
+    uint32_t deletedCount = 0;
+    struct dirent* entry;
+
+    while ((entry = readdir(dir)) != nullptr) {
+        if (entry->d_type != DT_REG) {
+            continue;
+        }
+
+        char filename[MAX_PATH_LENGTH];
+        snprintf(filename, sizeof(filename), "%s/%s", VALIDATION_DIR, entry->d_name);
+
+        if (unlink(filename) == 0) {
+            deletedCount++;
+            Log.info("StorageManager::clearValidationFiles() - Deleted %s", filename);
+        } else {
+            Log.error("StorageManager::clearValidationFiles() - Failed to delete %s, errno=%d",
+                      filename, errno);
+        }
+    }
+
+    closedir(dir);
+
+    Log.info("StorageManager::clearValidationFiles() - Deleted %u files", deletedCount);
+    return deletedCount;
+}
+
+uint32_t StorageManager::getValidationFileCount() {
+    return countFilesInDir(VALIDATION_DIR, 0);
+}
+
+// ============================================================================
+// INTERRUPTED TEST RECOVERY (GAMMA-013)
+// ============================================================================
+
+bool StorageManager::handleInterruptedTestRecovery(BrevitestTestRecord* record) {
+    /**
+     * LEGACY BEHAVIOR (brevitest-firmware.ino:4834-4844):
+     *
+     * bool test_interrupted = eeprom.running_test_uuid[0] != '\0';
+     * if (test_interrupted) {
+     *     Log.info("Test interrupted: %s (Assay %s) - saving cancelled test to file",
+     *              eeprom.running_test_uuid, eeprom.running_assay_id);
+     *     memcpy(test.cartridge_id, eeprom.running_test_uuid, BARCODE_UUID_LENGTH + 1);
+     *     memcpy(test.assay_id, eeprom.running_assay_id, ASSAY_UUID_LENGTH + 1);
+     *     write_test_to_file();
+     *     memset(eeprom.running_test_uuid, 0, BARCODE_UUID_LENGTH + 1);
+     *     memset(eeprom.running_assay_id, 0, ASSAY_UUID_LENGTH + 1);
+     *     EEPROM.put(0, eeprom);
+     * }
+     */
+
+    // Check if there's recovery data
+    if (!hasRecoveryData()) {
+        return false;
+    }
+
+    RecoveryInfo info = getRecoveryInfo();
+
+    Log.info("Test interrupted: %s (Assay %s) - saving cancelled test to file",
+             info.cartridge_uuid, info.assay_id);
+
+    // Populate test record with recovery info if provided
+    if (record != nullptr) {
+        memcpy(record->cartridge_id, info.cartridge_uuid, BARCODE_UUID_LENGTH + 1);
+        memcpy(record->assay_id, info.assay_id, ASSAY_UUID_LENGTH + 1);
+
+        // Cache the interrupted test record
+        if (!cacheTestData(record)) {
+            Log.error("StorageManager::handleInterruptedTestRecovery() - Failed to cache test");
+        }
+    } else {
+        // Create a minimal test record for caching
+        BrevitestTestRecord minimalRecord;
+        memcpy(minimalRecord.cartridge_id, info.cartridge_uuid, BARCODE_UUID_LENGTH + 1);
+        memcpy(minimalRecord.assay_id, info.assay_id, ASSAY_UUID_LENGTH + 1);
+        minimalRecord.start_time = Time.now();
+        minimalRecord.duration = 0;  // Unknown - test was interrupted
+        minimalRecord.number_of_readings = 0;
+
+        if (!cacheTestData(&minimalRecord)) {
+            Log.error("StorageManager::handleInterruptedTestRecovery() - Failed to cache minimal test");
+        }
+    }
+
+    // Clear recovery data from EEPROM
+    if (!clearRecoveryData()) {
+        Log.error("StorageManager::handleInterruptedTestRecovery() - Failed to clear recovery data");
+        return false;
+    }
+
+    Log.info("StorageManager::handleInterruptedTestRecovery() - Recovery complete");
+    return true;
+}
+
+// ============================================================================
 // CACHE CLEANUP (STOR-005)
 // ============================================================================
 

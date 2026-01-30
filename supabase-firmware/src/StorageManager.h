@@ -453,6 +453,54 @@ public:
      */
     bool loadLatestValidationData(char* buffer, size_t bufferSize);
 
+    /**
+     * @brief List all magnetometer validation files
+     *
+     * LEGACY BEHAVIOR (brevitest-firmware.cpp):
+     * - Opens /validation directory
+     * - Iterates through all regular files
+     * - Logs each filename via Log.info()
+     *
+     * @return Number of validation files found
+     */
+    uint32_t listValidationFiles();
+
+    /**
+     * @brief Clear all magnetometer validation files
+     *
+     * LEGACY BEHAVIOR (brevitest-firmware.cpp):
+     * - Opens /validation directory
+     * - Deletes all regular files
+     * - Clears internal validation data buffer
+     *
+     * @return Number of files deleted
+     */
+    uint32_t clearValidationFiles();
+
+    /**
+     * @brief Get validation file count
+     * @return Number of files in validation directory
+     */
+    uint32_t getValidationFileCount();
+
+    // ========================================================================
+    // INTERRUPTED TEST RECOVERY (GAMMA-013)
+    // ========================================================================
+
+    /**
+     * @brief Handle interrupted test recovery on startup
+     *
+     * LEGACY BEHAVIOR (brevitest-firmware.ino:4834-4844):
+     * - Checks if running_test_uuid is non-empty
+     * - If so, saves incomplete test data to cache file
+     * - Clears running_test_uuid and running_assay_id
+     * - Saves updated EEPROM
+     *
+     * @param record Test record to populate with recovery data (for caching)
+     * @return true if an interrupted test was recovered
+     */
+    bool handleInterruptedTestRecovery(BrevitestTestRecord* record);
+
     // ========================================================================
     // CACHE CLEANUP (STOR-005)
     // ========================================================================

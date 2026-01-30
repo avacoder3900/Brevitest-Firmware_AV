@@ -1,0 +1,365 @@
+{
+  "project": "Firmware Rewrite - Beta: Hardware Controllers",
+  "branchName": "firmware-rewrite-supabase",
+  "terminal": "beta",
+  "description": "Implement all hardware controllers exactly matching legacy firmware behavior. Each controller must use correct pins, timing, and protocols.",
+  "lastUpdated": "2026-01-30",
+
+  "legacyReference": {
+    "primaryFiles": [
+      "legacy-firmware/firmware/src/brevitest-firmware.h (pin definitions)",
+      "legacy-firmware/firmware/src/brevitest-firmware.ino (hardware functions)"
+    ],
+    "pinDefinitions": {
+      "buzzer": "A0 (pinBuzzer)",
+      "photodiodes": "A2 (pinPhotoA), A3 (pinPhotoB), A4 (pinPhotoC)",
+      "heaterThermistor": "A6 (pinHeaterThermistor)",
+      "cartridgeDetector": "D3 (pinCartridgeDetected)",
+      "heater": "D4 (pinHeater)",
+      "lasers": "D5 (pinLaserA), D6 (pinLaserB), D7 (pinLaserC)",
+      "motor": "D8 (pinMotorDir), D11 (pinMotorReset), D12 (pinMotorSleep), D13 (pinMotorStep)",
+      "barcode": "D22 (pinBarcodeReady), D23 (pinBarcodeTrigger)",
+      "stageLimit": "D26 (pinStageLimit)"
+    }
+  },
+
+  "userStories": [
+    {
+      "id": "BETA-001",
+      "title": "Implement HardwareConfig.h with pin definitions",
+      "description": "Define all pin constants matching legacy firmware exactly.",
+      "acceptanceCriteria": [
+        "All pin definitions match legacy brevitest-firmware.h lines 175-191",
+        "Use hal_pin_t and uint16_t types where legacy does",
+        "Include all timing constants from legacy header",
+        "Compile passes"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.h lines 175-191",
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented in supabase-firmware/src/HardwareConfig.h. All pins, timing constants, thermistor lookup table defined. NOTE: Pins D22, D23, D26, A6 require hardware mapping for Boron compatibility."
+    },
+    {
+      "id": "BETA-002",
+      "title": "Implement MotorController wake_motor() and sleep_motor()",
+      "description": "Implement motor power control functions.",
+      "acceptanceCriteria": [
+        "sleep_motor() sets pinMotorSleep LOW, sets motor_awake = false",
+        "wake_motor() sets pinMotorSleep HIGH, delays 10000us, sets motor_awake = true",
+        "Track motor_awake state variable"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 726-737",
+      "priority": 2,
+      "passes": true,
+      "notes": "Implemented as MotorController::enable()/disable() calling HAL::motorWake()/motorSleep(). State tracked in HAL._motorAwake."
+    },
+    {
+      "id": "BETA-003",
+      "title": "Implement MotorController move_one_eighth_step()",
+      "description": "Implement single step movement with limit detection.",
+      "acceptanceCriteria": [
+        "Check stage limit switch (pinStageLimit) for proximal movement",
+        "Double-check with 10000us delay if limit triggered",
+        "Reset stage_position and microns_error to 0 at limit",
+        "Check STAGE_POSITION_LIMIT (45000) for distal movement",
+        "Step HIGH then LOW with step_delay microseconds each",
+        "Update stage_position by +/- MOTOR_MICRONS_PER_EIGHTH_STEP (25)",
+        "Return false if at limit, true if step completed"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 739-779",
+      "priority": 3,
+      "passes": true,
+      "notes": "Implemented as MotorController::executeStep() with limit check, 10000us debounce, position reset at limit."
+    },
+    {
+      "id": "BETA-004",
+      "title": "Implement MotorController move_stage()",
+      "description": "Implement relative movement by microns.",
+      "acceptanceCriteria": [
+        "Wake motor if not already awake",
+        "Calculate direction from sign of microns parameter",
+        "Set pinMotorDir HIGH for proximal (negative), LOW for distal (positive)",
+        "Calculate eighth_steps from (abs_microns + microns_error) / 25",
+        "Track microns_error as remainder for next move",
+        "Floor step_delay to MOTOR_MINIMUM_STEP_DELAY (250us) minimum",
+        "Loop calling move_one_eighth_step()"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 781-808",
+      "priority": 4,
+      "passes": true,
+      "notes": "Implemented as MotorController::moveRelative() with direction calculation, _positionError tracking, step delay clamping."
+    },
+    {
+      "id": "BETA-005",
+      "title": "Implement MotorController reset_stage()",
+      "description": "Implement stage homing to proximal limit.",
+      "acceptanceCriteria": [
+        "Wake motor if not awake",
+        "Move until pinStageLimit goes LOW (move_stage_until_proximal_limit)",
+        "Use MOTOR_RESET_STEP_DELAY (290us)",
+        "Then move STAGE_MICRONS_TO_INITIAL_POSITION (1000) distally",
+        "Sleep motor if sleep parameter is true"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 810-840",
+      "priority": 5,
+      "passes": true,
+      "notes": "Implemented as MotorController::home(sleepAfter) with moveUntilLimit(), initial position move."
+    },
+    {
+      "id": "BETA-006",
+      "title": "Implement MotorController position functions",
+      "description": "Implement move_stage_to_position and specific position functions.",
+      "acceptanceCriteria": [
+        "move_stage_to_position() calculates distance from current and calls move_stage()",
+        "move_stage_to_test_start_position() moves to 7860 microns",
+        "move_stage_to_optical_read_position() moves to 21000 microns",
+        "move_stage_to_magnetometer_start_position() moves to 12800 microns"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 842-864",
+      "priority": 6,
+      "passes": true,
+      "notes": "Implemented: moveToPosition(), moveToTestStart(), moveToOpticalRead(), moveToMagnetometer(). Position constants in StagePosition namespace."
+    },
+    {
+      "id": "BETA-007",
+      "title": "Implement MotorController oscillate_stage()",
+      "description": "Implement stage oscillation for mixing.",
+      "acceptanceCriteria": [
+        "Takes amplitude (microns), step_delay, cycles, inBCODE parameters",
+        "Loops cycles times: move +amplitude, BCODE_loop() if inBCODE, move -amplitude, BCODE_loop() if inBCODE",
+        "Returns early if test_state becomes CANCELLED"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 891-906",
+      "priority": 7,
+      "passes": true,
+      "notes": "Implemented as MotorController::oscillate() with Particle.process() calls for BCODE processing, _cancelled flag checking."
+    },
+    {
+      "id": "BETA-008",
+      "title": "Implement HeaterController temperature reading",
+      "description": "Implement thermistor reading with lookup table.",
+      "acceptanceCriteria": [
+        "Read analog value from pinHeaterThermistor (A6)",
+        "Use raw_table_lookup() with legacy temperature table",
+        "Temperature table: 21 entries from 0-1000C (10x scale) mapped to ADC values",
+        "Interpolate between table entries for accuracy",
+        "Store temperature in temp_C_10X (10x actual for decimal precision)"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 20-45",
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented in HeaterController::readTemperature() using HAL::readThermistorRaw() and HAL::rawToTemperature() with THERMISTOR_TEMP_TABLE/THERMISTOR_RAW_TABLE lookup."
+    },
+    {
+      "id": "BETA-009",
+      "title": "Implement HeaterController turn_on/off_heater()",
+      "description": "Implement heater power control.",
+      "acceptanceCriteria": [
+        "turn_off_heater() writes 0 to heater pin, delays 5000us, sets heater_on=false, power=0",
+        "turn_on_heater(power) limits power to 0-255",
+        "Checks temp_C_10X > HEATER_MAX_TEMPERATURE (600) and turns off if exceeded",
+        "Uses analogWrite with HEATER_PWM_FREQUENCY (150Hz)",
+        "Sets heater_on=true, stores power value"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 1111-1154",
+      "priority": 9,
+      "passes": true,
+      "notes": "Implemented in HeaterController::applyPower() and HAL::setHeaterPower()/setHeaterOff(). Max temp check in checkSafetyConditions()."
+    },
+    {
+      "id": "BETA-010",
+      "title": "Implement HeaterController PID controller",
+      "description": "Implement PID temperature control algorithm.",
+      "acceptanceCriteria": [
+        "Calculate error = target_C_10X - temp_C_10X",
+        "Calculate proportional term: error * k_p_num / k_p_den",
+        "Calculate integral term: accumulated error * k_i_num / k_i_den",
+        "Calculate derivative term: (error - previous_error) * k_d_num / k_d_den",
+        "Default gains: k_p=80/4, k_i=1/50000, k_d=1/5",
+        "Limit output to 0-255 range",
+        "Store previous_error for next iteration"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.h lines 249-285 (HeatingElement struct)",
+      "priority": 10,
+      "passes": true,
+      "notes": "Implemented in HeaterController::calculatePID() with numerator/denominator format matching legacy. Anti-windup integral clamping included."
+    },
+    {
+      "id": "BETA-011",
+      "title": "Implement LaserController enable/disable functions",
+      "description": "Implement 3-channel laser control.",
+      "acceptanceCriteria": [
+        "turn_on_laser(channel) accepts 'A', 'B', or 'C'",
+        "Uses pinLaserA (D5), pinLaserB (D6), pinLaserC (D7)",
+        "Sets digital pin HIGH to enable",
+        "turn_off_laser(channel) sets pin LOW",
+        "turn_off_all_lasers() disables all three channels",
+        "Track power_on state for each laser"
+      ],
+      "legacyReference": "Derived from pin definitions and usage patterns",
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented in LaserController with enableLaser()/disableLaser()/disableAllLasers(). State tracked in _enabled[] array. Safety interlock included."
+    },
+    {
+      "id": "BETA-012",
+      "title": "Implement LaserController turn_on_laser_for_duration()",
+      "description": "Implement timed laser activation.",
+      "acceptanceCriteria": [
+        "turn_on_laser_for_duration(channel, duration) enables laser, delays, disables",
+        "turn_on_all_lasers_for_duration(duration) does all three sequentially",
+        "Used for LED testing in setup() with 250ms duration"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 4814-4816",
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented as LaserController::pulse() with configurable timing. Uses setPulseMode() for duration configuration."
+    },
+    {
+      "id": "BETA-013",
+      "title": "Implement BarcodeScanner scan_barcode()",
+      "description": "Implement barcode scanning protocol.",
+      "acceptanceCriteria": [
+        "Initialize Serial1 at 9600 baud",
+        "Clear barcode_uuid buffer",
+        "Set pinBarcodeTrigger LOW to start scan",
+        "Wait for pinBarcodeReady HIGH or timeout (BARCODE_READ_TIMEOUT=1000ms)",
+        "Read characters from Serial1 into buffer",
+        "Set pinBarcodeTrigger HIGH to stop scan",
+        "Close Serial1",
+        "Return barcode type based on length: 36=CARTRIDGE, 32=MAGNETOMETER, 16=STRESS_TEST",
+        "Return error codes: -1=GENERAL_ERROR, -2=VALIDATION_ERROR, -3=OPTICAL_ERROR"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 914-979",
+      "priority": 13,
+      "passes": true,
+      "notes": "Implemented in BarcodeScanner::triggerScan() with full protocol, retry logic, and type detection via getBarcodeType()."
+    },
+    {
+      "id": "BETA-014",
+      "title": "Implement BuzzerController basic functions",
+      "description": "Implement buzzer tone generation.",
+      "acceptanceCriteria": [
+        "turn_on_buzzer_for_duration(duration, frequency) uses tone() function",
+        "BUZZER_FREQUENCY=600Hz, BUZZER_DURATION=1000ms for standard beep",
+        "BUZZER_INSERT_FREQUENCY=620Hz, BUZZER_INSERT_DURATION=200ms",
+        "BUZZER_REMOVE_FREQUENCY=620Hz, BUZZER_REMOVE_DURATION=500ms"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 987-991",
+      "priority": 14,
+      "passes": true,
+      "notes": "Implemented in BuzzerController namespace with playTone(), cartridgeInsert(), cartridgeRemove(), standardBeep(). All constants match legacy."
+    },
+    {
+      "id": "BETA-015",
+      "title": "Implement BuzzerController alert patterns",
+      "description": "Implement repeating buzzer patterns for alerts.",
+      "acceptanceCriteria": [
+        "turn_on_buzzer_alert() starts periodic alert at BUZZER_ALERT_PERIOD (4000ms)",
+        "Alert uses BUZZER_ALERT_FREQUENCY=850Hz, BUZZER_ALERT_DURATION=500ms",
+        "turn_on_buzzer_problem() starts periodic problem at BUZZER_PROBLEM_PERIOD (777ms)",
+        "Problem uses BUZZER_PROBLEM_FREQUENCY=620Hz, BUZZER_PROBLEM_DURATION=100ms",
+        "Uses Timer for non-blocking periodic operation",
+        "turn_off_buzzer_timer() stops all periodic buzzing",
+        "Flags: buzzer_alert_running, buzzer_problem_running, start_alert_buzzer, start_problem_buzzer"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 993-1062",
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented with startPeriodicAlert(AlertType) using Particle Timer for non-blocking operation. stopPeriodicAlert() cleans up."
+    },
+    {
+      "id": "BETA-016",
+      "title": "Implement LEDController indicator functions",
+      "description": "Implement RGB LED status indicators.",
+      "acceptanceCriteria": [
+        "Use Particle LEDStatus API for indicators",
+        "indicatorDontTouch: RGB_COLOR_RED, LED_PATTERN_SOLID",
+        "indicatorInsert: RGB_COLOR_GREEN, LED_PATTERN_FADE",
+        "indicatorRemove: RGB_COLOR_GREEN, LED_PATTERN_BLINK, LED_SPEED_SLOW",
+        "turn_off_indicator_LEDs() deactivates all three",
+        "turn_on_remove_cartridge_LED() activates green blink",
+        "turn_on_dont_touch_LED() activates red solid",
+        "turn_on_insert_cartridge_LED() activates green fade"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 1070-1103",
+      "priority": 16,
+      "passes": true,
+      "notes": "Implemented in LEDController with LEDStatus objects matching legacy exactly. showPrompt() activates indicators."
+    },
+    {
+      "id": "BETA-017",
+      "title": "Implement Spectrophotometer I2C switch control",
+      "description": "Implement PCA9536 switch for 3-channel spectrophotometer selection.",
+      "acceptanceCriteria": [
+        "init_spectrophotometer_switch() configures I2C address 0x41",
+        "power_on_spectrophotometer(channel) enables A=0x01, B=0x02, C=0x04",
+        "power_off_all_spectrophotometers() writes 0x00",
+        "Uses Wire library for I2C communication"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.h lines 49-58",
+      "priority": 17,
+      "passes": true,
+      "notes": "Implemented via HAL::initSpectroMux() and HAL::selectSpectroChannel(). Constants in HardwareConfig.h."
+    },
+    {
+      "id": "BETA-018",
+      "title": "Implement AS7341 spectrophotometer driver",
+      "description": "Port DFRobot_AS7341 driver for 11-channel spectrophotometer.",
+      "acceptanceCriteria": [
+        "Initialize AS7341 sensor on I2C",
+        "Configure ASTEP (default 999), ATIME (default 49), AGAIN (default 7)",
+        "Read all 10 spectral channels: F1-F8, Clear, NIR",
+        "take_spectrophotometer_reading() populates BrevitestSpectrophotometerReading struct",
+        "Handle I2C communication errors gracefully"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DFRobot_AS7341.cpp",
+      "priority": 18,
+      "passes": true,
+      "notes": "Implemented in drivers/AS7341.cpp with full channel reading, configuration, SMUX management. Spectrophotometer class wraps driver."
+    },
+    {
+      "id": "BETA-019",
+      "title": "Implement Spectrophotometer continuous scanning",
+      "description": "Implement continuous spectrophotometer reading during stage movement.",
+      "acceptanceCriteria": [
+        "spectrophotometer_reading_continuous(baseline, scans, log) takes readings while moving",
+        "Calculate step_delay based on integration time",
+        "Store readings in test record",
+        "Track reading number, channel, position, temperature, timestamp",
+        "Handle up to SPECTRO_MAX_READINGS (300) readings"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino spectrophotometer_reading_continuous function",
+      "priority": 19,
+      "passes": true,
+      "notes": "Implemented as Spectrophotometer::readingContinuous() with motor coordination. Calculates segment sizes, coordinates F1-F4/F5-F8 measurements with stage movement."
+    },
+    {
+      "id": "BETA-020",
+      "title": "Document all hardware timing requirements",
+      "description": "Create comprehensive hardware timing documentation.",
+      "acceptanceCriteria": [
+        "Motor step timing: minimum 250us delay",
+        "Heater stabilization: 5000us after analogWrite",
+        "Barcode trigger timing: 100000us between reads",
+        "I2C spectrophotometer timeout: 2000ms",
+        "All timing critical operations documented"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Created supabase-firmware/docs/HARDWARE_TIMING.md with comprehensive timing documentation for all subsystems."
+    }
+  ],
+
+  "codebasePatterns": [
+    "Use delayMicroseconds() for precise timing, delay() for longer waits",
+    "Always check limit switches before motor movement",
+    "Track hardware state (awake, on, etc.) to avoid unnecessary operations",
+    "Use volatile for variables accessed from interrupts",
+    "Log hardware operations for diagnostics"
+  ],
+
+  "knownIssues": [
+    "HardwareConfig.h defines pins D22, D23, D26, A6 which don't exist on Particle Boron. These need remapping for hardware compatibility."
+  ]
+}

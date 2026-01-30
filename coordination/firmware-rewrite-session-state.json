@@ -1,0 +1,84 @@
+{
+  "project": "Brevitest Supabase Firmware Rewrite",
+  "createdAt": "2026-01-30T00:00:00Z",
+  "lastUpdated": "2026-01-30T00:00:00Z",
+
+  "activeSessions": {},
+
+  "fileReservations": {},
+
+  "taskClaims": {},
+
+  "messageLog": [
+    {
+      "from": "orchestrator",
+      "to": "all",
+      "timestamp": "2026-01-30T00:00:00Z",
+      "message": "Firmware rewrite project initialized. PRDs created for Alpha (State Machine), Beta (Hardware), Gamma (Cloud), Delta (Serial). Ready for terminal assignments."
+    }
+  ],
+
+  "prdStatus": {
+    "prd-fw-alpha-statemachine.json": {
+      "totalStories": 17,
+      "completedStories": 13,
+      "assignedTo": "alpha-orchestrator",
+      "status": "in_progress"
+    },
+    "prd-fw-beta-hardware.json": {
+      "totalStories": 20,
+      "completedStories": 0,
+      "assignedTo": null,
+      "status": "ready"
+    },
+    "prd-fw-gamma-cloud.json": {
+      "totalStories": 16,
+      "completedStories": 0,
+      "assignedTo": null,
+      "status": "ready"
+    },
+    "prd-fw-delta-serial.json": {
+      "totalStories": 28,
+      "completedStories": 0,
+      "assignedTo": null,
+      "status": "ready"
+    }
+  },
+
+  "dependencies": {
+    "description": "PRD dependencies - some work must be completed before others can proceed",
+    "graph": {
+      "ALPHA-001": [],
+      "ALPHA-002": [],
+      "ALPHA-003": [],
+      "ALPHA-004": ["ALPHA-001"],
+      "ALPHA-005": ["ALPHA-004"],
+      "ALPHA-011": ["ALPHA-005", "ALPHA-009", "ALPHA-010"],
+      "ALPHA-012": ["ALPHA-011"],
+      "BETA-001": [],
+      "BETA-002": ["BETA-001"],
+      "BETA-003": ["BETA-002"],
+      "GAMMA-001": [],
+      "GAMMA-002": ["GAMMA-001", "ALPHA-007"],
+      "DELTA-001": [],
+      "DELTA-015": ["BETA-*", "ALPHA-005"]
+    },
+    "notes": "Alpha state machine is foundational. Beta hardware can proceed in parallel for most stories. Gamma cloud depends on Alpha cloud tracking. Delta serial depends on both Alpha and Beta."
+  },
+
+  "qualityChecklist": {
+    "beforeCommit": [
+      "Code matches legacy behavior (verify against legacy source)",
+      "No AI-generated filler or unnecessary comments",
+      "Proper error handling with meaningful messages",
+      "Logging matches legacy format",
+      "Compile passes with no warnings",
+      "State transitions documented if applicable"
+    ],
+    "afterStory": [
+      "Update PRD with passes: true",
+      "Update progress.txt with learnings",
+      "Update AGENTS.md if patterns discovered"
+    ]
+  }
+}

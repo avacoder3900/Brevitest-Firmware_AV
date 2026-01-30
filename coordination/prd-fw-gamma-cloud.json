@@ -1,0 +1,307 @@
+{
+  "project": "Firmware Rewrite - Gamma: Cloud & Storage",
+  "branchName": "firmware-rewrite-supabase",
+  "terminal": "gamma",
+  "description": "Implement Supabase cloud communication and local storage management. Replace Particle cloud events with Supabase Edge Functions while maintaining compatible behavior.",
+  "lastUpdated": "2026-01-30",
+
+  "legacyReference": {
+    "cloudEvents": {
+      "publish": [
+        "validate-cartridge - Send cartridge UUID for validation",
+        "reset-cartridge - Request cartridge reset on server",
+        "load-assay - Request test script by assay ID",
+        "upload-test - Upload test results"
+      ],
+      "subscribe": [
+        "validate-cartridge-response",
+        "reset-cartridge-response",
+        "load-assay-response",
+        "upload-test-response"
+      ]
+    },
+    "storageDirectories": [
+      "/cache - Cached test results pending upload",
+      "/buffer - Temporary data buffer",
+      "/validation - Magnetometer validation files",
+      "/assay - Cached assay BCODE files"
+    ]
+  },
+
+  "supabaseEndpoints": {
+    "validateCartridge": "POST /functions/v1/validate-cartridge",
+    "resetCartridge": "POST /functions/v1/reset-cartridge",
+    "loadAssay": "GET /functions/v1/load-assay?id={assayId}",
+    "uploadTest": "POST /functions/v1/upload-test"
+  },
+
+  "userStories": [
+    {
+      "id": "GAMMA-001",
+      "title": "Implement SupabaseClient initialization",
+      "description": "Initialize HTTP client for Supabase communication.",
+      "acceptanceCriteria": [
+        "Store Supabase project URL and API key",
+        "Configure HTTP client with proper headers (Authorization: Bearer, Content-Type: application/json)",
+        "Support both WiFi and Cellular connections",
+        "init() returns true on successful configuration"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - init(), setEndpoint(), setApiKey(), setDeviceId()"
+    },
+    {
+      "id": "GAMMA-002",
+      "title": "Implement validateCartridge() cloud call",
+      "description": "Implement cartridge validation request to Supabase.",
+      "acceptanceCriteria": [
+        "POST to /functions/v1/validate-cartridge",
+        "Request body: { \"cartridgeId\": \"uuid\", \"deviceId\": \"device-uuid\", \"requestId\": \"unique-id\" }",
+        "Generate unique requestId for correlation",
+        "Set cloud_operation_pending = true on send",
+        "Handle response asynchronously",
+        "Parse response for validation result and assay ID",
+        "Set cartridge_state based on response (VALIDATED or INVALID)",
+        "Set cloud_operation_pending = false on response"
+      ],
+      "legacyReference": "legacy-firmware publish_validate_cartridge() and response_validate_cartridge()",
+      "priority": 2,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - validateCartridge()"
+    },
+    {
+      "id": "GAMMA-003",
+      "title": "Implement validation retry with exponential backoff",
+      "description": "Handle validation failures with retry logic.",
+      "acceptanceCriteria": [
+        "Track validation_retry_count (max 3)",
+        "Calculate backoff: VALIDATION_RETRY_BACKOFF_BASE (5000ms) * retry_count",
+        "On HTTP error or timeout: increment count, schedule retry",
+        "On max retries: set cartridge_state = INVALID, transition to ERROR_STATE",
+        "Clear retry tracking on successful validation or cartridge removal",
+        "Log each retry attempt with delay"
+      ],
+      "legacyReference": "legacy-firmware VALIDATING_CARTRIDGE state handling",
+      "priority": 3,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - executeWithRetry() with exponential backoff"
+    },
+    {
+      "id": "GAMMA-004",
+      "title": "Implement loadAssay() cloud call",
+      "description": "Implement assay/BCODE download from Supabase.",
+      "acceptanceCriteria": [
+        "GET from /functions/v1/load-assay?id={assayId}",
+        "Parse response for assay ID, duration, BCODE string",
+        "Validate BCODE checksum",
+        "Store in BrevitestAssay struct",
+        "Cache assay to /assay/{assayId} file",
+        "Handle multi-part responses if BCODE exceeds payload limit"
+      ],
+      "legacyReference": "legacy-firmware publish_load_assay() and response_load_assay()",
+      "priority": 4,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - loadAssay() with checksum verification"
+    },
+    {
+      "id": "GAMMA-005",
+      "title": "Implement uploadTest() cloud call",
+      "description": "Implement test result upload to Supabase.",
+      "acceptanceCriteria": [
+        "POST to /functions/v1/upload-test",
+        "Request body: BrevitestTestRecord as JSON or binary",
+        "Include all spectrophotometer readings (up to 300)",
+        "Include test metadata: cartridge_id, assay_id, start_time, duration",
+        "Handle 30s timeout",
+        "On success: set test_state = UPLOADED",
+        "On failure: cache to /cache/{cartridgeId} for retry"
+      ],
+      "legacyReference": "legacy-firmware publish_upload_test() and response_upload_test()",
+      "priority": 5,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - uploadTest() with binary data and caching"
+    },
+    {
+      "id": "GAMMA-006",
+      "title": "Implement resetCartridge() cloud call",
+      "description": "Implement cartridge reset request to Supabase.",
+      "acceptanceCriteria": [
+        "POST to /functions/v1/reset-cartridge",
+        "Request body: { \"cartridgeId\": \"uuid\" }",
+        "Handle 30s timeout",
+        "On success: transition to IDLE",
+        "On failure: set error state"
+      ],
+      "legacyReference": "legacy-firmware publish_reset_cartridge() and response_reset_cartridge()",
+      "priority": 6,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - resetCartridge()"
+    },
+    {
+      "id": "GAMMA-007",
+      "title": "Implement StorageManager EEPROM operations",
+      "description": "Implement EEPROM read/write for persistent data.",
+      "acceptanceCriteria": [
+        "Define Particle_EEPROM struct matching legacy (firmware_version, data_format_version, stress_test_cycles, running_test_uuid, running_assay_id)",
+        "setup_eeprom() reads and validates EEPROM, resets if version mismatch",
+        "reset_eeprom() clears and reinitializes with defaults",
+        "Preserve lifetime_stress_test_cycles across resets",
+        "Use EEPROM.put() and EEPROM.get() for struct storage"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 203-237",
+      "priority": 7,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - loadConfig(), saveConfig(), resetConfig() with Particle_EEPROM"
+    },
+    {
+      "id": "GAMMA-008",
+      "title": "Implement StorageManager directory creation",
+      "description": "Implement filesystem directory management.",
+      "acceptanceCriteria": [
+        "create_dir_if_not_exists(path) creates directory if missing",
+        "Use stat() to check existence",
+        "Use mkdir(path, 0777) to create",
+        "Handle file-in-the-way by deleting",
+        "Log creation or existing status"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 245-283",
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - createDirIfNotExists()"
+    },
+    {
+      "id": "GAMMA-009",
+      "title": "Implement StorageManager test caching",
+      "description": "Implement test result file caching.",
+      "acceptanceCriteria": [
+        "write_test_to_file() saves BrevitestTestRecord to /cache/{cartridgeId}",
+        "load_cached_test(filename) reads test record from file",
+        "test_in_cache() checks if any cached tests exist",
+        "clear_cache() removes cached test files",
+        "output_cache() lists and outputs cached test data"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 285-384",
+      "priority": 9,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - cacheTestData(), loadCachedTest(), hasCachedTests(), etc."
+    },
+    {
+      "id": "GAMMA-010",
+      "title": "Implement StorageManager assay caching",
+      "description": "Implement assay BCODE file caching.",
+      "acceptanceCriteria": [
+        "save_assay_to_file() saves assay to /assay/{assayId}",
+        "load_assay_from_file(assayId, checksum) loads and validates",
+        "Validate BCODE checksum against expected",
+        "list_assay_files() lists cached assays",
+        "clear_assay_files() removes all cached assays",
+        "output_assay_file(number) outputs specific assay content"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 386-562",
+      "priority": 10,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - cacheAssay(), loadCachedAssay(), hasAssay(), listCachedAssays()"
+    },
+    {
+      "id": "GAMMA-011",
+      "title": "Implement checksum calculation",
+      "description": "Implement CRC32 checksum for data validation.",
+      "acceptanceCriteria": [
+        "checksum(buf, size) calculates CRC32",
+        "Use legacy CRC32 lookup table",
+        "Used for BCODE validation",
+        "Used for test record integrity"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 47-140",
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - calculateChecksum() using CRC32 lookup table matching legacy"
+    },
+    {
+      "id": "GAMMA-012",
+      "title": "Implement connection monitoring",
+      "description": "Monitor cloud connection and handle reconnection.",
+      "acceptanceCriteria": [
+        "Track last_cloud_connected state",
+        "Detect connection restoration",
+        "Re-register subscriptions on reconnect (for Particle compatibility)",
+        "connect_to_cloud() initiates connection",
+        "disconnect_from_cloud() disconnects",
+        "isConnected() returns current status"
+      ],
+      "legacyReference": "legacy-firmware loop() connection monitoring",
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented in SupabaseClient.cpp - isConnected(), processConnection(), updateConnectionState()"
+    },
+    {
+      "id": "GAMMA-013",
+      "title": "Implement interrupted test recovery",
+      "description": "Detect and save interrupted tests on startup.",
+      "acceptanceCriteria": [
+        "Check EEPROM for running_test_uuid on startup",
+        "If test was interrupted (non-empty UUID), save to cache file",
+        "Clear running_test_uuid after saving",
+        "Log interrupted test recovery"
+      ],
+      "legacyReference": "legacy-firmware setup() interrupted test handling lines 4834-4844",
+      "priority": 13,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - handleInterruptedTestRecovery() called from main.ino setup()"
+    },
+    {
+      "id": "GAMMA-014",
+      "title": "Implement magnetometer validation file management",
+      "description": "Manage magnetometer validation data files.",
+      "acceptanceCriteria": [
+        "Files stored in /validation/magnet-{timestamp}.txt",
+        "load_latest_magnet_validation() finds and loads most recent",
+        "list_validation_files() lists all validation files",
+        "clear_validation_files() removes all files",
+        "Store data in magnet_validation_data buffer (1024 bytes)"
+      ],
+      "legacyReference": "legacy-firmware magnetometer file functions",
+      "priority": 14,
+      "passes": true,
+      "notes": "Implemented in StorageManager.cpp - listValidationFiles(), clearValidationFiles(), getValidationFileCount()"
+    },
+    {
+      "id": "GAMMA-015",
+      "title": "Implement CloudProtocol data structures",
+      "description": "Define all cloud protocol data structures.",
+      "acceptanceCriteria": [
+        "BrevitestTestRecord struct (9668 bytes): data_format_code, cartridge_id, assay_id, start_time, duration, spectro settings, readings array",
+        "BrevitestSpectrophotometerReading struct (32 bytes): number, channel, position, temperature, laser_output, msec, f1-f8, clear, nir",
+        "BrevitestAssay struct: id, duration, BCODE_length, BCODE buffer (5000 chars)",
+        "Struct sizes must match legacy exactly for binary compatibility"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.h lines 359-422",
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented in DataTypes.h with static_assert verification for exact size matching (32 bytes and 9668 bytes)"
+    },
+    {
+      "id": "GAMMA-016",
+      "title": "Document cloud protocol specification",
+      "description": "Create comprehensive cloud API documentation.",
+      "acceptanceCriteria": [
+        "Document all Supabase endpoints",
+        "Document request/response formats",
+        "Document error codes and handling",
+        "Document retry behavior",
+        "Document binary data format for test upload"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Created coordination/docs/CLOUD-PROTOCOL-SPEC.md with complete API documentation"
+    }
+  ],
+
+  "codebasePatterns": [
+    "Always check connection before cloud operations",
+    "Use request IDs for request/response correlation",
+    "Cache data locally before upload for recovery",
+    "Validate checksums on downloaded data",
+    "Log all cloud operations with request details"
+  ]
+}

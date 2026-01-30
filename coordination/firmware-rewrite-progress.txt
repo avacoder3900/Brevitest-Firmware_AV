@@ -1,0 +1,307 @@
+## Codebase Patterns
+
+### State Machine
+- ALWAYS use can_transition_to() before setMode() - never bypass validation
+- State transitions log in format: "State transition: X -> Y"
+- Use Time.now() for transition timestamps, millis() for timeout tracking
+- volatile keyword required for state variables accessed from interrupts
+
+### Hardware
+- Debounce ALL hardware state changes (10ms for detector, 5000ms for heater ready)
+- delayMicroseconds() for precise timing under 1000us, delay() for longer
+- Always check limit switches BEFORE motor movement
+- Wake motor before movement, sleep after if not needed soon
+
+### Cloud Operations
+- Track cloud_operation_pending flag for timeout detection
+- Retry with exponential backoff: base * retry_count
+- Clear all tracking when cartridge removed
+- Validate checksums on all downloaded data
+
+### Serial Commands
+- Parse as comma-delimited integers
+- Log all command executions for diagnostics
+- Check state machine before hardware commands
+
+---
+
+## Progress Log
+
+### 2026-01-30 - Project Initialization
+Terminal: Orchestrator
+
+### Setup Completed
+- Created master PRD: prd-firmware-rewrite-master.json
+- Created Alpha PRD (State Machine): prd-fw-alpha-statemachine.json (17 stories)
+- Created Beta PRD (Hardware): prd-fw-beta-hardware.json (20 stories)
+- Created Gamma PRD (Cloud): prd-fw-gamma-cloud.json (16 stories)
+- Created Delta PRD (Serial): prd-fw-delta-serial.json (28 stories)
+- Created coordination session state file
+- Created terminal instructions document
+
+### Total User Stories: 81
+
+### Legacy Analysis Completed
+- Analyzed legacy brevitest-firmware.ino (6200+ lines)
+- Documented all 11 DeviceMode states
+- Documented state transition validation matrix
+- Documented hardware_loop() behavior
+- Documented set_device_indicators() LED/buzzer behavior
+- Documented validation retry logic with exponential backoff
+- Documented cartridge rejection during heating
+- Documented recently tested barcode cooldown
+
+### Key Findings from Legacy Analysis
+1. hardware_loop() is called EVERY loop iteration - handles debouncing, temperature, indicators
+2. Heater ready requires 5000ms debounce to prevent false positives
+3. Cartridges inserted during HEATING are REJECTED (won't burn the cartridge)
+4. Validation has 45s timeout with max 3 retries and exponential backoff (5s base)
+5. Recently tested barcodes have 30s cooldown before re-scanning
+6. LED indicators: Red solid = don't touch, Green fade = insert, Green blink = remove
+
+### Ready for Terminal Work
+Project is ready for parallel development by multiple terminals.
+
+### Coordination Setup Complete
+- Updated AGENTS.md with PRD workflow documentation
+- Added critical constants reference
+- Added state transition quick reference
+- Documented all discovered legacy patterns
+
+---
+
+## How to Start Working
+
+### For Alpha Terminal (State Machine)
+1. Read `coordination/prd-fw-alpha-statemachine.json`
+2. Read `coordination/docs/STATE_TRANSITIONS_LEGACY_ANALYSIS.md`
+3. Read legacy: `legacy-firmware/firmware/src/DeviceState.cpp`
+4. Start with ALPHA-001: Define DeviceMode enum
+
+### For Beta Terminal (Hardware)
+1. Read `coordination/prd-fw-beta-hardware.json`
+2. Read legacy: `legacy-firmware/firmware/src/brevitest-firmware.h` (pin definitions)
+3. Read legacy: `legacy-firmware/firmware/src/brevitest-firmware.ino` (hardware functions)
+4. Start with BETA-001: Implement HAL layer
+
+### For Gamma Terminal (Cloud)
+1. Read `coordination/prd-fw-gamma-cloud.json`
+2. Read legacy validation logic in brevitest-firmware.ino:5528-5787
+3. Start with GAMMA-001: Define CloudProtocol interface
+
+### For Delta Terminal (Serial/BCODE)
+1. Read `coordination/prd-fw-delta-serial.json`
+2. Read legacy: process_serial_port() and BCODE functions
+3. Start with DELTA-001: Implement serial command parser
+
+---
+
+## 2026-01-30 - Alpha Stories ALPHA-001 to ALPHA-012
+Terminal: Alpha (Orchestrator)
+
+### Already Implemented (Verified)
+- ALPHA-001: DeviceMode enum (DataTypes.h:122-134)
+- ALPHA-002: TestState enum (DataTypes.h:141-149)
+- ALPHA-003: CartridgeState enum (DataTypes.h:156-163)
+- ALPHA-004: State transition validation (StateMachine.cpp:136-226)
+- ALPHA-005: State transition with history logging (StateMachine.cpp:236-306)
+
+### Implemented This Session
+
+#### ALPHA-009: heater_debounced()
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:4878-4900
+- Implementation:
+  - Returns false during 5000ms debounce period
+  - Tracks previous_heater_ready for change detection
+  - Uses heater_debounce_time for timing
+  - Prevents false heater ready signals
+
+#### ALPHA-010: set_device_indicators()
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:4909-5019
+- Implementation:
+  - Red solid = don't touch (active operations)
+  - Green fade = insert cartridge (idle + heater ready)
+  - Green blink = remove cartridge (test complete, invalid, heating)
+  - Problem buzzer for invalid cartridge
+  - Alert buzzer after test upload
+
+#### ALPHA-011: hardware_loop()
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:5254-5416
+- Implementation:
+  - Heater temperature monitoring with heater_ready update
+  - Cartridge detector debouncing (10ms DETECTOR_DEBOUNCE_DELAY)
+  - Cartridge insertion: reset stage, move to test start, start scanning
+  - Cartridge removal: reset stage, clear state, reset to idle
+  - Calls set_device_indicators() every loop
+  - Temperature control via heaterController.update()
+  - Buzzer trigger processing
+
+#### ALPHA-012: main loop() with state machine
+- File: main.ino
+- Legacy reference: brevitest-firmware.ino:5444-5843
+- Implementation:
+  - Calls processSerialCommands() every iteration
+  - Calls hardware_loop() every iteration
+  - State-driven behavior for all 11 states
+  - Validation retry logic with exponential backoff (45s timeout, 3 retries, 5s base)
+  - Upload/reset timeout handling (30s)
+  - Recently tested barcode cooldown (30s)
+  - Pending barcode handling for cartridge rejection during heating
+
+### Key Learnings
+1. The firmware wasn't working because hardware_loop() was missing entirely
+2. Heater debouncing (5000ms) is critical - prevents false heater ready signals
+3. Detector debouncing (10ms) prevents false cartridge triggers
+4. set_device_indicators() must match legacy LED patterns exactly:
+   - Red = don't touch
+   - Green fade = insert
+   - Green blink = remove
+5. Cartridge rejection during HEATING prevents thermal damage
+
+### Files Changed
+- supabase-firmware/src/main.ino
+
+---
+
+## 2026-01-30 - Delta Terminal Session
+Terminal: Delta (Serial Commands & Test Engine)
+
+### Completed Stories (26/28)
+All code implementation stories complete. Documentation stories pending.
+
+### Serial Commands Completed
+- DELTA-001: Serial command parser (CommandParser.cpp) ✓
+- DELTA-002: System commands (1-9) ✓
+- DELTA-003: Messaging commands (10-12) ✓
+- DELTA-004: Stage motion commands (20-29) ✓
+- DELTA-005: Laser commands (30-33) ✓
+- DELTA-006: Buzzer commands (40-43) - Integrated with BuzzerController ✓
+- DELTA-007: Heater commands (50-55) ✓
+- DELTA-008: Barcode command (60) - Integrated with BarcodeScanner ✓
+- DELTA-009: Magnetometer commands (70-73) - NEW ✓
+- DELTA-010: Stress test commands (90-93) - NEW ✓
+- DELTA-011: Spectrophotometer commands (301-311) ✓
+- DELTA-012: Cache commands (400-406) ✓
+- DELTA-013: Radio control commands (8000-8999) - NEW ✓
+- DELTA-014: State management commands (9000-9032) ✓
+
+### BCODE Interpreter Completed
+- DELTA-015 to DELTA-024: All BCODE opcodes implemented
+- Supports nested repeat loops (4 levels)
+- Callback-based hardware integration
+- Cartridge removal detection during execution
+
+### TestRunner Completed
+- DELTA-025: Full lifecycle management ✓
+- DELTA-026: Stress test execution with EEPROM tracking ✓
+
+### Documentation Pending
+- DELTA-027: Serial command reference documentation
+- DELTA-028: BCODE instruction set documentation
+
+### New Serial Commands Added This Session
+| Command | Function |
+|---------|----------|
+| 70 | Start magnetometer validation |
+| 71 | List validation files |
+| 72 | Load latest validation |
+| 73 | Clear validation files |
+| 90 | Start stress test (param: cycles) |
+| 91 | Stop stress test |
+| 92 | Get stress test status |
+| 93 | Reset stress test counters |
+| 8000 | Radio control help |
+| 8001 | Show radio status |
+| 8100/8101 | WiFi off/on |
+| 8200/8201 | Cellular off/on |
+| 8300/8301 | Bluetooth off/on |
+| 8500-8503 | Test modes |
+| 8900/8901 | All radios off/on |
+| 8999 | Emission check report |
+
+### Files Modified
+- supabase-firmware/src/SerialCommands.h
+- supabase-firmware/src/SerialCommands.cpp
+
+---
+
+## 2026-01-30 - Gamma Terminal Session (Cloud & Storage)
+Terminal: Gamma
+
+### Completed Stories (16/16) - ALL GAMMA TASKS COMPLETE
+
+### Previously Completed (verified this session)
+- GAMMA-001: SupabaseClient initialization ✓
+- GAMMA-002: validateCartridge() cloud call ✓
+- GAMMA-003: Validation retry with exponential backoff ✓
+- GAMMA-004: loadAssay() cloud call ✓
+- GAMMA-005: uploadTest() cloud call ✓
+- GAMMA-006: resetCartridge() cloud call ✓
+- GAMMA-007: StorageManager EEPROM operations ✓
+- GAMMA-008: StorageManager directory creation ✓
+- GAMMA-009: StorageManager test caching ✓
+- GAMMA-010: StorageManager assay caching ✓
+- GAMMA-011: Checksum calculation (CRC32) ✓
+- GAMMA-012: Connection monitoring ✓
+
+### Completed This Session
+
+#### GAMMA-013: Implement interrupted test recovery
+- File: StorageManager.cpp, main.ino
+- Legacy reference: brevitest-firmware.ino:4834-4844
+- Implementation:
+  - Added handleInterruptedTestRecovery() to StorageManager
+  - Checks EEPROM for running_test_uuid on startup
+  - Saves interrupted test to /cache/ directory
+  - Clears EEPROM recovery data after saving
+  - Integrated into main.ino setup() after StorageManager init
+  - Logs recovery action with cartridge and assay IDs
+
+#### GAMMA-014: Magnetometer validation file management
+- File: StorageManager.cpp, StorageManager.h
+- Legacy reference: legacy-firmware magnetometer file functions
+- Implementation:
+  - Added listValidationFiles() - iterates /validation/, logs each file
+  - Added clearValidationFiles() - deletes all validation files
+  - Added getValidationFileCount() - counts validation files
+  - Files stored as /validation/magnet_{timestamp}.txt
+  - Max 50 files with FIFO eviction
+
+#### GAMMA-015: CloudProtocol data structures
+- File: DataTypes.h
+- Legacy reference: brevitest-firmware.h:359-422
+- Verified exact binary compatibility:
+  - BrevitestSpectrophotometerReading: 32 bytes (static_assert verified)
+  - BrevitestTestRecord: 9668 bytes (static_assert verified)
+  - BrevitestAssay: id[9], duration, BCODE_length, BCODE[5000]
+  - Particle_EEPROM: All fields match legacy
+
+#### GAMMA-016: Document cloud protocol specification
+- File: coordination/docs/CLOUD-PROTOCOL-SPEC.md
+- Created comprehensive documentation:
+  - All 4 Supabase endpoints (validate, load-assay, upload-test, reset)
+  - Request/response JSON formats with examples
+  - All error codes (network, auth, validation, upload, server, client)
+  - Retry behavior with exponential backoff algorithm
+  - Binary data format (9668-byte test record, 32-byte readings)
+  - Offline caching strategy (FIFO eviction)
+  - Request ID correlation mechanism
+  - Connection monitoring
+
+### Key Learnings
+1. Static assertions in DataTypes.h ensure binary compatibility at compile time
+2. Interrupted test recovery must happen early in setup() before normal operation
+3. Magnetometer validation files use timestamp-based naming for easy sorting
+4. CRC32 lookup table in StorageManager matches legacy firmware exactly
+
+### Files Modified
+- supabase-firmware/src/StorageManager.h (added validation and recovery functions)
+- supabase-firmware/src/StorageManager.cpp (implemented new functions)
+- supabase-firmware/src/main.ino (added StorageManager init and recovery)
+- coordination/prd-fw-gamma-cloud.json (marked all stories complete)
+- coordination/docs/CLOUD-PROTOCOL-SPEC.md (new documentation)
+
+---

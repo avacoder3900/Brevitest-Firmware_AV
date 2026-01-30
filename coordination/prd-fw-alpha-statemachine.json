@@ -1,0 +1,396 @@
+{
+  "project": "Firmware Rewrite - Alpha: State Machine & Core Loop",
+  "branchName": "firmware-rewrite-supabase",
+  "terminal": "alpha",
+  "description": "Implement the core state machine and main loop exactly matching legacy firmware behavior. This is the foundation - all other modules depend on correct state management.",
+  "lastUpdated": "2026-01-30",
+
+  "legacyReference": {
+    "primaryFiles": [
+      "legacy-firmware/firmware/src/DeviceState.h (lines 1-346)",
+      "legacy-firmware/firmware/src/DeviceState.cpp (lines 1-584)",
+      "legacy-firmware/firmware/src/brevitest-firmware.ino (lines 4703-4870 setup, 5254-5416 hardware_loop, 5444-5843 loop)"
+    ],
+    "keyFunctions": [
+      "DeviceStateMachine::can_transition_to()",
+      "DeviceStateMachine::transition_to()",
+      "DeviceStateMachine::reset_to_idle()",
+      "hardware_loop()",
+      "set_device_indicators()",
+      "heater_debounced()"
+    ]
+  },
+
+  "stateTransitionMatrix": {
+    "description": "Complete state transition rules from legacy firmware. MUST be implemented exactly.",
+    "transitions": {
+      "INITIALIZING": {
+        "allowedTargets": ["IDLE", "HEATING"],
+        "notes": "Normal startup goes to IDLE. If heater not ready, can go to HEATING."
+      },
+      "IDLE": {
+        "allowedTargets": ["BARCODE_SCANNING", "STRESS_TESTING", "HEATING", "UPLOADING_RESULTS"],
+        "notes": "Main waiting state. Can start scanning on cartridge insert, go to heating if temp drops, or upload cached results."
+      },
+      "HEATING": {
+        "allowedTargets": ["IDLE", "BARCODE_SCANNING", "STRESS_TESTING"],
+        "notes": "Waiting for heater. Can scan barcode during heating (early detection). Cartridges inserted during heating are REJECTED."
+      },
+      "BARCODE_SCANNING": {
+        "allowedTargets": ["VALIDATING_CARTRIDGE", "VALIDATING_MAGNETOMETER", "STRESS_TESTING", "IDLE"],
+        "notes": "After barcode read, determines cartridge type and routes accordingly."
+      },
+      "VALIDATING_CARTRIDGE": {
+        "allowedTargets": ["RUNNING_TEST", "RESETTING_CARTRIDGE", "IDLE"],
+        "notes": "Cloud validation. Has 45s timeout with 3 retries and exponential backoff."
+      },
+      "VALIDATING_MAGNETOMETER": {
+        "allowedTargets": ["IDLE"],
+        "notes": "BLE magnetometer validation. Terminal state - only returns to IDLE."
+      },
+      "RUNNING_TEST": {
+        "allowedTargets": ["UPLOADING_RESULTS", "IDLE"],
+        "notes": "Test execution via BCODE. Goes to UPLOADING_RESULTS on completion, IDLE if cancelled."
+      },
+      "UPLOADING_RESULTS": {
+        "allowedTargets": ["IDLE"],
+        "notes": "Cloud upload. Has 30s timeout. Returns to IDLE when complete or failed."
+      },
+      "RESETTING_CARTRIDGE": {
+        "allowedTargets": ["IDLE"],
+        "notes": "Cloud reset request. Has 30s timeout. Returns to IDLE when complete."
+      },
+      "STRESS_TESTING": {
+        "allowedTargets": ["IDLE"],
+        "notes": "Automated testing cycles. Only exits to IDLE."
+      },
+      "ERROR_STATE": {
+        "allowedTargets": ["IDLE"],
+        "notes": "Error condition. Can only recover to IDLE after clearing error."
+      }
+    },
+    "alwaysAllowed": {
+      "toErrorState": "Can ALWAYS transition to ERROR_STATE from any state (safety mechanism)",
+      "toIdle": "Can ALWAYS transition to IDLE from any state (reset/cleanup mechanism)"
+    }
+  },
+
+  "userStories": [
+    {
+      "id": "ALPHA-001",
+      "title": "Implement DeviceMode enum with all 11 states",
+      "description": "Define DeviceMode enum exactly matching legacy firmware states.",
+      "acceptanceCriteria": [
+        "DeviceMode enum has exactly 11 values: IDLE, INITIALIZING, HEATING, BARCODE_SCANNING, VALIDATING_CARTRIDGE, VALIDATING_MAGNETOMETER, RUNNING_TEST, UPLOADING_RESULTS, RESETTING_CARTRIDGE, STRESS_TESTING, ERROR_STATE",
+        "Enum values match legacy order for compatibility",
+        "deviceModeToString() function returns exact legacy string names",
+        "Compile passes with no warnings"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.h lines 24-36",
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented in DataTypes.h:122-134"
+    },
+    {
+      "id": "ALPHA-002",
+      "title": "Implement TestState enum",
+      "description": "Define TestState enum for tracking test execution progress.",
+      "acceptanceCriteria": [
+        "TestState enum has values: NOT_STARTED, RUNNING, COMPLETED, CANCELLED, UPLOAD_PENDING, UPLOAD_IN_PROGRESS, UPLOADED",
+        "testStateToString() function returns exact legacy string names",
+        "Compile passes"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.h lines 44-52",
+      "priority": 2,
+      "passes": true,
+      "notes": "Implemented in DataTypes.h:141-149"
+    },
+    {
+      "id": "ALPHA-003",
+      "title": "Implement CartridgeState enum",
+      "description": "Define CartridgeState enum for tracking cartridge status.",
+      "acceptanceCriteria": [
+        "CartridgeState enum has values: NOT_INSERTED, DETECTED, BARCODE_READ, VALIDATED, INVALID, TEST_COMPLETE",
+        "cartridgeStateToString() function returns exact legacy string names",
+        "Compile passes"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.h lines 60-67",
+      "priority": 3,
+      "passes": true,
+      "notes": "Implemented in DataTypes.h:156-163"
+    },
+    {
+      "id": "ALPHA-004",
+      "title": "Implement state transition validation matrix",
+      "description": "Implement can_transition_to() with complete legacy validation rules.",
+      "acceptanceCriteria": [
+        "canTransitionTo() matches legacy can_transition_to() exactly",
+        "All 11 states have correct allowed transitions per legacy matrix",
+        "Always allows transition to ERROR_STATE from any state",
+        "Always allows transition to IDLE from any state",
+        "Same-state transitions return false",
+        "Unit tests verify all valid transitions return true",
+        "Unit tests verify all invalid transitions return false"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.cpp lines 22-105",
+      "priority": 4,
+      "passes": true,
+      "notes": "Implemented in StateMachine.cpp:136-226. Matches legacy can_transition_to() exactly."
+    },
+    {
+      "id": "ALPHA-005",
+      "title": "Implement state transition with history logging",
+      "description": "Implement transition_to() that validates, logs to history, and updates state.",
+      "acceptanceCriteria": [
+        "setMode() validates transition using canTransitionTo()",
+        "Invalid transitions are rejected with warning log",
+        "Valid transitions update mode and previous_mode",
+        "Transition timestamp is recorded using Time.now()",
+        "Current cartridge ID is copied to transition entry",
+        "History uses 50-entry circular buffer exactly like legacy",
+        "Log.info() outputs 'State transition: X -> Y' format"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.cpp lines 115-147",
+      "priority": 5,
+      "passes": true,
+      "notes": "Implemented in StateMachine.cpp:236-306. Uses 50-entry circular buffer."
+    },
+    {
+      "id": "ALPHA-006",
+      "title": "Implement reset_to_idle() method",
+      "description": "Implement reset_to_idle() that clears all state to safe defaults.",
+      "acceptanceCriteria": [
+        "Sets mode to IDLE without validation",
+        "Sets test_state to NOT_STARTED",
+        "Sets cartridge_state to NOT_INSERTED",
+        "Clears cloud_operation_pending flag",
+        "Clears last_error string",
+        "Logs 'Device state reset to IDLE'"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.cpp lines 156-173",
+      "priority": 6,
+      "passes": true,
+      "notes": "Implemented in StateMachine.cpp:277-306"
+    },
+    {
+      "id": "ALPHA-007",
+      "title": "Implement cloud operation tracking",
+      "description": "Implement start_cloud_operation(), end_cloud_operation(), and timeout detection.",
+      "acceptanceCriteria": [
+        "start_cloud_operation() sets pending flag and records start time",
+        "end_cloud_operation() clears pending flag and start time",
+        "is_cloud_operation_timeout(timeout_ms) returns true if elapsed > timeout",
+        "Default timeout is 30000ms",
+        "Handles millis() overflow correctly"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.cpp lines 181-213",
+      "priority": 7,
+      "passes": true,
+      "notes": "Implemented in StateMachine.cpp:582-608"
+    },
+    {
+      "id": "ALPHA-008",
+      "title": "Implement barcode tracking for state history",
+      "description": "Implement set_current_barcode(), clear_current_barcode(), and get_transitions_for_barcode().",
+      "acceptanceCriteria": [
+        "set_current_barcode() copies up to 36 chars with null termination",
+        "clear_current_barcode() sets first char to null",
+        "get_transitions_for_barcode() returns indices of matching transitions",
+        "History entries include barcode_id field (36 chars + null)",
+        "Print functions show barcode association"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/DeviceState.cpp lines 318-450",
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented in StateMachine.cpp:532-541 and 681-698"
+    },
+    {
+      "id": "ALPHA-009",
+      "title": "Implement heater_debounced() function",
+      "description": "Implement heater ready debouncing with 5000ms delay.",
+      "acceptanceCriteria": [
+        "Returns false while debouncing is in progress",
+        "Starts debounce timer when heater_ready state changes",
+        "Uses HEATER_READY_DEBOUNCE_DELAY (5000ms) for debounce period",
+        "Only returns true heater_ready after debounce completes",
+        "Tracks previous_heater_ready for change detection"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 4878-4900",
+      "priority": 9,
+      "passes": true,
+      "notes": "Implemented in main.ino heater_debounced() function. Matches legacy exactly."
+    },
+    {
+      "id": "ALPHA-010",
+      "title": "Implement set_device_indicators() function",
+      "description": "Implement LED and buzzer control based on device state.",
+      "acceptanceCriteria": [
+        "STRESS_TESTING, RUNNING_TEST, BARCODE_SCANNING, VALIDATING_* states show red 'don't touch' LED",
+        "ERROR_STATE with invalid cartridge shows green blink + problem buzzer",
+        "ERROR_STATE without invalid cartridge shows red solid",
+        "HEATING with cartridge shows green blink (remove), no buzzer",
+        "HEATING without cartridge shows red solid, no buzzer",
+        "IDLE with cartridge and UPLOADED test shows green blink + alert buzzer",
+        "IDLE with cartridge but no uploaded test shows green blink, no buzzer",
+        "IDLE without cartridge and heater ready shows green fade, no buzzer",
+        "IDLE without cartridge and heater not ready shows red solid",
+        "UPLOADING_RESULTS with uploaded test + cartridge shows alert buzzer",
+        "INITIALIZING shows red solid"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 4909-5019",
+      "priority": 10,
+      "passes": true,
+      "notes": "Implemented in main.ino set_device_indicators() function. Matches legacy LED/buzzer patterns."
+    },
+    {
+      "id": "ALPHA-011",
+      "title": "Implement hardware_loop() function",
+      "description": "Implement the core hardware monitoring loop called every iteration.",
+      "acceptanceCriteria": [
+        "Updates heater_ready based on temperature delta from target",
+        "Heater ready threshold is HEATER_READY_TEMP_DELTA (10 degrees in 10x scale = 100)",
+        "Implements cartridge detector debouncing (10ms delay)",
+        "On cartridge insertion: reset_stage, move_stage_to_test_start_position, sleep_motor",
+        "On cartridge insertion during HEATING: transition to BARCODE_SCANNING for early detection",
+        "On cartridge removal: reset_stage, turn_off_buzzer_timer, clear_current_barcode, reset_to_idle",
+        "Calls set_device_indicators() every loop",
+        "Runs PID temperature control if temperature_control_on",
+        "Handles buzzer alert/problem triggers"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 5254-5416",
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented in main.ino hardware_loop() function. Includes heater monitoring, detector debouncing (10ms), cartridge handling."
+    },
+    {
+      "id": "ALPHA-012",
+      "title": "Implement main loop() with state machine",
+      "description": "Implement the main loop with proper state-driven behavior.",
+      "acceptanceCriteria": [
+        "Always calls process_serial_port() and hardware_loop() every iteration",
+        "Monitors cloud connection and re-registers subscriptions on reconnect",
+        "STRESS_TESTING state calls stress_test_loop()",
+        "RESETTING_CARTRIDGE state publishes reset and handles 30s timeout",
+        "UPLOADING_RESULTS state publishes upload and handles 30s timeout",
+        "BARCODE_SCANNING state only scans if heater_debounced()",
+        "VALIDATING_CARTRIDGE state implements full retry logic with exponential backoff",
+        "VALIDATING_MAGNETOMETER state calls magnet_validation_loop()",
+        "HEATING state allows early barcode scanning, transitions when heater ready",
+        "IDLE state has no specific actions (waits for hardware_loop transitions)",
+        "ERROR_STATE has no specific actions (handled by indicators)"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 5444-5843",
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented in main.ino loop() function. Calls hardware_loop() every iteration, state-driven behavior."
+    },
+    {
+      "id": "ALPHA-013",
+      "title": "Implement validation retry logic with exponential backoff",
+      "description": "Implement cartridge validation retry with proper timeout and backoff.",
+      "acceptanceCriteria": [
+        "Default timeout is 45000ms (VALIDATION_TIMEOUT_MS)",
+        "Maximum timeout is 60000ms (VALIDATION_MAX_TIMEOUT_MS)",
+        "Maximum retries is 3 (VALIDATION_MAX_RETRIES)",
+        "Backoff delay is VALIDATION_RETRY_BACKOFF_BASE (5000ms) multiplied by retry count",
+        "On timeout: increment retry count, calculate backoff, clear cloud operation",
+        "On max retries exceeded: set cartridge_state to INVALID, set error, clear tracking",
+        "On cloud disconnect during validation: count as retry with backoff",
+        "Verify cartridge still present before retry",
+        "Log retry attempts with remaining delay"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 5528-5787",
+      "priority": 13,
+      "passes": true,
+      "notes": "Implemented in main.ino VALIDATING_CARTRIDGE case. 45s timeout, 3 retries, exponential backoff (5s base)."
+    },
+    {
+      "id": "ALPHA-014",
+      "title": "Implement cartridge rejection during heating",
+      "description": "Cartridges inserted during heating must be rejected to prevent damage.",
+      "acceptanceCriteria": [
+        "When cartridge inserted during HEATING mode, scan barcode but do NOT validate",
+        "Store barcode in pending_barcode_uuid",
+        "Set pending_barcode_available = true",
+        "Signal user to remove cartridge (green blink LED, NO buzzer)",
+        "Transition back to HEATING mode",
+        "When heater becomes ready AND cartridge still inserted with pending barcode, re-scan",
+        "Log 'Cartridge inserted during heating - please remove cartridge and re-insert'"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 5077-5100",
+      "priority": 14,
+      "passes": true,
+      "notes": "Implemented in main.ino: pending_barcode_uuid/available vars (lines 142-143), BARCODE_SCANNING stores pending on heating (lines 361-365), HEATING re-scans when ready (lines 337-342), set_device_indicators() shows green blink no buzzer (lines 773-783)"
+    },
+    {
+      "id": "ALPHA-015",
+      "title": "Implement recently tested barcode cooldown",
+      "description": "Prevent re-scanning same barcode within 30 second cooldown window.",
+      "acceptanceCriteria": [
+        "Track last_tested_barcode (36 char UUID) and last_tested_timestamp",
+        "RECENT_TEST_COOLDOWN_MS is 30000 (30 seconds)",
+        "On successful test completion, record barcode and timestamp",
+        "Skip barcode scanning if same barcode within cooldown window",
+        "Clear tracking when cartridge is removed",
+        "Log when skipping scan due to cooldown"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 5284-5316",
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented in main.ino: last_tested_barcode/timestamp vars (lines 138-139), RECENT_TEST_COOLDOWN_MS=30000 (line 82), records on test complete (lines 438-441), cooldown check in BARCODE_SCANNING (lines 374-380), cleared on removal (lines 933-934)"
+    },
+    {
+      "id": "ALPHA-016",
+      "title": "Implement setup() function",
+      "description": "Implement device initialization exactly matching legacy startup sequence.",
+      "acceptanceCriteria": [
+        "Serial.begin(115200), wait for connection up to 15s",
+        "Initialize cartridge detector pin with INPUT_PULLUP",
+        "Initialize all hardware pins (buzzer, stage limit, barcode, lasers, heater, motor)",
+        "Register Particle.variable for temperature and magnet_validation",
+        "Register Particle.function for all cloud functions",
+        "Call register_cloud_subscriptions()",
+        "Setup EEPROM with version check",
+        "Create directories: /cache, /buffer, /validation, /assay",
+        "Attach cartridge detector interrupt",
+        "Initialize I2C and spectrophotometer switch",
+        "Reset stage and test LEDs/buzzer",
+        "Initialize state machine to INITIALIZING",
+        "Check for interrupted test and save to file",
+        "Call reset_device_state()",
+        "Start temperature control",
+        "Transition to IDLE",
+        "Log startup information"
+      ],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino lines 4703-4870",
+      "priority": 16,
+      "passes": true,
+      "notes": "Implemented in main.ino setup(): 15s serial wait, Particle.variable (temperature, magnet_validation, device_status), Particle.function (runTest, resetDevice, setHeaterTarget, getStatus), starts in INITIALIZING mode, StorageManager init with EEPROM and directories, interrupted test recovery, all hardware init via controllers"
+    },
+    {
+      "id": "ALPHA-017",
+      "title": "Document all state transitions with diagrams",
+      "description": "Create comprehensive documentation for all state transitions.",
+      "acceptanceCriteria": [
+        "Mermaid state diagram in markdown showing all 11 states",
+        "Each transition documented with trigger condition",
+        "Each state documented with entry/exit actions",
+        "Error recovery paths documented",
+        "Timing requirements documented",
+        "Hardware interactions per state documented"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Documentation is critical for future maintenance."
+    }
+  ],
+
+  "codebasePatterns": [
+    "ALWAYS read fresh state before making decisions",
+    "Use volatile for state variables accessed from interrupts",
+    "Log all state transitions with from->to format",
+    "Use debouncing for all hardware state changes",
+    "Handle millis() overflow in timeout calculations",
+    "Clear all tracking variables when cartridge is removed"
+  ]
+}

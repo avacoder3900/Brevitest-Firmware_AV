@@ -35,6 +35,11 @@
 #include "DataTypes.h"
 #include "HardwareConfig.h"
 
+// Forward declarations
+class MotorController;
+class LaserController;
+class HeaterController;
+
 //==============================================================================
 // CONSTANTS
 //==============================================================================
@@ -457,6 +462,56 @@ public:
      * @brief Print status to log
      */
     void printStatus();
+
+    //==========================================================================
+    // COORDINATED SCANNING (BETA-019)
+    //==========================================================================
+
+    /**
+     * @brief Perform continuous scanning with coordinated motor movement
+     *
+     * This function matches the legacy spectrophotometer_reading_continuous() behavior:
+     * - Calculates segment sizes based on integration time and step delay
+     * - For each channel (A, B, C): powers on spectro, turns on laser
+     * - For each segment: moves stage while sensor integrates
+     * - Stores readings in the test record
+     *
+     * @param test Pointer to test record to populate with readings
+     * @param motor Pointer to motor controller for stage movement
+     * @param laser Pointer to laser controller
+     * @param heater Pointer to heater controller for temperature reading
+     * @param baseline If true, records as baseline scans
+     * @param startingPosition Starting stage position in microns
+     * @param distanceToScan Distance to scan in microns
+     * @param stepDelayUs Step delay in microseconds (use MOTOR_SENSOR_STEP_DELAY)
+     * @param log If true, log each reading
+     * @return true if scanning completed successfully
+     */
+    bool readingContinuous(BrevitestTestRecord* test,
+                           class MotorController* motor,
+                           class LaserController* laser,
+                           class HeaterController* heater,
+                           bool baseline,
+                           int32_t startingPosition,
+                           int32_t distanceToScan,
+                           uint16_t stepDelayUs,
+                           bool log = false);
+
+    /**
+     * @brief Calculate integration time in microseconds
+     * @param atime ATIME value
+     * @param astep ASTEP value
+     * @return Integration time in microseconds
+     */
+    static uint32_t calculateIntegrationTimeUs(uint8_t atime, uint16_t astep);
+
+    /**
+     * @brief Calculate step delay for motor to match integration time
+     * @param atime ATIME value
+     * @param astep ASTEP value
+     * @return Calculated step delay in microseconds
+     */
+    static uint16_t calculateStepDelayForIntegration(uint8_t atime, uint16_t astep);
 
 private:
     //==========================================================================

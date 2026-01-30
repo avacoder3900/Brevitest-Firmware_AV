@@ -1,0 +1,196 @@
+{
+  "project": "Brevitest Supabase Firmware Rewrite",
+  "branchName": "firmware-rewrite-supabase",
+  "version": "1.0.0",
+  "description": "Complete rewrite of Brevitest firmware to match legacy behavior while integrating Supabase cloud backend. This master PRD coordinates multiple sub-PRDs for parallel development.",
+  "lastUpdated": "2026-01-30",
+  "coordinator": "orchestrator",
+
+  "legacyAnalysis": {
+    "sourceFiles": [
+      "legacy-firmware/firmware/src/brevitest-firmware.ino",
+      "legacy-firmware/firmware/src/brevitest-firmware.h",
+      "legacy-firmware/firmware/src/DeviceState.cpp",
+      "legacy-firmware/firmware/src/DeviceState.h",
+      "legacy-firmware/firmware/src/DFRobot_AS7341.cpp",
+      "legacy-firmware/firmware/src/DFRobot_AS7341.h"
+    ],
+    "totalLinesOfCode": 6200,
+    "firmwareVersion": 56,
+    "dataFormatVersion": 39
+  },
+
+  "architecture": {
+    "targetPlatform": "Particle Boron (NRF52840)",
+    "deviceOS": "6.3.3",
+    "cloudBackend": "Supabase Edge Functions",
+    "modules": [
+      "StateMachine - Core state management with validated transitions",
+      "HAL - Hardware abstraction layer for pins and peripherals",
+      "MotorController - Stepper motor control with limit detection",
+      "HeaterController - PID temperature control with thermistor",
+      "LaserController - 3-channel laser control with photodiodes",
+      "Spectrophotometer - AS7341 11-channel sensor control",
+      "BarcodeScanner - Serial barcode reader interface",
+      "BuzzerController - Audio feedback patterns",
+      "LEDController - RGB status indicators",
+      "StorageManager - EEPROM and filesystem operations",
+      "SupabaseClient - Cloud API communication",
+      "SerialCommands - Diagnostic command interface",
+      "BCODEInterpreter - Test script execution engine",
+      "TestRunner - Test orchestration and data collection"
+    ]
+  },
+
+  "terminalAssignments": {
+    "alpha": {
+      "name": "State Machine & Core Loop",
+      "prdFile": "prd-fw-alpha-statemachine.json",
+      "responsibilities": [
+        "DeviceMode state machine implementation",
+        "State transition validation matrix",
+        "Transition history tracking",
+        "Main loop() state handling",
+        "hardware_loop() implementation",
+        "State-driven indicators"
+      ],
+      "fileReservations": [
+        "supabase-firmware/src/StateMachine.cpp",
+        "supabase-firmware/src/StateMachine.h",
+        "supabase-firmware/src/main.ino"
+      ]
+    },
+    "beta": {
+      "name": "Hardware Controllers",
+      "prdFile": "prd-fw-beta-hardware.json",
+      "responsibilities": [
+        "MotorController with legacy movement functions",
+        "HeaterController with PID control",
+        "LaserController with 3-channel support",
+        "Spectrophotometer with AS7341 driver",
+        "BarcodeScanner with legacy protocol",
+        "BuzzerController with alert patterns",
+        "LEDController with state indicators"
+      ],
+      "fileReservations": [
+        "supabase-firmware/src/MotorController.cpp",
+        "supabase-firmware/src/MotorController.h",
+        "supabase-firmware/src/HeaterController.cpp",
+        "supabase-firmware/src/HeaterController.h",
+        "supabase-firmware/src/LaserController.cpp",
+        "supabase-firmware/src/LaserController.h",
+        "supabase-firmware/src/Spectrophotometer.cpp",
+        "supabase-firmware/src/Spectrophotometer.h",
+        "supabase-firmware/src/BarcodeScanner.cpp",
+        "supabase-firmware/src/BarcodeScanner.h",
+        "supabase-firmware/src/BuzzerController.cpp",
+        "supabase-firmware/src/BuzzerController.h",
+        "supabase-firmware/src/LEDController.cpp",
+        "supabase-firmware/src/LEDController.h"
+      ]
+    },
+    "gamma": {
+      "name": "Cloud & Storage",
+      "prdFile": "prd-fw-gamma-cloud.json",
+      "responsibilities": [
+        "SupabaseClient HTTP communication",
+        "Cloud event publish/subscribe",
+        "Validation retry logic with exponential backoff",
+        "StorageManager EEPROM operations",
+        "Filesystem cache management",
+        "Test result upload handling"
+      ],
+      "fileReservations": [
+        "supabase-firmware/src/SupabaseClient.cpp",
+        "supabase-firmware/src/SupabaseClient.h",
+        "supabase-firmware/src/CloudProtocol.h",
+        "supabase-firmware/src/StorageManager.cpp",
+        "supabase-firmware/src/StorageManager.h"
+      ]
+    },
+    "delta": {
+      "name": "Serial Commands & Test Engine",
+      "prdFile": "prd-fw-delta-serial.json",
+      "responsibilities": [
+        "Serial command parser (100+ commands)",
+        "Command categories implementation",
+        "BCODE interpreter",
+        "TestRunner orchestration",
+        "Diagnostic output formatting"
+      ],
+      "fileReservations": [
+        "supabase-firmware/src/SerialCommands.cpp",
+        "supabase-firmware/src/SerialCommands.h",
+        "supabase-firmware/src/CommandParser.cpp",
+        "supabase-firmware/src/CommandParser.h",
+        "supabase-firmware/src/BCODEInterpreter.cpp",
+        "supabase-firmware/src/BCODEInterpreter.h",
+        "supabase-firmware/src/TestRunner.cpp",
+        "supabase-firmware/src/TestRunner.h"
+      ]
+    }
+  },
+
+  "qualityGates": {
+    "codeReview": {
+      "required": true,
+      "checklist": [
+        "Matches legacy behavior exactly (document deviations)",
+        "No AI slop - clear, purposeful code",
+        "Proper error handling with meaningful messages",
+        "Memory-safe operations (no buffer overflows)",
+        "Thread-safe where applicable",
+        "Comprehensive logging for diagnostics"
+      ]
+    },
+    "documentation": {
+      "required": true,
+      "checklist": [
+        "Function-level documentation with @brief, @param, @return",
+        "State transition diagrams for state machines",
+        "Hardware timing requirements documented",
+        "Pin assignments and electrical requirements",
+        "Error codes and recovery procedures"
+      ]
+    },
+    "testing": {
+      "required": true,
+      "checklist": [
+        "Unit tests for state transitions",
+        "Hardware simulation tests where possible",
+        "Serial command response validation",
+        "Timing-critical operation verification"
+      ]
+    }
+  },
+
+  "criticalConstants": {
+    "timing": {
+      "DETECTOR_DEBOUNCE_DELAY_MS": 10,
+      "HEATER_READY_DEBOUNCE_DELAY_MS": 5000,
+      "VALIDATION_TIMEOUT_MS": 45000,
+      "VALIDATION_MAX_RETRIES": 3,
+      "VALIDATION_RETRY_BACKOFF_BASE_MS": 5000,
+      "RECENT_TEST_COOLDOWN_MS": 30000,
+      "HEATER_CONTROL_INTERVAL_MS": 1000,
+      "BUZZER_ALERT_PERIOD_MS": 4000,
+      "BUZZER_PROBLEM_PERIOD_MS": 777
+    },
+    "hardware": {
+      "STAGE_POSITION_LIMIT_MICRONS": 45000,
+      "STAGE_TEST_START_POSITION_MICRONS": 7860,
+      "SPECTRO_STARTING_POSITION_MICRONS": 21000,
+      "MOTOR_MICRONS_PER_EIGHTH_STEP": 25,
+      "MOTOR_MINIMUM_STEP_DELAY_US": 250,
+      "HEATER_TARGET_TEMP_C_10X": 4500,
+      "HEATER_READY_TEMP_DELTA_C_10X": 100,
+      "HEATER_MAX_TEMP_C": 600
+    },
+    "communication": {
+      "SERIAL_BAUD_RATE": 115200,
+      "BARCODE_BAUD_RATE": 9600,
+      "BARCODE_READ_TIMEOUT_MS": 1000,
+      "BARCODE_UUID_LENGTH": 36
+    }
+  }
+}
