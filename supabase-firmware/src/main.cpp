@@ -1,3 +1,8 @@
+/******************************************************/
+//       THIS IS A GENERATED FILE - DO NOT EDIT       //
+/******************************************************/
+
+#line 1 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/supabase-firmware/src/main.ino"
 /**
  * @file main.ino
  * @brief Main entry point for Brevitest Supabase Firmware
@@ -14,6 +19,17 @@
 #include "Particle.h"
 
 // System configuration
+void cartridgeInterruptHandler();
+void setup();
+void loop();
+void setupTestRunnerCallbacks();
+void startCartridgeValidation();
+void onValidationComplete(bool success, const char* assayId);
+void startResultUpload();
+void onUploadComplete(bool success);
+void logStatus();
+void executeSerialCommand(const char* cmd);
+#line 17 "c:/Users/aleja/ONEDRI~1/Documents/GitHub/brevitest-device/supabase-firmware/src/main.ino"
 SYSTEM_MODE(AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 

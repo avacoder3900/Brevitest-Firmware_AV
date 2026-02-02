@@ -1,5 +1,6 @@
 {
     "recommendations": [
+        "particle.particle-vscode-pack",
         "particle.particle-vscode-core",
         "ms-vscode.cpptools"
     ]

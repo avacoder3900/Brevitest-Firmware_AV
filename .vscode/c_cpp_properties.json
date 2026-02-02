@@ -1,18 +1,19 @@
 {
     "configurations": [
         {
-            "name": "Mac",
+            "name": "Particle",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/supabase-firmware/src/**",
+                "${workspaceFolder}/supabase-firmware/lib/**"
             ],
-            "defines": [],
-            "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX10.14.sdk/System/Library/Frameworks"
+            "defines": [
+                "PLATFORM_ID=35"
             ],
-            "compilerPath": "/usr/bin/clang",
             "cStandard": "c11",
             "cppStandard": "c++17",
-            "intelliSenseMode": "clang-x64"
+            "intelliSenseMode": "gcc-arm",
+            "configurationProvider": "particle.particle-vscode-core"
         }
     ],
     "version": 4

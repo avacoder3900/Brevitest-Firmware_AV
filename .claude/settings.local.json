@@ -14,7 +14,11 @@
       "Bash(git commit -m \"$\\(cat <<''EOF''\nFix Supabase firmware API compatibility and compile errors\n\nRefactored firmware to resolve numerous API mismatches between main.ino\nand the actual class/namespace implementations:\n\n- SupabaseClient.cpp: Added POSIX headers, fixed BrevitestTestRecord\n  field access \\(cartridge_id, assay_id instead of header.xxx\\)\n- SerialCommands: Renamed CommandCategory enum values with CAT_ prefix\n  to avoid BLE macro collision, fixed Spectrophotometer method calls\n- HardwareConfig.h: Added #ifndef guards for version macros, removed\n  duplicate SPECTRO_* constexpr that conflicted with DataTypes.h macros\n- TestRunner: Renamed StateChangeCallback to TestStateChangeCallback,\n  removed invalid BuzzerController forward declaration \\(it''s a namespace\\)\n- main.ino: Updated all API calls to use correct methods \\(getCurrentMode,\n  isReady, getCurrentPosition, enableLaser/disableLaser, etc.\\) and\n  namespace syntax for BuzzerController:: and LEDController::\n\nCompiled binary included: brevitest-supabase-v100.bin \\(57KB\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd VS Code Particle Workbench configuration\n\nConfigure project for VS Code with Particle Workbench extension:\n- project.properties: Target msom platform with DeviceOS 6.3.4\n- .vscode/settings.json: Workspace settings for Particle extension\n- .vscode/extensions.json: Recommended extensions\n- .vscode/launch.json: Flash and monitor configuration\n- .vscode/tasks.json: Build, flash, and serial monitor tasks\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git push:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(if not exist src mklink /J src supabase-firmwaresrc)",
+      "Bash(cmd /c \"cd /d \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\"\" && if not exist src mklink /J src supabase-firmware\\\\src\")",
+      "Bash(cmd /c \"dir \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\"\" | findstr src\")",
+      "Bash(cmd /c \"mklink /J \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\\\\src\"\" \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\\\\supabase-firmware\\\\src\"\"\")"
     ]
   }
 }

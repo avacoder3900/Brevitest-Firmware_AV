@@ -1050,7 +1050,7 @@ int SerialCommands::handleScanBarcode(const ParsedCommand& cmd) {
     BarcodeType type = barcodeScanner.triggerScan(timeout);
     const char* barcode = barcodeScanner.getLastBarcode();
 
-    if (type == BarcodeType::UNKNOWN || barcode[0] == '\0') {
+    if (type == BarcodeType::GENERAL_ERROR || barcode[0] == '\0') {
         serialParser.respond("Barcode scan failed or timed out");
         serialParser.respondError(-2, "Scan failed");
         return -2;
