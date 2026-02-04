@@ -18,7 +18,17 @@
       "Bash(if not exist src mklink /J src supabase-firmwaresrc)",
       "Bash(cmd /c \"cd /d \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\"\" && if not exist src mklink /J src supabase-firmware\\\\src\")",
       "Bash(cmd /c \"dir \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\"\" | findstr src\")",
-      "Bash(cmd /c \"mklink /J \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\\\\src\"\" \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\\\\supabase-firmware\\\\src\"\"\")"
+      "Bash(cmd /c \"mklink /J \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\\\\src\"\" \"\"C:\\\\Users\\\\aleja\\\\OneDrive - Linbeck Group, LLC\\\\Documents\\\\GitHub\\\\brevitest-device\\\\supabase-firmware\\\\src\"\"\")",
+      "Bash(where:*)",
+      "Bash(g++:*)",
+      "Bash(gcc:*)",
+      "Bash(build_and_run.bat)",
+      "Bash(./test_host.exe:*)",
+      "Bash(cmd.exe /c \"cd /d C:\\\\temp\\\\brevitest_test && g++ -std=c++11 -I. test_host.cpp StateMachine.cpp DataTypes.cpp -o test_host.exe 2>&1\")",
+      "Bash(cmd.exe /c \"g++ -std=c++11 -IC:\\\\temp\\\\brevitest_test C:\\\\temp\\\\brevitest_test\\\\test_host.cpp C:\\\\temp\\\\brevitest_test\\\\StateMachine.cpp C:\\\\temp\\\\brevitest_test\\\\DataTypes.cpp -o C:\\\\temp\\\\brevitest_test\\\\test_host.exe 2>&1\")",
+      "Bash(/c/ProgramData/mingw64/mingw64/libexec/gcc/x86_64-w64-mingw32/15.2.0/cc1plus.exe:*)",
+      "Bash(particle --version:*)",
+      "Bash(particle list)"
     ]
   }
 }

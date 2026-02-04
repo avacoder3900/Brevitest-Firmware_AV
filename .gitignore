@@ -8,3 +8,4 @@ firmware/wifi-test/
 firmware/src/brevitest-firmware.cpp
 msom_firmware*.*
 firmware/nul
+nul
