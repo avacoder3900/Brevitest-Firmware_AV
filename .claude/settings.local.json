@@ -28,7 +28,8 @@
       "Bash(cmd.exe /c \"g++ -std=c++11 -IC:\\\\temp\\\\brevitest_test C:\\\\temp\\\\brevitest_test\\\\test_host.cpp C:\\\\temp\\\\brevitest_test\\\\StateMachine.cpp C:\\\\temp\\\\brevitest_test\\\\DataTypes.cpp -o C:\\\\temp\\\\brevitest_test\\\\test_host.exe 2>&1\")",
       "Bash(/c/ProgramData/mingw64/mingw64/libexec/gcc/x86_64-w64-mingw32/15.2.0/cc1plus.exe:*)",
       "Bash(particle --version:*)",
-      "Bash(particle list)"
+      "Bash(particle list)",
+      "WebFetch(domain:docs.particle.io)"
     ]
   }
 }
