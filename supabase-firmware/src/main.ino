@@ -777,17 +777,16 @@ bool heater_debounced() {
 /**
  * @brief Set device LED and buzzer indicators based on state (ALPHA-010)
  *
- * LEGACY BEHAVIOR (brevitest-firmware.ino:4909-5019):
+ * LED BEHAVIOR:
  * - STRESS_TESTING, RUNNING_TEST, BARCODE_SCANNING, VALIDATING_*: Red solid (don't touch)
  * - ERROR_STATE with invalid cartridge: Green blink + problem buzzer
  * - ERROR_STATE without invalid cartridge: Red solid
- * - HEATING with cartridge: Green blink (remove), no buzzer
- * - HEATING without cartridge: Red solid, no buzzer
+ * - HEATING (with or without cartridge): Red solid (waiting for temperature)
  * - IDLE with cartridge + UPLOADED test: Green blink + alert buzzer
  * - IDLE with cartridge but no UPLOADED test: Green blink, no buzzer
- * - IDLE without cartridge + heater ready: Green fade, no buzzer
- * - IDLE without cartridge + heater not ready: Red solid
- * - UPLOADING_RESULTS with uploaded + cartridge: alert buzzer
+ * - IDLE without cartridge + heater ready: Green solid (ready for cartridge)
+ * - IDLE without cartridge + heater not ready: Red solid (heating up)
+ * - UPLOADING_RESULTS: Red solid, alert buzzer if cartridge present
  * - INITIALIZING: Red solid
  */
 void set_device_indicators() {
@@ -813,15 +812,9 @@ void set_device_indicators() {
             break;
 
         case DeviceMode::HEATING:
-            if (deviceState.hasCartridge()) {
-                // Cartridge inserted while heating - signal to remove (green blink, NO buzzer)
-                LEDController::setPattern(LEDColors::GREEN, BrvtLEDPattern::BLINK, BrvtLEDSpeed::NORMAL);
-                BuzzerController::stopPeriodicAlert();
-            } else {
-                // Heating up - don't touch (red solid)
-                LEDController::setPattern(LEDColors::RED, BrvtLEDPattern::SOLID, BrvtLEDSpeed::NORMAL);
-                BuzzerController::stopPeriodicAlert();
-            }
+            // Heating up - red solid (with or without cartridge)
+            LEDController::setPattern(LEDColors::RED, BrvtLEDPattern::SOLID, BrvtLEDSpeed::NORMAL);
+            BuzzerController::stopPeriodicAlert();
             break;
 
         case DeviceMode::IDLE:
@@ -933,28 +926,19 @@ void hardware_loop() {
                 }
 
                 if (!skip_barcode_scan) {
-                    // Check if we're in HEATING mode - always scan barcode if inserted during heating
-                    if (deviceState.getCurrentMode() == DeviceMode::HEATING) {
-                        // === EARLY DETECTION: Cartridge inserted during heating ===
-                        deviceState.setCartridgeState(CartridgeState::DETECTED);
-                        Log.info("Cartridge detected during heating - transitioning to BARCODE_SCANNING");
-                        deviceState.setMode(DeviceMode::BARCODE_SCANNING);
-                        Log.info("Will scan barcode but not validate until heater ready");
-                    }
-                    // Check if we can start barcode scanning (heater ready + valid transition)
-                    else if (heater_ready && deviceState.canTransitionTo(DeviceMode::BARCODE_SCANNING)) {
-                        deviceState.setCartridgeState(CartridgeState::DETECTED);
-                        deviceState.setMode(DeviceMode::BARCODE_SCANNING);
-                        BuzzerController::playTone(BUZZER_INSERT_FREQUENCY, BUZZER_INSERT_DURATION);
-                    } else {
-                        // Heater not ready and not in heating mode - signal removal needed
-                        deviceState.setCartridgeState(CartridgeState::DETECTED);
-                        deviceState.setError(ErrorCode::ERR_HEATER_FAULT, "Heater not ready");
+                    deviceState.setCartridgeState(CartridgeState::DETECTED);
 
-                        // Activate LED immediately to signal removal (no buzzer)
-                        LEDController::setPattern(LEDColors::GREEN, BrvtLEDPattern::BLINK, BrvtLEDSpeed::NORMAL);
-                        BuzzerController::stopPeriodicAlert();
-                        Log.info("Remove cartridge - heater not ready");
+                    // Check if heater is ready
+                    if (heater_ready && deviceState.canTransitionTo(DeviceMode::BARCODE_SCANNING)) {
+                        // Heater ready - start barcode scanning immediately
+                        deviceState.setMode(DeviceMode::BARCODE_SCANNING);
+                        barcodeScanner.triggerScan();
+                        BuzzerController::playTone(BUZZER_INSERT_FREQUENCY, BUZZER_INSERT_DURATION);
+                        Log.info("Heater ready - starting barcode scan");
+                    } else {
+                        // Heater not ready - transition to HEATING and wait
+                        deviceState.setMode(DeviceMode::HEATING);
+                        Log.info("Cartridge inserted - waiting for heater to reach temperature");
                     }
                 }
             } else {
