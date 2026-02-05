@@ -263,6 +263,10 @@ void setup() {
     Log.info("Initializing motor controller...");
     if (!motorController.init()) {
         Log.warn("Motor controller initialization failed");
+    } else {
+        // Home the stage at startup so motor is at known position
+        Log.info("Homing stage...");
+        motorController.home(true);  // sleepAfter=true to save power
     }
 
     // Initialize heater controller
@@ -832,11 +836,11 @@ void set_device_indicators() {
                     BuzzerController::stopPeriodicAlert();
                 }
             } else if (heater_debounced()) {
-                // Heater ready and no cartridge - ready for insertion (green fade)
-                LEDController::setPattern(LEDColors::GREEN, BrvtLEDPattern::FADE, BrvtLEDSpeed::SLOW);
+                // Heater ready and no cartridge - ready for insertion (green solid)
+                LEDController::setPattern(LEDColors::GREEN, BrvtLEDPattern::SOLID, BrvtLEDSpeed::NORMAL);
                 BuzzerController::stopPeriodicAlert();
             } else {
-                // Heater not ready - don't touch (red solid)
+                // Heater not ready - heating up (red solid)
                 LEDController::setPattern(LEDColors::RED, BrvtLEDPattern::SOLID, BrvtLEDSpeed::NORMAL);
                 BuzzerController::stopPeriodicAlert();
             }
