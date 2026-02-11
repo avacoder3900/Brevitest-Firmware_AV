@@ -1,21 +1,22 @@
 /**
  * @file CloudProtocol.h
- * @brief Request/response structures for Supabase cloud communication
- * @author Agent DELTA - Supabase Firmware Rewrite Project
- * @date January 2026
+ * @brief Request/response structures and async callbacks for Supabase cloud communication
+ * @date February 2026
  *
- * This file defines all data structures used for communication between
- * the Brevitest device and Supabase Edge Functions. It replaces the
- * Particle Pub/Sub message formats with structured HTTPS request/response
- * payloads.
+ * All data structures and callback types for communication between the Brevitest
+ * device and Supabase Edge Functions. All cloud operations are non-blocking via
+ * async callbacks - NO blocking delay() in any cloud operation path.
  *
  * Protocol Overview:
  * - All requests use HTTPS POST to Edge Function endpoints
  * - Request bodies are JSON-encoded
  * - Responses are JSON with standard status/error fields
  * - Request ID correlation for tracking and retry logic
+ * - Async callback pattern: caller provides callback, gets notified on completion
+ * - Retry: 3 attempts, 5s exponential backoff, 45s timeout
  *
  * User Stories Implemented:
+ *   - GAMMA-001: Protocol structures with async callback typedefs
  *   - CLOUD-001: Protocol structures for SupabaseClient
  *   - CLOUD-002: Validate cartridge request/response
  *   - CLOUD-003: Load assay request/response
@@ -344,6 +345,41 @@ struct CachedUpload {
         assayId[0] = '\0';
     }
 };
+
+// ============================================================================
+// ASYNC CALLBACK TYPEDEFS
+// ============================================================================
+
+/**
+ * @brief Callback for cartridge validation completion
+ * @param response The validation response (check response.isSuccess())
+ */
+typedef void (*ValidateCartridgeCallback)(const ValidateCartridgeResponse& response);
+
+/**
+ * @brief Callback for assay load completion
+ * @param response The load assay response (check response.isSuccess())
+ */
+typedef void (*LoadAssayCallback)(const LoadAssayResponse& response);
+
+/**
+ * @brief Callback for test upload completion
+ * @param response The upload response (check response.isSuccess())
+ */
+typedef void (*UploadTestCallback)(const UploadTestResponse& response);
+
+/**
+ * @brief Callback for cartridge reset completion
+ * @param response The reset response (check response.isSuccess())
+ */
+typedef void (*ResetCartridgeCallback)(const ResetCartridgeResponse& response);
+
+/**
+ * @brief Generic cloud operation callback (for WiFi status, etc.)
+ * @param status Operation result status
+ * @param message Optional status message (may be nullptr)
+ */
+typedef void (*CloudStatusCallback)(CloudStatus status, const char* message);
 
 // ============================================================================
 // JSON SERIALIZATION HELPERS

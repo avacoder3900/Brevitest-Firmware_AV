@@ -5,7 +5,7 @@
  * @date January 2026
  *
  * This file provides the hardware abstraction interface between firmware logic
- * and physical hardware on the Particle Boron (NRF52840) platform.
+ * and physical hardware on the Particle B-Series SoM (NRF52840) platform.
  *
  * Features:
  * - GPIO initialization and configuration
@@ -228,7 +228,7 @@ namespace HAL {
      * @brief Generate a single motor step pulse
      *
      * Generates a step pulse on the motor STEP pin. Pulse width is
-     * sufficient for A4988 driver requirements.
+     * sufficient for A5985GETTR-T driver requirements.
      */
     void motorPulse();
 
@@ -366,17 +366,18 @@ namespace HAL {
     bool i2cDevicePresent(uint8_t address);
 
     // ========================================================================
-    // SPECTROPHOTOMETER MUX CONTROL
+    // SPECTROPHOTOMETER SENSOR POWER CONTROL (PCA9536DR)
     // ========================================================================
 
     /**
-     * @brief Initialize the spectrophotometer multiplexer (PCA9536)
+     * @brief Initialize the spectrophotometer power switch (PCA9536DR)
      *
-     * Configures the PCA9536 I/O expander for output mode.
+     * Configures the PCA9536 I/O expander for output mode to control
+     * individual AS7341 sensor VDD power on the stage board.
      *
      * @return true if initialization successful
      */
-    bool initSpectroMux();
+    bool initSpectroPower();
 
     /**
      * @brief Select spectrophotometer channel

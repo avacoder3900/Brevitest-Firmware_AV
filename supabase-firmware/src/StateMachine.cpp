@@ -4,8 +4,8 @@
  * @details Implements all state transition logic, validation, history tracking,
  *          and state management functions.
  *
- * @version 1.0
- * @date 2026-01-29
+ * @version 2.0
+ * @date 2026-02-11
  *
  * User Stories Implemented:
  *   - SM-001: DeviceState class implementation

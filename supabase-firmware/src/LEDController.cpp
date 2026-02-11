@@ -5,7 +5,7 @@
  * @date January 2026
  *
  * This file implements the LED controller module for device status indication
- * using the Particle Boron's built-in RGB LED with LEDStatus API.
+ * using the Particle B-Series SoM external RGB LED with RGB.control()/RGB.color() API.
  *
  * Implementation Notes:
  * - Uses Particle LEDStatus objects for pattern management

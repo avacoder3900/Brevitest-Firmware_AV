@@ -4,7 +4,7 @@
  * @author Agent MU - Supabase Firmware Rewrite Project
  * @date January 2026
  *
- * This module manages the built-in RGB LED on the Particle Boron for status
+ * This module manages the external RGB LED on the Particle B-Series SoM for status
  * indication. It provides state-based indicators, user prompt patterns, and
  * a priority system for display management.
  *

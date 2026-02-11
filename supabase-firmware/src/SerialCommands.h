@@ -40,13 +40,8 @@
 //==============================================================================
 // FIRMWARE VERSION INFO
 //==============================================================================
-// Note: FIRMWARE_VERSION and DATA_FORMAT_VERSION are defined in DataTypes.h
-
-/** @brief Firmware version string */
-#define FIRMWARE_VERSION_STRING "1.0.0"
-
-/** @brief Firmware version code (for cloud reporting) */
-#define FIRMWARE_VERSION_CODE 100
+// FIRMWARE_VERSION and DATA_FORMAT_VERSION are defined ONLY in DataTypes.h
+// FIRMWARE_VERSION_CODE and FIRMWARE_VERSION_STRING are defined in main.ino
 
 /** @brief Build date (auto-generated) */
 #define FIRMWARE_BUILD_DATE __DATE__

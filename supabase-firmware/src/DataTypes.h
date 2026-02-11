@@ -6,14 +6,19 @@
  *          persistent EEPROM data. All structures are byte-packed for binary
  *          compatibility with legacy firmware.
  *
+ * Platform: Particle B-Series SoM (NRF52840) on Acuity GEN2 Main Board R5
+ *
  * @note Structure sizes are critical for binary compatibility:
  *       - BrevitestSpectrophotometerReading: 32 bytes
  *       - BrevitestTestRecord: 9668 bytes
  *
- * @version 1.0
- * @date 2026-01-29
+ * @note FIRMWARE_VERSION is defined ONLY here. Do not define it elsewhere.
+ *
+ * @version 2.0
+ * @date 2026-02-11
  *
  * User Stories Implemented:
+ *   - ALPHA-001: Single firmware version source of truth
  *   - DATA-001: BrevitestTestRecord structure (9668 bytes)
  *   - DATA-002: BrevitestSpectrophotometerReading structure (32 bytes)
  *   - DATA-003: BrevitestAssay structure with BCODE buffer
@@ -32,11 +37,11 @@
 // FIRMWARE VERSION AND FORMAT CONSTANTS
 //==============================================================================
 
-/** @brief Current firmware version number */
-#define FIRMWARE_VERSION 56
+/** @brief Current firmware version number (SINGLE SOURCE OF TRUTH - do not redefine) */
+#define FIRMWARE_VERSION 200
 
 /** @brief Data format version for binary compatibility */
-#define DATA_FORMAT_VERSION 39
+#define DATA_FORMAT_VERSION 40
 
 /** @brief Single character code identifying test data format */
 #define TEST_DATA_FORMAT_CODE 'J'

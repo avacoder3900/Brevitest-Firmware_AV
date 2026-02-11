@@ -525,11 +525,11 @@ private:
     bool initMux();
 
     /**
-     * @brief Convert channel character to mux value
+     * @brief Convert channel character to PCA9536 power switch value
      * @param channel Channel character ('A', 'B', 'C')
-     * @return Mux register value, or 0 for invalid channel
+     * @return Power register value, or 0 for invalid channel
      */
-    uint8_t channelToMuxValue(char channel);
+    uint8_t channelToPowerValue(char channel);
 
     /**
      * @brief Convert channel index to character

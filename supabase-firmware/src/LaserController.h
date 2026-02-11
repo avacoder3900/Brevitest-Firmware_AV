@@ -15,7 +15,7 @@
  * - Safety interlock with cartridge detection
  * - Maximum continuous on-time limit
  *
- * Hardware Platform: Particle Boron (NRF52840)
+ * Hardware Platform: Particle B-Series SoM (NRF52840)
  *
  * User Stories Implemented:
  *   - LAS-001: LaserController class with init()

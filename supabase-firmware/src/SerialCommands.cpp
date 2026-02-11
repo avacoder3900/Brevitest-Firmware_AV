@@ -2017,8 +2017,7 @@ const char* SerialCommands::getCategoryName(CommandCategory category) {
 
 void SerialCommands::printFirmwareInfo() {
     serialParser.respond("================================");
-    serialParser.respond("Brevitest Firmware v%s", FIRMWARE_VERSION_STRING);
-    serialParser.respond("Version Code: %d", FIRMWARE_VERSION_CODE);
+    serialParser.respond("Brevitest Firmware v%d", FIRMWARE_VERSION);
     serialParser.respond("Data Format: %d", DATA_FORMAT_VERSION);
     serialParser.respond("Build: %s", FIRMWARE_BUILD_DATE);
     serialParser.respond("Device: %s", System.deviceID().c_str());

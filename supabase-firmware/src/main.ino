@@ -1,13 +1,13 @@
 /**
  * @file main.ino
  * @brief Main entry point for Brevitest Supabase Firmware
- * @version 57
- * @date January 2026
+ * @version 200
+ * @date February 2026
  *
- * This firmware controls the Brevitest diagnostic device with Supabase cloud
- * backend integration, replacing the legacy Particle/CouchDB architecture.
+ * This firmware controls the Brevitest Acuity GEN2 diagnostic device with
+ * Supabase cloud backend integration, replacing the legacy Particle/CouchDB architecture.
  *
- * Target Platform: Particle Boron (NRF52840)
+ * Target Platform: Particle B-Series SoM (NRF52840) on Acuity GEN2 Main Board R5
  * DeviceOS: 6.3.3
  */
 
@@ -35,11 +35,11 @@ SYSTEM_THREAD(ENABLED);
 #include "BCODEInterpreter.h"
 
 //==============================================================================
-// FIRMWARE VERSION
+// FIRMWARE VERSION (references DataTypes.h FIRMWARE_VERSION = 200)
 //==============================================================================
 
-#define FIRMWARE_VERSION_CODE 57
-#define FIRMWARE_VERSION_STRING "57.0.0-supabase"
+#define FIRMWARE_VERSION_CODE FIRMWARE_VERSION
+#define FIRMWARE_VERSION_STRING "200.0.0-supabase"
 
 //==============================================================================
 // LEGACY-COMPATIBLE CONSTANTS
@@ -661,38 +661,68 @@ void handleCartridgeRemoved() {
 // CLOUD OPERATIONS
 //==============================================================================
 
+// Async callback for cartridge validation
+void onValidationCallback(const ValidateCartridgeResponse& response, void* context);
+// Async callback for assay loading
+void onAssayLoadCallback(const LoadAssayResponse& response, void* context);
+// Async callback for test upload
+void onUploadCallback(const UploadTestResponse& response, void* context);
+
 void startCartridgeValidation() {
     Log.info("Starting cartridge validation for: %s", currentCartridgeId);
 
-    // TODO: Implement async validation with SupabaseClient
-    // For now, simulate successful validation
+    deviceState.startCloudOperation();
 
-    // In production:
-    // cloudClient.validateCartridge(currentCartridgeId, onValidationComplete);
-
-    // Simulated success - load assay and start test
-    delay(1000);
-    onValidationComplete(true, "ASSAY001");
+    // Async validation via SupabaseClient - returns immediately, callback fires on completion
+    if (!cloudClient.validateCartridgeAsync(currentCartridgeId, onValidationCallback, nullptr)) {
+        Log.error("Failed to initiate cartridge validation");
+        deviceState.endCloudOperation();
+        deviceState.setMode(DeviceMode::IDLE);
+        BuzzerController::playErrorMelody();
+    }
 }
 
-void onValidationComplete(bool success, const char* assayId) {
-    if (!success) {
-        Log.error("Cartridge validation failed");
+void onValidationCallback(const ValidateCartridgeResponse& response, void* context) {
+    deviceState.endCloudOperation();
+
+    if (!response.isSuccess() || !response.isValid) {
+        Log.error("Cartridge validation failed: %s", response.errorMessage);
         deviceState.setMode(DeviceMode::IDLE);
         BuzzerController::playErrorMelody();
         return;
     }
 
-    Log.info("Cartridge validated, assay: %s", assayId);
+    Log.info("Cartridge validated, assay: %s", response.assayId);
 
-    // Load assay (in production, download from cloud)
-    strcpy(currentAssay.id, assayId);
+    // Load assay from cloud (async)
+    deviceState.startCloudOperation();
+    if (!cloudClient.loadAssayAsync(response.assayId, onAssayLoadCallback, nullptr)) {
+        Log.error("Failed to initiate assay load");
+        deviceState.endCloudOperation();
+        deviceState.setMode(DeviceMode::IDLE);
+        BuzzerController::playErrorMelody();
+    }
+}
 
-    // Example BCODE for testing
-    const char* testBcode = "0:|10:7,999,49|2:7860,300|11:5|1:5000|14:10|2:-7860,300|99:";
-    strcpy(currentAssay.BCODE, testBcode);
-    currentAssay.BCODE_length = strlen(testBcode);
-    currentAssay.duration = 60;
+void onAssayLoadCallback(const LoadAssayResponse& response, void* context) {
+    deviceState.endCloudOperation();
+
+    if (!response.isSuccess()) {
+        Log.error("Assay load failed: %s", response.errorMessage);
+        deviceState.setMode(DeviceMode::IDLE);
+        BuzzerController::playErrorMelody();
+        return;
+    }
+
+    Log.info("Assay loaded: %s, BCODE length: %u", response.assayId, response.bcodeLength);
+
+    // Populate assay structure
+    strncpy(currentAssay.id, response.assayId, ASSAY_UUID_LENGTH);
+    currentAssay.id[ASSAY_UUID_LENGTH] = '\0';
+    currentAssay.duration = response.duration;
+    currentAssay.BCODE_length = response.bcodeLength;
+    strncpy(currentAssay.BCODE, response.bcode, BCODE_CAPACITY - 1);
+    currentAssay.BCODE[BCODE_CAPACITY - 1] = '\0';
 
     // Start test
     if (testRunner.startTest(&currentAssay, currentCartridgeId)) {
@@ -711,22 +741,36 @@ void startResultUpload() {
     Log.info("Uploading test record: %u readings, %u sec duration",
              record->number_of_readings, record->duration);
 
-    // TODO: Implement async upload with SupabaseClient
-    // cloudClient.uploadTest(record, onUploadComplete);
+    deviceState.startCloudOperation();
 
-    // Simulated success
-    delay(2000);
-    onUploadComplete(true);
+    // Async upload via SupabaseClient - returns immediately
+    if (!cloudClient.uploadTestAsync(record, onUploadCallback, nullptr)) {
+        Log.error("Failed to initiate test upload");
+        deviceState.endCloudOperation();
+
+        // Cache for offline retry
+        storageManager.cacheTestData(record);
+        Log.info("Test record cached for later upload");
+
+        BuzzerController::startPeriodicAlert(AlertType::GENERAL);
+        deviceState.setMode(DeviceMode::IDLE);
+    }
 }
 
-void onUploadComplete(bool success) {
-    if (success) {
+void onUploadCallback(const UploadTestResponse& response, void* context) {
+    deviceState.endCloudOperation();
+
+    if (response.isSuccess() && response.acknowledged) {
         Log.info("Test results uploaded successfully");
         BuzzerController::playSuccessMelody();
     } else {
-        Log.error("Test upload failed");
+        Log.error("Test upload failed: %s", response.errorMessage);
         BuzzerController::playErrorMelody();
-        // TODO: Cache for retry
+
+        // Cache for offline retry
+        BrevitestTestRecord* record = testRunner.getTestRecord();
+        storageManager.cacheTestData(record);
+        Log.info("Test record cached for later upload");
     }
 
     // Alert user to remove cartridge

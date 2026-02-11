@@ -7,7 +7,7 @@
  * This module provides high-level stepper motor control for the Brevitest linear stage.
  * It handles position tracking, homing, absolute/relative movements, and oscillation modes.
  *
- * Hardware: A4988 stepper driver with 8 microsteps per full step
+ * Hardware: A5985GETTR-T dual full bridge, MS1/MS2/MS3 tied HIGH (1/8 microstep)
  * Resolution: 25 microns per 1/8 step
  *
  * Features:

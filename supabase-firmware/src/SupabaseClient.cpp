@@ -722,7 +722,7 @@ int SupabaseClient::sendPost(const char* url, const char* body,
         }
 
         if (!client.available()) {
-            delay(10);
+            Particle.process();  // Yield to system thread (non-blocking)
         }
     }
     responseBuffer[responseLen] = '\0';
@@ -804,7 +804,12 @@ int SupabaseClient::executeWithRetry(const char* url, const char* body,
     for (uint8_t attempt = 0; attempt <= _maxRetries; attempt++) {
         if (attempt > 0) {
             _log.warn("Retry attempt %d/%d", attempt, _maxRetries);
-            delay(_retryDelayMs * attempt);  // Exponential backoff
+            // Non-blocking backoff: yield to system while waiting
+            uint32_t backoffMs = _retryDelayMs * attempt;
+            uint32_t backoffStart = millis();
+            while ((millis() - backoffStart) < backoffMs) {
+                Particle.process();  // Keep system alive during backoff
+            }
         }
 
         httpStatus = sendPost(url, body, responseBuffer, responseSize);

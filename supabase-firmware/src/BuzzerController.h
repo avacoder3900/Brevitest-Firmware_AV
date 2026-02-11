@@ -105,7 +105,7 @@ typedef void (*PatternCompleteCallback)();
  *
  * Thread Safety:
  *   Functions use volatile state variables for timer callback safety.
- *   All state changes are atomic on the single-core Particle Boron.
+ *   All state changes are atomic on the single-core Particle B-Series SoM.
  */
 namespace BuzzerController {
 

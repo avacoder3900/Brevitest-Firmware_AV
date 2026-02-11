@@ -179,8 +179,8 @@ bool Spectrophotometer::setGain(uint8_t again) {
 //==============================================================================
 
 bool Spectrophotometer::initMux() {
-    // Use HAL function to initialize the mux
-    return HAL::initSpectroMux();
+    // Use HAL function to initialize the sensor power switch
+    return HAL::initSpectroPower();
 }
 
 bool Spectrophotometer::selectChannel(char channel) {
@@ -216,22 +216,22 @@ bool Spectrophotometer::allChannelsOff() {
 }
 
 bool Spectrophotometer::verifyChannelSelection(char channel) {
-    // Read back from PCA9536 output register
+    // Read back from PCA9536 output register to verify sensor power state
     uint8_t readback = 0;
-    if (!HAL::i2cReadRegister(I2C_ADDR_SPECTRO_MUX, SPECTRO_MUX_OUTPUT_CMD, &readback)) {
+    if (!HAL::i2cReadRegister(I2C_ADDR_SPECTRO_POWER, SPECTRO_PWR_OUTPUT_CMD, &readback)) {
         return false;
     }
 
-    uint8_t expected = channelToMuxValue(channel);
+    uint8_t expected = channelToPowerValue(channel);
     return (readback == expected);
 }
 
-uint8_t Spectrophotometer::channelToMuxValue(char channel) {
+uint8_t Spectrophotometer::channelToPowerValue(char channel) {
     switch (channel) {
-        case SPECTRO_CHANNEL_A: return SPECTRO_MUX_CHANNEL_A;
-        case SPECTRO_CHANNEL_B: return SPECTRO_MUX_CHANNEL_B;
-        case SPECTRO_CHANNEL_C: return SPECTRO_MUX_CHANNEL_C;
-        default:                return SPECTRO_MUX_ALL_OFF;
+        case SPECTRO_CHANNEL_A: return SPECTRO_PWR_SENSOR_A;
+        case SPECTRO_CHANNEL_B: return SPECTRO_PWR_SENSOR_B;
+        case SPECTRO_CHANNEL_C: return SPECTRO_PWR_SENSOR_C;
+        default:                return SPECTRO_PWR_ALL_OFF;
     }
 }
 

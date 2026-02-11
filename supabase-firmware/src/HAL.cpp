@@ -4,7 +4,7 @@
  * @author Agent BETA - Supabase Firmware Rewrite Project
  * @date January 2026
  *
- * Implementation of all HAL functions for Particle Boron (NRF52840).
+ * Implementation of all HAL functions for Particle B-Series SoM (NRF52840).
  */
 
 #include "HAL.h"
@@ -75,8 +75,8 @@ namespace HAL {
         initAnalogPin(PIN_HEATER_THERMISTOR, INPUT);
 
         // === DIGITAL PINS ===
-        // Cartridge detection (input with pull-up, active LOW)
-        initDigitalPin(PIN_CARTRIDGE_DETECT, INPUT_PULLUP);
+        // Cartridge detection (external 10k pull-up on board, active LOW)
+        initDigitalPin(PIN_CARTRIDGE_DETECT, INPUT);
 
         // Heater control (output, start OFF for safety)
         initDigitalPin(PIN_HEATER, OUTPUT, LOW);
@@ -105,8 +105,8 @@ namespace HAL {
             // Continue anyway - device may work without I2C devices
         }
 
-        // Initialize spectrophotometer mux
-        initSpectroMux();
+        // Initialize spectrophotometer sensor power switch (PCA9536)
+        initSpectroPower();
 
         // Reset state variables
         _motorAwake = false;
@@ -313,7 +313,7 @@ namespace HAL {
     }
 
     void motorPulse() {
-        // A4988 requires minimum 1us pulse width
+        // A5985 requires minimum 1us pulse width
         digitalWrite(PIN_MOTOR_STEP, HIGH);
         delayMicroseconds(2);
         digitalWrite(PIN_MOTOR_STEP, LOW);
@@ -443,49 +443,50 @@ namespace HAL {
     }
 
     // ========================================================================
-    // SPECTROPHOTOMETER MUX CONTROL
+    // SPECTROPHOTOMETER SENSOR POWER CONTROL (PCA9536DR)
     // ========================================================================
 
-    bool initSpectroMux() {
+    bool initSpectroPower() {
         // Configure PCA9536 for output mode on all pins
-        if (!i2cWriteRegister(I2C_ADDR_SPECTRO_MUX, SPECTRO_MUX_CONFIG_CMD, SPECTRO_MUX_SET_OUTPUTS)) {
-            Log.warn("HAL: Failed to configure spectro mux");
+        if (!i2cWriteRegister(I2C_ADDR_SPECTRO_POWER, SPECTRO_PWR_CONFIG_CMD, SPECTRO_PWR_SET_OUTPUTS)) {
+            Log.warn("HAL: Failed to configure spectro power switch");
             return false;
         }
 
-        // Turn off all spectrophotometers initially
+        // Power off all sensors initially
         return spectroAllOff();
     }
 
     bool selectSpectroChannel(char channel) {
+        // Power on one AS7341 sensor at a time via PCA9536 (shared I2C address 0x39)
         uint8_t value;
         switch (channel) {
             case 'A':
             case 'a':
-                value = SPECTRO_MUX_CHANNEL_A;
+                value = SPECTRO_PWR_SENSOR_A;
                 break;
             case 'B':
             case 'b':
-                value = SPECTRO_MUX_CHANNEL_B;
+                value = SPECTRO_PWR_SENSOR_B;
                 break;
             case 'C':
             case 'c':
-                value = SPECTRO_MUX_CHANNEL_C;
+                value = SPECTRO_PWR_SENSOR_C;
                 break;
             case 0:
             case '0':
-                value = SPECTRO_MUX_ALL_OFF;
+                value = SPECTRO_PWR_ALL_OFF;
                 break;
             default:
                 Log.warn("HAL: Invalid spectro channel '%c'", channel);
                 return false;
         }
 
-        return i2cWriteRegister(I2C_ADDR_SPECTRO_MUX, SPECTRO_MUX_OUTPUT_CMD, value);
+        return i2cWriteRegister(I2C_ADDR_SPECTRO_POWER, SPECTRO_PWR_OUTPUT_CMD, value);
     }
 
     bool spectroAllOff() {
-        return i2cWriteRegister(I2C_ADDR_SPECTRO_MUX, SPECTRO_MUX_OUTPUT_CMD, SPECTRO_MUX_ALL_OFF);
+        return i2cWriteRegister(I2C_ADDR_SPECTRO_POWER, SPECTRO_PWR_OUTPUT_CMD, SPECTRO_PWR_ALL_OFF);
     }
 
     // ========================================================================

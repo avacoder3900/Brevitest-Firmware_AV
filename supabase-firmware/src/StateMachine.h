@@ -15,10 +15,11 @@
  *
  * @note All state access should go through this module's API
  *
- * @version 1.0
- * @date 2026-01-29
+ * @version 2.0
+ * @date 2026-02-11
  *
  * User Stories Implemented:
+ *   - ALPHA-002: Validated state transitions and observer pattern
  *   - SM-001: DeviceState class with state members
  *   - SM-002: State transition validation matrix
  *   - SM-003: Transition history tracking (50-entry circular buffer)
@@ -105,7 +106,7 @@ typedef void (*StateChangeCallback)(DeviceMode from, DeviceMode to);
  *
  * Thread Safety:
  *   State access is protected via volatile members and atomic-like operations
- *   for the single-core Particle Boron. For true multi-threaded environments,
+ *   for the single-core Particle B-Series SoM. For true multi-threaded environments,
  *   additional mutex protection would be needed.
  */
 class StateMachine {

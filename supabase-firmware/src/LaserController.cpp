@@ -7,7 +7,7 @@
  * Implementation of the LaserController class for managing three laser
  * diode channels with safety features and pulsed operation mode.
  *
- * Hardware Platform: Particle Boron (NRF52840)
+ * Hardware Platform: Particle B-Series SoM (NRF52840)
  */
 
 #include "LaserController.h"

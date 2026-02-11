@@ -4,11 +4,14 @@
  * @details Provides serialization, deserialization, checksum calculation,
  *          and Base64 encoding/decoding functions for firmware data structures.
  *
+ * Platform: Particle B-Series SoM (NRF52840) on Acuity GEN2 Main Board R5
+ *
  * User Stories Implemented:
+ *   - ALPHA-001: Single firmware version source of truth
  *   - DATA-006: Serialization utilities implementation
  *
- * @version 1.0
- * @date 2026-01-29
+ * @version 2.0
+ * @date 2026-02-11
  */
 
 #include "DataTypes.h"
