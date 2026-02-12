@@ -9,3 +9,8 @@ firmware/src/brevitest-firmware.cpp
 msom_firmware*.*
 firmware/nul
 nul
+
+# Private keys and certificates
+*.pem
+*.der
+*.key
