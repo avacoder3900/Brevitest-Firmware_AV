@@ -331,12 +331,16 @@ BCODEInstruction BCODEInterpreter::parseInstruction() {
     instruction.opcode = static_cast<BCODEOpcode>(cmd);
     instruction.param_count = 0;
 
+    // Skip past attribute delimiter between opcode and parameters
+    if (index < _bcode_length && _bcode[index] == ATTR_DELIM) {
+        index++;
+    }
+
     // Parse parameters (up to 4)
     while (instruction.param_count < 4 &&
            index < _bcode_length &&
            _bcode[index] != ITEM_DELIM &&
-           _bcode[index] != '\0' &&
-           _bcode[index] != ATTR_DELIM) {
+           _bcode[index] != '\0') {
 
         int32_t param = 0;
         index = getToken(index, &param);
