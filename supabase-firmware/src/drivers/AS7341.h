@@ -353,29 +353,6 @@ public:
      */
     void setGain(Gain gain);
 
-    /**
-     * @brief Set wait time between measurements
-     * @param value WTIME value
-     */
-    void setWtime(uint8_t value);
-
-    /**
-     * @brief Get current ATIME value
-     * @return ATIME register value
-     */
-    uint8_t getAtime();
-
-    /**
-     * @brief Get current ASTEP value
-     * @return ASTEP register value
-     */
-    uint16_t getAstep();
-
-    /**
-     * @brief Get current gain setting
-     * @return AGAIN register value
-     */
-    uint8_t getGain();
 
     //--------------------------------------------------------------------------
     // Measurement Control
@@ -412,11 +389,6 @@ public:
      */
     FullSpectralData readAllChannels(uint16_t timeoutMs = 1000);
 
-    /**
-     * @brief Read flicker detection register
-     * @return Flicker detection data (0=unknown, 100=100Hz, 120=120Hz)
-     */
-    uint8_t readFlickerData();
 
     //--------------------------------------------------------------------------
     // Enable/Disable Functions
@@ -449,16 +421,6 @@ public:
      * @param current Current level (1-20 corresponds to 4mA-42mA in 2mA steps)
      */
     void setLedCurrent(uint8_t current);
-
-    //--------------------------------------------------------------------------
-    // GPIO Control
-    //--------------------------------------------------------------------------
-
-    /**
-     * @brief Set GPIO mode
-     * @param mode INPUT or OUTPUT
-     */
-    void setGpioMode(uint8_t mode);
 
     //--------------------------------------------------------------------------
     // Debug/Status
@@ -521,8 +483,6 @@ private:
     //--------------------------------------------------------------------------
 
     uint16_t getChannelData(uint8_t channel);
-    float getWtime();
-    float getIntegrationTime();
 
     void writeReg(uint8_t reg, uint8_t data);
     void writeReg(uint8_t reg, void* pBuf, size_t size);

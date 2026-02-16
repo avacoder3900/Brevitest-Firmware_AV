@@ -187,19 +187,6 @@ bool TestRunner::isReady() const {
     return _initialized && _state == TestRunnerState::IDLE;
 }
 
-String TestRunner::getStatus() const {
-    String status = "TestRunner: ";
-    status += testRunnerStateToString(_state);
-
-    if (_state == TestRunnerState::EXECUTING) {
-        status += " (";
-        status += String(getTestProgress());
-        status += "%)";
-    }
-
-    return status;
-}
-
 //==============================================================================
 // TEST CONTROL
 //==============================================================================
@@ -268,36 +255,12 @@ void TestRunner::stopTest() {
     // Save partial data
     _test_record.duration = (millis() - _test_start_time) / 1000;
 
-    // Set appropriate state
-    if (_cartridge_removed) {
-        _test_state = TestState::CANCELLED;
-        setState(TestRunnerState::CANCELLED);
-    } else {
-        _test_state = TestState::CANCELLED;
-        setState(TestRunnerState::CANCELLED);
-    }
-}
-
-TestState TestRunner::getTestState() const {
-    return _test_state;
+    _test_state = TestState::CANCELLED;
+    setState(TestRunnerState::CANCELLED);
 }
 
 TestRunnerState TestRunner::getState() const {
     return _state;
-}
-
-uint8_t TestRunner::getTestProgress() const {
-    if (_state != TestRunnerState::EXECUTING) {
-        if (_state == TestRunnerState::COMPLETED) return 100;
-        return 0;
-    }
-
-    // Calculate progress based on BCODE instruction pointer
-    uint16_t length = _interpreter.getBCODELength();
-    if (length == 0) return 0;
-
-    uint16_t position = _interpreter.getInstructionPointer();
-    return static_cast<uint8_t>((position * 100) / length);
 }
 
 uint32_t TestRunner::getElapsedTime() const {
@@ -319,12 +282,6 @@ const BrevitestTestRecord* TestRunner::getTestRecord() const {
 
 uint16_t TestRunner::getReadingCount() const {
     return _test_record.number_of_readings;
-}
-
-bool TestRunner::isRecordComplete() const {
-    return _record_finalized &&
-           (_state == TestRunnerState::COMPLETED ||
-            _state == TestRunnerState::CANCELLED);
 }
 
 bool TestRunner::finalizeRecord() {
@@ -372,12 +329,6 @@ bool TestRunner::addReading(const BrevitestSpectrophotometerReading* reading) {
     return true;
 }
 
-void TestRunner::getSpectroSettings(uint8_t* gain, uint16_t* astep, uint8_t* atime) const {
-    if (gain) *gain = _spectro_gain;
-    if (astep) *astep = _spectro_astep;
-    if (atime) *atime = _spectro_atime;
-}
-
 void TestRunner::setSpectroSettings(uint8_t gain, uint16_t astep, uint8_t atime) {
     _spectro_gain = gain;
     _spectro_astep = astep;
@@ -421,10 +372,6 @@ void TestRunner::onCartridgeRemoved() {
     // Update state
     _test_state = TestState::CANCELLED;
     setState(TestRunnerState::CANCELLED);
-}
-
-bool TestRunner::wasCartridgeRemoved() const {
-    return _cartridge_removed;
 }
 
 bool TestRunner::checkCartridge() {

@@ -204,12 +204,6 @@ public:
     const char* getCurrentModeString() const;
 
     /**
-     * @brief Get the timestamp of the last state change
-     * @return Unix timestamp of last transition
-     */
-    uint32_t getLastTransitionTime() const;
-
-    /**
      * @brief Get current state as JSON-formatted string
      * @param buffer Output buffer for JSON string
      * @param bufferSize Size of output buffer
@@ -432,23 +426,6 @@ public:
     const StateTransitionEntry* getTransition(int index) const;
 
     /**
-     * @brief Get transition history as array
-     * @param entries Output array for transition entries
-     * @param maxEntries Maximum entries to return
-     * @return Number of entries copied
-     */
-    int getTransitionHistory(StateTransitionEntry* entries, int maxEntries) const;
-
-    /**
-     * @brief Get transitions for a specific cartridge
-     * @param cartridge_id Cartridge UUID to search for
-     * @param entries Output array for matching entries
-     * @param maxEntries Maximum entries to return
-     * @return Number of matching entries found
-     */
-    int getHistoryByCartridge(const char* cartridge_id, StateTransitionEntry* entries, int maxEntries) const;
-
-    /**
      * @brief Clear all transition history
      */
     void clearHistory();
@@ -472,13 +449,6 @@ public:
      * @return true if callback registered successfully
      */
     bool registerStateChangeCallback(StateChangeCallback callback);
-
-    /**
-     * @brief Unregister a state change callback
-     * @param callback Function to remove
-     * @return true if callback was found and removed
-     */
-    bool unregisterStateChangeCallback(StateChangeCallback callback);
 
 private:
     //==========================================================================

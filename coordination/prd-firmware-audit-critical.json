@@ -1,0 +1,134 @@
+{
+  "featureName": "Firmware Audit - Critical & High Priority Fixes",
+  "branchName": "postgres-firmware",
+  "description": "Critical safety bugs, functional gaps, and legacy parity fixes identified during comprehensive firmware audit. These must be resolved before deployment.",
+  "lastUpdated": "2026-02-12",
+  "affectedFiles": [
+    "supabase-firmware/src/main.ino",
+    "supabase-firmware/src/HAL.cpp",
+    "supabase-firmware/src/drivers/AS7341.cpp",
+    "supabase-firmware/src/StorageManager.cpp",
+    "supabase-firmware/src/HardwareConfig.h",
+    "supabase-firmware/src/TestRunner.cpp",
+    "supabase-firmware/src/Spectrophotometer.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino",
+    "legacy-firmware/firmware/src/brevitest-firmware.h",
+    "legacy-firmware/firmware/src/DFRobot_AS7341.cpp",
+    "legacy-firmware/firmware/src/DFRobot_AS7341.h"
+  ],
+  "userStories": [
+    {
+      "id": "AUD-001",
+      "title": "Add LaserController::update() call to hardware_loop",
+      "description": "LaserController::update() contains the cartridge-removal safety interlock and maximum continuous on-time protection, but is NEVER called from the main loop or hardware_loop(). The safety interlock is completely dead code.",
+      "acceptanceCriteria": [
+        "laserController.update() is called every iteration in hardware_loop()",
+        "Lasers are automatically disabled when cartridge is removed during laser operation",
+        "Lasers are automatically disabled after LASER_MAX_CONTINUOUS_ON_MS (30s)",
+        "No change to laser behavior during normal spectrophotometer readings"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino:1419-1457 - Legacy turns lasers off immediately after each reading; no persistent safety loop needed. New firmware uses persistent enable/disable model requiring periodic safety checks.",
+      "priority": 1,
+      "notes": "Single line addition to hardware_loop(). Legacy didn't need this because lasers were only on during blocking delayMicroseconds() calls."
+    },
+    {
+      "id": "AUD-002",
+      "title": "Implement barcode type routing for magnetometer and stress test",
+      "description": "All scanned barcodes are currently treated as cartridge UUIDs. Legacy firmware routes barcodes by type: BARCODE_TYPE_CARTRIDGE (1), BARCODE_TYPE_MAGNETOMETER (2), BARCODE_TYPE_STRESS_TEST (4). Missing routing means magnetometer validation and stress test cartridges cannot be used.",
+      "acceptanceCriteria": [
+        "Barcode type is determined from scanned UUID format",
+        "BARCODE_TYPE_CARTRIDGE routes to VALIDATING_CARTRIDGE state",
+        "BARCODE_TYPE_MAGNETOMETER routes to VALIDATING_MAGNETOMETER state",
+        "BARCODE_TYPE_STRESS_TEST routes to STRESS_TESTING state with cycle count from barcode",
+        "Unknown barcode types set CartridgeState::INVALID and error"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino:5071-5221 - barcode_scan_loop() switch on barcode_type",
+      "priority": 1,
+      "notes": "Requires understanding barcode UUID format to determine type. Legacy uses get_barcode_type() function."
+    },
+    {
+      "id": "AUD-003",
+      "title": "Fix motor wake delay to match legacy 10ms",
+      "description": "HAL::motorWake() uses delayMicroseconds(1000) = 1ms. Legacy uses delayMicroseconds(10000) = 10ms. The A5985GETTR-T datasheet specifies wake time from sleep mode. Insufficient delay may cause missed initial steps.",
+      "acceptanceCriteria": [
+        "HAL::motorWake() uses delayMicroseconds(10000) matching legacy",
+        "Motor reliably executes first steps after wake from sleep"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HAL.cpp"],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino - wake_motor() uses delayMicroseconds(10000)",
+      "priority": 1,
+      "notes": "Single constant change. A5985 datasheet wake time is typ 1ms but legacy uses 10ms for margin."
+    },
+    {
+      "id": "AUD-004",
+      "title": "Fix AS7341 clearInterrupt implementation",
+      "description": "clearInterrupt() in the new firmware only reads STATUS_1 register but doesn't write-1-to-clear the interrupt bits. Per AS7341 datasheet, interrupt status bits are cleared by writing 1 to the respective bit positions. Note: legacy firmware also has this bug (declared but never implemented), but we should fix it for correctness.",
+      "acceptanceCriteria": [
+        "clearInterrupt() reads STATUS_1 register then writes back the value to clear interrupt flags",
+        "Spectrophotometer readings complete without stale interrupt flags"
+      ],
+      "affectedFiles": ["supabase-firmware/src/drivers/AS7341.cpp"],
+      "legacyReference": "legacy-firmware/firmware/src/DFRobot_AS7341.h:296 - clearInterrupt() declared but NOT implemented in legacy .cpp",
+      "priority": 2,
+      "notes": "Legacy has same bug. Fix for correctness. AS7341 datasheet section 10.2.14 STATUS register."
+    },
+    {
+      "id": "AUD-005",
+      "title": "Fix StorageManager checksum comparison bug",
+      "description": "StorageManager::validateChecksum() compares uint32_t < 0, which is always false for unsigned types. This means checksum validation silently passes for corrupt data.",
+      "acceptanceCriteria": [
+        "Checksum comparison uses correct signed/unsigned logic",
+        "Invalid checksums are properly detected and reported"
+      ],
+      "affectedFiles": ["supabase-firmware/src/StorageManager.cpp"],
+      "legacyReference": "N/A - new firmware feature",
+      "priority": 2,
+      "notes": "Bug is in the comparison logic. Need to read the specific code to determine correct fix."
+    },
+    {
+      "id": "AUD-006",
+      "title": "Remove duplicate defines in main.ino that shadow HardwareConfig.h",
+      "description": "main.ino lines 49-82 redefine 14 constants already defined in HardwareConfig.h. These duplicates create maintenance risk - if HardwareConfig.h values are updated, main.ino shadows them silently.",
+      "acceptanceCriteria": [
+        "All duplicate #defines in main.ino that exist in HardwareConfig.h are removed",
+        "main.ino uses HardwareConfig.h values directly",
+        "Firmware compiles without warnings"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino", "supabase-firmware/src/HardwareConfig.h"],
+      "legacyReference": "N/A - code hygiene",
+      "priority": 2,
+      "notes": "Must verify each constant exists in HardwareConfig.h before removing from main.ino"
+    },
+    {
+      "id": "AUD-007",
+      "title": "Fix TestRunner stopTest identical if/else branches",
+      "description": "TestRunner::stopTest() has identical code in both if and else branches of a conditional. One branch likely has wrong behavior.",
+      "acceptanceCriteria": [
+        "stopTest() if/else branches have distinct, correct behavior",
+        "Test cancellation and completion are handled differently as appropriate"
+      ],
+      "affectedFiles": ["supabase-firmware/src/TestRunner.cpp"],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino - test cancellation handling",
+      "priority": 2,
+      "notes": "Need to read the specific code to determine correct fix for each branch."
+    },
+    {
+      "id": "AUD-008",
+      "title": "Implement upload timeout caching",
+      "description": "main.ino line 502 has TODO for caching test results when upload times out. Currently the test data is lost on upload timeout.",
+      "acceptanceCriteria": [
+        "When upload times out, test record is cached via storageManager.cacheTestData()",
+        "User is notified via buzzer alert",
+        "Device transitions to IDLE after caching"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "legacyReference": "legacy-firmware/firmware/src/brevitest-firmware.ino - upload failure caching",
+      "priority": 2,
+      "notes": "StorageManager::cacheTestData() already exists and is used in the upload callback. Just need to add it to the timeout path."
+    }
+  ]
+}

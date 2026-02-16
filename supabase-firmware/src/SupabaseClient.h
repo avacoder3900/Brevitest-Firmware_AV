@@ -40,38 +40,6 @@
 // ============================================================================
 
 /**
- * @brief Callback for cartridge validation result
- * @param response Validation response from server
- * @param userContext User-provided context pointer
- */
-typedef void (*ValidateCartridgeCallback)(const ValidateCartridgeResponse& response,
-                                          void* userContext);
-
-/**
- * @brief Callback for assay load result
- * @param response Assay data response from server
- * @param userContext User-provided context pointer
- */
-typedef void (*LoadAssayCallback)(const LoadAssayResponse& response,
-                                  void* userContext);
-
-/**
- * @brief Callback for test upload result
- * @param response Upload confirmation from server
- * @param userContext User-provided context pointer
- */
-typedef void (*UploadTestCallback)(const UploadTestResponse& response,
-                                   void* userContext);
-
-/**
- * @brief Callback for cartridge reset result
- * @param response Reset confirmation from server
- * @param userContext User-provided context pointer
- */
-typedef void (*ResetCartridgeCallback)(const ResetCartridgeResponse& response,
-                                       void* userContext);
-
-/**
  * @brief Callback for connection state changes
  * @param connected Current connection state
  * @param userContext User-provided context pointer

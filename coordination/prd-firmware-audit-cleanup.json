@@ -1,0 +1,172 @@
+{
+  "featureName": "Firmware Audit - Dead Code Cleanup",
+  "branchName": "postgres-firmware",
+  "description": "Removal of ~150 dead code items (~1,500+ lines) identified during comprehensive firmware audit. Organized by module for safe, incremental cleanup.",
+  "lastUpdated": "2026-02-12",
+  "affectedFiles": [
+    "supabase-firmware/src/main.ino",
+    "supabase-firmware/src/HardwareConfig.h",
+    "supabase-firmware/src/HAL.cpp",
+    "supabase-firmware/src/HAL.h",
+    "supabase-firmware/src/MotorController.h",
+    "supabase-firmware/src/MotorController.cpp",
+    "supabase-firmware/src/BuzzerController.h",
+    "supabase-firmware/src/BuzzerController.cpp",
+    "supabase-firmware/src/LEDController.h",
+    "supabase-firmware/src/LEDController.cpp",
+    "supabase-firmware/src/drivers/AS7341.h",
+    "supabase-firmware/src/drivers/AS7341.cpp",
+    "subabase-firmware/src/Spectrophotometer.h",
+    "supabase-firmware/src/Spectrophotometer.cpp",
+    "supabase-firmware/src/TestRunner.h",
+    "supabase-firmware/src/TestRunner.cpp",
+    "supabase-firmware/src/StateMachine.h",
+    "supabase-firmware/src/StateMachine.cpp",
+    "supabase-firmware/src/SerialCommands.cpp",
+    "supabase-firmware/src/SupabaseClient.h",
+    "supabase-firmware/src/SupabaseClient.cpp",
+    "supabase-firmware/src/StorageManager.h",
+    "supabase-firmware/src/StorageManager.cpp"
+  ],
+  "referenceFiles": [
+    "legacy-firmware/firmware/src/brevitest-firmware.ino"
+  ],
+  "userStories": [
+    {
+      "id": "CLN-001",
+      "title": "Remove dead code from main.ino",
+      "description": "Remove unused global variables and empty function stubs: cloud_magnet_validation[1024] buffer, handleCartridgeInserted()/handleCartridgeRemoved() empty stubs.",
+      "acceptanceCriteria": [
+        "cloud_magnet_validation[1024] removed if not referenced by Particle.variable",
+        "Empty handleCartridgeInserted/Removed stubs removed",
+        "No compiler warnings introduced",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/main.ino"],
+      "priority": 3,
+      "notes": "cloud_magnet_validation IS used by Particle.variable() on line 235 - check if this cloud variable is actually needed before removing."
+    },
+    {
+      "id": "CLN-002",
+      "title": "Remove unused constants from HardwareConfig.h",
+      "description": "Remove ~35 unused constants: LEGACY_HARDWARE_VERSION, LASER_PWM_*, LED_*, MOTOR_MOVE_DURATION_UNIT, STAGE_* positions, BARCODE_TYPE_* constants superseded by enum, ADC_*, I2C_*, THERMISTOR_SCALE, etc.",
+      "acceptanceCriteria": [
+        "Each constant verified unused via grep before removal",
+        "No compiler errors after removal",
+        "All remaining constants are actively referenced"
+      ],
+      "affectedFiles": ["supabase-firmware/src/HardwareConfig.h"],
+      "priority": 3,
+      "notes": "Must verify each constant is truly unused. Some may be referenced in SerialCommands.cpp."
+    },
+    {
+      "id": "CLN-003",
+      "title": "Remove dead functions from MotorController",
+      "description": "Remove 15 dead functions: moveToPositionAsync(), stepRelative(), async oscillation system (start/stop/update/isOscillating), position helpers (moveToHome/TestStart/OpticalRead/Magnetometer/ShippingBolt), reset(), micronsToSteps(), stepsToMicrons(), calculateStepDelayForIntegration().",
+      "acceptanceCriteria": [
+        "Each function verified uncalled via grep before removal",
+        "Declarations removed from .h file",
+        "Implementations removed from .cpp file",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/MotorController.h", "supabase-firmware/src/MotorController.cpp"],
+      "priority": 3,
+      "notes": "Some functions may be called from SerialCommands.cpp - verify all call sites."
+    },
+    {
+      "id": "CLN-004",
+      "title": "Remove dead functions from BuzzerController",
+      "description": "Remove 13 dead functions: 5 predefined alert wrappers, tone queue system, volume control (no-op). Volume _volumeLevel is set but never applied to hardware.",
+      "acceptanceCriteria": [
+        "Each function verified uncalled via grep before removal",
+        "Tone queue and volume infrastructure removed",
+        "playTone(), playErrorMelody(), playSuccessMelody(), startPeriodicAlert(), stopPeriodicAlert(), update(), init() preserved",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/BuzzerController.h", "supabase-firmware/src/BuzzerController.cpp"],
+      "priority": 3,
+      "notes": "Verify which functions are called from main.ino and SerialCommands.cpp before removal."
+    },
+    {
+      "id": "CLN-005",
+      "title": "Remove dead functions from AS7341 driver",
+      "description": "Remove 18 dead functions: interrupt configuration, flicker detection, GPIO control. These features are not used by the spectrophotometer module.",
+      "acceptanceCriteria": [
+        "Each function verified uncalled via grep before removal",
+        "Core measurement functions preserved: begin(), startMeasure(), readAllChannels(), setGain(), setIntegrationTime()",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/drivers/AS7341.h", "supabase-firmware/src/drivers/AS7341.cpp"],
+      "priority": 3,
+      "notes": "Be careful not to remove functions that are called internally by the measurement pipeline."
+    },
+    {
+      "id": "CLN-006",
+      "title": "Remove dead functions from Spectrophotometer",
+      "description": "Remove readingContinuous() (184 lines), continuous mode API (startContinuousMode, stopContinuousMode, processContinuousMode), setTestStartTime() (never called). ~250 lines removable.",
+      "acceptanceCriteria": [
+        "readingContinuous() and continuous mode API removed",
+        "setTestStartTime() removed",
+        "readChannel() and readAllChannels() preserved and functional",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/Spectrophotometer.h", "supabase-firmware/src/Spectrophotometer.cpp"],
+      "priority": 3,
+      "notes": "Verify no serial commands reference continuous mode before removing."
+    },
+    {
+      "id": "CLN-007",
+      "title": "Remove dead functions from LEDController",
+      "description": "Entire state/prompt/priority system (~350 lines) is bypassed - main.ino only uses init(), setPattern(), update(). Remove unused state management, prompt system, and priority queue.",
+      "acceptanceCriteria": [
+        "State/prompt/priority system removed",
+        "init(), setPattern(), update() preserved",
+        "LED behavior unchanged",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": ["supabase-firmware/src/LEDController.h", "supabase-firmware/src/LEDController.cpp"],
+      "priority": 3,
+      "notes": "Verify no serial commands use the state/prompt/priority API."
+    },
+    {
+      "id": "CLN-008",
+      "title": "Remove dead code from HAL, TestRunner, StateMachine, SerialCommands",
+      "description": "HAL: 6 unused functions (buzzForDuration, getHeaterOnDuration, readSpectroChannel, i2cDevicePresent, delayUs, getSpectroPin). TestRunner: bcodeDelayLoop() declared but never defined, _get_temp_callback/_get_stage_position_callback never invoked. StateMachine: onCartridgeInserted/Removed never called, isHeatingRequired trivial wrapper. SerialCommands: printCategoryHelp, getCategory, getCategoryName, CommandCategory enum, getSerialCommands, handleSetPulseParams/handleOutputReadings no-ops.",
+      "acceptanceCriteria": [
+        "Each function verified uncalled before removal",
+        "All removals from both .h and .cpp files",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": [
+        "supabase-firmware/src/HAL.h",
+        "supabase-firmware/src/HAL.cpp",
+        "supabase-firmware/src/TestRunner.h",
+        "supabase-firmware/src/TestRunner.cpp",
+        "supabase-firmware/src/StateMachine.h",
+        "supabase-firmware/src/StateMachine.cpp",
+        "supabase-firmware/src/SerialCommands.cpp"
+      ],
+      "priority": 3,
+      "notes": "Large story - may need to be split if too many files touched at once."
+    },
+    {
+      "id": "CLN-009",
+      "title": "Remove dead code from SupabaseClient and StorageManager",
+      "description": "SupabaseClient: conflicting callback typedefs with CloudProtocol.h, 4 fake async methods, unused SUPABASE_ROOT_CA (32 lines), HTTP timeout constants, CACHE_DIR. StorageManager: _assayBuffer[6000] should be local, unused BUFFER_DIR constant.",
+      "acceptanceCriteria": [
+        "Callback typedef conflicts resolved",
+        "Unused constants and certificates removed",
+        "_assayBuffer moved to local scope or removed if unused",
+        "Firmware compiles successfully"
+      ],
+      "affectedFiles": [
+        "supabase-firmware/src/SupabaseClient.h",
+        "supabase-firmware/src/SupabaseClient.cpp",
+        "supabase-firmware/src/StorageManager.h",
+        "supabase-firmware/src/StorageManager.cpp"
+      ],
+      "priority": 3,
+      "notes": "Be careful with callback typedefs - may need to consolidate rather than just delete."
+    }
+  ]
+}

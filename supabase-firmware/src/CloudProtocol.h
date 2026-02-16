@@ -353,26 +353,30 @@ struct CachedUpload {
 /**
  * @brief Callback for cartridge validation completion
  * @param response The validation response (check response.isSuccess())
+ * @param context User-provided context pointer
  */
-typedef void (*ValidateCartridgeCallback)(const ValidateCartridgeResponse& response);
+typedef void (*ValidateCartridgeCallback)(const ValidateCartridgeResponse& response, void* context);
 
 /**
  * @brief Callback for assay load completion
  * @param response The load assay response (check response.isSuccess())
+ * @param context User-provided context pointer
  */
-typedef void (*LoadAssayCallback)(const LoadAssayResponse& response);
+typedef void (*LoadAssayCallback)(const LoadAssayResponse& response, void* context);
 
 /**
  * @brief Callback for test upload completion
  * @param response The upload response (check response.isSuccess())
+ * @param context User-provided context pointer
  */
-typedef void (*UploadTestCallback)(const UploadTestResponse& response);
+typedef void (*UploadTestCallback)(const UploadTestResponse& response, void* context);
 
 /**
  * @brief Callback for cartridge reset completion
  * @param response The reset response (check response.isSuccess())
+ * @param context User-provided context pointer
  */
-typedef void (*ResetCartridgeCallback)(const ResetCartridgeResponse& response);
+typedef void (*ResetCartridgeCallback)(const ResetCartridgeResponse& response, void* context);
 
 /**
  * @brief Generic cloud operation callback (for WiFi status, etc.)

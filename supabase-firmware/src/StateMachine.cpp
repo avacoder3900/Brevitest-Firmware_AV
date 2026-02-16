@@ -321,10 +321,6 @@ const char* StateMachine::getCurrentModeString() const {
     return deviceModeToString(_currentMode);
 }
 
-uint32_t StateMachine::getLastTransitionTime() const {
-    return _lastTransitionTime;
-}
-
 size_t StateMachine::getStateAsJson(char* buffer, size_t bufferSize) const {
     if (buffer == nullptr || bufferSize == 0) {
         return 0;
@@ -661,43 +657,6 @@ const StateTransitionEntry* StateMachine::getTransition(int index) const {
     return &_transitionHistory[actualIndex];
 }
 
-int StateMachine::getTransitionHistory(StateTransitionEntry* entries, int maxEntries) const {
-    if (entries == nullptr || maxEntries <= 0) {
-        return 0;
-    }
-
-    int count = (maxEntries < _historyCount) ? maxEntries : _historyCount;
-
-    for (int i = 0; i < count; i++) {
-        const StateTransitionEntry* entry = getTransition(i);
-        if (entry != nullptr) {
-            entries[i] = *entry;
-        }
-    }
-
-    return count;
-}
-
-int StateMachine::getHistoryByCartridge(const char* cartridge_id,
-                                        StateTransitionEntry* entries,
-                                        int maxEntries) const {
-    if (cartridge_id == nullptr || cartridge_id[0] == '\0' ||
-        entries == nullptr || maxEntries <= 0) {
-        return 0;
-    }
-
-    int found = 0;
-
-    for (int i = 0; i < _historyCount && found < maxEntries; i++) {
-        const StateTransitionEntry* entry = getTransition(i);
-        if (entry != nullptr && strcmp(entry->cartridge_id, cartridge_id) == 0) {
-            entries[found++] = *entry;
-        }
-    }
-
-    return found;
-}
-
 void StateMachine::clearHistory() {
     _historyIndex = 0;
     _historyCount = 0;
@@ -772,25 +731,6 @@ bool StateMachine::registerStateChangeCallback(StateChangeCallback callback) {
     }
 
     return false; // No room
-}
-
-bool StateMachine::unregisterStateChangeCallback(StateChangeCallback callback) {
-    if (callback == nullptr) {
-        return false;
-    }
-
-    for (int i = 0; i < _observerCount; i++) {
-        if (_observers[i] == callback) {
-            // Shift remaining observers down
-            for (int j = i; j < _observerCount - 1; j++) {
-                _observers[j] = _observers[j + 1];
-            }
-            _observerCount--;
-            return true;
-        }
-    }
-
-    return false; // Not found
 }
 
 //==============================================================================

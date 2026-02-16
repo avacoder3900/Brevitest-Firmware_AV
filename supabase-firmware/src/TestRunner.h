@@ -221,12 +221,6 @@ public:
      */
     bool isReady() const;
 
-    /**
-     * @brief Get human-readable status string
-     * @return Status string
-     */
-    String getStatus() const;
-
     //==========================================================================
     // TEST CONTROL (TEST-001)
     //==========================================================================
@@ -246,22 +240,10 @@ public:
     void stopTest();
 
     /**
-     * @brief Get current test state
-     * @return Current TestState
-     */
-    TestState getTestState() const;
-
-    /**
      * @brief Get test runner state
      * @return Current TestRunnerState
      */
     TestRunnerState getState() const;
-
-    /**
-     * @brief Get test progress percentage
-     * @return Progress 0-100
-     */
-    uint8_t getTestProgress() const;
 
     /**
      * @brief Get elapsed test time
@@ -292,12 +274,6 @@ public:
     uint16_t getReadingCount() const;
 
     /**
-     * @brief Check if test record is complete and valid
-     * @return true if record is ready for upload
-     */
-    bool isRecordComplete() const;
-
-    /**
      * @brief Finalize test record (calculate checksum, etc.)
      * @return true if finalization successful
      */
@@ -313,14 +289,6 @@ public:
      * @return true if reading added successfully
      */
     bool addReading(const BrevitestSpectrophotometerReading* reading);
-
-    /**
-     * @brief Get current spectrophotometer settings
-     * @param gain Output AGAIN value
-     * @param astep Output ASTEP value
-     * @param atime Output ATIME value
-     */
-    void getSpectroSettings(uint8_t* gain, uint16_t* astep, uint8_t* atime) const;
 
     /**
      * @brief Set spectrophotometer settings
@@ -351,12 +319,6 @@ public:
      * @details Called when cartridge removal is detected during test
      */
     void onCartridgeRemoved();
-
-    /**
-     * @brief Check if test was cancelled due to cartridge removal
-     * @return true if cancelled
-     */
-    bool wasCartridgeRemoved() const;
 
     //==========================================================================
     // STRESS TEST MODE (TEST-006)

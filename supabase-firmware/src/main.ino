@@ -42,32 +42,8 @@ SYSTEM_THREAD(ENABLED);
 #define FIRMWARE_VERSION_STRING "200.0.0-supabase"
 
 //==============================================================================
-// LEGACY-COMPATIBLE CONSTANTS
+// CLOUD OPERATION CONSTANTS (not in HardwareConfig.h)
 //==============================================================================
-
-// Detector debouncing
-#define DETECTOR_DEBOUNCE_DELAY 10              // 10ms debounce for cartridge detector
-
-// Heater
-#define HEATER_READY_TEMP_DELTA 10              // 1.0°C delta (in 10x format = 10)
-#define HEATER_READY_DEBOUNCE_DELAY 5000        // 5 second debounce for heater ready
-
-// Buzzer
-#define BUZZER_FREQUENCY 600
-#define BUZZER_DURATION 1000
-#define BUZZER_INSERT_FREQUENCY 620
-#define BUZZER_INSERT_DURATION 200
-#define BUZZER_ALERT_FREQUENCY 850
-#define BUZZER_ALERT_DURATION 500
-#define BUZZER_PROBLEM_FREQUENCY 620
-#define BUZZER_PROBLEM_DURATION 100
-
-// Stage positions
-#define STAGE_MICRONS_TO_TEST_START_POSITION 7860
-
-// Motor speeds
-#define MOTOR_FAST_STEP_DELAY 290
-#define MOTOR_SLOW_STEP_DELAY 600
 
 // Validation retry
 #define VALIDATION_TIMEOUT_MS 45000             // 45 second timeout
@@ -158,11 +134,8 @@ SerialLogHandler logHandler(LOG_LEVEL_INFO);
 //==============================================================================
 
 void processSerialCommands();
-void handleCartridgeInserted();
-void handleCartridgeRemoved();
 void onStateChange(DeviceMode oldMode, DeviceMode newMode);
 void runHeaterControl();
-void updateStatusLED();
 
 // Legacy-compatible hardware loop functions
 bool heater_debounced();
@@ -185,7 +158,7 @@ void cartridgeInterruptHandler() {
 
 // Particle cloud variables (legacy compatibility)
 int cloud_temperature = 0;
-char cloud_magnet_validation[1024] = "";
+char cloud_magnet_validation[256] = "";
 char cloud_device_status[256] = "";
 
 //==============================================================================
@@ -409,24 +382,50 @@ void loop() {
                 // Heater ready - process barcode normally
                 if (barcodeScanner.getScanState() == ScanState::SUCCESS) {
                     const char* barcode = barcodeScanner.getLastBarcode();
+                    BarcodeType barcodeType = barcodeScanner.getLastBarcodeType();
+
                     strncpy(currentCartridgeId, barcode, BARCODE_UUID_LENGTH);
                     currentCartridgeId[BARCODE_UUID_LENGTH] = '\0';
-
-                    // Check recently tested cooldown
-                    if (last_tested_barcode[0] != '\0' &&
-                        strcmp(barcode, last_tested_barcode) == 0 &&
-                        (millis() - last_tested_timestamp) < RECENT_TEST_COOLDOWN_MS) {
-                        Log.info("Same barcode tested recently - waiting for cooldown");
-                        break;
-                    }
-
-                    Log.info("Barcode read: %s", currentCartridgeId);
                     deviceState.setCurrentCartridgeId(currentCartridgeId);
                     deviceState.setCartridgeState(CartridgeState::BARCODE_READ);
 
-                    deviceState.setMode(DeviceMode::VALIDATING_CARTRIDGE);
-                    deviceState.startCloudOperation();
-                    startCartridgeValidation();
+                    switch (barcodeType) {
+                        case BarcodeType::CARTRIDGE: {
+                            // Check recently tested cooldown
+                            if (last_tested_barcode[0] != '\0' &&
+                                strcmp(barcode, last_tested_barcode) == 0 &&
+                                (millis() - last_tested_timestamp) < RECENT_TEST_COOLDOWN_MS) {
+                                Log.info("Same barcode tested recently - waiting for cooldown");
+                                break;
+                            }
+
+                            Log.info("Cartridge barcode read: %s", currentCartridgeId);
+                            deviceState.setMode(DeviceMode::VALIDATING_CARTRIDGE);
+                            deviceState.startCloudOperation();
+                            startCartridgeValidation();
+                            break;
+                        }
+                        case BarcodeType::MAGNETOMETER: {
+                            Log.info("Magnetometer barcode read: %s", currentCartridgeId);
+                            deviceState.setMode(DeviceMode::VALIDATING_MAGNETOMETER);
+                            break;
+                        }
+                        case BarcodeType::STRESS_TEST: {
+                            int maxCycles = atoi(&barcode[STRESS_TEST_PREFIX_LENGTH]);
+                            Log.info("Stress test barcode read: %s (cycles=%d)", currentCartridgeId, maxCycles);
+                            StressTestConfig stressConfig;
+                            stressConfig.total_cycles = maxCycles > 0 ? maxCycles : 10;
+                            testRunner.startStressTest(stressConfig);
+                            deviceState.setMode(DeviceMode::STRESS_TESTING);
+                            break;
+                        }
+                        default: {
+                            Log.warn("Unknown barcode format: %s", currentCartridgeId);
+                            deviceState.setCartridgeState(CartridgeState::INVALID);
+                            deviceState.setError(ErrorCode::ERR_BARCODE_READ_FAILED, "Unknown barcode format");
+                            break;
+                        }
+                    }
                 }
             }
             break;
@@ -499,7 +498,10 @@ void loop() {
             if (deviceState.isCloudOperationTimeout(UPLOAD_TIMEOUT_MS)) {
                 Log.error("Upload timeout - caching results");
                 deviceState.endCloudOperation();
-                // TODO: Cache test results to /cache directory
+                BrevitestTestRecord* timeoutRecord = testRunner.getTestRecord();
+                storageManager.cacheTestData(timeoutRecord);
+                Log.info("Test record cached for later upload");
+                BuzzerController::startPeriodicAlert(AlertType::GENERAL);
                 deviceState.setMode(DeviceMode::IDLE);
             }
             break;
@@ -642,19 +644,6 @@ void setupTestRunnerCallbacks() {
 
         return readingsTaken;
     });
-}
-
-// Note: Cartridge insertion/removal is now handled by hardware_loop() with proper debouncing.
-// These functions are kept for backward compatibility with any external calls.
-
-void handleCartridgeInserted() {
-    // Now handled in hardware_loop() with proper debouncing
-    // This is called from the interrupt handler, which sets detector_changed = true
-}
-
-void handleCartridgeRemoved() {
-    // Now handled in hardware_loop() with proper debouncing
-    // This is called from the interrupt handler, which sets detector_changed = true
 }
 
 //==============================================================================
@@ -946,7 +935,7 @@ void hardware_loop() {
             if (new_detector_state) {
                 // === CARTRIDGE INSERTED ===
                 motorController.home();
-                motorController.moveToPosition(STAGE_MICRONS_TO_TEST_START_POSITION, MOTOR_FAST_STEP_DELAY);
+                motorController.moveToPosition(STAGE_MICRONS_TO_TEST_START, MOTOR_FAST_STEP_DELAY);
                 motorController.disable();
 
                 // === PREVENT RE-SCANNING AFTER TEST COMPLETION ===
@@ -1014,6 +1003,9 @@ void hardware_loop() {
         detector_debouncing = true;
         detector_debouncing_time = millis() + DETECTOR_DEBOUNCE_DELAY;
     }
+
+    // === LASER SAFETY INTERLOCK ===
+    laserController.update();
 
     // === UPDATE DEVICE INDICATORS ===
     set_device_indicators();

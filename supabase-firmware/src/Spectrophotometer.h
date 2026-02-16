@@ -35,17 +35,9 @@
 #include "DataTypes.h"
 #include "HardwareConfig.h"
 
-// Forward declarations
-class MotorController;
-class LaserController;
-class HeaterController;
-
 //==============================================================================
 // CONSTANTS
 //==============================================================================
-
-/** @brief Maximum number of readings that can be stored */
-constexpr uint16_t SPECTRO_BUFFER_SIZE = SPECTRO_MAX_READINGS;
 
 /** @brief Number of channels on PCA9536 mux */
 constexpr uint8_t SPECTRO_NUM_CHANNELS = 3;
@@ -73,17 +65,6 @@ enum class SpectroError : int8_t {
     ERR_BUFFER_FULL = -7,     ///< Reading buffer is full
     ERR_NO_BASELINE = -8      ///< No baseline captured
 };
-
-//==============================================================================
-// CALLBACK TYPES
-//==============================================================================
-
-/**
- * @brief Callback function type for continuous reading mode
- * @param reading Pointer to the captured reading
- * @param index Reading index in the sequence
- */
-typedef void (*SpectroReadingCallback)(const BrevitestSpectrophotometerReading* reading, uint16_t index);
 
 //==============================================================================
 // BASELINE DATA STRUCTURE
@@ -305,12 +286,6 @@ public:
                      uint16_t laserOutput = 0);
 
     /**
-     * @brief Set the test start timestamp for relative timing
-     * @param startTime Timestamp in milliseconds
-     */
-    void setTestStartTime(uint32_t startTime);
-
-    /**
      * @brief Get current reading number
      * @return Number of readings taken since reset
      */
@@ -320,61 +295,6 @@ public:
      * @brief Reset reading number to zero
      */
     void resetReadingNumber() { readingNumber_ = 0; }
-
-    //==========================================================================
-    // CONTINUOUS READING MODE (SPEC-005)
-    //==========================================================================
-
-    /**
-     * @brief Start continuous reading mode
-     * @param channel Channel to read continuously
-     * @param callback Function to call for each reading (optional)
-     * @return true if started successfully
-     */
-    bool startContinuousMode(char channel, SpectroReadingCallback callback = nullptr);
-
-    /**
-     * @brief Stop continuous reading mode
-     */
-    void stopContinuousMode();
-
-    /**
-     * @brief Check if continuous mode is active
-     * @return true if in continuous mode
-     */
-    bool isContinuousModeActive() const { return continuousModeActive_; }
-
-    /**
-     * @brief Process continuous mode (call from main loop)
-     * @return true if a reading was captured
-     *
-     * Must be called regularly when continuous mode is active.
-     * Returns true when a new reading is available.
-     */
-    bool processContinuousMode();
-
-    /**
-     * @brief Get reading buffer
-     * @return Pointer to reading array
-     */
-    BrevitestSpectrophotometerReading* getReadingBuffer() { return readingBuffer_; }
-
-    /**
-     * @brief Get number of readings in buffer
-     * @return Number of readings captured
-     */
-    uint16_t getReadingCount() const { return readingCount_; }
-
-    /**
-     * @brief Clear reading buffer
-     */
-    void clearReadingBuffer();
-
-    /**
-     * @brief Check if reading buffer is full
-     * @return true if buffer has reached maximum capacity
-     */
-    bool isBufferFull() const { return readingCount_ >= SPECTRO_BUFFER_SIZE; }
 
     //==========================================================================
     // CALIBRATION FUNCTIONS (SPEC-006)
@@ -463,56 +383,6 @@ public:
      */
     void printStatus();
 
-    //==========================================================================
-    // COORDINATED SCANNING (BETA-019)
-    //==========================================================================
-
-    /**
-     * @brief Perform continuous scanning with coordinated motor movement
-     *
-     * This function matches the legacy spectrophotometer_reading_continuous() behavior:
-     * - Calculates segment sizes based on integration time and step delay
-     * - For each channel (A, B, C): powers on spectro, turns on laser
-     * - For each segment: moves stage while sensor integrates
-     * - Stores readings in the test record
-     *
-     * @param test Pointer to test record to populate with readings
-     * @param motor Pointer to motor controller for stage movement
-     * @param laser Pointer to laser controller
-     * @param heater Pointer to heater controller for temperature reading
-     * @param baseline If true, records as baseline scans
-     * @param startingPosition Starting stage position in microns
-     * @param distanceToScan Distance to scan in microns
-     * @param stepDelayUs Step delay in microseconds (use MOTOR_SENSOR_STEP_DELAY)
-     * @param log If true, log each reading
-     * @return true if scanning completed successfully
-     */
-    bool readingContinuous(BrevitestTestRecord* test,
-                           class MotorController* motor,
-                           class LaserController* laser,
-                           class HeaterController* heater,
-                           bool baseline,
-                           int32_t startingPosition,
-                           int32_t distanceToScan,
-                           uint16_t stepDelayUs,
-                           bool log = false);
-
-    /**
-     * @brief Calculate integration time in microseconds
-     * @param atime ATIME value
-     * @param astep ASTEP value
-     * @return Integration time in microseconds
-     */
-    static uint32_t calculateIntegrationTimeUs(uint8_t atime, uint16_t astep);
-
-    /**
-     * @brief Calculate step delay for motor to match integration time
-     * @param atime ATIME value
-     * @param astep ASTEP value
-     * @return Calculated step delay in microseconds
-     */
-    static uint16_t calculateStepDelayForIntegration(uint8_t atime, uint16_t astep);
-
 private:
     //==========================================================================
     // PRIVATE HELPER FUNCTIONS
@@ -552,13 +422,6 @@ private:
      */
     void applyBaselineSubtraction(BrevitestSpectrophotometerReading* reading, char channel);
 
-    /**
-     * @brief Store reading in buffer
-     * @param reading Reading to store
-     * @return true if stored successfully
-     */
-    bool storeReading(const BrevitestSpectrophotometerReading* reading);
-
     //==========================================================================
     // MEMBER VARIABLES
     //==========================================================================
@@ -583,16 +446,6 @@ private:
     // Reading tracking
     uint8_t readingNumber_;
     uint32_t testStartTime_;
-
-    // Continuous mode
-    bool continuousModeActive_;
-    char continuousChannel_;
-    SpectroReadingCallback readingCallback_;
-    uint32_t lastReadingTime_;
-
-    // Reading buffer
-    BrevitestSpectrophotometerReading readingBuffer_[SPECTRO_BUFFER_SIZE];
-    uint16_t readingCount_;
 
     // Baseline data (one per channel: A, B, C)
     SpectroBaselineData baseline_[SPECTRO_NUM_CHANNELS];

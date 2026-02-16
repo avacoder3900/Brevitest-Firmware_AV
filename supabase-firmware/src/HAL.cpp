@@ -189,15 +189,6 @@ namespace HAL {
         return 0;  // Should not reach here
     }
 
-    uint16_t readSpectroChannel(char channel, uint8_t samples) {
-        uint16_t pin = getSpectroPin(channel);
-        if (pin == 0) {
-            Log.warn("HAL: Invalid spectro channel '%c'", channel);
-            return 0;
-        }
-        return analogReadAvg(pin, samples);
-    }
-
     bool isThermistorReadingValid(int16_t raw) {
         return (raw >= HEATER_MIN_RAW_READING && raw <= HEATER_MAX_RAW_READING);
     }
@@ -327,7 +318,7 @@ namespace HAL {
     void motorWake() {
         digitalWrite(PIN_MOTOR_SLEEP, HIGH);  // Exit sleep mode
         digitalWrite(PIN_MOTOR_RESET, HIGH);  // Ensure not in reset
-        delayMicroseconds(1000);              // Allow driver to wake up
+        delayMicroseconds(10000);             // Allow driver to wake up (legacy: 10ms)
         _motorAwake = true;
     }
 
@@ -380,14 +371,6 @@ namespace HAL {
         return (Wire.endTransmission() == 0);
     }
 
-    bool i2cWrite(uint8_t address, const uint8_t* data, uint8_t length) {
-        Wire.beginTransmission(address);
-        for (uint8_t i = 0; i < length; i++) {
-            Wire.write(data[i]);
-        }
-        return (Wire.endTransmission() == 0);
-    }
-
     bool i2cReadRegister(uint8_t address, uint8_t reg, uint8_t* value) {
         Wire.beginTransmission(address);
         Wire.write(reg);
@@ -401,45 +384,6 @@ namespace HAL {
             return true;
         }
         return false;
-    }
-
-    uint8_t i2cReadBytes(uint8_t address, uint8_t reg, uint8_t* buffer, uint8_t length) {
-        Wire.beginTransmission(address);
-        Wire.write(reg);
-        if (Wire.endTransmission() != 0) {
-            return 0;
-        }
-
-        Wire.requestFrom(address, length);
-        uint8_t count = 0;
-        while (Wire.available() && count < length) {
-            buffer[count++] = Wire.read();
-        }
-        return count;
-    }
-
-    uint8_t i2cScan() {
-        uint8_t deviceCount = 0;
-
-        Log.info("HAL: I2C bus scan starting...");
-
-        for (uint8_t addr = 1; addr < 127; addr++) {
-            Wire.beginTransmission(addr);
-            uint8_t error = Wire.endTransmission();
-
-            if (error == 0) {
-                Log.info("HAL: I2C device found at 0x%02X", addr);
-                deviceCount++;
-            }
-        }
-
-        Log.info("HAL: I2C scan complete. %d device(s) found.", deviceCount);
-        return deviceCount;
-    }
-
-    bool i2cDevicePresent(uint8_t address) {
-        Wire.beginTransmission(address);
-        return (Wire.endTransmission() == 0);
     }
 
     // ========================================================================
@@ -493,22 +437,6 @@ namespace HAL {
     // UTILITY FUNCTIONS
     // ========================================================================
 
-    uint16_t getSpectroPin(char channel) {
-        switch (channel) {
-            case 'A':
-            case 'a':
-                return PIN_PHOTO_A;
-            case 'B':
-            case 'b':
-                return PIN_PHOTO_B;
-            case 'C':
-            case 'c':
-                return PIN_PHOTO_C;
-            default:
-                return 0;
-        }
-    }
-
     hal_pin_t getLaserPin(char channel) {
         switch (channel) {
             case 'A':
@@ -522,20 +450,6 @@ namespace HAL {
                 return PIN_LASER_C;
             default:
                 return 0;
-        }
-    }
-
-    void delayUs(uint32_t us) {
-        if (us > 10000) {
-            // For longer delays, yield to system periodically
-            while (us > 1000) {
-                delayMicroseconds(1000);
-                us -= 1000;
-                Particle.process();
-            }
-        }
-        if (us > 0) {
-            delayMicroseconds(us);
         }
     }
 

@@ -32,14 +32,6 @@
 #include "Particle.h"
 
 // ============================================================================
-// VERSION REFERENCE
-// ============================================================================
-// FIRMWARE_VERSION and DATA_FORMAT_VERSION are defined ONLY in DataTypes.h
-// Do NOT redefine them here.
-
-#define LEGACY_HARDWARE_VERSION 56  // Compatible with hardware version 56+
-
-// ============================================================================
 // ANALOG PIN DEFINITIONS
 // ============================================================================
 // Analog pins on Particle B-Series SoM (NRF52840)
@@ -214,8 +206,6 @@ constexpr uint8_t SPECTRO_PWR_SENSOR_C = 0x04;        // Power on sensor C (IO2)
 // I2C CONFIGURATION
 // ============================================================================
 
-constexpr uint32_t I2C_CLOCK_SPEED = 400000;         // 400 kHz (Fast mode)
-constexpr uint32_t I2C_TIMEOUT_MS = 100;             // I2C operation timeout
 constexpr uint32_t I2C_INIT_DELAY_US = 10000;        // Delay after I2C init
 
 // ============================================================================
@@ -239,24 +229,16 @@ constexpr uint16_t BUZZER_PROBLEM_PERIOD = 777;      // Problem repeat period
 // LED/LASER CONSTANTS
 // ============================================================================
 
-constexpr uint8_t LED_DEFAULT_POWER = 115;           // Default LED power (0-255)
-constexpr uint16_t LED_WARMUP_DELAY_MS = 1000;       // LED warmup time
 constexpr uint16_t LED_DURATION = 500;               // Default LED on duration
-constexpr uint8_t LASER_MAX_POWER = 255;             // Maximum laser power
 constexpr uint8_t LASER_DEFAULT_POWER = 128;         // Default laser power (50%)
-constexpr uint16_t LASER_PWM_FREQUENCY = 500;        // Laser PWM frequency (Hz)
-constexpr uint32_t LASER_PWM_ON_US = 20000;          // Laser PWM on time (us)
-constexpr uint32_t LASER_PWM_TOTAL_US = 2000;        // Laser PWM cycle time (us)
 
 // ============================================================================
 // MOTOR CONSTANTS
 // ============================================================================
 
 constexpr uint16_t MOTOR_MICRONS_PER_EIGHTH_STEP = 25;   // Microns per 1/8 step
-constexpr uint32_t MOTOR_MOVE_DURATION_UNIT = 25000;     // Movement duration unit (us)
 constexpr uint16_t MOTOR_MINIMUM_STEP_DELAY = 250;       // Minimum step delay (us)
 constexpr uint16_t MOTOR_RESET_STEP_DELAY = 290;         // Reset movement step delay (us)
-constexpr uint16_t MOTOR_BOUNCE_STEP_DELAY = 350;        // Bounce movement step delay (us)
 constexpr uint16_t MOTOR_FAST_STEP_DELAY = 290;          // Fast movement step delay (us)
 constexpr uint16_t MOTOR_SLOW_STEP_DELAY = 600;          // Slow movement step delay (us)
 constexpr uint16_t MOTOR_OSCILLATION_STEP_DELAY = 350;   // Oscillation step delay (us)
@@ -267,11 +249,7 @@ constexpr uint16_t MOTOR_SENSOR_STEP_DELAY = 1000;       // Sensor reading step 
 // ============================================================================
 
 constexpr int32_t STAGE_RESET_STEPS = -60000;            // Steps to move during reset
-constexpr int32_t STAGE_POSITION_LIMIT = 45000;          // Maximum stage position (microns)
-constexpr int32_t STAGE_MICRONS_TO_INITIAL = 1000;       // Initial position from home
 constexpr int32_t STAGE_MICRONS_TO_TEST_START = 7860;    // Position for test start
-constexpr int32_t STAGE_SHIPPING_BOLT_LOCATION = 28000;  // Shipping bolt check position
-constexpr int32_t STAGE_MICRONS_TO_MAG_START = 12800;    // Magnetometer start position
 
 // ============================================================================
 // HEATER CONSTANTS
@@ -279,10 +257,8 @@ constexpr int32_t STAGE_MICRONS_TO_MAG_START = 12800;    // Magnetometer start p
 
 constexpr uint8_t HEATER_MAX_POWER = 255;                // Maximum heater PWM
 constexpr uint8_t HEATER_DEFAULT_POWER = 64;             // Default heater power (25%)
-constexpr uint16_t HEATER_PWM_FREQUENCY = 150;           // Heater PWM frequency (Hz)
 constexpr int16_t HEATER_MAX_TEMPERATURE = 600;          // Max temp (60.0C in 10x format)
 constexpr uint16_t HEATER_CONTROL_INTERVAL = 1000;       // PID control interval (ms)
-constexpr uint16_t HEATER_PULSE_DURATION = 800;          // Default pulse duration (ms)
 constexpr int16_t HEATER_DEFAULT_TEMP_TARGET = 450;      // Default target (45.0C in 10x)
 constexpr int16_t HEATER_READY_TEMP_DELTA = 10;          // Ready tolerance (1.0C in 10x)
 constexpr uint16_t HEATER_READY_DEBOUNCE_DELAY = 5000;   // Temp stable debounce (ms)
@@ -299,7 +275,6 @@ constexpr uint32_t HEATER_STABILIZATION_TIME_US = 5000;  // ADC stabilization ti
 // Table provides linear interpolation between points
 
 constexpr uint8_t THERMISTOR_TABLE_LENGTH = 21;
-constexpr int16_t THERMISTOR_SCALE = 10000;
 
 // Temperature lookup table (10x degrees Celsius)
 // Range: 0.0C to 100.0C in 5C increments (descending order for ADC matching)
@@ -360,12 +335,7 @@ constexpr int16_t THERMISTOR_RAW_TABLE[THERMISTOR_TABLE_LENGTH] = {
 // and SPECTRO_MAX_READINGS are defined as macros in DataTypes.h
 
 constexpr int32_t SPECTRO_WELL_LENGTH = 5000;            // Well length (microns)
-constexpr int32_t SPECTRO_STARTING_STAGE_POS = 21000;    // Starting position (microns)
-constexpr uint8_t SPECTRO_NUMBER_OF_READINGS = 5;        // Readings per sample
 constexpr uint16_t SPECTRO_TIMEOUT = 2000;               // Reading timeout (ms)
-constexpr uint8_t SPECTRO_MAX_CYCLES = 255;              // Max reading cycles
-constexpr uint8_t SPECTRO_READING_CYCLES = 10;           // Default reading cycles
-constexpr uint16_t SPECTRO_RAW_MAX_CYCLES = 300;         // Raw reading max cycles
 
 // ============================================================================
 // BARCODE SCANNER CONSTANTS
@@ -374,30 +344,11 @@ constexpr uint16_t SPECTRO_RAW_MAX_CYCLES = 300;         // Raw reading max cycl
 constexpr uint32_t BARCODE_DELAY_US = 100000;            // Barcode scan delay (us)
 constexpr uint16_t BARCODE_READ_TIMEOUT = 1000;          // Read timeout (ms)
 
-// Barcode type identifiers
-constexpr int8_t BARCODE_TYPE_CARTRIDGE = 1;
-constexpr int8_t BARCODE_TYPE_MAGNETOMETER = 2;
-constexpr int8_t BARCODE_TYPE_OPTICAL = 3;
-constexpr int8_t BARCODE_TYPE_STRESS_TEST = 4;
-constexpr int8_t BARCODE_TYPE_SHIPPING = 5;
-constexpr int8_t BARCODE_TYPE_GENERAL_ERROR = -1;
-constexpr int8_t BARCODE_TYPE_VALIDATION_ERROR = -2;
-constexpr int8_t BARCODE_TYPE_OPTICAL_ERROR = -3;
-
 // ============================================================================
 // DEBOUNCE AND TIMING CONSTANTS
 // ============================================================================
 
 constexpr uint16_t DETECTOR_DEBOUNCE_DELAY = 10;         // Cartridge detect debounce (ms)
-constexpr uint16_t ASYNC_COMMAND_DEFAULT_INTERVAL = 5000; // Async command interval (ms)
-
-// ============================================================================
-// ADC CONFIGURATION
-// ============================================================================
-
-constexpr uint8_t ADC_RESOLUTION_BITS = 12;              // ADC resolution (bits)
-constexpr uint16_t ADC_MAX_VALUE = 4095;                 // Max ADC value (2^12 - 1)
-constexpr float ADC_REFERENCE_VOLTAGE = 3.3f;            // Reference voltage (V)
 
 // ============================================================================
 // DEFAULT SAMPLE AVERAGING

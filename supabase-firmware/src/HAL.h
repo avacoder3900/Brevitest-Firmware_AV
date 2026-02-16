@@ -73,17 +73,6 @@ namespace HAL {
     // ========================================================================
 
     /**
-     * @brief Read analog value with optional averaging
-     *
-     * Reads an analog pin with configurable sample averaging for noise reduction.
-     *
-     * @param pin Analog pin to read
-     * @param samples Number of samples to average (default: DEFAULT_ANALOG_SAMPLES)
-     * @return Averaged ADC value (0-4095 for 12-bit resolution)
-     */
-    uint16_t analogReadAvg(uint16_t pin, uint8_t samples = DEFAULT_ANALOG_SAMPLES);
-
-    /**
      * @brief Read thermistor and convert to temperature
      *
      * Reads the heater thermistor and converts the raw ADC value to temperature
@@ -112,17 +101,6 @@ namespace HAL {
      * @return Temperature in 10x Celsius
      */
     int16_t rawToTemperature(int16_t raw);
-
-    /**
-     * @brief Read spectrophotometer channel
-     *
-     * Reads the analog photodetector for a spectrophotometer channel.
-     *
-     * @param channel Channel identifier ('A', 'B', or 'C')
-     * @param samples Number of samples to average (default: DEFAULT_ANALOG_SAMPLES)
-     * @return ADC value (0-4095), or 0 if invalid channel
-     */
-    uint16_t readSpectroChannel(char channel, uint8_t samples = DEFAULT_ANALOG_SAMPLES);
 
     /**
      * @brief Check if thermistor reading is within valid range
@@ -317,16 +295,6 @@ namespace HAL {
     bool i2cWriteRegister(uint8_t address, uint8_t reg, uint8_t value);
 
     /**
-     * @brief Write multiple bytes to an I2C device
-     *
-     * @param address I2C device address (7-bit)
-     * @param data Pointer to data buffer
-     * @param length Number of bytes to write
-     * @return true if write successful
-     */
-    bool i2cWrite(uint8_t address, const uint8_t* data, uint8_t length);
-
-    /**
      * @brief Read a single byte from an I2C register
      *
      * @param address I2C device address (7-bit)
@@ -335,35 +303,6 @@ namespace HAL {
      * @return true if read successful
      */
     bool i2cReadRegister(uint8_t address, uint8_t reg, uint8_t* value);
-
-    /**
-     * @brief Read multiple bytes from an I2C device
-     *
-     * @param address I2C device address (7-bit)
-     * @param reg Starting register address
-     * @param buffer Pointer to buffer for read data
-     * @param length Number of bytes to read
-     * @return Number of bytes actually read
-     */
-    uint8_t i2cReadBytes(uint8_t address, uint8_t reg, uint8_t* buffer, uint8_t length);
-
-    /**
-     * @brief Scan I2C bus for devices
-     *
-     * Scans all 7-bit addresses (1-127) and logs found devices.
-     * Useful for debugging I2C connectivity issues.
-     *
-     * @return Number of devices found
-     */
-    uint8_t i2cScan();
-
-    /**
-     * @brief Check if an I2C device is present
-     *
-     * @param address I2C device address (7-bit)
-     * @return true if device acknowledges
-     */
-    bool i2cDevicePresent(uint8_t address);
 
     // ========================================================================
     // SPECTROPHOTOMETER SENSOR POWER CONTROL (PCA9536DR)
@@ -399,29 +338,12 @@ namespace HAL {
     // ========================================================================
 
     /**
-     * @brief Get pin number for spectrophotometer channel
-     *
-     * @param channel Channel identifier ('A', 'B', or 'C')
-     * @return Pin number, or 0 if invalid channel
-     */
-    uint16_t getSpectroPin(char channel);
-
-    /**
      * @brief Get laser pin for channel
      *
      * @param channel Channel identifier ('A', 'B', or 'C')
      * @return Pin number, or 0 if invalid channel
      */
     hal_pin_t getLaserPin(char channel);
-
-    /**
-     * @brief Delay in microseconds with yield
-     *
-     * Uses delayMicroseconds() but yields to system for longer delays.
-     *
-     * @param us Microseconds to delay
-     */
-    void delayUs(uint32_t us);
 
     /**
      * @brief Get elapsed time since a timestamp

@@ -567,14 +567,9 @@ bool StorageManager::loadCachedAssay(const char* assayId, BrevitestAssay* assay,
     // Verify checksum if provided
     if (expectedChecksum != 0) {
         uint32_t actualChecksum = calculateChecksum(assay->BCODE, strlen(assay->BCODE));
-        // Use absolute value for comparison (matches legacy)
-        int32_t absExpected = (expectedChecksum < 0) ? -expectedChecksum : expectedChecksum;
-        int32_t absActual = (actualChecksum < 0x80000000) ? actualChecksum : -(int32_t)actualChecksum;
-        absActual = (absActual < 0) ? -absActual : absActual;
-
-        if (absActual != absExpected) {
-            Log.error("StorageManager::loadCachedAssay() - Checksum mismatch: expected %d, got %u",
-                      absExpected, actualChecksum);
+        if (actualChecksum != expectedChecksum) {
+            Log.error("StorageManager::loadCachedAssay() - Checksum mismatch: expected 0x%08lX, got 0x%08lX",
+                      (unsigned long)expectedChecksum, (unsigned long)actualChecksum);
             assay->id[0] = '\0';
             return false;
         }

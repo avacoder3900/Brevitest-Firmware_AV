@@ -393,3 +393,54 @@ All Alpha stories are now complete:
 - coordination/docs/STATE_TRANSITIONS_LEGACY_ANALYSIS.md - State machine documentation
 
 ---
+
+## 2026-02-12 - Firmware Audit & Critical Fix Session
+
+### Audit Completed
+Comprehensive firmware audit performed across all modules:
+- 68 timing constants verified (5 mismatches fixed)
+- 26 state transitions verified (exact match with legacy)
+- 7 hardware drivers audited against BOM/datasheets
+- ~150 dead code items identified (~1,500+ lines removable)
+
+### PRD Documents Created
+- coordination/prd-firmware-audit-critical.json - 8 stories (AUD-001 to AUD-008)
+- coordination/prd-firmware-audit-cleanup.json - 9 stories (CLN-001 to CLN-009)
+
+### Critical Fixes Implemented (Ralph Loop)
+
+#### AUD-001: LaserController::update() safety interlock
+- File: main.ino hardware_loop()
+- Legacy Reference: brevitest-firmware.ino:1419-1457
+- Fix: Added laserController.update() to hardware_loop()
+
+#### AUD-002: Barcode type routing
+- File: main.ino BARCODE_SCANNING handler
+- Legacy Reference: brevitest-firmware.ino:5035-5223
+- Fix: Route by BarcodeType: CARTRIDGE/MAGNETOMETER/STRESS_TEST
+
+#### AUD-003: Motor wake delay
+- File: HAL.cpp motorWake()
+- Fix: 1ms to 10ms matching legacy A5985GETTR-T wake time
+
+#### AUD-004: AS7341 clearInterrupt
+- File: drivers/AS7341.cpp
+- Fix: Write-1-to-clear after STATUS_1 read
+
+#### AUD-005: StorageManager checksum comparison
+- File: StorageManager.cpp loadCachedAssay()
+- Fix: Direct uint32_t comparison replacing broken absolute-value logic
+
+#### AUD-006: Remove duplicate defines
+- File: main.ino
+- Fix: Removed 14 duplicate #defines shadowing HardwareConfig.h
+
+#### AUD-007: TestRunner stopTest identical branches
+- File: TestRunner.cpp
+- Fix: Collapsed identical if/else to single path
+
+#### AUD-008: Upload timeout caching
+- File: main.ino UPLOADING_RESULTS handler
+- Fix: Cache test data on upload timeout via storageManager.cacheTestData()
+
+### Remaining: CLN-001 to CLN-009 dead code cleanup (~1,500 lines)

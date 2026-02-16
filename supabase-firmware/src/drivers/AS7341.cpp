@@ -85,24 +85,6 @@ void Driver::setGain(Gain gain) {
     setGain(static_cast<uint8_t>(gain));
 }
 
-void Driver::setWtime(uint8_t value) {
-    writeReg(REG_WTIME, &value, 1);
-}
-
-uint8_t Driver::getAtime() {
-    return readReg(REG_ATIME);
-}
-
-uint16_t Driver::getAstep() {
-    uint8_t data[2] = {0};
-    readReg(REG_ASTEP_L, &data[0], 1);
-    readReg(REG_ASTEP_H, &data[1], 1);
-    return (static_cast<uint16_t>(data[1]) << 8) | data[0];
-}
-
-uint8_t Driver::getGain() {
-    return readReg(REG_CFG_1);
-}
 
 //==============================================================================
 // MEASUREMENT CONTROL
@@ -211,11 +193,6 @@ FullSpectralData Driver::readAllChannels(uint16_t timeoutMs) {
     return data;
 }
 
-uint8_t Driver::readFlickerData() {
-    uint8_t data = 0;
-    readReg(REG_STATUS, &data, 1);
-    return data;
-}
 
 //==============================================================================
 // ENABLE/DISABLE FUNCTIONS
@@ -310,17 +287,6 @@ void Driver::setLedCurrent(uint8_t current) {
 // GPIO CONTROL
 //==============================================================================
 
-void Driver::setGpioMode(uint8_t mode) {
-    uint8_t data = 0;
-    readReg(REG_GPIO_2, &data, 1);
-    if (mode == INPUT) {
-        data |= (1 << 2);
-    } else if (mode == OUTPUT) {
-        data &= ~(1 << 2);
-    }
-    writeReg(REG_GPIO_2, &data, 1);
-}
-
 void Driver::setGpio(bool connect) {
     uint8_t data = 0;
     readReg(REG_CPIO, &data, 1);
@@ -382,7 +348,10 @@ void Driver::setBank(uint8_t addr) {
 void Driver::clearInterrupt() {
     uint8_t data = 0;
     readReg(REG_STATUS_1, &data, 1);
-    // Reading STATUS_1 clears interrupts
+    // Write-1-to-clear: write back read value to clear active interrupt flags
+    if (data) {
+        writeReg(REG_STATUS_1, &data, 1);
+    }
 }
 
 void Driver::clearFIFO() {
@@ -595,27 +564,6 @@ uint16_t Driver::getChannelData(uint8_t channel) {
     return (static_cast<uint16_t>(data[1]) << 8) | data[0];
 }
 
-float Driver::getWtime() {
-    uint8_t data = 0;
-    readReg(REG_WTIME, &data, 1);
-
-    if (data == 0) {
-        return 2.78f;
-    } else if (data == 1) {
-        return 5.56f;
-    } else if (data == 255) {
-        return 711.0f;
-    } else {
-        return 2.78f * (data + 1);
-    }
-}
-
-float Driver::getIntegrationTime() {
-    uint8_t atime = getAtime();
-    uint16_t astep = getAstep();
-    // Integration time = (ATIME + 1) * (ASTEP + 1) * 2.78us
-    return static_cast<float>((atime + 1) * (astep + 1)) * 2.78f;
-}
 
 //==============================================================================
 // DEBUG/STATUS
