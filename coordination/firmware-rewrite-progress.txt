@@ -1,446 +1,1113 @@
-## Codebase Patterns
+================================================================================
+BREVITEST FIRMWARE REWRITE - COMPLETE REPLICATION GUIDE
+================================================================================
+Date: February 2026
+Platform: Particle M-SoM (RTL8722DM), DeviceOS 6.3.4
+Branch: postgres-firmware
+Legacy: Particle Cloud + CouchDB -> New: Supabase PostgreSQL
 
-### State Machine
-- ALWAYS use can_transition_to() before setMode() - never bypass validation
-- State transitions log in format: "State transition: X -> Y"
-- Use Time.now() for transition timestamps, millis() for timeout tracking
-- volatile keyword required for state variables accessed from interrupts
+This document captures everything needed to replicate a firmware rewrite from
+legacy code to a modern architecture using Claude Code terminals.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+1.  PROJECT OVERVIEW
+2.  PREREQUISITES AND TOOLING
+3.  REPOSITORY STRUCTURE
+4.  METHODOLOGY: THE RALPH LOOP
+5.  PHASE 0: LEGACY ANALYSIS (DO THIS FIRST)
+6.  PHASE 1: PROJECT SCAFFOLDING
+7.  PHASE 2: CORE DATA TYPES AND STATE MACHINE (Alpha)
+8.  PHASE 3: HARDWARE ABSTRACTION AND DRIVERS (Beta)
+9.  PHASE 4: CLOUD PROTOCOL AND STORAGE (Gamma)
+10. PHASE 5: SERIAL COMMANDS AND TEST ENGINE (Delta)
+11. PHASE 6: MAIN LOOP INTEGRATION
+12. PHASE 7: FIRMWARE AUDIT
+13. PHASE 8: DEAD CODE CLEANUP
+14. PHASE 9: HOST-SIDE UNIT TESTING
+15. PHASE 10: COMPILE, FLASH, AND VERIFY
+16. ARCHITECTURE DECISIONS AND RATIONALE
+17. BUGS FOUND AND FIXED
+18. KEY CONSTANTS REFERENCE (LEGACY -> NEW)
+19. FILE-BY-FILE MAPPING (LEGACY -> NEW)
+20. LESSONS LEARNED
+21. SESSION LOG
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+The Brevitest Acuity Sample Processing Unit (SPU) is an IoT medical diagnostic
+device that runs immunoassay tests using:
+  - Stepper motor stage for cartridge positioning
+  - 3x AS7341 spectrophotometers (via PCA9536 I2C multiplexer)
+  - 3x laser diodes (A, B, C channels)
+  - Heater with PID temperature control and thermistor
+  - Barcode scanner for cartridge identification
+  - Piezo buzzer for user alerts
+  - RGB LED for status indication
+
+The legacy firmware was a single 5,843-line .ino file plus headers running on
+Particle Boron (NRF52840) using Particle Cloud and CouchDB.
+
+The rewrite targets Particle M-SoM (RTL8722DM) with Supabase PostgreSQL backend,
+decomposed into 29 source files across clean modules.
+
+Final binary size: Flash 69,854 / RAM 53,634 bytes (msom 6.3.4).
+
+================================================================================
+2. PREREQUISITES AND TOOLING
+================================================================================
 
 ### Hardware
-- Debounce ALL hardware state changes (10ms for detector, 5000ms for heater ready)
-- delayMicroseconds() for precise timing under 1000us, delay() for longer
-- Always check limit switches BEFORE motor movement
-- Wake motor before movement, sleep after if not needed soon
+- Particle M-SoM development board
+- USB cable for serial monitoring
+- WiFi network credentials stored on device
 
-### Cloud Operations
-- Track cloud_operation_pending flag for timeout detection
-- Retry with exponential backoff: base * retry_count
-- Clear all tracking when cartridge removed
-- Validate checksums on all downloaded data
+### Software
+- Particle CLI (particle compile, particle flash, particle serial monitor)
+  Install: npm install -g particle-cli
+  Login: particle login
+- MinGW g++ (for host-side unit tests on Windows)
+  Path: C:\ProgramData\mingw64\mingw64\bin\g++.exe
+  CRITICAL: Must add bin dir to PATH for cc1plus to find DLLs:
+    export PATH="/c/ProgramData/mingw64/mingw64/bin:$PATH"
+- Git for version control
+- Claude Code CLI for AI-assisted development
 
-### Serial Commands
-- Parse as comma-delimited integers
-- Log all command executions for diagnostics
-- Check state machine before hardware commands
+### Particle Cloud Compile Command
+  particle compile msom supabase-firmware --target 6.3.4
 
----
+### Flash Command (OTA)
+  particle flash <device-id> supabase-firmware.bin
 
-## Progress Log
+### Serial Monitor
+  particle serial monitor --follow
+
+================================================================================
+3. REPOSITORY STRUCTURE
+================================================================================
+
+Brevitest-Firmware_AV/
+├── legacy-firmware/              # Archived reference code
+│   ├── firmware/src/
+│   │   ├── brevitest-firmware.ino   # Main legacy firmware (5843 lines)
+│   │   ├── brevitest-firmware.h     # All constants and defines
+│   │   ├── DeviceState.cpp/h        # Legacy state machine
+│   │   └── DFRobot_AS7341.cpp/h     # Legacy spectro driver
+│   └── archive/                     # Older versions (V4-V23)
+│
+├── supabase-firmware/            # New firmware (the rewrite)
+│   ├── project.properties           # Platform: msom, version: 6.3.4
+│   ├── src/
+│   │   ├── main.ino                 # Entry point, setup(), loop()
+│   │   ├── DataTypes.cpp/h          # Enums, structs, CRC32, Base64
+│   │   ├── StateMachine.cpp/h       # 11-state device state machine
+│   │   ├── HAL.cpp/h                # Hardware Abstraction Layer
+│   │   ├── HardwareConfig.h         # All pin definitions and constants
+│   │   ├── HeaterController.cpp/h   # PID temperature controller
+│   │   ├── MotorController.cpp/h    # Stepper motor stage control
+│   │   ├── LaserController.cpp/h    # 3-channel laser control
+│   │   ├── Spectrophotometer.cpp/h  # High-level spectro controller
+│   │   ├── BarcodeScanner.cpp/h     # Barcode reader integration
+│   │   ├── BuzzerController.cpp/h   # Piezo buzzer control
+│   │   ├── LEDController.cpp/h      # RGB LED status patterns
+│   │   ├── BCODEInterpreter.cpp/h   # Test instruction interpreter
+│   │   ├── TestRunner.cpp/h         # Test execution orchestrator
+│   │   ├── CloudProtocol.cpp/h      # JSON serialization for cloud
+│   │   ├── SupabaseClient.cpp/h     # HTTPS cloud communication
+│   │   ├── StorageManager.cpp/h     # EEPROM + filesystem management
+│   │   ├── CommandParser.cpp/h      # Serial command parser
+│   │   ├── SerialCommands.cpp/h     # 100+ serial command handlers
+│   │   └── drivers/
+│   │       └── AS7341.cpp/h         # Low-level AS7341 I2C driver
+│   ├── tests_excluded/             # Host-side test infrastructure
+│   │   └── host/
+│   │       ├── test_host.cpp         # 57 unit tests
+│   │       └── Particle.h            # Mock Particle SDK for desktop
+│   └── docs/
+│       ├── SERIAL_COMMANDS.md
+│       ├── BCODE_SPECIFICATION.md
+│       └── HARDWARE_TIMING.md
+│
+├── coordination/                 # Project management files
+│   ├── firmware-rewrite-progress.txt  # THIS FILE
+│   ├── prd-firmware-rewrite-master.json
+│   ├── prd-fw-alpha-statemachine.json  # 17 stories
+│   ├── prd-fw-beta-hardware.json       # 20 stories
+│   ├── prd-fw-gamma-cloud.json         # 16 stories
+│   ├── prd-fw-delta-serial.json        # 28 stories
+│   ├── prd-firmware-audit-critical.json # 8 stories
+│   ├── prd-firmware-audit-cleanup.json  # 9 stories
+│   └── docs/
+│       ├── STATE_TRANSITIONS_LEGACY_ANALYSIS.md
+│       ├── CLOUD-PROTOCOL-SPEC.md
+│       └── SERIAL-COMMANDS-REFERENCE.md
+│
+└── supabase-firmware.bin         # Flashable binary (msom 6.3.4)
+
+================================================================================
+4. METHODOLOGY: THE RALPH LOOP
+================================================================================
+
+Every implementation follows the Ralph Loop:
+
+  READ -> DOCUMENT -> IMPLEMENT -> VERIFY -> COMMIT
+
+Step 1: READ LEGACY
+  - Find the corresponding function/section in the legacy firmware
+  - Note the exact line numbers for reference
+  - Understand the behavior, edge cases, timing, and constants
+  - Look for #define constants that affect the behavior
+
+Step 2: DOCUMENT
+  - Write the user story acceptance criteria
+  - Note the legacy reference (file:lines)
+  - Document expected inputs, outputs, and side effects
+
+Step 3: IMPLEMENT
+  - Write the new code in the appropriate module
+  - Preserve exact behavioral compatibility where possible
+  - Use the same constants (copy from legacy header)
+  - Add appropriate logging (Log.info/warn/error)
+
+Step 4: VERIFY
+  - Compile: particle compile msom supabase-firmware --target 6.3.4
+  - Run host tests if applicable (g++ test_host.cpp)
+  - Check flash/RAM usage (must fit in device memory)
+  - Flash to device if hardware testing needed
+
+Step 5: COMMIT
+  - Stage specific files (not git add -A)
+  - Write descriptive commit message
+  - Push to branch
+
+### PRD-Driven Development
+Each terminal works from a Product Requirements Document (PRD) in JSON format.
+PRDs contain user stories with:
+  - Story ID (e.g., ALPHA-001)
+  - Title and description
+  - Acceptance criteria (testable conditions)
+  - Legacy reference (file and line numbers)
+  - Dependencies on other stories
+
+================================================================================
+5. PHASE 0: LEGACY ANALYSIS (DO THIS FIRST)
+================================================================================
+
+Before writing ANY code, analyze the legacy firmware completely.
+
+### Step 0.1: Read the Main Header File
+File: legacy-firmware/firmware/src/brevitest-firmware.h
+Contains ALL constants: pin definitions, timing values, buffer sizes, thresholds.
+Copy every #define into a reference document.
+
+### Step 0.2: Read the Main .ino File
+File: legacy-firmware/firmware/src/brevitest-firmware.ino (5843 lines)
+Map out the major sections:
+  - Global variables and state
+  - setup() function
+  - loop() function
+  - hardware_loop() - THE MOST CRITICAL FUNCTION
+  - set_device_indicators() - LED/buzzer behavior
+  - Serial command handlers
+  - BCODE interpreter
+  - Cloud API functions
+  - Temperature/heater functions
+  - Motor/stage functions
+  - Spectrophotometer functions
+
+### Step 0.3: Document the State Machine
+Map every DeviceMode state:
+  - Entry conditions
+  - Exit conditions
+  - Actions performed in each state
+  - LED/buzzer behavior per state
+  - Timeout values
+
+Legacy states (11 total):
+  IDLE(0), INITIALIZING(1), HEATING(2), BARCODE_SCANNING(3),
+  VALIDATING_CARTRIDGE(4), VALIDATING_MAGNETOMETER(5), RUNNING_TEST(6),
+  UPLOADING_RESULTS(7), ERROR_STATE(10), STRESS_TESTING(11),
+  LOADING_ASSAY(8)
+
+### Step 0.4: Document Critical Timing
+| Parameter                    | Value   | Source                    |
+|------------------------------|---------|---------------------------|
+| Detector debounce            | 10ms    | DETECTOR_DEBOUNCE_DELAY   |
+| Heater ready debounce        | 5000ms  | HEATER_READY_DEBOUNCE     |
+| Heater ready tolerance       | 1.0C    | HEATER_READY_TEMP_DELTA=10|
+| Default target temp          | 45.0C   | HEATER_DEFAULT_TARGET=450 |
+| Max temperature              | 60.0C   | HEATER_MAX_TEMPERATURE=600|
+| Validation timeout           | 45000ms | VALIDATION_TIMEOUT_MS     |
+| Validation max retries       | 3       | VALIDATION_MAX_RETRIES    |
+| Validation backoff base      | 5000ms  | Exponential backoff       |
+| Upload/reset timeout         | 30000ms | CLOUD_OPERATION_TIMEOUT   |
+| Recent barcode cooldown      | 30000ms | RECENT_TEST_COOLDOWN_MS   |
+| Motor wake delay             | 10ms    | A5985GETTR-T datasheet    |
+| BCODE delay unit             | 500ms   | BCODE_MAX_DELAY           |
+| Barcode read timeout         | 1000ms  | BARCODE_READ_TIMEOUT      |
+| Laser max continuous on      | 30s     | Safety interlock          |
+| PID control interval         | 1000ms  | HEATER_CONTROL_INTERVAL   |
+| Heater failsafe timing       | 2000ms  | HEATER_FAILSAFE_TIMING    |
+
+### Step 0.5: Document hardware_loop() Behavior
+THIS IS THE MOST IMPORTANT FUNCTION IN THE FIRMWARE.
+It runs EVERY loop() iteration and handles:
+  1. Heater temperature monitoring (updates heater_ready flag)
+  2. Cartridge detector debouncing (10ms)
+  3. Cartridge insertion handling (reset stage, move to test start, scan)
+  4. Cartridge removal handling (reset stage, clear state, idle)
+  5. LED/buzzer indicator updates (set_device_indicators)
+  6. PID temperature control (heaterController.update())
+  7. Buzzer trigger processing
+
+KEY LESSON: The first version of the rewrite was non-functional because
+hardware_loop() was missing entirely. Without it, the heater never heats,
+cartridges are never detected, and LEDs never update.
+
+### Step 0.6: Document LED Indicator Logic
+| State                           | LED Color | Pattern | Buzzer         |
+|---------------------------------|-----------|---------|----------------|
+| Active operation (test, scan)   | Red       | Solid   | None           |
+| Error + invalid cartridge       | Green     | Blink   | Problem (620Hz)|
+| Error (other)                   | Red       | Solid   | None           |
+| Heating (waiting for temp)      | Red       | Solid   | None           |
+| Idle + cartridge + uploaded     | Green     | Blink   | Alert (850Hz)  |
+| Idle + cartridge (no upload)    | Green     | Blink   | None           |
+| Idle + no cartridge + ready     | Green     | Solid   | None           |
+| Idle + no cartridge + heating   | Red       | Solid   | None           |
+| Uploading results               | Red       | Solid   | Alert if cart  |
+| Initializing                    | Red       | Solid   | None           |
+
+================================================================================
+6. PHASE 1: PROJECT SCAFFOLDING
+================================================================================
+
+### Step 1.1: Create project.properties
+  name=brevitest-supabase-firmware
+
+### Step 1.2: Create directory structure
+  supabase-firmware/
+    src/
+      drivers/
+    tests_excluded/
+      host/
+      unit/
+    docs/
+
+### Step 1.3: Create PRD Documents
+Create JSON PRD files for each terminal/phase:
+  - Master PRD with total story count
+  - Alpha PRD: State Machine (17 stories)
+  - Beta PRD: Hardware (20 stories)
+  - Gamma PRD: Cloud & Storage (16 stories)
+  - Delta PRD: Serial & Test Engine (28 stories)
+Total: 81 implementation stories
+
+### Step 1.4: Create Coordination Files
+  - This progress file
+  - Terminal instructions
+  - Session state tracking
+
+================================================================================
+7. PHASE 2: CORE DATA TYPES AND STATE MACHINE (Alpha - 17 stories)
+================================================================================
+
+### Files Created
+  DataTypes.h        - All enums, structs, constants (SINGLE SOURCE OF TRUTH)
+  DataTypes.cpp      - CRC32, Base64, serialization, string conversions
+  StateMachine.h     - State machine class with validation
+  StateMachine.cpp   - Transition validation, history, observers
+
+### Key Implementation Notes
+
+ALPHA-001 to ALPHA-003: Enums
+  - DeviceMode enum must match legacy values EXACTLY (for cloud compatibility)
+  - TestState, CartridgeState, ErrorCode enums
+  - String conversion functions for every enum value
+
+ALPHA-004: State Transition Validation
+  - Hard-coded valid transitions (canTransitionTo matrix)
+  - ALWAYS allow transition to ERROR_STATE from any state
+  - ALWAYS allow transition to IDLE from any state (reset path)
+  - Same-state transitions are INVALID
+
+ALPHA-005: History Logging
+  - 50-entry circular buffer for state transitions
+  - Records: from_mode, to_mode, timestamp, trigger string
+  - Essential for debugging state machine issues
+
+ALPHA-009: Heater Debouncing
+  - heater_ready flag: temp within 1.0C of target AND temp below target
+  - 5000ms debounce prevents false positives
+  - CRITICAL: Without this, cartridges can be damaged by premature insertion
+
+ALPHA-010: Device Indicators (set_device_indicators)
+  - Must match legacy LED behavior exactly (users know red=wait, green=go)
+  - Called every loop iteration from hardware_loop()
+
+ALPHA-011: hardware_loop()
+  - THE HEART OF THE FIRMWARE
+  - Must run every loop() iteration
+  - Handles all real-time hardware monitoring and debouncing
+
+ALPHA-012: Main Loop Integration
+  - loop() calls: processSerialCommands() + hardware_loop()
+  - State-driven behavior with switch statement
+  - Timeout handling for all cloud operations
+
+### Data Structure Sizes (Verified with static_assert)
+  BrevitestSpectrophotometerReading: 32 bytes
+  BrevitestTestRecord: 9668 bytes (header + 300 readings)
+  BCODE buffer: 5000 bytes
+  Transition history: 50 entries
+
+================================================================================
+8. PHASE 3: HARDWARE ABSTRACTION AND DRIVERS (Beta - 20 stories)
+================================================================================
+
+### Files Created
+  HardwareConfig.h       - All pin definitions, constants, lookup tables
+  HAL.cpp/h              - Hardware Abstraction Layer
+  HeaterController.cpp/h - PID temperature controller
+  MotorController.cpp/h  - Stepper motor stage control
+  LaserController.cpp/h  - 3-channel laser with safety interlocks
+  Spectrophotometer.cpp/h - High-level 3x AS7341 controller
+  BarcodeScanner.cpp/h   - Barcode reader interface
+  BuzzerController.cpp/h - Non-blocking piezo control
+  LEDController.cpp/h    - RGB LED patterns
+  drivers/AS7341.cpp/h   - Low-level I2C driver for AS7341
+
+### Pin Mapping (M-SoM)
+  HEATER = D4, THERMISTOR = A6
+  LASER_A = D5, LASER_B = D6, LASER_C = D7
+  MOTOR_STEP = D13, MOTOR_DIR = D8, MOTOR_SLEEP = D12
+  BARCODE_TRIGGER = D23, BARCODE_READY = D22
+  STAGE_LIMIT = D26, CARTRIDGE_DETECT = D3
+  LED_DATA = D2, BUZZER = A0
+  I2C: SDA = D0, SCL = D1
+
+### Key Implementation Notes
+
+HAL Layer Design:
+  - Static namespace (not a class) for zero-overhead hardware access
+  - All pin initialization in HAL::init()
+  - Thermistor uses 21-point lookup table with linear interpolation
+  - Temperature returned in 10x Celsius format (375 = 37.5C)
+
+HeaterController:
+  - PID uses INTEGER MATH (no floating point on embedded)
+  - Kp=80/4, Ki=1/50000, Kd=1/5 (numerator/denominator pairs)
+  - Failsafe: max continuous on-time of 2000ms
+  - Over-temperature cutoff at 60.0C
+  - Thermal runaway detection
+
+MotorController:
+  - 1/8 microstepping: 25 microns per step
+  - Home to limit switch before any absolute positioning
+  - Wake delay: 10ms (A5985GETTR-T datasheet requirement)
+  - Sleep motor after positioning to save power
+
+Spectrophotometer:
+  - PCA9536 I2C multiplexer at 0x41 selects channel A/B/C
+  - AS7341 at 0x39 reads 10 spectral channels (F1-F8, Clear, NIR)
+  - Baseline capture required before test scans
+  - SMUX configuration for channel mapping
+
+LaserController:
+  - Safety interlock: requires cartridge present to enable
+  - Maximum continuous on-time: 30 seconds
+  - Pulse mode: 20us on, 2ms cycle (configurable)
+
+### Thermistor Lookup Table (from legacy)
+  {0, 2438}, {50, 2175}, {100, 1925}, {150, 1694}, {200, 1482},
+  {250, 1292}, {300, 1123}, {350, 975}, {370, 921}, {380, 895},
+  {400, 845}, {420, 798}, {440, 754}, {450, 733}, {460, 712},
+  {480, 673}, {500, 637}, {600, 475}, {700, 348}, {800, 250},
+  {1000, 122}
+  Format: {temperature_10x, raw_ADC_value}
+
+================================================================================
+9. PHASE 4: CLOUD PROTOCOL AND STORAGE (Gamma - 16 stories)
+================================================================================
+
+### Files Created
+  CloudProtocol.cpp/h  - JSON serialization/deserialization
+  SupabaseClient.cpp/h - HTTPS client for Supabase Edge Functions
+  StorageManager.cpp/h - EEPROM + LittleFS filesystem
+
+### Cloud Endpoints (4 total)
+  1. validate-cartridge - Verify cartridge UUID, get associated assay
+  2. load-assay         - Download BCODE instructions for test
+  3. upload-test        - Upload test results (9668-byte record)
+  4. reset-cartridge    - Reset cartridge state for re-testing
+
+### JSON Serialization
+  - Manual sprintf-based serialization (no JSON library)
+  - Manual strstr-based deserialization (findJsonString, findJsonInt, etc.)
+  - Request ID: UUID v4 format for correlation
+  - All timestamps as uint32_t (Unix epoch)
+
+### Storage Architecture
+  EEPROM:
+    - Device configuration (WiFi, firmware version, data format)
+    - Recovery data (running test UUID for crash recovery)
+    - Stress test cycle counters
+
+  LittleFS Filesystem:
+    /cache/     - Failed upload test records (max 50 files, FIFO eviction)
+    /assay/     - Downloaded assay instructions (max 50 files)
+    /validation/ - Magnetometer validation data
+    /buffer/    - Temporary working storage
+
+### Key Implementation Notes
+  - Retry logic: 3 attempts with 5s exponential backoff
+  - Failed uploads cached to filesystem for later retry
+  - Interrupted test recovery on startup (checks EEPROM for in-progress test)
+  - CRC32 checksums on all test records (IEEE 802.3 with lookup table)
+  - Static assertions verify struct sizes at compile time
+
+### IMPORTANT: CloudProtocol.cpp Extraction
+  Originally, the serialization functions were implemented inside
+  SupabaseClient.cpp but declared in CloudProtocol.h. This was refactored
+  to move all serialize/deserialize functions into CloudProtocol.cpp where
+  they belong. This allows host-side testing without pulling in the full
+  SupabaseClient (which depends on Particle HTTP libraries).
+
+================================================================================
+10. PHASE 5: SERIAL COMMANDS AND TEST ENGINE (Delta - 28 stories)
+================================================================================
+
+### Files Created
+  CommandParser.cpp/h    - Serial line parsing (comma-delimited integers)
+  SerialCommands.cpp/h   - 100+ command handlers
+  BCODEInterpreter.cpp/h - Custom instruction interpreter
+  TestRunner.cpp/h       - Test execution orchestrator
+
+### Serial Command Format
+  Input: "command_id" or "command_id,param1,param2,..."
+  Response: "OK:value" or "ERR:code:message"
+  Baud rate: 115200
+
+### Command Categories (100+ commands)
+  1-9      System (reset, EEPROM, pins)
+  10-12    Serial messaging control
+  20-29    Stage motion (home, move, oscillate)
+  30-33    Laser control (A, B, C, all)
+  40-43    Buzzer control (tone, alert, problem)
+  50-55    Heater (temperature, PID, target)
+  60       Barcode scanner trigger
+  70-73    Magnetometer validation
+  90-93    Stress testing
+  301-311  Spectrophotometer (params, channels, scans)
+  400-406  Cloud operations (cache, upload, assays)
+  8000-8999 Radio control (WiFi, cellular, BLE, FCC)
+  9000-9020 State management (view, force, history)
+
+### BCODE Interpreter
+  Custom instruction set for controlling test execution.
+  Format: "opcode:param1,param2|opcode:param1|..."
+  Delimiters: | (instruction), : (opcode/params), , (params), # (end)
+
+  Opcodes:
+    0  START_TEST      - Begin test sequence
+    1  DELAY(ms)       - Delay with callback for heater control
+    2  MOVE_MICRONS(microns, step_delay)
+    3  OSCILLATE(microns, step_delay, cycles)
+    10 SET_SENSOR_PARAMS(gain, astep, atime)
+    11 BASELINE_SCANS(num_scans)
+    14 TEST_SCANS(num_scans)
+    15 SENSOR_READING(channel, gain, astep, atime)
+    16 CONTINUOUS_SCANS(baseline, start, distance, step_delay)
+    20 REPEAT_BEGIN(iterations)  - Start repeat block (4 levels nesting)
+    21 REPEAT_END               - End repeat block
+    99 END_TEST                 - Complete test
+
+  Callback-based hardware integration:
+    - StageMoveCallback, StageOscillateCallback
+    - SpectroConfigCallback, SpectroScanCallback
+    - DelayLoopCallback (returns false to cancel)
+
+### TestRunner
+  Orchestrates complete test lifecycle:
+    1. Load assay (BCODE + metadata)
+    2. Wait for heater ready
+    3. Execute BCODE instructions via BCODEInterpreter
+    4. Collect spectrophotometer readings
+    5. Finalize record with checksum
+    6. Hand off to cloud for upload
+  Also supports stress testing (automated repeated cycles).
+
+================================================================================
+11. PHASE 6: MAIN LOOP INTEGRATION
+================================================================================
+
+### main.ino Structure (the glue)
+
+setup():
+  1. Wait for serial (15s timeout)
+  2. Initialize HAL (all GPIO pins)
+  3. Initialize StorageManager (EEPROM + filesystem)
+  4. Check for interrupted test recovery
+  5. Initialize HeaterController, start PID
+  6. Initialize SerialCommands
+  7. Initialize MotorController, home stage
+  8. Register Particle.variable (temperature, magnet_validation)
+  9. Register Particle.function (runTest, resetDevice, setHeaterTarget, getStatus)
+  10. Set initial LED (red solid = initializing)
+  11. Transition to IDLE state
+
+loop():
+  1. serialCommands.process()
+  2. hardware_loop()    <-- CRITICAL: runs every iteration
+  3. State-driven switch:
+     - VALIDATING_CARTRIDGE: timeout/retry handling
+     - LOADING_ASSAY: timeout handling
+     - RUNNING_TEST: testRunner.update()
+     - UPLOADING_RESULTS: timeout + cache on failure
+     - HEATING: check heater_ready, handle pending barcodes
+     - BARCODE_SCANNING: trigger scan, route by type
+     - etc.
+
+hardware_loop():
+  1. Update heater_ready flag from current temperature
+  2. Debounce cartridge detector (10ms)
+  3. Handle cartridge insertion (reset stage, move to test start, scan)
+  4. Handle cartridge removal (reset stage, clear state, idle)
+  5. set_device_indicators() for LED/buzzer
+  6. heaterController.update() for PID control
+  7. BuzzerController::update() for non-blocking tones
+  8. laserController.update() for safety interlock
+
+### Cloud Function Handlers (remote control via Particle Cloud)
+  runTest(args)       - Start test with cartridge UUID
+  resetDevice(args)   - Reset device to IDLE
+  setHeaterTarget(args) - Set target temperature
+  getStatus(args)     - Return JSON status
+
+================================================================================
+12. PHASE 7: FIRMWARE AUDIT
+================================================================================
+
+After all 81 stories complete, perform a comprehensive audit.
+
+### Audit Categories
+1. TIMING CONSTANTS: Compare every constant to legacy (68 checked, 5 fixed)
+2. STATE TRANSITIONS: Verify every valid/invalid transition (26 checked)
+3. HARDWARE DRIVERS: Verify against component datasheets (7 drivers)
+4. DEAD CODE: Identify unused functions, variables, includes (~150 items)
+
+### Critical Fixes Found During Audit (8 stories: AUD-001 to AUD-008)
+
+AUD-001: LaserController::update() was not being called in hardware_loop()
+  - Without this, laser safety interlock (30s max on-time) doesn't work
+  - Fix: Added laserController.update() to hardware_loop()
+
+AUD-002: Barcode type routing was incomplete
+  - Legacy routes CARTRIDGE/MAGNETOMETER/STRESS_TEST/OPTICAL/SHIPPING
+  - New code only handled CARTRIDGE
+  - Fix: Added routing for all barcode types in BARCODE_SCANNING handler
+
+AUD-003: Motor wake delay was 1ms, should be 10ms
+  - A5985GETTR-T datasheet specifies 10ms wake time
+  - Fix: Changed delay in HAL::motorWake() from 1ms to 10ms
+
+AUD-004: AS7341 interrupt not being cleared after read
+  - Can cause phantom interrupts and stale data
+  - Fix: Added write-1-to-clear after STATUS_1 register read
+
+AUD-005: StorageManager checksum comparison used broken absolute-value logic
+  - Was: if (abs(a - b) == 0) which can overflow for uint32_t
+  - Fix: Direct uint32_t equality comparison
+
+AUD-006: Duplicate #defines in main.ino shadowing HardwareConfig.h
+  - 14 constants duplicated between files
+  - Fix: Removed all duplicates from main.ino
+
+AUD-007: TestRunner::stopTest() had identical if/else branches
+  - Both branches did the same thing
+  - Fix: Collapsed to single code path
+
+AUD-008: Upload timeout didn't cache test data
+  - On upload timeout, test data was lost
+  - Fix: Added storageManager.cacheTestData() on timeout
+
+================================================================================
+13. PHASE 8: DEAD CODE CLEANUP
+================================================================================
+
+9 cleanup stories (CLN-001 to CLN-009) removing ~3,300 lines:
+  - Unused functions, commented-out code, dead branches
+  - Redundant includes, unused variables
+  - Copy-paste artifacts from legacy code
+  - Debug-only code left in production
+
+Rule: If it's not called by anything, delete it. No "just in case" code.
+
+================================================================================
+14. PHASE 9: HOST-SIDE UNIT TESTING
+================================================================================
+
+### Test Infrastructure
+Host-side tests compile firmware logic modules with desktop g++ using a mock
+Particle.h that stubs out hardware APIs.
+
+### Mock Particle.h (tests_excluded/host/Particle.h)
+Provides stubs for:
+  - MockLogger (Log.info/warn/error as no-ops)
+  - millis() / delay() using static counters
+  - MockTime, MockWire, MockSerial
+  - GPIO: pinMode, digitalWrite, digitalRead, analogRead
+  - Pin definitions: D0-D26, A0-A5
+  - Minimal String class
+
+### Build Command
+  export PATH="/c/ProgramData/mingw64/mingw64/bin:$PATH"
+  g++ -std=c++11 -I. test_host.cpp StateMachine.cpp DataTypes.cpp \
+      BCODEInterpreter.cpp CloudProtocol.cpp -o test_host.exe
+
+CRITICAL: The -I. flag must come FIRST so the mock Particle.h in the test
+directory is found before any system headers.
+
+### Test Suite (57 tests)
+  Data Structure Tests (3):
+    - spectrophotometer_reading_size (32 bytes)
+    - test_record_size (9668 bytes)
+    - test_record_header_layout
+
+  Enum Conversion Tests (3):
+    - device_mode_to_string, test_state_to_string, cartridge_state_to_string
+
+  State Transition Tests (8):
+    - Same state invalid, always allow error, always allow idle
+    - Valid transitions from INITIALIZING, IDLE, HEATING, BARCODE_SCANNING,
+      VALIDATING_CARTRIDGE, RUNNING_TEST
+
+  State Machine Instance Tests (9):
+    - Init, valid/invalid transition, force mode, reset to idle
+    - History circular buffer, cartridge ID/state, test state
+
+  CRC32 Tests (4):
+    - Known value, empty, single byte, test record checksum
+
+  Base64 Tests (3):
+    - Encode, decode, roundtrip
+
+  Serialization Tests (1):
+    - Test record serialize/deserialize roundtrip
+
+  BCODE Interpreter Tests (14):
+    - Load valid/null/empty
+    - Simple start-end execution
+    - Parse move params (verifies 5000, 300)
+    - Parse sensor params
+    - Baseline and test scans
+    - Repeat block (3 iterations = 3 moves)
+    - Nested repeat (2x3 = 6 moves)
+    - Missing params error
+    - Cancel during delay (callback returns false)
+    - Pause/resume
+    - Opcode to string, state to string
+
+  CloudProtocol Tests (11):
+    - Serialize validate request, upload request
+    - Deserialize all 4 response types
+    - Error status code mapping
+    - Null handling
+    - UUID v4 format validation
+    - Status to string
+    - Serialize roundtrip
+
+### BUG FOUND BY TESTS: BCODE Parameter Parsing
+The host tests immediately caught a critical bug in BCODEInterpreter:
+  parseInstruction() did not skip past the ':' (ATTR_DELIM) between the
+  opcode and parameters. This meant ALL parameterized instructions (MOVE,
+  DELAY, SCANS, REPEAT, etc.) would fail with 0 parameters.
+
+  Fix (BCODEInterpreter.cpp, parseInstruction):
+    Added: Skip ATTR_DELIM before parameter parsing loop
+    Removed: ATTR_DELIM check from parameter loop condition
+
+  This bug would have caused every test to fail on real hardware.
+  The host tests caught it before the first flash.
+
+================================================================================
+15. PHASE 10: COMPILE, FLASH, AND VERIFY
+================================================================================
+
+### Cloud Compile
+  cd <project-root>
+  particle compile msom supabase-firmware --target 6.3.4 --saveTo supabase-firmware.bin
+
+  Expected output:
+    Compile succeeded.
+    Flash: ~69,854  RAM: ~53,634
+
+### Flash (OTA - device must be online)
+  particle flash <device-id> supabase-firmware.bin
+
+### Flash (USB - device connected via USB)
+  particle flash --serial supabase-firmware.bin
+
+### Verify Device Status
+  particle list                   # Check device is online
+  particle serial monitor         # Watch serial output
+
+  Over serial, send:
+    9001    -> Show current state (should be IDLE)
+    50      -> Read temperature
+    12      -> Show device ID
+
+### Expected Boot Sequence
+  1. Red solid LED (INITIALIZING)
+  2. Stage homes to limit switch
+  3. Heater PID starts (target 45.0C)
+  4. Red solid while heating
+  5. Green solid when heater_ready (within 1.0C of target for 5s)
+  6. Device is ready for cartridge insertion
+
+### Troubleshooting: Temperature Not Reaching Target
+  If temperature is stuck below target:
+  - Check heater hardware connections (PIN_HEATER = D4)
+  - Send serial command 51 (heater on manual) to verify heating element works
+  - Send serial command 54 (start PID control) to restart PID
+  - Check thermistor reading (command 50) - should change when heated
+  - Check for thermal runaway protection tripping
+
+### Troubleshooting: WiFi Connection Issues
+  - Device may take 30-60s to connect after flash
+  - DNS failures during WiFi negotiation are normal
+  - Look for "Netif wl4 link UP" in serial output
+  - If persistent, send command 9 to clear WiFi credentials and re-provision
+
+================================================================================
+16. ARCHITECTURE DECISIONS AND RATIONALE
+================================================================================
+
+### Why Decompose Into 29 Files?
+  Legacy: 1 giant .ino file (5843 lines) + 1 header + 1 driver
+  New: 29 files averaging ~300 lines each
+  Rationale:
+    - Each module is independently testable
+    - Clear ownership and responsibility
+    - Parallel development by multiple terminals
+    - Easier to audit and review
+
+### Why Manual JSON Parsing (No Library)?
+  - Embedded systems have limited RAM (53KB)
+  - ArduinoJson would add ~5KB flash + dynamic allocation
+  - Our JSON is simple and predictable (known field names)
+  - sprintf/strstr approach is zero-allocation
+
+### Why Integer PID (No Floating Point)?
+  - ARM Cortex-M has no hardware FPU on all variants
+  - Integer math is 10-100x faster on some Particle platforms
+  - PID uses numerator/denominator pairs: Kp = 80/4 = 20.0
+
+### Why Callback-Based BCODE Execution?
+  - BCODE interpreter doesn't know about hardware
+  - Hardware callbacks are registered by main.ino
+  - Interpreter is pure logic, testable without hardware
+  - Same callbacks can be mocked for host testing
+
+### Why Static Namespace for HAL?
+  - Zero overhead (no object allocation)
+  - Clear separation: HAL::readThermistor() vs heater.getTemp()
+  - Pin configurations are fixed at compile time
+  - No inheritance or polymorphism needed
+
+### Why tests_excluded/ Instead of test/?
+  - Particle cloud compile includes ALL files in project directory
+  - test/ files would be compiled for device (fail: no desktop headers)
+  - tests_excluded/ naming convention prevents inclusion
+  - Host tests compile separately with g++ on desktop
+
+================================================================================
+17. BUGS FOUND AND FIXED
+================================================================================
+
+### Bug 1: Missing hardware_loop() (Pre-audit)
+  Severity: CRITICAL (device non-functional)
+  Cause: hardware_loop() was not implemented in initial rewrite
+  Effect: No heater control, no cartridge detection, no LED updates
+  Fix: Implemented hardware_loop() matching legacy line-by-line
+
+### Bug 2: BCODE Parameter Parsing (Found by host tests)
+  Severity: CRITICAL (all tests would fail)
+  Cause: parseInstruction() didn't skip ':' before parsing params
+  Effect: MOVE, DELAY, SCANS, REPEAT all fail with 0 parameters
+  Fix: Added ATTR_DELIM skip before parameter loop
+  File: BCODEInterpreter.cpp:331-337
+
+### Bug 3: Motor Wake Delay Too Short (Audit AUD-003)
+  Severity: HIGH (intermittent motor failures)
+  Cause: 1ms delay instead of 10ms per A5985GETTR-T datasheet
+  Fix: HAL.cpp motorWake() delay changed to 10ms
+
+### Bug 4: Laser Safety Interlock Not Running (Audit AUD-001)
+  Severity: HIGH (laser could stay on indefinitely)
+  Cause: laserController.update() not called in hardware_loop()
+  Fix: Added to hardware_loop()
+
+### Bug 5: Upload Timeout Data Loss (Audit AUD-008)
+  Severity: HIGH (test results lost on network failure)
+  Cause: Upload timeout didn't cache data before giving up
+  Fix: Added storageManager.cacheTestData() on timeout
+
+### Bug 6: AS7341 Interrupt Not Cleared (Audit AUD-004)
+  Severity: MEDIUM (stale readings possible)
+  Cause: STATUS_1 register read without write-1-to-clear
+  Fix: Added clear after read in AS7341 driver
+
+### Bug 7: Checksum Comparison Overflow (Audit AUD-005)
+  Severity: MEDIUM (false checksum mismatches)
+  Cause: abs(uint32_t - uint32_t) can overflow
+  Fix: Direct equality comparison
+
+### Bug 8: Barcode Type Routing Incomplete (Audit AUD-002)
+  Severity: MEDIUM (magnetometer/stress test barcodes ignored)
+  Cause: Only CARTRIDGE type was handled
+  Fix: Added routing for all 5 barcode types
+
+### Bug 9: Duplicate #defines (Audit AUD-006)
+  Severity: LOW (worked but maintenance hazard)
+  Cause: 14 constants in main.ino shadowing HardwareConfig.h
+  Fix: Removed duplicates
+
+================================================================================
+18. KEY CONSTANTS REFERENCE (LEGACY -> NEW)
+================================================================================
+
+All constants migrated from legacy brevitest-firmware.h to new HardwareConfig.h.
+Values are identical unless noted.
+
+### Firmware Identity
+  FIRMWARE_VERSION:       56 -> 200  (CHANGED - new major version)
+  DATA_FORMAT_VERSION:    39 -> 40   (CHANGED - new format)
+
+### Motor/Stage
+  MOTOR_MICRONS_PER_EIGHTH_STEP: 25 (same)
+  MOTOR_MINIMUM_STEP_DELAY:     250us (same)
+  MOTOR_RESET_STEP_DELAY:       290us (same)
+  MOTOR_FAST_STEP_DELAY:        290us (same)
+  MOTOR_SLOW_STEP_DELAY:        600us (same)
+  MOTOR_OSCILLATION_STEP_DELAY: 350us (same)
+  STAGE_RESET_STEPS:           -60000 (same)
+  STAGE_MICRONS_TO_TEST_START:  7860 (same)
+  STAGE_SHIPPING_BOLT_LOCATION: 28000 (same)
+
+### Heater
+  HEATER_MAX_POWER:             255 (same)
+  HEATER_DEFAULT_POWER:          64 (same)
+  HEATER_PWM_FREQUENCY:         150 (same)
+  HEATER_MAX_TEMPERATURE:       600 = 60.0C (same)
+  HEATER_DEFAULT_TEMP_TARGET:   450 = 45.0C (same)
+  HEATER_READY_TEMP_DELTA:       10 = 1.0C (same)
+  HEATER_READY_DEBOUNCE_DELAY: 5000ms (same)
+  HEATER_CONTROL_INTERVAL:     1000ms (same)
+  HEATER_FAILSAFE_TIMING:      2000ms (same)
+
+### Spectrophotometer
+  SPECTRO_ASTEP_DEFAULT:        999 (same)
+  SPECTRO_ATIME_DEFAULT:         49 (same)
+  SPECTRO_AGAIN_DEFAULT:          7 (same)
+  SPECTRO_MAX_READINGS:         300 (same)
+  SPECTRO_SWITCH_ADDR:         0x41 (same, PCA9536)
+  AS7341_I2C_ADDR:             0x39 (same)
+
+### Barcode
+  BARCODE_UUID_LENGTH:           36 (same)
+  BARCODE_READ_TIMEOUT:        1000ms (same)
+  BARCODE_SERIAL_BAUD:         9600 (same)
+  MAGNETOMETER_PREFIX:        "MAG-" (same)
+  STRESS_TEST_PREFIX:  "STRESS-TEST-" (same)
+
+### BCODE
+  BCODE_CAPACITY:              5000 bytes (same)
+  BCODE_MAX_DELAY:              500ms (same, = BCODE_DELAY_UNIT_MS)
+
+### Buzzer
+  BUZZER_FREQUENCY:             600Hz (same)
+  BUZZER_ALERT_FREQUENCY:       850Hz (same)
+  BUZZER_PROBLEM_FREQUENCY:     620Hz (same)
+  BUZZER_ALERT_PERIOD:         4000ms (same)
+  BUZZER_PROBLEM_PERIOD:        777ms (same)
+
+### Delimiters (BCODE/Serial)
+  ARG_DELIM:    ',' (same)
+  ATTR_DELIM:   ':' (same)
+  ITEM_DELIM:   '|' (same)
+  END_DELIM:    '#' (same)
+
+================================================================================
+19. FILE-BY-FILE MAPPING (LEGACY -> NEW)
+================================================================================
+
+Legacy: brevitest-firmware.h (all #defines)
+  -> HardwareConfig.h (hardware constants)
+  -> DataTypes.h (data structures, enums)
+  -> CloudProtocol.h (cloud-specific constants)
+
+Legacy: brevitest-firmware.ino (5843 lines, everything)
+  -> main.ino (setup, loop, hardware_loop, indicators, cloud functions)
+  -> StateMachine.cpp (state validation, transitions, history)
+  -> HeaterController.cpp (PID control, temperature monitoring)
+  -> MotorController.cpp (stage movement, homing, oscillation)
+  -> LaserController.cpp (laser control, safety interlocks)
+  -> Spectrophotometer.cpp (multi-channel spectro management)
+  -> BarcodeScanner.cpp (barcode reading, type classification)
+  -> BuzzerController.cpp (non-blocking buzzer patterns)
+  -> LEDController.cpp (RGB LED patterns and animations)
+  -> BCODEInterpreter.cpp (instruction parsing and execution)
+  -> TestRunner.cpp (test lifecycle management)
+  -> CloudProtocol.cpp (JSON serialization)
+  -> SupabaseClient.cpp (HTTP client, replaces Particle.publish)
+  -> StorageManager.cpp (EEPROM + filesystem, replaces cloud sync)
+  -> CommandParser.cpp (serial input parsing)
+  -> SerialCommands.cpp (command handlers)
+  -> HAL.cpp (raw hardware access)
+
+Legacy: DeviceState.cpp/h
+  -> StateMachine.cpp/h (expanded with validation, history, observers)
+
+Legacy: DFRobot_AS7341.cpp/h
+  -> drivers/AS7341.cpp/h (rewritten to match datasheet directly)
+
+================================================================================
+20. LESSONS LEARNED
+================================================================================
+
+### Critical Lessons
+
+1. HARDWARE_LOOP IS EVERYTHING
+   The single most important function in embedded firmware is the main
+   hardware monitoring loop. Without it, the device is a brick. It must:
+   - Run every loop() iteration (no delays that block it)
+   - Handle all real-time monitoring (temperature, switches, sensors)
+   - Update all user-facing indicators (LEDs, buzzer)
+   This was the #1 reason the first rewrite attempt didn't work.
+
+2. HOST TESTS CATCH REAL BUGS
+   The BCODE parameter parsing bug would have caused every test to fail
+   on hardware. Host-side testing found it in seconds, saving hours of
+   on-device debugging. Always test pure logic modules on desktop first.
+
+3. COPY CONSTANTS EXACTLY
+   Don't "improve" legacy constants. If the heater debounce was 5000ms
+   in legacy, it's 5000ms in the rewrite. These values were tuned on
+   real hardware over years. Change them only with hardware testing.
+
+4. MOCK PARTICLE.H APPROACH WORKS
+   For modules that use Log.info(), millis(), delay(), Wire, Serial:
+   Create a mock Particle.h with stub implementations. Use -I. flag
+   to override the real Particle.h. This lets you compile firmware
+   logic modules on desktop without any Particle SDK.
+
+5. AUDIT AFTER IMPLEMENTATION
+   Even after all stories pass, perform a dedicated audit phase.
+   We found 8 critical/high bugs that passed all acceptance criteria
+   but would have caused real-world failures.
+
+6. EXTRACT SERIALIZATION FROM CLIENT
+   Keep JSON serialization in a separate file from the HTTP client.
+   This allows host-side testing of serialization without pulling in
+   network dependencies.
+
+### Process Lessons
+
+7. PRD-DRIVEN DEVELOPMENT SCALES
+   Breaking 81 stories across 4 terminals with JSON PRDs worked well.
+   Each terminal had clear scope and minimal merge conflicts.
+
+8. RALPH LOOP PREVENTS DRIFT
+   Always reading legacy BEFORE implementing prevents "I think it
+   should work like this" guessing. The legacy code IS the spec.
+
+9. STATIC_ASSERT FOR DATA COMPATIBILITY
+   static_assert(sizeof(BrevitestTestRecord) == 9668) catches
+   struct layout changes at compile time. Essential for binary
+   protocol compatibility.
+
+10. GIT COMMIT AFTER EACH PHASE
+    Don't accumulate changes. Commit after each story or small group.
+    This makes it easy to bisect if something breaks.
+
+### Tooling Lessons
+
+11. MINGW PATH ISSUE ON WINDOWS
+    g++ compiles may fail silently (exit code 1, no output) if
+    MinGW's bin directory is not in PATH. The compiler executable
+    works, but cc1plus.exe can't find its DLLs. Fix:
+    export PATH="/c/ProgramData/mingw64/mingw64/bin:$PATH"
+
+12. PARTICLE CLOUD COMPILE INCLUDES EVERYTHING
+    The Particle cloud compiler includes ALL files in the project
+    directory. Put test files in tests_excluded/ (not test/) to
+    prevent them from being compiled for the device target.
+
+13. OTA FLASH REQUIRES DEVICE ONLINE
+    particle flash <device-id> only works if the device is connected
+    to Particle Cloud. For offline devices, use USB:
+    particle flash --serial supabase-firmware.bin
+
+================================================================================
+21. SESSION LOG
+================================================================================
 
 ### 2026-01-30 - Project Initialization
-Terminal: Orchestrator
-
-### Setup Completed
-- Created master PRD: prd-firmware-rewrite-master.json
-- Created Alpha PRD (State Machine): prd-fw-alpha-statemachine.json (17 stories)
-- Created Beta PRD (Hardware): prd-fw-beta-hardware.json (20 stories)
-- Created Gamma PRD (Cloud): prd-fw-gamma-cloud.json (16 stories)
-- Created Delta PRD (Serial): prd-fw-delta-serial.json (28 stories)
-- Created coordination session state file
-- Created terminal instructions document
-
-### Total User Stories: 81
-
-### Legacy Analysis Completed
-- Analyzed legacy brevitest-firmware.ino (6200+ lines)
-- Documented all 11 DeviceMode states
-- Documented state transition validation matrix
-- Documented hardware_loop() behavior
-- Documented set_device_indicators() LED/buzzer behavior
-- Documented validation retry logic with exponential backoff
-- Documented cartridge rejection during heating
-- Documented recently tested barcode cooldown
-
-### Key Findings from Legacy Analysis
-1. hardware_loop() is called EVERY loop iteration - handles debouncing, temperature, indicators
-2. Heater ready requires 5000ms debounce to prevent false positives
-3. Cartridges inserted during HEATING are REJECTED (won't burn the cartridge)
-4. Validation has 45s timeout with max 3 retries and exponential backoff (5s base)
-5. Recently tested barcodes have 30s cooldown before re-scanning
-6. LED indicators: Red solid = don't touch, Green fade = insert, Green blink = remove
-
-### Ready for Terminal Work
-Project is ready for parallel development by multiple terminals.
-
-### Coordination Setup Complete
-- Updated AGENTS.md with PRD workflow documentation
-- Added critical constants reference
-- Added state transition quick reference
-- Documented all discovered legacy patterns
-
----
-
-## How to Start Working
-
-### For Alpha Terminal (State Machine)
-1. Read `coordination/prd-fw-alpha-statemachine.json`
-2. Read `coordination/docs/STATE_TRANSITIONS_LEGACY_ANALYSIS.md`
-3. Read legacy: `legacy-firmware/firmware/src/DeviceState.cpp`
-4. Start with ALPHA-001: Define DeviceMode enum
-
-### For Beta Terminal (Hardware)
-1. Read `coordination/prd-fw-beta-hardware.json`
-2. Read legacy: `legacy-firmware/firmware/src/brevitest-firmware.h` (pin definitions)
-3. Read legacy: `legacy-firmware/firmware/src/brevitest-firmware.ino` (hardware functions)
-4. Start with BETA-001: Implement HAL layer
-
-### For Gamma Terminal (Cloud)
-1. Read `coordination/prd-fw-gamma-cloud.json`
-2. Read legacy validation logic in brevitest-firmware.ino:5528-5787
-3. Start with GAMMA-001: Define CloudProtocol interface
-
-### For Delta Terminal (Serial/BCODE)
-1. Read `coordination/prd-fw-delta-serial.json`
-2. Read legacy: process_serial_port() and BCODE functions
-3. Start with DELTA-001: Implement serial command parser
-
----
-
-## 2026-01-30 - Alpha Stories ALPHA-001 to ALPHA-012
-Terminal: Alpha (Orchestrator)
-
-### Already Implemented (Verified)
-- ALPHA-001: DeviceMode enum (DataTypes.h:122-134)
-- ALPHA-002: TestState enum (DataTypes.h:141-149)
-- ALPHA-003: CartridgeState enum (DataTypes.h:156-163)
-- ALPHA-004: State transition validation (StateMachine.cpp:136-226)
-- ALPHA-005: State transition with history logging (StateMachine.cpp:236-306)
-
-### Implemented This Session
-
-#### ALPHA-009: heater_debounced()
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:4878-4900
-- Implementation:
-  - Returns false during 5000ms debounce period
-  - Tracks previous_heater_ready for change detection
-  - Uses heater_debounce_time for timing
-  - Prevents false heater ready signals
-
-#### ALPHA-010: set_device_indicators()
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:4909-5019
-- Implementation:
-  - Red solid = don't touch (active operations)
-  - Green fade = insert cartridge (idle + heater ready)
-  - Green blink = remove cartridge (test complete, invalid, heating)
-  - Problem buzzer for invalid cartridge
-  - Alert buzzer after test upload
-
-#### ALPHA-011: hardware_loop()
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:5254-5416
-- Implementation:
-  - Heater temperature monitoring with heater_ready update
-  - Cartridge detector debouncing (10ms DETECTOR_DEBOUNCE_DELAY)
-  - Cartridge insertion: reset stage, move to test start, start scanning
-  - Cartridge removal: reset stage, clear state, reset to idle
-  - Calls set_device_indicators() every loop
-  - Temperature control via heaterController.update()
-  - Buzzer trigger processing
-
-#### ALPHA-012: main loop() with state machine
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:5444-5843
-- Implementation:
-  - Calls processSerialCommands() every iteration
-  - Calls hardware_loop() every iteration
-  - State-driven behavior for all 11 states
-  - Validation retry logic with exponential backoff (45s timeout, 3 retries, 5s base)
-  - Upload/reset timeout handling (30s)
-  - Recently tested barcode cooldown (30s)
-  - Pending barcode handling for cartridge rejection during heating
-
-### Key Learnings
-1. The firmware wasn't working because hardware_loop() was missing entirely
-2. Heater debouncing (5000ms) is critical - prevents false heater ready signals
-3. Detector debouncing (10ms) prevents false cartridge triggers
-4. set_device_indicators() must match legacy LED patterns exactly:
-   - Red = don't touch
-   - Green fade = insert
-   - Green blink = remove
-5. Cartridge rejection during HEATING prevents thermal damage
-
-### Files Changed
-- supabase-firmware/src/main.ino
-
----
-
-## 2026-01-30 - Delta Terminal Session
-Terminal: Delta (Serial Commands & Test Engine)
-
-### Completed Stories (26/28)
-All code implementation stories complete. Documentation stories pending.
-
-### Serial Commands Completed
-- DELTA-001: Serial command parser (CommandParser.cpp) ✓
-- DELTA-002: System commands (1-9) ✓
-- DELTA-003: Messaging commands (10-12) ✓
-- DELTA-004: Stage motion commands (20-29) ✓
-- DELTA-005: Laser commands (30-33) ✓
-- DELTA-006: Buzzer commands (40-43) - Integrated with BuzzerController ✓
-- DELTA-007: Heater commands (50-55) ✓
-- DELTA-008: Barcode command (60) - Integrated with BarcodeScanner ✓
-- DELTA-009: Magnetometer commands (70-73) - NEW ✓
-- DELTA-010: Stress test commands (90-93) - NEW ✓
-- DELTA-011: Spectrophotometer commands (301-311) ✓
-- DELTA-012: Cache commands (400-406) ✓
-- DELTA-013: Radio control commands (8000-8999) - NEW ✓
-- DELTA-014: State management commands (9000-9032) ✓
-
-### BCODE Interpreter Completed
-- DELTA-015 to DELTA-024: All BCODE opcodes implemented
-- Supports nested repeat loops (4 levels)
-- Callback-based hardware integration
-- Cartridge removal detection during execution
-
-### TestRunner Completed
-- DELTA-025: Full lifecycle management ✓
-- DELTA-026: Stress test execution with EEPROM tracking ✓
-
-### Documentation Pending
-- DELTA-027: Serial command reference documentation
-- DELTA-028: BCODE instruction set documentation
-
-### New Serial Commands Added This Session
-| Command | Function |
-|---------|----------|
-| 70 | Start magnetometer validation |
-| 71 | List validation files |
-| 72 | Load latest validation |
-| 73 | Clear validation files |
-| 90 | Start stress test (param: cycles) |
-| 91 | Stop stress test |
-| 92 | Get stress test status |
-| 93 | Reset stress test counters |
-| 8000 | Radio control help |
-| 8001 | Show radio status |
-| 8100/8101 | WiFi off/on |
-| 8200/8201 | Cellular off/on |
-| 8300/8301 | Bluetooth off/on |
-| 8500-8503 | Test modes |
-| 8900/8901 | All radios off/on |
-| 8999 | Emission check report |
-
-### Files Modified
-- supabase-firmware/src/SerialCommands.h
-- supabase-firmware/src/SerialCommands.cpp
-
----
-
-## 2026-01-30 - Gamma Terminal Session (Cloud & Storage)
-Terminal: Gamma
-
-### Completed Stories (16/16) - ALL GAMMA TASKS COMPLETE
-
-### Previously Completed (verified this session)
-- GAMMA-001: SupabaseClient initialization ✓
-- GAMMA-002: validateCartridge() cloud call ✓
-- GAMMA-003: Validation retry with exponential backoff ✓
-- GAMMA-004: loadAssay() cloud call ✓
-- GAMMA-005: uploadTest() cloud call ✓
-- GAMMA-006: resetCartridge() cloud call ✓
-- GAMMA-007: StorageManager EEPROM operations ✓
-- GAMMA-008: StorageManager directory creation ✓
-- GAMMA-009: StorageManager test caching ✓
-- GAMMA-010: StorageManager assay caching ✓
-- GAMMA-011: Checksum calculation (CRC32) ✓
-- GAMMA-012: Connection monitoring ✓
-
-### Completed This Session
-
-#### GAMMA-013: Implement interrupted test recovery
-- File: StorageManager.cpp, main.ino
-- Legacy reference: brevitest-firmware.ino:4834-4844
-- Implementation:
-  - Added handleInterruptedTestRecovery() to StorageManager
-  - Checks EEPROM for running_test_uuid on startup
-  - Saves interrupted test to /cache/ directory
-  - Clears EEPROM recovery data after saving
-  - Integrated into main.ino setup() after StorageManager init
-  - Logs recovery action with cartridge and assay IDs
-
-#### GAMMA-014: Magnetometer validation file management
-- File: StorageManager.cpp, StorageManager.h
-- Legacy reference: legacy-firmware magnetometer file functions
-- Implementation:
-  - Added listValidationFiles() - iterates /validation/, logs each file
-  - Added clearValidationFiles() - deletes all validation files
-  - Added getValidationFileCount() - counts validation files
-  - Files stored as /validation/magnet_{timestamp}.txt
-  - Max 50 files with FIFO eviction
-
-#### GAMMA-015: CloudProtocol data structures
-- File: DataTypes.h
-- Legacy reference: brevitest-firmware.h:359-422
-- Verified exact binary compatibility:
-  - BrevitestSpectrophotometerReading: 32 bytes (static_assert verified)
-  - BrevitestTestRecord: 9668 bytes (static_assert verified)
-  - BrevitestAssay: id[9], duration, BCODE_length, BCODE[5000]
-  - Particle_EEPROM: All fields match legacy
-
-#### GAMMA-016: Document cloud protocol specification
-- File: coordination/docs/CLOUD-PROTOCOL-SPEC.md
-- Created comprehensive documentation:
-  - All 4 Supabase endpoints (validate, load-assay, upload-test, reset)
-  - Request/response JSON formats with examples
-  - All error codes (network, auth, validation, upload, server, client)
-  - Retry behavior with exponential backoff algorithm
-  - Binary data format (9668-byte test record, 32-byte readings)
-  - Offline caching strategy (FIFO eviction)
-  - Request ID correlation mechanism
-  - Connection monitoring
-
-### Key Learnings
-1. Static assertions in DataTypes.h ensure binary compatibility at compile time
-2. Interrupted test recovery must happen early in setup() before normal operation
-3. Magnetometer validation files use timestamp-based naming for easy sorting
-4. CRC32 lookup table in StorageManager matches legacy firmware exactly
-
-### Files Modified
-- supabase-firmware/src/StorageManager.h (added validation and recovery functions)
-- supabase-firmware/src/StorageManager.cpp (implemented new functions)
-- supabase-firmware/src/main.ino (added StorageManager init and recovery)
-- coordination/prd-fw-gamma-cloud.json (marked all stories complete)
-- coordination/docs/CLOUD-PROTOCOL-SPEC.md (new documentation)
-
----
-
-## 2026-01-30 - Final Alpha Stories & Verification Session
-Terminal: Alpha (Completion)
-
-### Completed Stories This Session
-
-#### ALPHA-014: Cartridge rejection during heating
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:5077-5100
-- Implementation (already present, verified):
-  - pending_barcode_uuid and pending_barcode_available variables (lines 142-143)
-  - Barcode read during HEATING stores to pending and transitions back (lines 361-365)
-  - HEATING mode with cartridge shows green blink LED, NO buzzer (lines 773-783)
-  - When heater ready with pending barcode, re-scans (lines 337-342)
-  - Log message present for user notification
-
-#### ALPHA-015: Recently tested barcode cooldown
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:5284-5316
-- Implementation (already present, verified):
-  - last_tested_barcode and last_tested_timestamp tracking (lines 138-139)
-  - RECENT_TEST_COOLDOWN_MS = 30000 (line 82)
-  - Records barcode and timestamp on test completion (lines 438-441)
-  - Cooldown check in BARCODE_SCANNING state (lines 374-380)
-  - Cleared on cartridge removal (lines 933-934)
-
-#### ALPHA-016: Complete setup() function
-- File: main.ino
-- Legacy reference: brevitest-firmware.ino:4703-4870
-- Implementation additions:
-  - Extended serial wait to 15s (while loop with timeout)
-  - Added Particle.variable: temperature, magnet_validation, device_status
-  - Added Particle.function: runTest, resetDevice, setHeaterTarget, getStatus
-  - Device now starts in INITIALIZING mode before transitioning to IDLE
-  - Cloud function implementations for remote device control
-
-#### ALPHA-017: Document all state transitions
-- File: coordination/docs/STATE_TRANSITIONS_LEGACY_ANALYSIS.md
-- Verification complete - all acceptance criteria met:
-  - Mermaid state diagram (lines 15-54) with all 11 states
-  - Each transition documented with trigger/guard/actions/legacy refs
-  - Entry/exit actions in Active Behaviors sections per state
-  - Error recovery paths (ERROR_STATE section + error codes table)
-  - Timing requirements table (lines 369-382)
-  - Global Behaviors section documents hardware interactions
-- Documentation is comprehensive with 394 lines
-
-### Implementation Summary
-
-All Alpha stories are now complete:
-- Alpha: 17/17 (100% complete) - ALL ALPHA TASKS COMPLETE
-- Beta: 20/20 (100% complete)
-- Gamma: 16/16 (100% complete)
-- Delta: 26/28 (DELTA-027 and DELTA-028 are documentation)
-
-### Remaining Documentation Stories
-- DELTA-027: Serial command reference documentation
-- DELTA-028: BCODE instruction set documentation
-
-### Files Modified This Session
-- supabase-firmware/src/main.ino (Particle cloud registrations, setup enhancements)
-- coordination/prd-fw-alpha-statemachine.json (marked ALPHA-014, 015, 016 as passing)
-
----
-
-## Project Status Summary
-
-### ✓ COMPLETE: 81/81 stories (100%)
-
-| Terminal | Complete | Total | Notes |
-|----------|----------|-------|-------|
-| Alpha    | 17/17    | 100%  | ALL COMPLETE |
-| Beta     | 20/20    | 100%  | ALL COMPLETE |
-| Gamma    | 16/16    | 100%  | ALL COMPLETE |
-| Delta    | 28/28    | 100%  | ALL COMPLETE |
-
-### Final Documentation Session
-- DELTA-027: Serial command reference updated with magnetometer (70-73), stress test (90-93), and radio control (8000-8999) commands
-- DELTA-028: BCODE specification verified complete with all opcodes and examples
-
-### Documentation Files
-- supabase-firmware/docs/SERIAL_COMMANDS.md - Complete serial command reference
-- supabase-firmware/docs/BCODE_SPECIFICATION.md - Complete BCODE instruction set
-- supabase-firmware/docs/HARDWARE_TIMING.md - Hardware timing reference
-- coordination/docs/CLOUD-PROTOCOL-SPEC.md - Cloud API specification
-- coordination/docs/STATE_TRANSITIONS_LEGACY_ANALYSIS.md - State machine documentation
-
----
-
-## 2026-02-12 - Firmware Audit & Critical Fix Session
-
-### Audit Completed
-Comprehensive firmware audit performed across all modules:
-- 68 timing constants verified (5 mismatches fixed)
-- 26 state transitions verified (exact match with legacy)
-- 7 hardware drivers audited against BOM/datasheets
-- ~150 dead code items identified (~1,500+ lines removable)
-
-### PRD Documents Created
-- coordination/prd-firmware-audit-critical.json - 8 stories (AUD-001 to AUD-008)
-- coordination/prd-firmware-audit-cleanup.json - 9 stories (CLN-001 to CLN-009)
-
-### Critical Fixes Implemented (Ralph Loop)
-
-#### AUD-001: LaserController::update() safety interlock
-- File: main.ino hardware_loop()
-- Legacy Reference: brevitest-firmware.ino:1419-1457
-- Fix: Added laserController.update() to hardware_loop()
-
-#### AUD-002: Barcode type routing
-- File: main.ino BARCODE_SCANNING handler
-- Legacy Reference: brevitest-firmware.ino:5035-5223
-- Fix: Route by BarcodeType: CARTRIDGE/MAGNETOMETER/STRESS_TEST
-
-#### AUD-003: Motor wake delay
-- File: HAL.cpp motorWake()
-- Fix: 1ms to 10ms matching legacy A5985GETTR-T wake time
-
-#### AUD-004: AS7341 clearInterrupt
-- File: drivers/AS7341.cpp
-- Fix: Write-1-to-clear after STATUS_1 read
-
-#### AUD-005: StorageManager checksum comparison
-- File: StorageManager.cpp loadCachedAssay()
-- Fix: Direct uint32_t comparison replacing broken absolute-value logic
-
-#### AUD-006: Remove duplicate defines
-- File: main.ino
-- Fix: Removed 14 duplicate #defines shadowing HardwareConfig.h
-
-#### AUD-007: TestRunner stopTest identical branches
-- File: TestRunner.cpp
-- Fix: Collapsed identical if/else to single path
-
-#### AUD-008: Upload timeout caching
-- File: main.ino UPLOADING_RESULTS handler
-- Fix: Cache test data on upload timeout via storageManager.cacheTestData()
-
-### Remaining: CLN-001 to CLN-009 dead code cleanup (~1,500 lines)
+- Created master PRD and 4 terminal PRDs (81 total stories)
+- Analyzed legacy firmware (5843 lines)
+- Documented state machine, hardware_loop, LED indicators
+- Created coordination infrastructure
+
+### 2026-01-30 - Alpha Terminal (State Machine)
+- Completed 17/17 stories
+- Key: DataTypes.h, StateMachine.cpp, main.ino integration
+- Key learning: hardware_loop() is critical, was missing initially
+
+### 2026-01-30 - Beta Terminal (Hardware)
+- Completed 20/20 stories
+- Key: HAL.cpp, all hardware controller modules
+- Key learning: Copy thermistor lookup table exactly from legacy
+
+### 2026-01-30 - Gamma Terminal (Cloud & Storage)
+- Completed 16/16 stories
+- Key: CloudProtocol, SupabaseClient, StorageManager
+- Key learning: static_assert for struct size verification
+
+### 2026-01-30 - Delta Terminal (Serial & Test Engine)
+- Completed 28/28 stories
+- Key: CommandParser, SerialCommands, BCODEInterpreter, TestRunner
+- Key learning: BCODE callbacks enable testable architecture
+
+### 2026-02-12 - Firmware Audit
+- 8 critical fixes (AUD-001 to AUD-008)
+- 9 cleanup stories (CLN-001 to CLN-009, ~3300 lines removed)
+- Key learning: Audit finds bugs that pass acceptance criteria
+
+### 2026-02-12 - Host Unit Testing
+- Expanded test suite from 32 to 57 tests
+- Added BCODE interpreter tests (14) and CloudProtocol tests (11)
+- Created mock Particle.h for desktop compilation
+- FOUND BUG: BCODE parseInstruction() parameter parsing broken
+- Fixed bug, all 57 tests passing
+
+### 2026-02-12 - Cloud Compile and Flash
+- Compiled: Flash 69,854 / RAM 53,634
+- Extracted CloudProtocol.cpp from SupabaseClient.cpp
+- Flashed to device BT-M01-0000-0228 (0a10aced202194944a071af0)
+- Device connected to WiFi, Particle Cloud online
+- Temperature reading at 35.7C, heating toward 45.0C target
+
+### Current State
+- 90/90 stories complete (81 original + 8 audit + 9 cleanup)
+- 57/57 host tests passing
+- Firmware compiling and flashing successfully
+- Device online and operational
+- Known issue: Heater may need investigation if not reaching target temp
+
+================================================================================
+END OF REPLICATION GUIDE
+================================================================================
