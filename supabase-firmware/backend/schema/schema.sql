@@ -61,8 +61,16 @@ CREATE TABLE IF NOT EXISTS cartridges (
     cartridge_uuid VARCHAR(37) UNIQUE NOT NULL,     -- 36-char UUID from barcode
     assay_id VARCHAR(9) REFERENCES assays(assay_id), -- Associated assay
     status VARCHAR(32) DEFAULT 'unused',            -- unused, validated, used, expired, invalid
-    lot_number VARCHAR(64),                         -- Manufacturing lot
+    lot_number VARCHAR(64),                         -- Manufacturing lot (maps to CouchDB folderId)
     expiration_date DATE,                           -- Cartridge expiration
+    serial_number VARCHAR(64),                      -- Manufacturing serial number
+    site_id VARCHAR(64),                            -- Research site identifier
+    program VARCHAR(255),                           -- Research program name
+    experiment TEXT,                                -- Experiment description
+    arm VARCHAR(255),                               -- Experimental arm
+    quantity INTEGER,                               -- Lot/batch quantity
+    validation_errors JSONB DEFAULT '[]',           -- Array of validation error objects
+    status_updated_at TIMESTAMP WITH TIME ZONE,     -- Auto-updated on status change
     validation_count INTEGER DEFAULT 0,             -- Number of validation attempts
     last_validated_at TIMESTAMP WITH TIME ZONE,     -- Last validation timestamp
     last_validated_by UUID REFERENCES devices(id),  -- Device that last validated
@@ -76,6 +84,9 @@ CREATE TABLE IF NOT EXISTS cartridges (
 CREATE INDEX IF NOT EXISTS idx_cartridges_uuid ON cartridges(cartridge_uuid);
 CREATE INDEX IF NOT EXISTS idx_cartridges_status ON cartridges(status);
 CREATE INDEX IF NOT EXISTS idx_cartridges_assay_id ON cartridges(assay_id);
+CREATE INDEX IF NOT EXISTS idx_cartridges_serial_number ON cartridges(serial_number);
+CREATE INDEX IF NOT EXISTS idx_cartridges_site_id ON cartridges(site_id);
+CREATE INDEX IF NOT EXISTS idx_cartridges_program ON cartridges(program);
 
 -- ============================================================================
 -- TEST RESULTS TABLE
@@ -246,6 +257,22 @@ CREATE TRIGGER update_cartridges_updated_at
     BEFORE UPDATE ON cartridges
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to auto-update status_updated_at when cartridge status changes
+CREATE OR REPLACE FUNCTION update_cartridge_status_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status THEN
+        NEW.status_updated_at = NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_cartridges_status_timestamp
+    BEFORE UPDATE ON cartridges
+    FOR EACH ROW
+    EXECUTE FUNCTION update_cartridge_status_timestamp();
 
 -- Function to validate cartridge and return assay info
 CREATE OR REPLACE FUNCTION validate_cartridge(

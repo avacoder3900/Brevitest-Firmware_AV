@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "dotenv": "^17.3.1",
     "global": "^4.4.0",
     "particle-cli": "^3.3.3"
   }

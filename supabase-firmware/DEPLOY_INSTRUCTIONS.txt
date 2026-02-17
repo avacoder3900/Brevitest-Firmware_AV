@@ -1,0 +1,89 @@
+===============================================================================
+ SUPABASE EDGE FUNCTIONS DEPLOYMENT INSTRUCTIONS
+===============================================================================
+
+Project Ref: ncyipufvutzghwgcxukg
+Project URL: https://ncyipufvutzghwgcxukg.supabase.co
+Functions:   validate-cartridge, load-assay, upload-test, reset-cartridge
+
+===============================================================================
+ STEP 1: Get a Personal Access Token (PAT)
+===============================================================================
+
+1. Open: https://supabase.com/dashboard/account/tokens
+2. Click "Generate new token"
+3. Name: "CLI Deploy" (or any name)
+4. Copy the token (starts with "sbp_")
+
+===============================================================================
+ STEP 2: Deploy (Choose ONE method)
+===============================================================================
+
+--- METHOD A: Supabase CLI (Recommended) ---
+
+  Open a terminal in the project root directory:
+  C:\Users\aleja\OneDrive - Linbeck Group, LLC\Documents\GitHub\Brevitest-Firmware_AV
+
+  Then run (using your PAT from .env SUPABASE_ACCESS_TOKEN):
+
+    npx supabase login --token %SUPABASE_ACCESS_TOKEN%
+
+    npx supabase functions deploy validate-cartridge --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api
+    npx supabase functions deploy load-assay --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api
+    npx supabase functions deploy upload-test --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api
+    npx supabase functions deploy reset-cartridge --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api
+
+  Or deploy all at once:
+
+    npx supabase functions deploy --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api
+
+
+--- METHOD B: PowerShell Script ---
+
+    $env:SUPABASE_ACCESS_TOKEN = "sbp_YOUR_TOKEN_HERE"
+    cd "C:\Users\aleja\OneDrive - Linbeck Group, LLC\Documents\GitHub\Brevitest-Firmware_AV\supabase-firmware"
+    .\deploy-edge-functions.ps1
+
+
+--- METHOD C: Bash Script (Git Bash / WSL) ---
+
+    export SUPABASE_ACCESS_TOKEN="sbp_YOUR_TOKEN_HERE"
+    cd "/c/Users/aleja/OneDrive - Linbeck Group, LLC/Documents/GitHub/Brevitest-Firmware_AV/supabase-firmware"
+    bash deploy-edge-functions.sh
+
+
+--- METHOD D: Supabase Dashboard (Manual, no token needed) ---
+
+  1. Go to https://supabase.com/dashboard/project/ncyipufvutzghwgcxukg/functions
+  2. For each function, click "Deploy a new function" > "Via Editor"
+  3. Set the function name (e.g., "validate-cartridge")
+  4. Paste the contents of the corresponding index.ts file
+  5. Click "Deploy function"
+
+  Function files:
+    supabase-firmware\backend\functions\validate-cartridge\index.ts
+    supabase-firmware\backend\functions\load-assay\index.ts
+    supabase-firmware\backend\functions\upload-test\index.ts
+    supabase-firmware\backend\functions\reset-cartridge\index.ts
+
+===============================================================================
+ STEP 3: Verify Deployment
+===============================================================================
+
+Test each function with curl:
+
+  curl -X POST "https://ncyipufvutzghwgcxukg.supabase.co/functions/v1/validate-cartridge" \
+    -H "Authorization: Bearer YOUR_ANON_OR_SERVICE_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"cartridge_id": "TEST-001"}'
+
+===============================================================================
+ NOTES
+===============================================================================
+
+- The --no-verify-jwt flag disables JWT verification on the functions, which
+  allows the ESP32 firmware to call them with just the service role key.
+- The --use-api flag bundles the functions server-side (no Docker needed).
+- The supabase/ directory at the project root was created by "supabase init"
+  and contains copies of the functions in the expected CLI directory structure.
+- Functions are also stored at: supabase-firmware/backend/functions/

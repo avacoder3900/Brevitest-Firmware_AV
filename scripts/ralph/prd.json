@@ -1,0 +1,87 @@
+{
+  "project": "Brevitest Firmware - Edge Function Deployment",
+  "branchName": "postgres-firmware",
+  "description": "Deploy the 4 Supabase edge functions and run end-to-end validation. The edge functions are already written and located in supabase/functions/. A Supabase Personal Access Token (PAT) is required for CLI deployment.",
+  "userStories": [
+    {
+      "id": "DEPLOY-001",
+      "title": "Authenticate Supabase CLI with Personal Access Token",
+      "description": "Log in to Supabase CLI using a PAT so that edge functions can be deployed. The PAT must start with 'sbp_' and can be generated at https://supabase.com/dashboard/account/tokens. Run: npx supabase login --token sbp_YOUR_TOKEN",
+      "acceptanceCriteria": [
+        "Run 'npx supabase login --token <PAT>' successfully",
+        "Verify login by running 'npx supabase projects list' and confirming project ncyipufvutzghwgcxukg appears",
+        "If no PAT is available, check env var SUPABASE_ACCESS_TOKEN"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Requires user to generate PAT at https://supabase.com/dashboard/account/tokens"
+    },
+    {
+      "id": "DEPLOY-002",
+      "title": "Deploy validate-cartridge edge function",
+      "description": "Deploy the validate-cartridge function to Supabase project ncyipufvutzghwgcxukg using the Supabase CLI.",
+      "acceptanceCriteria": [
+        "Run 'npx supabase functions deploy validate-cartridge --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api' from project root",
+        "Command completes without errors",
+        "Function accessible at https://ncyipufvutzghwgcxukg.supabase.co/functions/v1/validate-cartridge"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DEPLOY-003",
+      "title": "Deploy load-assay edge function",
+      "description": "Deploy the load-assay function to Supabase project ncyipufvutzghwgcxukg using the Supabase CLI.",
+      "acceptanceCriteria": [
+        "Run 'npx supabase functions deploy load-assay --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api' from project root",
+        "Command completes without errors",
+        "Function accessible at https://ncyipufvutzghwgcxukg.supabase.co/functions/v1/load-assay"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DEPLOY-004",
+      "title": "Deploy upload-test edge function",
+      "description": "Deploy the upload-test function to Supabase project ncyipufvutzghwgcxukg using the Supabase CLI.",
+      "acceptanceCriteria": [
+        "Run 'npx supabase functions deploy upload-test --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api' from project root",
+        "Command completes without errors",
+        "Function accessible at https://ncyipufvutzghwgcxukg.supabase.co/functions/v1/upload-test"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DEPLOY-005",
+      "title": "Deploy reset-cartridge edge function",
+      "description": "Deploy the reset-cartridge function to Supabase project ncyipufvutzghwgcxukg using the Supabase CLI.",
+      "acceptanceCriteria": [
+        "Run 'npx supabase functions deploy reset-cartridge --project-ref ncyipufvutzghwgcxukg --no-verify-jwt --use-api' from project root",
+        "Command completes without errors",
+        "Function accessible at https://ncyipufvutzghwgcxukg.supabase.co/functions/v1/reset-cartridge"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DEPLOY-006",
+      "title": "Verify all deployed edge functions respond correctly",
+      "description": "Send test requests to each deployed function and verify they return valid responses (even error responses for missing data are acceptable - we just need to confirm the functions are live and responding).",
+      "acceptanceCriteria": [
+        "curl POST to validate-cartridge returns a JSON response (not 404 or 500)",
+        "curl POST to load-assay returns a JSON response",
+        "curl POST to upload-test returns a JSON response",
+        "curl POST to reset-cartridge returns a JSON response",
+        "All responses include proper CORS headers"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Use service role key from SUPABASE_SERVICE_ROLE_KEY env variable (see .env file)"
+    }
+  ]
+}

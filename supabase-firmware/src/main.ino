@@ -24,6 +24,7 @@ SYSTEM_THREAD(ENABLED);
 #include "StateMachine.h"
 #include "StorageManager.h"
 #include "SupabaseClient.h"
+#include "supabase_config.h"
 #include "MotorController.h"
 #include "HeaterController.h"
 #include "LaserController.h"
@@ -281,10 +282,12 @@ void setup() {
     }
 
     // Initialize cloud client
+    // NOTE: Endpoint and anon key are configured in supabase_config.h
+    // The anon key is a publishable key (safe for client-side/firmware use)
     Log.info("Initializing Supabase client...");
     cloudClient.init();
-    // cloudClient.setEndpoint("https://your-project.supabase.co/functions/v1");
-    // cloudClient.setApiKey("your-api-key");
+    cloudClient.setEndpoint(SUPABASE_ENDPOINT);
+    cloudClient.setApiKey(SUPABASE_ANON_KEY);
 
     // Initialize test runner
     Log.info("Initializing test runner...");
